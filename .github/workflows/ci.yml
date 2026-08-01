@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  api-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @skp/api-contracts lint
+
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: skp
+          POSTGRES_PASSWORD: skp_dev_password
+          POSTGRES_DB: skp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U skp -d skp_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SKP_NODE_ENV: test
+      SKP_PORT: 3000
+      SKP_LOG_LEVEL: error
+      SKP_DATABASE_URL: postgresql://skp:skp_dev_password@localhost:5432/skp_ci?schema=public
+      SKP_JWT_SECRET: ci-secret-must-be-at-least-32-characters
+      SKP_CORS_ORIGINS: http://localhost:5173
+      SKP_DIGILOCKER_BASE_URL: https://digilocker.example.sandbox
+      SKP_DIGILOCKER_CLIENT_ID: ci
+      SKP_DIGILOCKER_CLIENT_SECRET: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @skp/api prisma:generate
+      - run: pnpm --filter @skp/api exec prisma migrate deploy
+      - run: pnpm --filter @skp/api typecheck
+      - run: pnpm --filter @skp/api test
+
+  admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @skp/admin typecheck
+      - run: pnpm --filter @skp/admin build
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Kiosk analyze
+        working-directory: apps/kiosk
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+      - name: Mobile analyze
+        working-directory: apps/mobile
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test

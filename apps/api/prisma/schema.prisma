@@ -1,0 +1,439 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("SKP_DATABASE_URL")
+}
+
+enum PrincipalType {
+  citizen
+  admin
+  device
+  system
+}
+
+enum UserRole {
+  citizen
+  admin
+  operator
+  viewer
+}
+
+enum DeviceStatus {
+  provisioning
+  active
+  inactive
+}
+
+enum PrintJobStatus {
+  created
+  ready
+  printing
+  completed
+  failed
+  expired
+}
+
+enum PrintJobSource {
+  otp_print
+  digilocker_print
+}
+
+enum OtpChallengeStatus {
+  pending
+  redeemed
+  expired
+  cancelled
+}
+
+enum DigiLockerSessionStatus {
+  pending
+  authorized
+  expired
+  failed
+}
+
+enum AdCreativeType {
+  video
+  image
+  banner
+  carousel
+}
+
+enum AdCampaignStatus {
+  draft
+  scheduled
+  active
+  paused
+  ended
+}
+
+enum AdSlot {
+  idle_video
+  home_banner
+  home_carousel
+}
+
+enum AdPlaybackEventType {
+  impression
+  play_start
+  play_complete
+  click
+}
+
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users               User[]
+  sites               Site[]
+  devices             Device[]
+  serviceEnablements  ServiceEnablement[]
+  advertisers         Advertiser[]
+
+  @@map("tenants")
+}
+
+model Site {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  devices           Device[]
+  adCampaignTargets AdCampaignTarget[]
+
+  @@map("sites")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String?  @map("tenant_id") @db.Uuid
+  email        String?  @unique
+  phone        String?  @unique
+  passwordHash String?  @map("password_hash")
+  displayName  String   @map("display_name")
+  role         UserRole
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant         Tenant?        @relation(fields: [tenantId], references: [id])
+  otpChallenges  OtpChallenge[]
+
+  @@map("users")
+}
+
+model PlatformSetting {
+  id           String   @id @default(uuid()) @db.Uuid
+  settingKey   String   @unique @map("setting_key") @db.VarChar(100)
+  settingValue Json     @map("setting_value")
+  description  String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+}
+
+model PhoneOtpSession {
+  id           String   @id @default(uuid()) @db.Uuid
+  phone        String   @unique
+  codeHash     String   @map("code_hash")
+  expiresAt    DateTime @map("expires_at")
+  attemptCount Int      @default(0) @map("attempt_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
+  @@map("phone_otp_sessions")
+}
+
+model Device {
+  id               String       @id @default(uuid()) @db.Uuid
+  tenantId         String       @map("tenant_id") @db.Uuid
+  siteId           String       @map("site_id") @db.Uuid
+  name             String
+  deviceKey        String       @unique @map("device_key")
+  deviceSecretHash String       @map("device_secret_hash")
+  status           DeviceStatus @default(provisioning)
+  lastHeartbeatAt  DateTime?    @map("last_heartbeat_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  site               Site                @relation(fields: [siteId], references: [id])
+  serviceEnablements ServiceEnablement[]
+  printJobs          PrintJob[]
+  otpChallenges      OtpChallenge[]
+  digiLockerSessions DigiLockerSession[]
+  adCampaignTargets  AdCampaignTarget[]
+  adPlaybackEvents   AdPlaybackEvent[]
+
+  @@map("devices")
+}
+
+model Advertiser {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  name         String
+  contactEmail String?  @map("contact_email")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+  creatives AdCreative[]
+  campaigns AdCampaign[]
+
+  @@index([tenantId])
+  @@map("advertisers")
+}
+
+model AdCreative {
+  id           String         @id @default(uuid()) @db.Uuid
+  advertiserId String         @map("advertiser_id") @db.Uuid
+  type         AdCreativeType
+  title        String
+  storagePath  String?        @map("storage_path")
+  publicUrl    String?        @map("public_url")
+  mimeType     String?        @map("mime_type")
+  durationSec  Int?           @map("duration_sec")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  advertiser        Advertiser          @relation(fields: [advertiserId], references: [id])
+  assets            AdCreativeAsset[]
+  campaignCreatives AdCampaignCreative[]
+  playbackEvents    AdPlaybackEvent[]
+
+  @@index([advertiserId])
+  @@map("ad_creatives")
+}
+
+model AdCreativeAsset {
+  id         String   @id @default(uuid()) @db.Uuid
+  creativeId String   @map("creative_id") @db.Uuid
+  storagePath String  @map("storage_path")
+  publicUrl  String?  @map("public_url")
+  mimeType   String?  @map("mime_type")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  creative AdCreative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+
+  @@index([creativeId])
+  @@map("ad_creative_assets")
+}
+
+model AdCampaign {
+  id           String          @id @default(uuid()) @db.Uuid
+  advertiserId String          @map("advertiser_id") @db.Uuid
+  name         String
+  status       AdCampaignStatus @default(draft)
+  startsAt     DateTime?       @map("starts_at")
+  endsAt       DateTime?       @map("ends_at")
+  priority     Int             @default(0)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  advertiser Advertiser           @relation(fields: [advertiserId], references: [id])
+  creatives  AdCampaignCreative[]
+  targets    AdCampaignTarget[]
+  events     AdPlaybackEvent[]
+
+  @@index([advertiserId, status])
+  @@map("ad_campaigns")
+}
+
+model AdCampaignCreative {
+  id         String @id @default(uuid()) @db.Uuid
+  campaignId String @map("campaign_id") @db.Uuid
+  creativeId String @map("creative_id") @db.Uuid
+  slot       AdSlot
+  sortOrder  Int    @default(0) @map("sort_order")
+  weight     Int    @default(1)
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creative AdCreative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, creativeId, slot])
+  @@index([campaignId])
+  @@map("ad_campaign_creatives")
+}
+
+model AdCampaignTarget {
+  id         String  @id @default(uuid()) @db.Uuid
+  campaignId String  @map("campaign_id") @db.Uuid
+  /// When true, campaign applies to all devices in the advertiser's tenant.
+  targetAll  Boolean @default(false) @map("target_all")
+  siteId     String? @map("site_id") @db.Uuid
+  deviceId   String? @map("device_id") @db.Uuid
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  site     Site?      @relation(fields: [siteId], references: [id])
+  device   Device?    @relation(fields: [deviceId], references: [id])
+
+  @@index([campaignId])
+  @@map("ad_campaign_targets")
+}
+
+model AdPlaybackEvent {
+  id         String              @id @default(uuid()) @db.Uuid
+  campaignId String              @map("campaign_id") @db.Uuid
+  creativeId String              @map("creative_id") @db.Uuid
+  deviceId   String              @map("device_id") @db.Uuid
+  eventType  AdPlaybackEventType @map("event_type")
+  occurredAt DateTime            @default(now()) @map("occurred_at")
+  metadata   Json?
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creative AdCreative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+  device   Device     @relation(fields: [deviceId], references: [id])
+
+  @@index([campaignId, occurredAt])
+  @@index([deviceId, occurredAt])
+  @@map("ad_playback_events")
+}
+
+model PlatformService {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  enablements ServiceEnablement[]
+
+  @@map("platform_services")
+}
+
+model ServiceEnablement {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  deviceId  String   @map("device_id") @db.Uuid
+  serviceId String   @map("service_id") @db.Uuid
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id])
+  device  Device          @relation(fields: [deviceId], references: [id])
+  service PlatformService @relation(fields: [serviceId], references: [id])
+
+  @@unique([deviceId, serviceId])
+  @@map("service_enablements")
+}
+
+model OtpChallenge {
+  id            String             @id @default(uuid()) @db.Uuid
+  userId        String             @map("user_id") @db.Uuid
+  codeHash      String             @map("code_hash")
+  codeHint      String             @map("code_hint")
+  documentLabel String             @map("document_label")
+  pageCount     Int                @default(1) @map("page_count")
+  attemptCount  Int                @default(0) @map("attempt_count")
+  status        OtpChallengeStatus @default(pending)
+  expiresAt     DateTime           @map("expires_at")
+  redeemedAt    DateTime?          @map("redeemed_at")
+  deviceId      String?            @map("device_id") @db.Uuid
+  printJobId    String?            @unique @map("print_job_id") @db.Uuid
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  user      User          @relation(fields: [userId], references: [id])
+  device    Device?       @relation(fields: [deviceId], references: [id])
+  printJob  PrintJob?     @relation(fields: [printJobId], references: [id])
+  documents OtpDocument[]
+
+  @@index([status, expiresAt])
+  @@map("otp_challenges")
+}
+
+model OtpDocument {
+  id          String   @id @default(uuid()) @db.Uuid
+  challengeId String   @map("challenge_id") @db.Uuid
+  fileName    String   @map("file_name")
+  storagePath String   @map("storage_path")
+  contentType String   @default("application/pdf") @map("content_type")
+  pageCount   Int      @default(1) @map("page_count")
+  byteSize    Int      @map("byte_size")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  challenge OtpChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId])
+  @@map("otp_documents")
+}
+
+model DigiLockerSession {
+  id                String                   @id @default(uuid()) @db.Uuid
+  deviceId          String                   @map("device_id") @db.Uuid
+  status            DigiLockerSessionStatus  @default(pending)
+  authorizationUrl  String                   @map("authorization_url")
+  state             String                   @unique
+  codeVerifier      String                   @map("code_verifier")
+  accessToken       String?                  @map("access_token")
+  idToken           String?                  @map("id_token")
+  tokenExpiresAt    DateTime?                @map("token_expires_at")
+  consentValidTill  String?                  @map("consent_valid_till")
+  externalSessionId String?                  @map("external_session_id")
+  expiresAt         DateTime                 @map("expires_at")
+  authorizedAt      DateTime?                @map("authorized_at")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+
+  device    Device     @relation(fields: [deviceId], references: [id])
+  printJobs PrintJob[]
+
+  @@map("digilocker_sessions")
+}
+
+model PrintJob {
+  id               String         @id @default(uuid()) @db.Uuid
+  deviceId         String?        @map("device_id") @db.Uuid
+  source           PrintJobSource
+  status           PrintJobStatus @default(created)
+  title            String
+  pageCount        Int            @default(1) @map("page_count")
+  payloadUrl       String?        @map("payload_url")
+  payloadPath      String?        @map("payload_path")
+  errorMessage     String?        @map("error_message")
+  idempotencyKey   String?        @unique @map("idempotency_key")
+  digiLockerSessionId String?     @map("digilocker_session_id") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  device            Device?            @relation(fields: [deviceId], references: [id])
+  digiLockerSession DigiLockerSession? @relation(fields: [digiLockerSessionId], references: [id])
+  otpChallenge      OtpChallenge?
+
+  @@index([status, createdAt])
+  @@map("print_jobs")
+}
+
+model AuditLog {
+  id            String        @id @default(uuid()) @db.Uuid
+  action        String
+  principalType PrincipalType @map("principal_type")
+  principalId   String?       @map("principal_id")
+  resourceType  String?       @map("resource_type")
+  resourceId    String?       @map("resource_id")
+  correlationId String?       @map("correlation_id")
+  metadata      Json?
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}

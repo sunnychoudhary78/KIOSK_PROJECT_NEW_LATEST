@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: skp-postgres
+    restart: unless-stopped
+    ports:
+      # Host 5434 avoids Windows PostgreSQL (5432) and other local Docker DBs (5433)
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: skp
+      POSTGRES_PASSWORD: skp_dev_password
+      POSTGRES_DB: skp_local
+    volumes:
+      - skp_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skp -d skp_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  skp_pg_data:

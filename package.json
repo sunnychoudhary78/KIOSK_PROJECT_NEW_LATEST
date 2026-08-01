@@ -1,0 +1,22 @@
+{
+  "name": "smart-kiosk-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Smart Kiosk Platform monorepo",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @skp/api dev",
+    "dev:admin": "pnpm --filter @skp/admin dev",
+    "build:api": "pnpm --filter @skp/api build",
+    "build:admin": "pnpm --filter @skp/admin build",
+    "lint": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" lint",
+    "typecheck": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" typecheck",
+    "test:api": "pnpm --filter @skp/api test",
+    "docker:up": "docker compose -f tooling/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f tooling/docker/docker-compose.yml down",
+    "bootstrap": "pnpm install && pnpm --filter @skp/api prisma:generate"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@skp/docs",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "node -e \"process.exit(0)\"",
+    "typecheck": "node -e \"process.exit(0)\""
+  }
+}

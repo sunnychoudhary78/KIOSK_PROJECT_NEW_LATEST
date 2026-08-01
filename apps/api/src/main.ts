@@ -1,0 +1,60 @@
+import { loadEnvFile } from './config/load-env.js';
+import { loadConfig } from './config/index.js';
+import { prisma } from './infrastructure/database/prisma.js';
+import { createLogger } from './infrastructure/logging/logger.js';
+import { createDigiLockerClient } from './infrastructure/external/digilocker.client.js';
+import { createMsg91FlowSmsClient } from './infrastructure/external/sms.client.js';
+import { AuditService } from './modules/audit/audit.service.js';
+import { PlatformSettingsService } from './modules/platform_settings/platform_settings.service.js';
+import { createApp } from './app.js';
+import type { AppDeps } from './types/deps.js';
+
+async function main() {
+  loadEnvFile();
+  const config = loadConfig();
+  const logger = createLogger(config);
+  const auditService = new AuditService(prisma);
+  const platformSettings = new PlatformSettingsService(prisma, auditService);
+  // Admin `sms_config` drives MSG91. When disabled, local/dev/test (or SKP_SMS_PROVIDER=noop) skip send.
+  const allowNoopWhenDisabled =
+    config.smsProvider === 'noop' ||
+    config.env === 'local' ||
+    config.env === 'test' ||
+    config.env === 'dev';
+  const sms = createMsg91FlowSmsClient({
+    settings: platformSettings,
+    logger,
+    allowNoopWhenDisabled,
+  });
+
+  const deps: AppDeps = {
+    config,
+    db: prisma,
+    logger,
+    digiLocker: createDigiLockerClient(config, logger),
+    sms,
+    auditService,
+  };
+
+  const app = createApp(deps);
+
+  const server = app.listen(config.port, () => {
+    logger.info({ port: config.port, env: config.env }, 'SKP API listening');
+  });
+
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, 'Shutting down');
+    server.close(async () => {
+      await prisma.$disconnect();
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

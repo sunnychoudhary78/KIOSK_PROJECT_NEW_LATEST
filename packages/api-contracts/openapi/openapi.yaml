@@ -1,0 +1,971 @@
+openapi: 3.0.3
+info:
+  title: Smart Kiosk Platform API
+  version: 1.0.0
+  description: |
+    Source-of-truth OpenAPI contract for Smart Kiosk Platform.
+    Versioned under /v1. Principals: citizen, admin, device.
+
+    DigiLocker OAuth callback is mounted outside this prefix at
+    GET /api/v1/auth/digilocker/callback (exact MeriPehchaan registered redirect).
+    Access tokens stay server-side; kiosks poll session status and download print PDFs via device JWT.
+servers:
+  - url: http://localhost:3000/v1
+    description: Local
+tags:
+  - name: Health
+  - name: Identity
+  - name: Devices
+  - name: Services
+  - name: OtpPrint
+  - name: DigiLocker
+  - name: Printing
+  - name: Audit
+  - name: PlatformSettings
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /auth/citizen/otp-request:
+    post:
+      tags: [Identity]
+      summary: Request citizen login OTP via SMS
+      operationId: citizenOtpRequest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CitizenOtpRequest'
+      responses:
+        '200':
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CitizenOtpRequestResponse'
+
+  /auth/citizen/otp-verify:
+    post:
+      tags: [Identity]
+      summary: Verify citizen login OTP and issue JWT
+      operationId: citizenOtpVerify
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CitizenOtpVerifyRequest'
+      responses:
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+
+  /auth/citizen/login:
+    post:
+      tags: [Identity]
+      summary: Deprecated password login (gone)
+      operationId: citizenLogin
+      deprecated: true
+      security: []
+      responses:
+        '410':
+          description: Password login removed; use OTP login
+
+  /auth/admin/login:
+    post:
+      tags: [Identity]
+      summary: Admin login
+      operationId: adminLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+      responses:
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+
+  /auth/device/token:
+    post:
+      tags: [Identity]
+      summary: Exchange device credentials for access token
+      operationId: deviceToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceTokenRequest'
+      responses:
+        '200':
+          description: Device token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+
+  /devices:
+    get:
+      tags: [Devices]
+      summary: List devices (admin)
+      operationId: listDevices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Device list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+    post:
+      tags: [Devices]
+      summary: Register a kiosk device (admin)
+      operationId: registerDevice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterDeviceRequest'
+      responses:
+        '201':
+          description: Device registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceRegistrationResponse'
+
+  /devices/{deviceId}/heartbeat:
+    post:
+      tags: [Devices]
+      summary: Device heartbeat
+      operationId: deviceHeartbeat
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '204':
+          description: Heartbeat accepted
+
+  /services:
+    get:
+      tags: [Services]
+      summary: List platform services
+      operationId: listServices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Service catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlatformService'
+
+  /services/{serviceCode}/enablement:
+    put:
+      tags: [Services]
+      summary: Enable or disable a service for a device
+      operationId: setServiceEnablement
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: serviceCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceEnablementRequest'
+      responses:
+        '200':
+          description: Enablement updated
+
+  /otp-challenges:
+    post:
+      tags: [OtpPrint]
+      summary: Upload PDFs and create OTP print challenge (citizen)
+      operationId: createOtpChallenge
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                documentLabel:
+                  type: string
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '201':
+          description: Challenge created; OTP returned and SMS sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpChallengeResponse'
+
+  /otp-challenges/redeem:
+    post:
+      tags: [OtpPrint]
+      summary: Redeem OTP at kiosk (device)
+      operationId: redeemOtpChallenge
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemOtpRequest'
+      responses:
+        '200':
+          description: OTP redeemed; print job and document download paths ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedeemOtpResponse'
+
+  /otp-challenges/{challengeId}/documents/{documentId}/content:
+    get:
+      tags: [OtpPrint]
+      summary: Download redeemed OTP document PDF (device)
+      operationId: getOtpDocumentContent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: PDF bytes
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /platform-settings:
+    get:
+      tags: [PlatformSettings]
+      summary: List platform settings (admin)
+      operationId: listPlatformSettings
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Settings list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlatformSetting'
+
+  /platform-settings/{settingKey}:
+    put:
+      tags: [PlatformSettings]
+      summary: Update a platform setting (admin)
+      operationId: updatePlatformSetting
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: settingKey
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [sms_config, otp_print_config, citizen_auth_config]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlatformSettingRequest'
+      responses:
+        '200':
+          description: Updated setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSetting'
+
+  /digilocker/sessions:
+    post:
+      tags: [DigiLocker]
+      summary: Start DigiLocker OAuth session (device) — returns pending + authorizationUrl
+      operationId: startDigiLockerSession
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartDigiLockerSessionRequest'
+      responses:
+        '201':
+          description: Session started (pending until OAuth callback)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigiLockerSessionResponse'
+
+  /digilocker/sessions/{sessionId}:
+    get:
+      tags: [DigiLocker]
+      summary: Poll DigiLocker session status (device)
+      operationId: getDigiLockerSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session status for kiosk polling
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigiLockerSessionResponse'
+
+  /digilocker/sessions/{sessionId}/documents:
+    get:
+      tags: [DigiLocker]
+      summary: List documents for DigiLocker session
+      operationId: listDigiLockerDocuments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Document list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DigiLockerDocument'
+
+  /digilocker/sessions/{sessionId}/print:
+    post:
+      tags: [DigiLocker]
+      summary: Create print job from DigiLocker document
+      operationId: printDigiLockerDocument
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrintDigiLockerRequest'
+      responses:
+        '201':
+          description: Print job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+
+  /print-jobs:
+    get:
+      tags: [Printing]
+      summary: List print jobs (admin)
+      operationId: listPrintJobs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Print jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PrintJob'
+
+  /print-jobs/{jobId}:
+    get:
+      tags: [Printing]
+      summary: Get print job
+      operationId: getPrintJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Print job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+
+  /print-jobs/{jobId}/status:
+    patch:
+      tags: [Printing]
+      summary: Update print job status (device)
+      operationId: updatePrintJobStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePrintJobStatusRequest'
+      responses:
+        '200':
+          description: Updated job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+
+  /print-jobs/{jobId}/content:
+    get:
+      tags: [Printing]
+      summary: Download print job PDF content (device)
+      operationId: getPrintJobContent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: PDF bytes (tokens stay server-side; DigiLocker file fetched by API)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /audit-logs:
+    get:
+      tags: [Audit]
+      summary: List audit logs (admin)
+      operationId: listAuditLogs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [code, message, correlationId]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        correlationId:
+          type: string
+
+    HealthResponse:
+      type: object
+      required: [status, service, version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+        version:
+          type: string
+
+    CitizenOtpRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+
+    CitizenOtpRequestResponse:
+      type: object
+      required: [message, expiresAt]
+      properties:
+        message:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        devOtp:
+          type: string
+          description: Present only in local/dev/test when SMS is noop
+
+    CitizenOtpVerifyRequest:
+      type: object
+      required: [phone, otp]
+      properties:
+        phone:
+          type: string
+        otp:
+          type: string
+
+    AdminLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    DeviceTokenRequest:
+      type: object
+      required: [deviceKey, deviceSecret]
+      properties:
+        deviceKey:
+          type: string
+        deviceSecret:
+          type: string
+
+    TokenResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn, principalType]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          enum: [Bearer]
+        expiresIn:
+          type: integer
+        principalType:
+          type: string
+          enum: [citizen, admin, device]
+        refreshToken:
+          type: string
+        deviceId:
+          type: string
+          format: uuid
+          description: Present when principalType is device
+        deviceName:
+          type: string
+          description: Present when principalType is device
+
+    Device:
+      type: object
+      required: [id, name, deviceKey, status, siteName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        deviceKey:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, provisioning]
+        siteName:
+          type: string
+        lastHeartbeatAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    RegisterDeviceRequest:
+      type: object
+      required: [name, siteName]
+      properties:
+        name:
+          type: string
+        siteName:
+          type: string
+        tenantId:
+          type: string
+          format: uuid
+
+    DeviceRegistrationResponse:
+      allOf:
+        - $ref: '#/components/schemas/Device'
+        - type: object
+          required: [deviceKey, deviceSecret]
+          properties:
+            deviceKey:
+              type: string
+            deviceSecret:
+              type: string
+
+    PlatformService:
+      type: object
+      required: [code, name, enabled]
+      properties:
+        code:
+          type: string
+          enum: [otp_print, digilocker_print]
+        name:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+
+    ServiceEnablementRequest:
+      type: object
+      required: [deviceId, enabled]
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+
+    OtpChallengeResponse:
+      type: object
+      required: [id, code, expiresAt, documentLabel, pageCount, documents]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        documentLabel:
+          type: string
+        pageCount:
+          type: integer
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/OtpDocumentMeta'
+
+    OtpDocumentMeta:
+      type: object
+      required: [id, fileName, pageCount, byteSize]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fileName:
+          type: string
+        pageCount:
+          type: integer
+        byteSize:
+          type: integer
+        contentPath:
+          type: string
+
+    RedeemOtpRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+        idempotencyKey:
+          type: string
+
+    RedeemOtpResponse:
+      type: object
+      required: [challengeId, printJob, documents]
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        printJob:
+          $ref: '#/components/schemas/PrintJob'
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/OtpDocumentMeta'
+
+    PlatformSetting:
+      type: object
+      required: [id, settingKey, settingValue, isActive, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        settingKey:
+          type: string
+        settingValue:
+          type: object
+          additionalProperties: true
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdatePlatformSettingRequest:
+      type: object
+      required: [settingValue]
+      properties:
+        settingValue:
+          type: object
+          additionalProperties: true
+        description:
+          type: string
+        isActive:
+          type: boolean
+
+    StartDigiLockerSessionRequest:
+      type: object
+      required: []
+      properties:
+        returnUrl:
+          type: string
+          format: uri
+
+    DigiLockerSessionResponse:
+      type: object
+      required: [id, status, authorizationUrl, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, authorized, expired, failed]
+        authorizationUrl:
+          type: string
+          format: uri
+          description: MeriPehchaan authorize URL (open in browser). Access tokens never returned to clients.
+        expiresAt:
+          type: string
+          format: date-time
+        authorizedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    DigiLockerDocument:
+      type: object
+      required: [id, name, issuer]
+      properties:
+        id:
+          type: string
+          description: DigiLocker document URI used as id
+        name:
+          type: string
+        issuer:
+          type: string
+        mimeType:
+          type: string
+        doctype:
+          type: string
+          description: DigiLocker doctype code when present; never used as a server-side filter
+        description:
+          type: string
+        source:
+          type: string
+          enum: [issued, uploaded, eaadhaar]
+          description: Whether the document came from issued, uploaded, or e-Aadhaar fallback
+
+    PrintDigiLockerRequest:
+      type: object
+      required: [documentId]
+      properties:
+        documentId:
+          type: string
+        idempotencyKey:
+          type: string
+
+    PrintJob:
+      type: object
+      required: [id, status, source, title, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [created, ready, printing, completed, failed, expired]
+        source:
+          type: string
+          enum: [otp_print, digilocker_print]
+        title:
+          type: string
+        pageCount:
+          type: integer
+        deviceId:
+          type: string
+          format: uuid
+          nullable: true
+        payloadUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdatePrintJobStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [printing, completed, failed]
+        errorMessage:
+          type: string
+
+    AuditLog:
+      type: object
+      required: [id, action, principalType, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        principalType:
+          type: string
+          enum: [citizen, admin, device, system]
+        principalId:
+          type: string
+          nullable: true
+        resourceType:
+          type: string
+          nullable: true
+        resourceId:
+          type: string
+          nullable: true
+        correlationId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
