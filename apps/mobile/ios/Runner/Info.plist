@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Smart Kiosk uses your location to show the nearest print kiosks.</string>
 </dict>
 </plist>

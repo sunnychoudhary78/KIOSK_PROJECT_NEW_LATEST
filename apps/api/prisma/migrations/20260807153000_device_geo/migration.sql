@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "devices" ADD COLUMN "latitude" DOUBLE PRECISION,
+ADD COLUMN "longitude" DOUBLE PRECISION,
+ADD COLUMN "address" TEXT;

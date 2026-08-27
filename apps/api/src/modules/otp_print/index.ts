@@ -77,6 +77,40 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
   );
 
   router.get(
+    '/otp-challenges/:challengeId',
+    authRequired(deps.config, ['citizen']),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const challengeId = requireParam(req.params.challengeId, 'challengeId');
+        const result = await service.getChallengeForCitizen(req.principal.id, challengeId);
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/otp-challenges/:challengeId/resend-otp',
+    authRequired(deps.config, ['citizen']),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const challengeId = requireParam(req.params.challengeId, 'challengeId');
+        const result = await service.resendOtp(req.principal.id, challengeId, req.correlationId);
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
     '/otp-challenges/:challengeId/documents/:documentId/content',
     authRequired(deps.config, ['device']),
     async (req: Request, res: Response, next: NextFunction) => {

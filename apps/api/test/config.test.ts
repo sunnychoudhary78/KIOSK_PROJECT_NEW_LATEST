@@ -21,10 +21,34 @@ describe('loadConfig', () => {
       SKP_DIGILOCKER_CLIENT_SECRET: 'secret',
       SKP_DIGILOCKER_REDIRECT_URI: 'http://localhost:3000/api/v1/auth/digilocker/callback',
       SKP_SMS_PROVIDER: 'noop',
+      SKP_MSG91_AUTH_KEY: 'test-key',
+      SKP_MSG91_SENDER_ID: 'IMRTPS',
+      SKP_MSG91_FLOW_ID: 'flow-abc',
+      SKP_MSG91_OTP_VAR: 'OTP',
+      SKP_MSG91_EXPIRY_VAR: 'TIME',
     });
 
     expect(config.port).toBe(4000);
     expect(config.auth.accessTtlSeconds).toBe(1800);
     expect(config.otp.length).toBe(6);
+    expect(config.msg91).toEqual({
+      authKey: 'test-key',
+      senderId: 'IMRTPS',
+      flowId: 'flow-abc',
+      otpVar: 'OTP',
+      expiryVar: 'TIME',
+    });
+    expect(config.razorpay).toEqual({
+      keyId: '',
+      keySecret: '',
+      webhookSecret: '',
+    });
+    expect(config.payments.windowMinutes).toBe(15);
+    expect(config.vedastro.baseUrl).toBe('https://api.vedastro.org/api');
+    expect(config.aiProvider).toBe('noop');
+    expect(config.openai).toEqual({
+      apiKey: '',
+      model: 'gpt-4o',
+    });
   });
 });

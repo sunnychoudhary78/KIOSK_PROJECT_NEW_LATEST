@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:skp_kiosk/features/well_being/domain/vital_kind.dart';
 import 'package:skp_kiosk/features/well_being/domain/vital_metric.dart';
 import 'package:skp_kiosk/features/well_being/domain/vital_quality.dart';
 
@@ -119,11 +118,4 @@ class VitalMetricTile extends StatelessWidget {
       VitalQuality.unknown => scheme.onSurface.withValues(alpha: 0.45),
     };
   }
-}
-
-/// Whether the temperature slot should show the placeholder.
-bool isTemperatureComingSoon(VitalMetric metric) {
-  return metric.kind == VitalKind.temperature &&
-      metric.quality == VitalQuality.unknown &&
-      !metric.hasValue;
 }

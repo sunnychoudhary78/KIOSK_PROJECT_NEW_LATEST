@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, Input, PageHeader, Panel } from '../../core/ui/primitives';
+import { Button, Input, PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
 
 type PlatformSetting = {
   id: string;
@@ -12,16 +12,6 @@ type PlatformSetting = {
   updatedAt: string;
 };
 
-type SmsForm = {
-  provider: 'msg91';
-  enabled: boolean;
-  auth_key: string;
-  sender_id: string;
-  flow_id: string;
-  otp_var_name: string;
-  message_template: string;
-};
-
 type OtpPrintForm = {
   ttlSeconds: number;
   otpLength: number;
@@ -29,6 +19,8 @@ type OtpPrintForm = {
   maxDocumentsPerSession: number;
   maxVerifyAttempts: number;
   maxFileSizeMb: number;
+  freePagesPerSession: number;
+  extraPageChargeRupees: number;
 };
 
 type CitizenAuthForm = {
@@ -38,15 +30,11 @@ type CitizenAuthForm = {
   requestCooldownSeconds: number;
 };
 
-const DEFAULT_SMS: SmsForm = {
-  provider: 'msg91',
-  enabled: false,
-  auth_key: '',
-  sender_id: '',
-  flow_id: '',
-  otp_var_name: 'OTP',
-  message_template:
-    'Your OTP for Smart Kiosk is --. Valid for 30 minutes. Do not share this code.',
+type SmsStatus = {
+  provider: string;
+  configured: boolean;
+  senderId: string | null;
+  flowIdConfigured: boolean;
 };
 
 const DEFAULT_OTP_PRINT: OtpPrintForm = {
@@ -56,6 +44,8 @@ const DEFAULT_OTP_PRINT: OtpPrintForm = {
   maxDocumentsPerSession: 5,
   maxVerifyAttempts: 5,
   maxFileSizeMb: 15,
+  freePagesPerSession: 5,
+  extraPageChargeRupees: 10,
 };
 
 const DEFAULT_CITIZEN_AUTH: CitizenAuthForm = {
@@ -65,42 +55,97 @@ const DEFAULT_CITIZEN_AUTH: CitizenAuthForm = {
   requestCooldownSeconds: 60,
 };
 
-type Tab = 'sms' | 'otp';
+const MIN_PRINT_TTL_SECONDS = 60;
+const MAX_PRINT_TTL_SECONDS = 86_400;
+const MIN_LOGIN_TTL_SECONDS = 60;
+const MAX_LOGIN_TTL_SECONDS = 3600;
+
+const SMS_TEMPLATE_PREVIEW =
+  'Your OTP for IMMORTAL is #### Valid for {expiry}. Do not share this code.';
+
+function formatOtpExpiryLabel(ttlSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(Number(ttlSeconds) || 0));
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0 && minutes === 0) {
+    return hours === 1 ? '1 hour' : `${hours} hours`;
+  }
+  if (hours > 0) {
+    const hourPart = hours === 1 ? '1 hour' : `${hours} hours`;
+    const minutePart = minutes === 1 ? '1 minute' : `${minutes} minutes`;
+    return `${hourPart} ${minutePart}`;
+  }
+  return totalMinutes === 1 ? '1 minute' : `${totalMinutes} minutes`;
+}
+
+function ttlToParts(ttlSeconds: number): { hours: number; minutes: number } {
+  const clamped = Math.min(
+    MAX_PRINT_TTL_SECONDS,
+    Math.max(MIN_PRINT_TTL_SECONDS, Math.floor(Number(ttlSeconds) || MIN_PRINT_TTL_SECONDS)),
+  );
+  const totalMinutes = Math.floor(clamped / 60);
+  return {
+    hours: Math.floor(totalMinutes / 60),
+    minutes: totalMinutes % 60,
+  };
+}
+
+function partsToTtlSeconds(hours: number, minutes: number): number {
+  const h = Math.min(24, Math.max(0, Math.floor(Number(hours) || 0)));
+  const m = Math.min(59, Math.max(0, Math.floor(Number(minutes) || 0)));
+  let total = h * 3600 + m * 60;
+  if (total < MIN_PRINT_TTL_SECONDS) total = MIN_PRINT_TTL_SECONDS;
+  if (total > MAX_PRINT_TTL_SECONDS) total = MAX_PRINT_TTL_SECONDS;
+  return total;
+}
+
+function clampLoginTtlSeconds(value: number): number {
+  const n = Math.floor(Number(value) || 0);
+  if (n < MIN_LOGIN_TTL_SECONDS) return MIN_LOGIN_TTL_SECONDS;
+  if (n > MAX_LOGIN_TTL_SECONDS) return MAX_LOGIN_TTL_SECONDS;
+  return n;
+}
 
 export function PlatformSettingsPage() {
   const { token } = useAuth();
-  const [tab, setTab] = useState<Tab>('sms');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [sms, setSms] = useState<SmsForm>(DEFAULT_SMS);
   const [otpPrint, setOtpPrint] = useState<OtpPrintForm>(DEFAULT_OTP_PRINT);
   const [citizenAuth, setCitizenAuth] = useState<CitizenAuthForm>(DEFAULT_CITIZEN_AUTH);
+  const [smsStatus, setSmsStatus] = useState<SmsStatus | null>(null);
+
+  const printDuration = ttlToParts(otpPrint.ttlSeconds);
+  const printExpiryLabel = formatOtpExpiryLabel(otpPrint.ttlSeconds);
 
   const load = useCallback(async () => {
-    setError(null);
     try {
-      const result = await apiRequest<{ items: PlatformSetting[] }>('/platform-settings', {
-        token,
-      });
+      const result = await apiRequest<{
+        items: PlatformSetting[];
+        smsStatus?: SmsStatus;
+      }>('/platform-settings', { token });
+
+      setSmsStatus(
+        result.smsStatus ?? {
+          provider: 'noop',
+          configured: false,
+          senderId: null,
+          flowIdConfigured: false,
+        },
+      );
+
       for (const item of result.items) {
-        if (item.settingKey === 'sms_config') {
-          const v = item.settingValue;
-          setSms({
-            provider: 'msg91',
-            enabled: v.enabled !== false,
-            auth_key: String(v.auth_key ?? ''),
-            sender_id: String(v.sender_id ?? ''),
-            flow_id: String(v.flow_id ?? ''),
-            otp_var_name: String(v.otp_var_name ?? 'OTP'),
-            message_template: String(v.message_template ?? DEFAULT_SMS.message_template),
-          });
-        }
         if (item.settingKey === 'otp_print_config') {
           setOtpPrint({ ...DEFAULT_OTP_PRINT, ...(item.settingValue as OtpPrintForm) });
         }
         if (item.settingKey === 'citizen_auth_config') {
-          setCitizenAuth({ ...DEFAULT_CITIZEN_AUTH, ...(item.settingValue as CitizenAuthForm) });
+          const loaded = { ...DEFAULT_CITIZEN_AUTH, ...(item.settingValue as CitizenAuthForm) };
+          setCitizenAuth({
+            ...loaded,
+            ttlSeconds: clampLoginTtlSeconds(loaded.ttlSeconds),
+          });
         }
       }
     } catch (err) {
@@ -112,156 +157,176 @@ export function PlatformSettingsPage() {
     void load();
   }, [load]);
 
-  async function saveSetting(settingKey: string, settingValue: unknown) {
+  async function putSetting(settingKey: string, settingValue: unknown): Promise<void> {
+    await apiRequest(`/platform-settings/${settingKey}`, {
+      method: 'PUT',
+      token,
+      body: { settingValue },
+    });
+  }
+
+  function setPrintDuration(hours: number, minutes: number) {
+    setOtpPrint((s) => ({ ...s, ttlSeconds: partsToTtlSeconds(hours, minutes) }));
+  }
+
+  async function onSave(event: FormEvent) {
+    event.preventDefault();
     setSaving(true);
     setError(null);
     setSuccess(null);
+
+    const printTtlSeconds = partsToTtlSeconds(printDuration.hours, printDuration.minutes);
+    const loginTtlRaw = Number(citizenAuth.ttlSeconds);
+    const loginTtlValid =
+      Number.isFinite(loginTtlRaw) &&
+      loginTtlRaw >= MIN_LOGIN_TTL_SECONDS &&
+      loginTtlRaw <= MAX_LOGIN_TTL_SECONDS;
+
+    const errors: string[] = [];
+    let printSaved = false;
+    let loginSaved = false;
+
     try {
-      await apiRequest(`/platform-settings/${settingKey}`, {
-        method: 'PUT',
-        token,
-        body: { settingValue },
+      await putSetting('otp_print_config', {
+        ...otpPrint,
+        ttlSeconds: printTtlSeconds,
+        otpLength: Number(otpPrint.otpLength),
+        maxPagesPerSession: Number(otpPrint.maxPagesPerSession),
+        maxDocumentsPerSession: Number(otpPrint.maxDocumentsPerSession),
+        maxVerifyAttempts: Number(otpPrint.maxVerifyAttempts),
+        maxFileSizeMb: Number(otpPrint.maxFileSizeMb),
+        freePagesPerSession: Number(otpPrint.freePagesPerSession),
+        extraPageChargeRupees: Number(otpPrint.extraPageChargeRupees),
       });
-      setSuccess('Settings saved');
-      await load();
+      printSaved = true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setSaving(false);
+      errors.push(
+        `Print OTP: ${err instanceof Error ? err.message : 'Failed to save'}`,
+      );
     }
-  }
 
-  async function onSaveSms(event: FormEvent) {
-    event.preventDefault();
-    if (!sms.message_template.includes('--')) {
-      setError('Message template must include -- as the OTP placeholder');
-      return;
+    if (!loginTtlValid) {
+      errors.push(
+        `Login OTP: TTL must be ${MIN_LOGIN_TTL_SECONDS}–${MAX_LOGIN_TTL_SECONDS} seconds (max 1 hour).`,
+      );
+    } else {
+      try {
+        await putSetting('citizen_auth_config', {
+          ...citizenAuth,
+          ttlSeconds: loginTtlRaw,
+          otpLength: Number(citizenAuth.otpLength),
+          maxVerifyAttempts: Number(citizenAuth.maxVerifyAttempts),
+          requestCooldownSeconds: Number(citizenAuth.requestCooldownSeconds),
+        });
+        loginSaved = true;
+      } catch (err) {
+        errors.push(
+          `Login OTP: ${err instanceof Error ? err.message : 'Failed to save'}`,
+        );
+      }
     }
-    await saveSetting('sms_config', sms);
-  }
 
-  async function onSaveOtp(event: FormEvent) {
-    event.preventDefault();
-    await saveSetting('otp_print_config', {
-      ...otpPrint,
-      ttlSeconds: Number(otpPrint.ttlSeconds),
-      otpLength: Number(otpPrint.otpLength),
-      maxPagesPerSession: Number(otpPrint.maxPagesPerSession),
-      maxDocumentsPerSession: Number(otpPrint.maxDocumentsPerSession),
-      maxVerifyAttempts: Number(otpPrint.maxVerifyAttempts),
-      maxFileSizeMb: Number(otpPrint.maxFileSizeMb),
-    });
-    await saveSetting('citizen_auth_config', {
-      ...citizenAuth,
-      ttlSeconds: Number(citizenAuth.ttlSeconds),
-      otpLength: Number(citizenAuth.otpLength),
-      maxVerifyAttempts: Number(citizenAuth.maxVerifyAttempts),
-      requestCooldownSeconds: Number(citizenAuth.requestCooldownSeconds),
-    });
+    await load();
+
+    if (errors.length === 0) {
+      setSuccess('Settings saved');
+    } else if (printSaved || loginSaved) {
+      setSuccess(
+        [printSaved ? 'Print settings saved' : null, loginSaved ? 'Login settings saved' : null]
+          .filter(Boolean)
+          .join('; '),
+      );
+      setError(errors.join(' '));
+    } else {
+      setError(errors.join(' '));
+    }
+
+    setSaving(false);
   }
 
   return (
-    <div>
+    <div className="settings-page">
       <PageHeader
         title="Platform settings"
-        subtitle="SMS provider and OTP print / login configuration"
+        subtitle="Print OTP expiry drives SMS ##var2##. MSG91 credentials come from the API environment."
       />
-      <div className="toolbar" style={{ marginBottom: 16 }}>
-        <Button
-          type="button"
-          variant={tab === 'sms' ? 'primary' : 'secondary'}
-          onClick={() => setTab('sms')}
-        >
-          SMS Config
-        </Button>
-        <Button
-          type="button"
-          variant={tab === 'otp' ? 'primary' : 'secondary'}
-          onClick={() => setTab('otp')}
-        >
-          OTP / Print
-        </Button>
-      </div>
+
       {error ? <p className="error">{error}</p> : null}
       {success ? <p className="success">{success}</p> : null}
 
-      {tab === 'sms' ? (
-        <Panel title="MSG91 Flow SMS">
-          <form className="form-grid" onSubmit={onSaveSms}>
+      <form className="settings-stack" onSubmit={onSave}>
+        <Panel
+          title="SMS & Print OTP expiry"
+          actions={
+            smsStatus ? (
+              <StatusBadge status={smsStatus.configured ? 'ready' : 'not_configured'} />
+            ) : null
+          }
+        >
+          <div className="settings-status muted">
+            {smsStatus?.configured ? (
+              <>
+                MSG91 ready via env
+                {smsStatus.senderId ? ` · sender ${smsStatus.senderId}` : ''}
+                {smsStatus.flowIdConfigured ? ' · flow ID set' : ''}
+              </>
+            ) : (
+              <>
+                MSG91 not configured. Set{' '}
+                <code>SKP_SMS_PROVIDER=msg91</code>, <code>SKP_MSG91_AUTH_KEY</code>,{' '}
+                <code>SKP_MSG91_SENDER_ID</code>, and <code>SKP_MSG91_FLOW_ID</code> on the API, then
+                restart.
+              </>
+            )}
+          </div>
+
+          <div className="settings-row">
             <label>
-              <span>Enabled</span>
-              <input
-                type="checkbox"
-                checked={sms.enabled}
-                onChange={(e) => setSms((s) => ({ ...s, enabled: e.target.checked }))}
-              />
-            </label>
-            <label>
-              Auth key
-              <Input
-                value={sms.auth_key}
-                onChange={(e) => setSms((s) => ({ ...s, auth_key: e.target.value }))}
-                maxLength={200}
-                placeholder="MSG91 auth key"
-              />
-            </label>
-            <label>
-              Sender ID
-              <Input
-                value={sms.sender_id}
-                onChange={(e) => setSms((s) => ({ ...s, sender_id: e.target.value }))}
-                maxLength={30}
-              />
-            </label>
-            <label>
-              Flow ID
-              <Input
-                value={sms.flow_id}
-                onChange={(e) => setSms((s) => ({ ...s, flow_id: e.target.value }))}
-                maxLength={50}
-              />
-            </label>
-            <label>
-              OTP variable name
-              <Input
-                value={sms.otp_var_name}
-                onChange={(e) => setSms((s) => ({ ...s, otp_var_name: e.target.value }))}
-                maxLength={40}
-              />
-            </label>
-            <label>
-              Message template (must include --)
-              <textarea
-                className="input"
-                rows={3}
-                value={sms.message_template}
-                onChange={(e) => setSms((s) => ({ ...s, message_template: e.target.value }))}
-                maxLength={500}
-              />
-            </label>
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Saving…' : 'Save SMS config'}
-            </Button>
-          </form>
-        </Panel>
-      ) : (
-        <Panel title="OTP print & citizen login">
-          <form className="form-grid" onSubmit={onSaveOtp}>
-            <h3>Print OTP</h3>
-            <label>
-              TTL (seconds)
+              Expiry hours
               <Input
                 type="number"
-                value={otpPrint.ttlSeconds}
-                onChange={(e) =>
-                  setOtpPrint((s) => ({ ...s, ttlSeconds: Number(e.target.value) }))
-                }
+                min={0}
+                max={24}
+                value={printDuration.hours}
+                onChange={(e) => setPrintDuration(Number(e.target.value), printDuration.minutes)}
               />
             </label>
+            <label>
+              Expiry minutes
+              <Input
+                type="number"
+                min={0}
+                max={59}
+                value={printDuration.minutes}
+                onChange={(e) => setPrintDuration(printDuration.hours, Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className="settings-preview">
+            <div>
+              <code>##var1##</code> = OTP code (hardcoded)
+            </div>
+            <div>
+              <code>##var2##</code> = <strong>{printExpiryLabel}</strong>
+            </div>
+            <div className="settings-preview-message">
+              {SMS_TEMPLATE_PREVIEW.replace('{expiry}', printExpiryLabel)}
+            </div>
+            <p className="muted" style={{ margin: '0.5rem 0 0' }}>
+              Range: 1 minute – 24 hours. Changing hours/minutes updates ##var2## immediately.
+            </p>
+          </div>
+        </Panel>
+
+        <Panel title="Print limits">
+          <div className="settings-row">
             <label>
               OTP length
               <Input
                 type="number"
+                min={4}
+                max={8}
                 value={otpPrint.otpLength}
                 onChange={(e) =>
                   setOtpPrint((s) => ({ ...s, otpLength: Number(e.target.value) }))
@@ -269,7 +334,7 @@ export function PlatformSettingsPage() {
               />
             </label>
             <label>
-              Max pages per session
+              Max pages / session
               <Input
                 type="number"
                 value={otpPrint.maxPagesPerSession}
@@ -279,7 +344,7 @@ export function PlatformSettingsPage() {
               />
             </label>
             <label>
-              Max documents per session
+              Max documents / session
               <Input
                 type="number"
                 value={otpPrint.maxDocumentsPerSession}
@@ -311,22 +376,66 @@ export function PlatformSettingsPage() {
                 }
               />
             </label>
-
-            <h3>Citizen login OTP</h3>
             <label>
-              Login OTP TTL (seconds)
+              Free pages / session
               <Input
                 type="number"
+                min={0}
+                max={100}
+                value={otpPrint.freePagesPerSession}
+                onChange={(e) =>
+                  setOtpPrint((s) => ({
+                    ...s,
+                    freePagesPerSession: Number(e.target.value),
+                  }))
+                }
+              />
+            </label>
+            <label>
+              Extra page charge (₹)
+              <Input
+                type="number"
+                min={0}
+                max={1000}
+                value={otpPrint.extraPageChargeRupees}
+                onChange={(e) =>
+                  setOtpPrint((s) => ({
+                    ...s,
+                    extraPageChargeRupees: Number(e.target.value),
+                  }))
+                }
+              />
+            </label>
+          </div>
+          <p className="muted" style={{ margin: '0.75rem 0 0' }}>
+            First {otpPrint.freePagesPerSession} page(s) are free. Each extra page costs ₹
+            {otpPrint.extraPageChargeRupees}. Max pages remains a hard cap.
+          </p>
+        </Panel>
+
+        <Panel title="Citizen login OTP">
+          <div className="settings-row">
+            <label>
+              TTL (seconds, max 3600)
+              <Input
+                type="number"
+                min={MIN_LOGIN_TTL_SECONDS}
+                max={MAX_LOGIN_TTL_SECONDS}
                 value={citizenAuth.ttlSeconds}
                 onChange={(e) =>
                   setCitizenAuth((s) => ({ ...s, ttlSeconds: Number(e.target.value) }))
                 }
               />
+              <span className="muted" style={{ fontSize: 12 }}>
+                SMS ##var2## for login: {formatOtpExpiryLabel(citizenAuth.ttlSeconds)}
+              </span>
             </label>
             <label>
-              Login OTP length
+              OTP length
               <Input
                 type="number"
+                min={4}
+                max={8}
                 value={citizenAuth.otpLength}
                 onChange={(e) =>
                   setCitizenAuth((s) => ({ ...s, otpLength: Number(e.target.value) }))
@@ -334,7 +443,7 @@ export function PlatformSettingsPage() {
               />
             </label>
             <label>
-              Login max verify attempts
+              Max verify attempts
               <Input
                 type="number"
                 value={citizenAuth.maxVerifyAttempts}
@@ -359,12 +468,15 @@ export function PlatformSettingsPage() {
                 }
               />
             </label>
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Saving…' : 'Save OTP settings'}
-            </Button>
-          </form>
+          </div>
         </Panel>
-      )}
+
+        <div className="settings-actions">
+          <Button type="submit" disabled={saving}>
+            {saving ? 'Saving…' : 'Save settings'}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

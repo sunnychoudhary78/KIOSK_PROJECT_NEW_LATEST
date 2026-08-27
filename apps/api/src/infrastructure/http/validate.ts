@@ -15,3 +15,17 @@ export function validateBody<T>(schema: ZodSchema<T>) {
     next();
   };
 }
+
+export function validateQuery<T>(schema: ZodSchema<T>) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    const result = schema.safeParse(req.query);
+    if (!result.success) {
+      next(
+        new AppError('validation_error', 'Query validation failed', 400, result.error.flatten()),
+      );
+      return;
+    }
+    req.query = result.data as Request['query'];
+    next();
+  };
+}

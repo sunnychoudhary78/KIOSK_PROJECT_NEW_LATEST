@@ -9,6 +9,9 @@ type Device = {
   deviceKey: string;
   status: string;
   siteName: string;
+  latitude: number | null;
+  longitude: number | null;
+  address: string | null;
   lastHeartbeatAt: string | null;
 };
 
@@ -18,12 +21,23 @@ type CreatedCredentials = {
   deviceSecret: string;
 };
 
+function formatLocation(device: Device): string {
+  if (device.address?.trim()) return device.address.trim();
+  if (device.latitude != null && device.longitude != null) {
+    return `${device.latitude.toFixed(5)}, ${device.longitude.toFixed(5)}`;
+  }
+  return '—';
+}
+
 export function KiosksPage() {
   const { token } = useAuth();
   const [items, setItems] = useState<Device[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [siteName, setSiteName] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [address, setAddress] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [credentials, setCredentials] = useState<CreatedCredentials | null>(null);
   const [copiedField, setCopiedField] = useState<'key' | 'secret' | null>(null);
@@ -46,8 +60,18 @@ export function KiosksPage() {
     event.preventDefault();
     const trimmedName = name.trim();
     const trimmedSite = siteName.trim();
+    const lat = Number(latitude);
+    const lng = Number(longitude);
     if (!trimmedName || !trimmedSite) {
       setError('Device name and site name are required');
+      return;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setError('Latitude and longitude are required numbers');
+      return;
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setError('Latitude must be −90…90 and longitude −180…180');
       return;
     }
 
@@ -57,7 +81,13 @@ export function KiosksPage() {
       const result = await apiRequest<Device & { deviceSecret: string }>('/devices', {
         method: 'POST',
         token,
-        body: { name: trimmedName, siteName: trimmedSite },
+        body: {
+          name: trimmedName,
+          siteName: trimmedSite,
+          latitude: lat,
+          longitude: lng,
+          address: address.trim() || undefined,
+        },
       });
       setCredentials({
         name: result.name,
@@ -66,6 +96,9 @@ export function KiosksPage() {
       });
       setName('');
       setSiteName('');
+      setLatitude('');
+      setLongitude('');
+      setAddress('');
       setCopiedField(null);
       await load();
     } catch (err) {
@@ -109,6 +142,34 @@ export function KiosksPage() {
               onChange={(e) => setSiteName(e.target.value)}
               placeholder="Demo Site"
               required
+            />
+          </label>
+          <label>
+            Latitude
+            <Input
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              placeholder="28.613900"
+              inputMode="decimal"
+              required
+            />
+          </label>
+          <label>
+            Longitude
+            <Input
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              placeholder="77.209000"
+              inputMode="decimal"
+              required
+            />
+          </label>
+          <label>
+            Address (optional)
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="City Mall, Gate 2"
             />
           </label>
           <Button type="submit" disabled={submitting}>
@@ -163,6 +224,7 @@ export function KiosksPage() {
             <tr>
               <th>Name</th>
               <th>Site</th>
+              <th>Location</th>
               <th>Status</th>
               <th>Device key</th>
               <th>Last heartbeat</th>
@@ -171,13 +233,14 @@ export function KiosksPage() {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={5}>No devices registered yet.</td>
+                <td colSpan={6}>No devices registered yet.</td>
               </tr>
             ) : (
               items.map((device) => (
                 <tr key={device.id}>
                   <td>{device.name}</td>
                   <td>{device.siteName}</td>
+                  <td>{formatLocation(device)}</td>
                   <td>{device.status}</td>
                   <td>
                     <code>{device.deviceKey}</code>

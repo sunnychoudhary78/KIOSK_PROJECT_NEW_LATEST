@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/features/digilocker_print/data/digilocker_print_repository.dart';
-import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_kiosk/services/print_spooler.dart';
 
 final digilockerRepositoryProvider = Provider<DigilockerPrintRepository>((ref) {
@@ -61,6 +60,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
   int _pollAttempts = 0;
   static const _maxPollAttempts = 150; // ~5 minutes at 2s
   bool _authCallbackSeen = false;
+  bool _pollInFlight = false;
 
   @override
   DigilockerUiState build() {
@@ -85,6 +85,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       _pollTimer = null;
       _authCallbackSeen = false;
       _pollAttempts = 0;
+      _pollInFlight = false;
 
       final previewPath = state.previewFilePath;
       if (previewPath != null && previewPath.isNotEmpty) {
@@ -105,6 +106,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
   Future<void> start() async {
     _pollTimer?.cancel();
     _authCallbackSeen = false;
+    _pollInFlight = false;
     state = const DigilockerUiState(phase: DigilockerPhase.loadingDocs);
     try {
       final session = await _repository.startSession();
@@ -169,6 +171,11 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         state.phase != DigilockerPhase.loadingDocs) {
       return;
     }
+    // Skip overlapping ticks so slow DigiLocker responses cannot stack
+    // concurrent GETs and exhaust the shared API rate-limit budget.
+    if (_pollInFlight) {
+      return;
+    }
     // Only auto-advance from consent/loading after auth.
     if (!force &&
         state.phase == DigilockerPhase.loadingDocs &&
@@ -190,6 +197,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       return;
     }
 
+    _pollInFlight = true;
     try {
       final session = await _repository.getSession(sessionId);
       if (session.status == 'authorized') {
@@ -214,6 +222,8 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           error: error.toString(),
         );
       }
+    } finally {
+      _pollInFlight = false;
     }
   }
 

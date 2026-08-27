@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  camera_windows
   flutter_libserialport
   media_kit_libs_windows_video
   media_kit_video

@@ -184,6 +184,33 @@ class SerialService {
     });
   }
 
+  /// Write a newline-terminated command line to the open port.
+  Future<void> sendLine(String line) {
+    return _serialized(() => _sendLineUnlocked(line));
+  }
+
+  Future<void> _sendLineUnlocked(String line) async {
+    _ensureNotDisposed();
+    final port = _port;
+    if (port == null || !port.isOpen) {
+      throw StateError('Serial port is not connected');
+    }
+
+    final trimmed = line.trimRight();
+    final payload = trimmed.endsWith('\n') ? trimmed : '$trimmed\n';
+    final bytes = Uint8List.fromList(utf8.encode(payload));
+    // Blocking write so short mode commands aren't dropped (Windows USB).
+    final written = port.write(bytes, timeout: 1000);
+    if (written != bytes.length) {
+      final error = SerialPort.lastError;
+      final message =
+          'Serial write incomplete ($written/${bytes.length}): ${error ?? 'unknown error'}';
+      AppLogger.error(message);
+      throw StateError(message);
+    }
+    AppLogger.info('Serial sent: ${trimmed.trim()}');
+  }
+
   Future<void> dispose() async {
     if (_disposed) {
       return;

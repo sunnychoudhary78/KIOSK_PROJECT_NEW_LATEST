@@ -5,6 +5,19 @@ import 'package:http/http.dart' as http;
 import 'package:skp_mobile/core/config/app_config.dart';
 import 'package:uuid/uuid.dart';
 
+class ApiException implements Exception {
+  const ApiException(this.message, {this.statusCode, this.code});
+
+  final String message;
+  final int? statusCode;
+  final String? code;
+
+  bool get isRetryable => statusCode != null && statusCode! >= 500;
+
+  @override
+  String toString() => message;
+}
+
 class ApiClient {
   ApiClient({http.Client? httpClient}) : _http = httpClient ?? http.Client();
 
@@ -12,6 +25,17 @@ class ApiClient {
   String? _accessToken;
 
   void setAccessToken(String? token) => _accessToken = token;
+
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Map<String, String>? query,
+  }) async {
+    final uri = Uri.parse('${AppConfig.current.apiBaseUrl}$path').replace(
+      queryParameters: query == null || query.isEmpty ? null : query,
+    );
+    final response = await _http.get(uri, headers: _headers());
+    return _decode(response);
+  }
 
   Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? body}) async {
     final response = await _http.post(
@@ -62,7 +86,11 @@ class ApiClient {
         ? <String, dynamic>{}
         : jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode >= 400) {
-      throw Exception(payload['message'] ?? 'Request failed');
+      throw ApiException(
+        payload['message'] as String? ?? 'Request failed',
+        statusCode: response.statusCode,
+        code: payload['code'] as String?,
+      );
     }
     return payload;
   }

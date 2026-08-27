@@ -2,136 +2,126 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:skp_kiosk/features/well_being/application/vitals_line_parser.dart';
 
 void main() {
-  group('VitalsLineParser firmware lines', () {
+  group('VitalsLineParser v2 firmware protocol', () {
     late VitalsLineParser parser;
 
     setUp(() {
       parser = VitalsLineParser();
     });
 
-    test('parses full valid firmware sample', () {
+    test('parses ready with sensor flags', () {
       final result = parser.parseLine(
-        'RED=12000 IR=62000 HR=78 SpO2=98 validHR=1 validSpO2=1 validCount=2',
+        '{"status":"ready","max30102":true,"mlx90614":false}',
       );
       expect(result, isNotNull);
-      expect(result!.finger, isTrue);
-      expect(result.heartRate, 78);
-      expect(result.spo2, 98);
-      expect(result.validHr, isTrue);
-      expect(result.validSpo2, isTrue);
-      expect(result.validCount, 2);
-      expect(result.fingerAbsent, isFalse);
+      expect(result!.kind, VitalsMessageKind.ready);
+      expect(result.max30102Ok, isTrue);
+      expect(result.mlx90614Ok, isFalse);
     });
 
-    test('HR=-- and SpO2=-- are missing values', () {
-      final result = parser.parseLine(
-        'RED=262143 IR=60000 HR=-- SpO2=-- validHR=0 validSpO2=0 validCount=0',
+    test('parses place_finger and finger_detected', () {
+      final place = parser.parseLine('{"status":"place_finger"}');
+      expect(place!.kind, VitalsMessageKind.placeFinger);
+      expect(place.fingerAbsent, isTrue);
+
+      final detected = parser.parseLine('{"status":"finger_detected"}');
+      expect(detected!.kind, VitalsMessageKind.fingerDetected);
+      expect(detected.finger, isTrue);
+    });
+
+    test('parses recording countdowns for both sensors', () {
+      final max = parser.parseLine(
+        '{"status":"recording","sensor":"max30102","elapsed":3,"remaining":17}',
       );
-      expect(result, isNotNull);
-      expect(result!.heartRate, isNull);
+      expect(max!.kind, VitalsMessageKind.recording);
+      expect(max.isMaxRecording, isTrue);
+      expect(max.elapsedSeconds, 3);
+      expect(max.remSeconds, 17);
+
+      final temp = parser.parseLine(
+        '{"status":"recording","sensor":"mlx90614","elapsed":10,"remaining":50}',
+      );
+      expect(temp!.isTempRecording, isTrue);
+      expect(temp.remSeconds, 50);
+    });
+
+    test('parses oxi result with null temps', () {
+      final result = parser.parseLine(
+        '{"bpm":75.5,"spo2":98.0,"object_f":null,"ambient_f":null}',
+      );
+      expect(result!.kind, VitalsMessageKind.result);
+      expect(result.finalHeartRate, 75.5);
+      expect(result.finalSpO2, 98.0);
+      expect(result.temperatureC, isNull);
+      expect(result.ok, isTrue);
+    });
+
+    test('parses temp result and converts F to C', () {
+      final result = parser.parseLine(
+        '{"bpm":null,"spo2":null,"object_f":98.6,"ambient_f":75.20}',
+      );
+      expect(result!.kind, VitalsMessageKind.result);
+      expect(result.heartRate, isNull);
       expect(result.spo2, isNull);
-      expect(result.validHr, isFalse);
-      expect(result.validSpo2, isFalse);
-      expect(result.finger, isTrue);
+      expect(result.temperatureF, closeTo(98.6, 0.01));
+      expect(result.temperatureC, closeTo(37.0, 0.05));
+      expect(result.ambientTempF, closeTo(75.2, 0.01));
+      expect(result.canCaptureTemp, isTrue);
     });
 
-    test('finger false when IR below 50000', () {
+    test('parses aborted finger_removed', () {
       final result = parser.parseLine(
-        'RED=1000 IR=12000 HR=-- SpO2=-- validHR=0 validSpO2=0 validCount=0',
+        '{"status":"aborted","reason":"finger_removed"}',
       );
-      expect(result, isNotNull);
-      expect(result!.finger, isFalse);
-      expect(result.fingerAbsent, isTrue);
+      expect(result!.kind, VitalsMessageKind.aborted);
+      expect(result.isFingerRemovedAbort, isTrue);
+      expect(result.abortReason, 'finger_removed');
     });
 
-    test('finger true when IR above 50000', () {
-      final result = parser.parseLine(
-        'RED=1000 IR=50001 HR=72 SpO2=97 validHR=1 validSpO2=1 validCount=1',
-      );
-      expect(result!.finger, isTrue);
+    test('maps sensor-not-found statuses to errors', () {
+      final max = parser.parseLine('{"status":"max30102_not_found"}');
+      expect(max!.kind, VitalsMessageKind.error);
+      expect(max.errorMessage, 'max30102_not_found');
+
+      final temp = parser.parseLine('{"status":"mlx90614_not_found"}');
+      expect(temp!.kind, VitalsMessageKind.error);
     });
 
-    test('does not treat validHR=0 as wiping sample identity', () {
-      final result = parser.parseLine(
-        'RED=1000 IR=60000 HR=-- SpO2=-- validHR=0 validSpO2=0 validCount=0',
-      );
-      expect(result!.recognized, isTrue);
-      expect(result.finger, isTrue);
-      expect(result.validCount, 0);
-    });
-
-    test('ignores wifi boot noise', () {
-      expect(parser.addChunk('Connecting to WiFi........\n'), isEmpty);
+    test('buffers fragmented JSON across chunks', () {
       expect(
-        parser.addChunk('Kiosk Dashboard Web Server Ready: http://192.168.1.5\n'),
+        parser.addChunk('{"bpm":72.0,"spo2":97.'),
         isEmpty,
       );
-    });
-
-    test('buffers fragmented firmware line', () {
-      expect(parser.addChunk('RED=12000 IR=62000 HR=7'), isEmpty);
-      final results = parser.addChunk('8 SpO2=98 validHR=1 validSpO2=1 validCount=3\n');
+      final results = parser.addChunk('0,"object_f":null,"ambient_f":null}\n');
       expect(results, hasLength(1));
-      expect(results.single.heartRate, 78);
-      expect(results.single.spo2, 98);
-      expect(results.single.validCount, 3);
-      expect(results.single.finger, isTrue);
+      expect(results.single.finalHeartRate, 72.0);
+      expect(results.single.finalSpO2, 97.0);
     });
 
-    test('tiny slices of validHR do not become HR=1', () {
-      expect(parser.addChunk('va'), isEmpty);
-      expect(parser.addChunk('lid'), isEmpty);
-      // Completes as validHR=1 without IR — not a full firmware sample alone.
-      final mid = parser.addChunk('HR=1\n');
-      // May coalesce; force timeout flush with fake clock.
-      final clock = _FakeClock(DateTime(2026, 1, 1));
-      parser = VitalsLineParser(
-        frameTimeout: const Duration(milliseconds: 400),
-        clock: clock,
+    test('ignores non-JSON lines and old protocol', () {
+      expect(parser.addChunk('Connecting to WiFi........\n'), isEmpty);
+      expect(parser.addChunk('hello\n'), isEmpty);
+      expect(
+        parser.parseLine(
+          '{"mode":"oxi","st":2,"bpm":78,"spo2":98,"rem":12,"pct":16,'
+          '"fb":0,"fs":0,"ok":0}',
+        ),
+        isNull,
       );
-      parser.addChunk('validHR=1\n');
-      clock.advance(const Duration(milliseconds: 500));
-      final flushed = parser.flushTimedOut();
-      for (final result in [...mid, ...flushed]) {
-        expect(result.heartRate, isNot(1));
-      }
     });
 
-    test('signal quality bands', () {
-      final poor = parser.parseLine(
-        'RED=1 IR=10000 HR=-- SpO2=-- validHR=0 validSpO2=0 validCount=0',
-      );
-      expect(poor!.signalQualityLabel, 'Poor');
-
-      final fair = parser.parseLine(
-        'RED=1 IR=60000 HR=-- SpO2=-- validHR=0 validSpO2=0 validCount=0',
-      );
-      expect(fair!.signalQualityLabel, 'Fair');
-
-      final excellent = parser.parseLine(
-        'RED=1 IR=90000 HR=80 SpO2=99 validHR=1 validSpO2=1 validCount=3',
-      );
-      expect(excellent!.signalQualityLabel, 'Excellent');
-    });
-
-    test('drops out-of-band HR even when validHR=1', () {
+    test('drops out-of-band bpm/spo2 on result', () {
       final result = parser.parseLine(
-        'RED=1 IR=60000 HR=1 SpO2=98 validHR=1 validSpO2=1 validCount=1',
+        '{"bpm":1,"spo2":50,"object_f":null,"ambient_f":null}',
       );
       expect(result!.heartRate, isNull);
-      expect(result.spo2, 98);
+      expect(result.spo2, isNull);
+      expect(result.ok, isFalse);
+    });
+
+    test('parses sensor_started', () {
+      final result = parser.parseLine('{"status":"sensor_started"}');
+      expect(result!.kind, VitalsMessageKind.sensorStarted);
     });
   });
-}
-
-class _FakeClock {
-  _FakeClock(this._now);
-
-  DateTime _now;
-
-  DateTime call() => _now;
-
-  void advance(Duration by) {
-    _now = _now.add(by);
-  }
 }

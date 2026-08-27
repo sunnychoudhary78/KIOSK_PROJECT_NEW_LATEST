@@ -7,6 +7,7 @@ import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/features/well_being/application/vitals_line_parser.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
+import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
 
 final wellBeingControllerProvider =
@@ -17,10 +18,13 @@ final wellBeingControllerProvider =
 class WellBeingController extends Notifier<WellBeingUiState> {
   final VitalsLineParser _parser = VitalsLineParser();
   StreamSubscription<String>? _incomingSub;
-  Timer? _measureTimer;
-  Timer? _phaseDelayTimer;
-  Timer? _flushTimer;
   ProviderSubscription<SerialUiState>? _serialWatch;
+
+  static const _cmdStop = '{"command":"stop"}';
+  static const _cmdStartMax =
+      '{"command":"start","sensor":"max30102"}';
+  static const _cmdStartTemp =
+      '{"command":"start","sensor":"mlx90614"}';
 
   @override
   WellBeingUiState build() {
@@ -39,7 +43,8 @@ class WellBeingController extends Notifier<WellBeingUiState> {
 
     state = state.copyWith(
       sessionActive: true,
-      phase: WellBeingPhase.idle,
+      phase: WellBeingPhase.choose,
+      activeMode: WellBeingMode.none,
       clearError: true,
       statusMessage: 'Connecting to sensor…',
     );
@@ -56,21 +61,20 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     });
     _syncConnection(ref.read(serialControllerProvider));
 
-    _flushTimer?.cancel();
-    _flushTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
-      if (!ref.mounted || !state.sessionActive) {
-        return;
-      }
-      for (final result in _parser.flushTimedOut()) {
-        _applySample(result);
-      }
-    });
-
     await _ensureConnected();
     if (!ref.mounted || !state.sessionActive) {
       return;
     }
     await _bindIncoming();
+    if (!ref.mounted || !state.sessionActive) {
+      return;
+    }
+    if (ref.mounted && state.isConnected) {
+      state = state.copyWith(
+        phase: WellBeingPhase.choose,
+        statusMessage: 'Choose a measurement',
+      );
+    }
   }
 
   Future<void> stopSession() async {
@@ -92,6 +96,85 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     await _bindIncoming();
   }
 
+  Future<void> startOxygen() async {
+    if (!ref.mounted || !state.sessionActive || !state.isConnected) {
+      return;
+    }
+    state = state.copyWith(
+      activeMode: WellBeingMode.oxi,
+      phase: WellBeingPhase.oxiIdle,
+      fingerDetected: false,
+      collectionTotalSeconds: VitalsLineParser.maxCollectionSeconds,
+      secondsRemaining: VitalsLineParser.maxCollectionSeconds,
+      measurePct: 0,
+      clearLiveHeartRate: true,
+      clearLiveSpO2: true,
+      clearFinalHeartRate: true,
+      clearFinalSpO2: true,
+      clearLiveTempC: true,
+      clearLiveTempF: true,
+      clearFinalTempC: true,
+      clearFinalTempF: true,
+      clearError: true,
+      statusMessage: 'Place your finger gently on the sensor',
+    );
+    await _sendCommand(_cmdStartMax);
+  }
+
+  Future<void> startTemperature() async {
+    if (!ref.mounted || !state.sessionActive || !state.isConnected) {
+      return;
+    }
+    state = state.copyWith(
+      activeMode: WellBeingMode.temp,
+      phase: WellBeingPhase.tempMeasuring,
+      fingerDetected: false,
+      collectionTotalSeconds: VitalsLineParser.tempCollectionSeconds,
+      secondsRemaining: VitalsLineParser.tempCollectionSeconds,
+      measurePct: 0,
+      clearLiveHeartRate: true,
+      clearLiveSpO2: true,
+      clearFinalHeartRate: true,
+      clearFinalSpO2: true,
+      clearLiveTempC: true,
+      clearLiveTempF: true,
+      clearFinalTempC: true,
+      clearFinalTempF: true,
+      clearError: true,
+      statusMessage: 'Hold steady near the temperature sensor',
+    );
+    await _sendCommand(_cmdStartTemp);
+  }
+
+  Future<void> returnToHub() async {
+    if (!ref.mounted || !state.sessionActive) {
+      return;
+    }
+    await _sendCommand(_cmdStop, silent: true);
+    if (!ref.mounted || !state.sessionActive) {
+      return;
+    }
+    state = state.copyWith(
+      phase: WellBeingPhase.choose,
+      activeMode: WellBeingMode.none,
+      fingerDetected: false,
+      collectionTotalSeconds: VitalsLineParser.maxCollectionSeconds,
+      secondsRemaining: VitalsLineParser.maxCollectionSeconds,
+      measurePct: 0,
+      clearLiveHeartRate: true,
+      clearLiveSpO2: true,
+      clearFinalHeartRate: true,
+      clearFinalSpO2: true,
+      clearLiveTempC: true,
+      clearLiveTempF: true,
+      clearFinalTempC: true,
+      clearFinalTempF: true,
+      statusMessage: state.isConnected
+          ? 'Choose a measurement'
+          : state.statusMessage,
+    );
+  }
+
   Future<void> _ensureConnected() async {
     if (!ref.mounted) {
       return;
@@ -104,7 +187,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       state = state.copyWith(
         connectionStatus: SerialConnectionStatus.connected,
         portName: portName,
-        statusMessage: 'Place your finger gently on the sensor',
+        statusMessage: 'Choose a measurement',
       );
       return;
     }
@@ -171,8 +254,8 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     }
 
     String? statusMessage = state.statusMessage;
-    if (serial.isConnected && state.phase == WellBeingPhase.idle) {
-      statusMessage = 'Place your finger gently on the sensor';
+    if (serial.isConnected && state.phase == WellBeingPhase.choose) {
+      statusMessage = 'Choose a measurement';
     }
     if (serial.status == SerialConnectionStatus.error) {
       statusMessage = 'Sensor connection error';
@@ -230,145 +313,235 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       return;
     }
 
-    final finger = sample.finger ?? false;
-    final validCount = sample.validCount ?? state.validCount;
-
-    var liveHr = state.liveHeartRate;
-    var liveSpo2 = state.liveSpO2;
-    if (sample.validHr == true && sample.heartRate != null) {
-      liveHr = sample.heartRate;
-    }
-    if (sample.validSpo2 == true && sample.spo2 != null) {
-      liveSpo2 = sample.spo2;
+    if (sample.isReady) {
+      AppLogger.info(
+        'Sensor ready: max30102=${sample.max30102Ok} mlx90614=${sample.mlx90614Ok}',
+      );
+      return;
     }
 
-    state = state.copyWith(
-      fingerDetected: finger,
-      validCount: validCount,
-      ir: sample.ir,
-      signalLabel: sample.signalQualityLabel,
-      liveHeartRate: liveHr,
-      liveSpO2: liveSpo2,
-    );
-
-    switch (state.phase) {
-      case WellBeingPhase.idle:
-        if (finger) {
-          _enterMeasuring();
-        }
-      case WellBeingPhase.measuring:
-        if (!finger) {
-          _enterCancelled();
-        } else {
-          state = state.copyWith(statusMessage: 'Keep your finger still');
-        }
-      case WellBeingPhase.cancelled:
-        break;
-      case WellBeingPhase.complete:
-        if (!finger) {
-          _scheduleReturnToIdle(const Duration(seconds: 2));
-        }
+    if (sample.isError) {
+      state = state.copyWith(
+        lastError: sample.errorMessage,
+        statusMessage: _humanError(sample.errorMessage),
+      );
+      return;
     }
 
-    AppLogger.info(
-      'Vitals sample: finger=$finger HR=${sample.heartRate} '
-      'SpO2=${sample.spo2} validCount=$validCount IR=${sample.ir}',
-    );
+    if (sample.isInfo) {
+      return;
+    }
+
+    if (state.activeMode == WellBeingMode.oxi) {
+      _applyOxiSample(sample);
+      return;
+    }
+
+    if (state.activeMode == WellBeingMode.temp) {
+      _applyTempSample(sample);
+    }
   }
 
-  void _enterMeasuring() {
-    _phaseDelayTimer?.cancel();
-    _measureTimer?.cancel();
+  void _applyOxiSample(VitalsParseResult sample) {
+    if (state.phase == WellBeingPhase.oxiComplete) {
+      return;
+    }
 
-    state = state.copyWith(
-      phase: WellBeingPhase.measuring,
-      secondsRemaining: WellBeingUiState.measureDurationSeconds,
-      validCount: 0,
-      clearLiveHeartRate: true,
-      clearLiveSpO2: true,
-      clearFinalHeartRate: true,
-      clearFinalSpO2: true,
-      statusMessage: 'Finger detected — measuring',
-    );
+    if (sample.isPlaceFinger) {
+      state = state.copyWith(
+        phase: WellBeingPhase.oxiIdle,
+        fingerDetected: false,
+        secondsRemaining: VitalsLineParser.maxCollectionSeconds,
+        measurePct: 0,
+        clearLiveHeartRate: true,
+        clearLiveSpO2: true,
+        statusMessage: 'Place your finger gently on the sensor',
+      );
+      return;
+    }
 
-    _measureTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!ref.mounted || state.phase != WellBeingPhase.measuring) {
-        timer.cancel();
+    if (sample.isFingerDetected || sample.isSensorStarted) {
+      state = state.copyWith(
+        phase: WellBeingPhase.oxiMeasuring,
+        fingerDetected: true,
+        secondsRemaining: VitalsLineParser.maxCollectionSeconds,
+        measurePct: 0,
+        statusMessage: sample.isFingerDetected
+            ? 'Finger detected — starting measurement'
+            : 'Keep your finger still',
+      );
+      return;
+    }
+
+    if (sample.isMaxRecording ||
+        (sample.isRecording && sample.sensor == null)) {
+      final rem = sample.remSeconds?.ceil().clamp(
+            0,
+            VitalsLineParser.maxCollectionSeconds,
+          );
+      final total = VitalsLineParser.maxCollectionSeconds;
+      final remaining = rem ?? state.secondsRemaining;
+      final pct = ((total - remaining) / total * 100).clamp(0.0, 100.0);
+      state = state.copyWith(
+        phase: WellBeingPhase.oxiMeasuring,
+        fingerDetected: true,
+        secondsRemaining: remaining,
+        measurePct: pct,
+        statusMessage: 'Keep your finger still',
+      );
+      return;
+    }
+
+    if (sample.isFingerRemovedAbort) {
+      state = state.copyWith(
+        phase: WellBeingPhase.oxiIdle,
+        fingerDetected: false,
+        secondsRemaining: VitalsLineParser.maxCollectionSeconds,
+        measurePct: 0,
+        clearLiveHeartRate: true,
+        clearLiveSpO2: true,
+        statusMessage: 'Finger lost — place your finger again',
+      );
+      // Firmware aborted; user can place finger again after we re-start.
+      unawaited(_sendCommand(_cmdStartMax, silent: true));
+      return;
+    }
+
+    if (sample.isAborted) {
+      state = state.copyWith(
+        phase: WellBeingPhase.oxiCancelled,
+        fingerDetected: false,
+        lastError: sample.abortReason,
+        statusMessage: _humanError(sample.abortReason),
+      );
+      return;
+    }
+
+    if (sample.isResult) {
+      final finalHr = sample.finalHeartRate ?? sample.heartRate;
+      final finalSpo2 = sample.finalSpO2 ?? sample.spo2;
+      if (finalHr == null && finalSpo2 == null) {
+        state = state.copyWith(
+          phase: WellBeingPhase.oxiIdle,
+          fingerDetected: false,
+          statusMessage: 'No reading — place your finger again',
+        );
+        unawaited(_sendCommand(_cmdStartMax, silent: true));
         return;
       }
-      final next = state.secondsRemaining - 1;
-      if (next <= 0) {
-        timer.cancel();
-        _enterComplete();
+      state = state.copyWith(
+        phase: WellBeingPhase.oxiComplete,
+        fingerDetected: false,
+        secondsRemaining: 0,
+        measurePct: 100,
+        finalHeartRate: finalHr,
+        finalSpO2: finalSpo2,
+        statusMessage: 'Measurement complete — you may remove your finger',
+      );
+      AppLogger.info('Oxi result: HR=$finalHr SpO2=$finalSpo2');
+    }
+  }
+
+  void _applyTempSample(VitalsParseResult sample) {
+    if (state.phase == WellBeingPhase.tempComplete) {
+      return;
+    }
+
+    if (sample.isSensorStarted) {
+      state = state.copyWith(
+        phase: WellBeingPhase.tempMeasuring,
+        secondsRemaining: VitalsLineParser.tempCollectionSeconds,
+        measurePct: 0,
+        statusMessage: 'Hold steady near the temperature sensor',
+      );
+      return;
+    }
+
+    if (sample.isTempRecording ||
+        (sample.isRecording && sample.sensor == null)) {
+      final rem = sample.remSeconds?.ceil().clamp(
+            0,
+            VitalsLineParser.tempCollectionSeconds,
+          );
+      final total = VitalsLineParser.tempCollectionSeconds;
+      final remaining = rem ?? state.secondsRemaining;
+      final pct = ((total - remaining) / total * 100).clamp(0.0, 100.0);
+      state = state.copyWith(
+        phase: WellBeingPhase.tempMeasuring,
+        secondsRemaining: remaining,
+        measurePct: pct,
+        statusMessage: 'Measuring temperature — hold steady',
+      );
+      return;
+    }
+
+    if (sample.isAborted) {
+      state = state.copyWith(
+        lastError: sample.abortReason,
+        statusMessage: _humanError(sample.abortReason),
+        phase: WellBeingPhase.choose,
+        activeMode: WellBeingMode.none,
+      );
+      return;
+    }
+
+    if (sample.isResult) {
+      final tempC = sample.temperatureC;
+      final tempF = sample.temperatureF;
+      if (tempC == null) {
+        state = state.copyWith(
+          statusMessage: 'No temperature reading — try again',
+          lastError: 'Temperature result missing',
+        );
         return;
       }
-      state = state.copyWith(secondsRemaining: next);
-    });
+      state = state.copyWith(
+        phase: WellBeingPhase.tempComplete,
+        secondsRemaining: 0,
+        measurePct: 100,
+        finalTempC: tempC,
+        finalTempF: tempF,
+        liveTempC: tempC,
+        liveTempF: tempF,
+        statusMessage: 'Temperature captured',
+      );
+      AppLogger.info('Temp result: ${tempC.toStringAsFixed(1)}°C');
+    }
   }
 
-  void _enterCancelled() {
-    _measureTimer?.cancel();
-    _measureTimer = null;
-    _phaseDelayTimer?.cancel();
-
-    state = state.copyWith(
-      phase: WellBeingPhase.cancelled,
-      statusMessage: 'Finger removed — measurement cancelled',
-      validCount: 0,
-    );
-
-    _scheduleReturnToIdle(const Duration(seconds: 3));
+  String _humanError(String? code) {
+    return switch (code) {
+      'finger_removed' => 'Finger removed during measurement',
+      'user_stop' => 'Measurement stopped',
+      'max30102_not_found' => 'Pulse oximeter sensor not found',
+      'mlx90614_not_found' => 'Temperature sensor not found',
+      'session_in_progress' => 'A measurement is already in progress',
+      'no_sensor_requested' => 'No sensor requested',
+      'unknown_sensor' || 'unknown_command' => 'Sensor command not understood',
+      null || '' => 'Sensor error',
+      _ => code,
+    };
   }
 
-  void _enterComplete() {
-    _measureTimer?.cancel();
-    _measureTimer = null;
-    _phaseDelayTimer?.cancel();
-
-    final finalHr = state.liveHeartRate;
-    final finalSpo2 = state.liveSpO2;
-
-    state = state.copyWith(
-      phase: WellBeingPhase.complete,
-      secondsRemaining: 0,
-      finalHeartRate: finalHr,
-      finalSpO2: finalSpo2,
-      statusMessage: 'Measurement complete',
-    );
-  }
-
-  void _scheduleReturnToIdle(Duration delay) {
-    _phaseDelayTimer?.cancel();
-    _phaseDelayTimer = Timer(delay, () {
-      if (!ref.mounted || !state.sessionActive) {
-        return;
+  Future<void> _sendCommand(String command, {bool silent = false}) async {
+    if (!ref.mounted) {
+      return;
+    }
+    final serial = ref.read(serialControllerProvider);
+    if (!serial.isConnected) {
+      return;
+    }
+    try {
+      await _serial.sendLine(command);
+    } catch (error) {
+      AppLogger.error('Well Being command failed: $command', error);
+      if (!silent && ref.mounted) {
+        state = state.copyWith(
+          lastError: error.toString(),
+          statusMessage: 'Could not talk to sensor',
+        );
       }
-      if (state.phase == WellBeingPhase.complete && state.fingerDetected) {
-        // Stay on results until finger is removed.
-        return;
-      }
-      _enterIdle();
-    });
-  }
-
-  void _enterIdle() {
-    _measureTimer?.cancel();
-    _measureTimer = null;
-    _phaseDelayTimer?.cancel();
-    _phaseDelayTimer = null;
-
-    state = state.copyWith(
-      phase: WellBeingPhase.idle,
-      secondsRemaining: WellBeingUiState.measureDurationSeconds,
-      validCount: 0,
-      clearLiveHeartRate: true,
-      clearLiveSpO2: true,
-      clearFinalHeartRate: true,
-      clearFinalSpO2: true,
-      statusMessage: state.isConnected
-          ? 'Place your finger gently on the sensor'
-          : state.statusMessage,
-    );
+    }
   }
 
   Future<void> _tearDown({required bool disconnect}) async {
@@ -378,12 +551,22 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       shouldDisconnect = disconnect && state.sessionActive;
       if (shouldDisconnect && ref.mounted) {
         final controller = ref.read(serialControllerProvider.notifier);
+        try {
+          if (ref.read(serialControllerProvider).isConnected) {
+            await controller.sendLine(_cmdStop);
+          }
+        } catch (_) {}
         doDisconnect = controller.disconnect;
       }
     } catch (_) {
       try {
         if (disconnect) {
           final service = ref.read(serialServiceProvider);
+          try {
+            if (service.isConnected) {
+              await service.sendLine(_cmdStop);
+            }
+          } catch (_) {}
           doDisconnect = () => service.disconnect(silent: true);
           shouldDisconnect = true;
         }
@@ -392,13 +575,6 @@ class WellBeingController extends Notifier<WellBeingUiState> {
         doDisconnect = null;
       }
     }
-
-    _measureTimer?.cancel();
-    _measureTimer = null;
-    _phaseDelayTimer?.cancel();
-    _phaseDelayTimer = null;
-    _flushTimer?.cancel();
-    _flushTimer = null;
 
     try {
       _serialWatch?.close();

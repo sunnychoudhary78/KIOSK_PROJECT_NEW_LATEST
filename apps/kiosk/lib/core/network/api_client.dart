@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:skp_kiosk/core/config/app_config.dart';
 import 'package:uuid/uuid.dart';
 
@@ -86,6 +87,34 @@ class ApiClient {
       headers['Authorization'] = 'Bearer $_accessToken';
     }
     return headers;
+  }
+
+  Future<Map<String, dynamic>> postMultipart(
+    String path, {
+    required Map<String, String> fields,
+    required List<int> fileBytes,
+    required String fileField,
+    required String filename,
+    String contentType = 'application/octet-stream',
+    Duration timeout = const Duration(seconds: 90),
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${_config.apiBaseUrl}$path'),
+    );
+    request.headers.addAll(_headers(json: false));
+    request.fields.addAll(fields);
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        fileField,
+        fileBytes,
+        filename: filename,
+        contentType: MediaType.parse(contentType),
+      ),
+    );
+    final streamed = await _http.send(request).timeout(timeout);
+    final response = await http.Response.fromStream(streamed);
+    return _decode(response);
   }
 
   Map<String, dynamic> _decode(http.Response response) {

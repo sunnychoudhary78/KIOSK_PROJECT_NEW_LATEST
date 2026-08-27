@@ -22,6 +22,8 @@ import {
 } from './modules/digilocker/index.js';
 import { registerAdsModule } from './modules/ads/index.js';
 import { registerPlatformSettingsModule } from './modules/platform_settings/index.js';
+import { registerPaymentsModule, registerRazorpayWebhook } from './modules/payments/index.js';
+import { registerAstrologyModule } from './modules/astrology/index.js';
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -38,15 +40,27 @@ export function createApp(deps: AppDeps): Express {
       credentials: true,
     }),
   );
+  app.use(correlationIdMiddleware);
+  registerRazorpayWebhook(app, deps);
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false }));
-  app.use(correlationIdMiddleware);
   app.use(
     rateLimit({
       windowMs: deps.config.rateLimit.windowMs,
       max: deps.config.rateLimit.max,
       standardHeaders: true,
       legacyHeaders: false,
+      // Health checks should not consume the shared budget.
+      skip: (req) => req.path === '/v1/health' || req.path === '/v1/payments/razorpay/webhook',
+      // Authenticated device/citizen traffic gets a per-token bucket so one
+      // kiosk IP (e.g. localhost) cannot exhaust the limit for OTP redeem.
+      keyGenerator: (req) => {
+        const auth = req.headers.authorization;
+        if (typeof auth === 'string' && auth.startsWith('Bearer ') && auth.length > 7) {
+          return `bearer:${auth.slice(7)}`;
+        }
+        return req.ip ?? 'unknown';
+      },
       message: {
         code: 'rate_limited',
         message: 'Too many requests',
@@ -73,9 +87,11 @@ export function createApp(deps: AppDeps): Express {
   registerAuditModule(v1, deps);
   registerPrintingModule(v1, deps);
   registerOtpPrintModule(v1, deps);
+  registerPaymentsModule(v1, deps);
   registerDigiLockerModule(v1, deps);
   registerAdsModule(v1, deps);
   registerPlatformSettingsModule(v1, deps);
+  registerAstrologyModule(v1, deps);
 
   // Device-authenticated PDF content for print jobs
   v1.get(

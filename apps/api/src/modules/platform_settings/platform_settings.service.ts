@@ -6,17 +6,14 @@ import {
   CITIZEN_AUTH_CONFIG_KEY,
   DEFAULT_CITIZEN_AUTH_CONFIG,
   DEFAULT_OTP_PRINT_CONFIG,
-  DEFAULT_SMS_CONFIG,
   OTP_PRINT_CONFIG_KEY,
   SMS_CONFIG_KEY,
   type CitizenAuthConfig,
   type OtpPrintConfig,
-  type SmsConfig,
 } from './platform_settings.defaults.js';
 import {
   citizenAuthConfigSchema,
   otpPrintConfigSchema,
-  smsConfigSchema,
   type UpdatePlatformSettingInput,
 } from './platform_settings.schemas.js';
 
@@ -25,31 +22,6 @@ function asObject(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
   }
   return {};
-}
-
-function normalizeSmsConfig(raw: unknown): SmsConfig {
-  const obj = asObject(raw);
-  const flowId = String(obj.flow_id || obj.template_id || obj.sms_templateid || '').trim();
-  return {
-    provider: 'msg91',
-    enabled: obj.enabled !== false,
-    auth_key: String(obj.auth_key || obj.sms_apikey || ''),
-    sender_id: String(obj.sender_id || obj.sms_sendername || ''),
-    flow_id: flowId,
-    otp_var_name: String(obj.otp_var_name || 'OTP').trim() || 'OTP',
-    message_template: String(obj.message_template || obj.sms_message || DEFAULT_SMS_CONFIG.message_template),
-  };
-}
-
-function maskSmsConfig(config: SmsConfig): SmsConfig & { auth_key_configured: boolean } {
-  const key = config.auth_key;
-  const masked =
-    key.length <= 4 ? (key ? '****' : '') : `${'*'.repeat(Math.max(0, key.length - 4))}${key.slice(-4)}`;
-  return {
-    ...config,
-    auth_key: masked,
-    auth_key_configured: Boolean(key),
-  };
 }
 
 export class PlatformSettingsService {
@@ -63,16 +35,14 @@ export class PlatformSettingsService {
     return rows.map((row) => this.toPublic(row.settingKey, row.settingValue, row));
   }
 
-  async getRaw(settingKey: string) {
-    return this.db.platformSetting.findUnique({ where: { settingKey } });
+  /** Operational settings only (SMS credentials live in env). */
+  async listOperational() {
+    const items = await this.list();
+    return items.filter((item) => item.settingKey !== SMS_CONFIG_KEY);
   }
 
-  async getSmsConfig(): Promise<SmsConfig> {
-    const row = await this.getRaw(SMS_CONFIG_KEY);
-    if (!row || !row.isActive) {
-      return { ...DEFAULT_SMS_CONFIG, enabled: false };
-    }
-    return normalizeSmsConfig(row.settingValue);
+  async getRaw(settingKey: string) {
+    return this.db.platformSetting.findUnique({ where: { settingKey } });
   }
 
   async getOtpPrintConfig(): Promise<OtpPrintConfig> {
@@ -105,6 +75,13 @@ export class PlatformSettingsService {
     adminId: string,
     correlationId?: string,
   ) {
+    if (settingKey === SMS_CONFIG_KEY) {
+      throw new AppError(
+        'sms_config_deprecated',
+        'SMS credentials are configured via environment variables (SKP_MSG91_*), not platform settings',
+        400,
+      );
+    }
     const value = this.validateValue(settingKey, input.settingValue);
     const existing = await this.getRaw(settingKey);
 
@@ -141,15 +118,6 @@ export class PlatformSettingsService {
   }
 
   private validateValue(settingKey: string, raw: unknown): unknown {
-    if (settingKey === SMS_CONFIG_KEY) {
-      const normalized = normalizeSmsConfig(raw);
-      // Preserve existing auth_key when admin sends masked/empty update with configured flag pattern
-      const parsed = smsConfigSchema.safeParse(normalized);
-      if (!parsed.success) {
-        throw new AppError('validation_error', parsed.error.issues[0]?.message ?? 'Invalid sms_config', 400);
-      }
-      return parsed.data;
-    }
     if (settingKey === OTP_PRINT_CONFIG_KEY) {
       const parsed = otpPrintConfigSchema.safeParse(raw);
       if (!parsed.success) {
@@ -180,31 +148,13 @@ export class PlatformSettingsService {
     settingValue: unknown,
     row: { id: string; description: string | null; isActive: boolean; updatedAt: Date },
   ) {
-    let value: unknown = settingValue;
-    if (settingKey === SMS_CONFIG_KEY) {
-      value = maskSmsConfig(normalizeSmsConfig(settingValue));
-    }
     return {
       id: row.id,
       settingKey,
-      settingValue: value,
+      settingValue,
       description: row.description,
       isActive: row.isActive,
       updatedAt: row.updatedAt.toISOString(),
-    };
-  }
-
-  /** Merge blank/masked auth_key with existing on update. */
-  async prepareSmsUpdate(raw: unknown): Promise<unknown> {
-    const incoming = normalizeSmsConfig(raw);
-    const existing = await this.getSmsConfig();
-    const looksMasked =
-      !incoming.auth_key ||
-      /^\*+\w{0,4}$/.test(incoming.auth_key) ||
-      incoming.auth_key.includes('*');
-    return {
-      ...incoming,
-      auth_key: looksMasked ? existing.auth_key : incoming.auth_key,
     };
   }
 }

@@ -64,6 +64,11 @@ async function main() {
       name: 'DigiLocker Print',
       description: 'Access DigiLocker and print documents from the kiosk',
     },
+    {
+      code: 'astrology',
+      name: 'Astrology & Palm Reading',
+      description: 'Vedic chart plus palm reading from the kiosk camera',
+    },
   ]) {
     await prisma.platformService.upsert({
       where: { code: service.code },
@@ -76,24 +81,29 @@ async function main() {
     });
   }
 
-  await prisma.platformSetting.upsert({
-    where: { settingKey: 'sms_config' },
-    update: {},
-    create: {
-      settingKey: 'sms_config',
-      description: 'MSG91 Flow SMS configuration for OTP delivery',
-      settingValue: {
-        provider: 'msg91',
-        enabled: false,
-        auth_key: '',
-        sender_id: '',
-        flow_id: '',
-        otp_var_name: 'OTP',
-        message_template:
-          'Your OTP for Smart Kiosk is --. Valid for 30 minutes. Do not share this code.',
-      },
-    },
+  const astrologyService = await prisma.platformService.findUnique({
+    where: { code: 'astrology' },
   });
+  if (astrologyService) {
+    const devices = await prisma.device.findMany({ select: { id: true, tenantId: true } });
+    for (const device of devices) {
+      await prisma.serviceEnablement.upsert({
+        where: {
+          deviceId_serviceId: {
+            deviceId: device.id,
+            serviceId: astrologyService.id,
+          },
+        },
+        update: {},
+        create: {
+          tenantId: device.tenantId,
+          deviceId: device.id,
+          serviceId: astrologyService.id,
+          enabled: true,
+        },
+      });
+    }
+  }
 
   await prisma.platformSetting.upsert({
     where: { settingKey: 'otp_print_config' },
@@ -108,6 +118,8 @@ async function main() {
         maxDocumentsPerSession: 5,
         maxVerifyAttempts: 5,
         maxFileSizeMb: 15,
+        freePagesPerSession: 5,
+        extraPageChargeRupees: 10,
       },
     },
   });

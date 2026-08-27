@@ -68,7 +68,7 @@ export class IdentityService {
     });
 
     try {
-      await this.sms.sendOtp(phone, code);
+      await this.sms.sendOtp(phone, code, authConfig.ttlSeconds);
     } catch (error) {
       await this.db.phoneOtpSession.delete({ where: { phone } }).catch(() => undefined);
       throw new AppError('sms_failed', sanitizeOtpDeliveryError(error), 502);

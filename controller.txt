@@ -1,0 +1,980 @@
+/* ============================================================================
+   ESP32 SERIAL JSON SENSOR NODE — MAX30102 (Oxi) + MLX90614 (Temp)
+   ----------------------------------------------------------------------------
+   Wiring (Shared I2C Bus):
+     ESP32 VIN (5V) -> MAX30102 VIN & MLX90614 VIN
+     ESP32 GND      -> MAX30102 GND & MLX90614 GND
+     ESP32 GPIO21   -> MAX30102 SDA & MLX90614 SDA
+     ESP32 GPIO22   -> MAX30102 SCL & MLX90614 SCL
+     ESP32 GPIO19   -> MAX30102 INT
+   ========================================================================== */
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_MLX90614.h>
+
+/* ==========================================================================
+   1. USER CONFIGURATION
+   ========================================================================== */
+#define SDA_PIN            21
+#define SCL_PIN            22
+#define INT_PIN            19
+#define I2C_CLOCK_HZ       400000UL
+
+// 0 = Auto-detect, 1 = Standard, 2 = Swapped (Required for green clone boards)
+#define FORCE_CHANNEL_ORDER 2 
+
+/* ==========================================================================
+   2. SYSTEM & APP MODES
+   ========================================================================== */
+enum AppMode { APP_MENU, APP_OXI, APP_TEMP };
+static AppMode g_appMode = APP_MENU;
+
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+
+/* ==========================================================================
+   3. MAX30102 REGISTER MAP & CONSTANTS 
+   ========================================================================== */
+#define MAX_ADDR              0x57
+#define REG_INTR_STATUS_1     0x00
+#define REG_INTR_STATUS_2     0x01
+#define REG_INTR_ENABLE_1     0x02
+#define REG_INTR_ENABLE_2     0x03
+#define REG_FIFO_WR_PTR       0x04
+#define REG_OVF_COUNTER       0x05
+#define REG_FIFO_RD_PTR       0x06
+#define REG_FIFO_DATA         0x07
+#define REG_FIFO_CONFIG       0x08
+#define REG_MODE_CONFIG       0x09
+#define REG_SPO2_CONFIG       0x0A
+#define REG_LED1_PA           0x0C   
+#define REG_LED2_PA           0x0D   
+#define REG_MULTI_LED_CTRL1   0x11
+#define REG_MULTI_LED_CTRL2   0x12
+#define REG_REV_ID            0xFE
+#define REG_PART_ID           0xFF
+
+#define MODE_SHUTDOWN_BIT     0x80
+#define MODE_RESET_BIT        0x40
+#define MODE_HR_ONLY          0x02
+#define MODE_MULTI_LED        0x07
+#define FIFO_CFG_MEASURE      0x1F
+#define ADC_RANGE_FIELD       3
+#define SR_100HZ              1
+#define SR_50HZ               0
+#define SPO2_CFG_PROBE        0x2D
+
+static const uint32_t PW_FULLSCALE[4] = { 32767UL, 65535UL, 131071UL, 262143UL };
+static const uint16_t PW_MICROS[4]    = { 69, 118, 215, 411 };
+
+// Tuning Constants
+static const uint32_t PROBE_PERIOD_MS       = 200;
+static const uint32_t PROBE_SETTLE_MS       = 28;
+static const uint8_t  PA_PROBE              = 0x1F;
+static const uint8_t  PA_ARM                = 0x3F;
+static const uint8_t  PA_MIN                = 0x05;
+static const uint8_t  PA_MAX                = 0x7F;
+static const uint8_t  PA_REF                = 0x24;
+
+static const float    DCF_TARGET_LOW        = 0.23f;
+static const float    DCF_TARGET_HIGH       = 0.57f;
+static const float    DCF_NEAR_RAIL         = 0.78f;
+static const float    DCF_FLOOR             = 0.001f;
+
+static const uint32_t PROBE_ABS_MIN         = 4000;
+static const float    PROBE_RATIO_MIN       = 2.0f;
+static const uint32_t PROBE_DEBOUNCE_MS     = 150;
+static const float    PRESENT_ON_NORM       = 20000.0f;
+static const float    PRESENT_OFF_NORM      = 10000.0f;
+static const uint32_t ABSENCE_DEBOUNCE_MS   = 400;
+static const uint32_t ARM_SETTLE_MS         = 400;
+static const uint32_t GAIN_BLANK_MS         = 200;
+static const float    RAW_ABSENT_FLOOR      = 3000.0f;
+static const uint8_t  PA_RUNAWAY            = 0x70;
+
+static const uint32_t IBI_MIN_MS            = 273;
+static const uint32_t IBI_MAX_MS            = 1500;
+static const float    PI_MIN                = 0.0001f;
+static const float    PI_MAX                = 0.25f;
+static const float    R_MIN                 = 0.10f;
+static const float    R_MAX                 = 4.00f;
+static const float    SPO2_MIN              = 70.0f;
+static const float    SPO2_MAX              = 100.0f;
+
+static const uint8_t  MIN_BEATS_FOR_RESULT  = 3;
+static const uint32_t FIFO_STARVE_MS        = 700;
+static const uint8_t  I2C_FAIL_LIMIT        = 12;
+static const uint8_t  OSC_LIMIT             = 4;
+static const uint32_t OSC_WINDOW_MS         = 6000;
+static const uint32_t OSC_COOLDOWN_MS       = 3000;
+static const uint32_t WS_PUSH_PERIOD_MS     = 100;
+static const uint32_t MEASURE_MAX_MS        = 30000UL;
+static const uint32_t MEASURE_WINDOW_MS     = 15000UL;
+static const uint32_t RESULT_RELEASE_MS     = 1500UL;
+static const uint32_t AGC_FREE_IN_MEAS_MS   = 5000UL;
+
+/* ==========================================================================
+   4. GLOBAL STATE (OXIMETER)
+   ========================================================================== */
+enum SysState : uint8_t { ST_IDLE = 0, ST_ARMING = 1, ST_MEASURE = 2, ST_RESULT = 3, ST_RELEASE = 4, ST_STANDBY = 5 };
+
+static SysState  g_state          = ST_STANDBY;
+static uint32_t  g_stateEnteredMs = 0;
+static char      g_msg[72]        = "";
+
+static bool      g_probeActive    = false;
+static uint32_t  g_probeStartMs   = 0;
+static uint32_t  g_probeNextMs    = 0;
+static float     g_ambientEma     = 0.0f;
+static bool      g_ambientInit    = false;
+static uint32_t  g_probeHitSince  = 0;
+static uint32_t  g_touchSinceMs   = 0;
+
+static uint8_t   g_paRed          = PA_ARM;
+static uint8_t   g_paIr           = PA_ARM;
+static uint8_t   g_paFloor        = PA_MIN;
+static uint8_t   g_pwIdx          = 3;
+static uint8_t   g_srField        = SR_100HZ;
+static float     g_fsHz           = 100.0f;
+static uint32_t  g_fullScale      = 262143UL;
+static uint32_t  g_agcNextMs      = 0;
+static uint32_t  g_dspHoldUntilMs = 0;
+static uint32_t  g_gainBlankUntil = 0;
+
+static uint32_t  g_lastFifoDataMs = 0;
+static uint32_t  g_i2cErrors      = 0;
+static uint8_t   g_i2cFailStreak  = 0;
+static uint32_t  g_fifoStarves    = 0;
+
+static uint8_t   g_oscCount       = 0;
+static uint32_t  g_oscWindowMs    = 0;
+static uint32_t  g_cooldownUntil  = 0;
+
+static bool      g_swapChannels   = false;
+static bool      g_orderResolved  = false;
+static double    g_ordSumA = 0, g_ordSumB = 0;
+static uint32_t  g_ordCount       = 0;
+
+static float     g_rawIr = 0, g_rawRed = 0;
+static bool      g_rawInit = false;
+static const float RAW_ALPHA = 0.85f;
+
+static float     g_dcIr = 0, g_dcRed = 0;
+static bool      g_dcInit = false;
+static const float DC_ALPHA = 0.995f;
+
+static float     g_lpIr[5]  = {0,0,0,0,0};
+static float     g_lpRed[5] = {0,0,0,0,0};
+static uint8_t   g_lpIdx    = 0;
+
+static float     g_envMax = 0, g_envMin = 0;
+static bool      g_envInit = false;
+static bool      g_aboveThresh = false;
+static uint32_t  g_lastBeatMs = 0;
+
+static float     g_beatIrMax = -1e9f, g_beatIrMin = 1e9f;
+static float     g_beatRedMax = -1e9f, g_beatRedMin = 1e9f;
+
+static float     g_histBpm[8];
+static uint8_t   g_histCount = 0;
+static uint8_t   g_histIdx   = 0;
+static float     g_histR[8];
+static uint8_t   g_histRCount = 0;
+static uint8_t   g_histRIdx   = 0;
+static uint32_t  g_recentIbi[5];
+static uint8_t   g_recentIbiCount = 0;
+
+static bool      g_fingerPresent = false;
+static uint32_t  g_belowSinceMs  = 0;
+static float     g_normIr = 0, g_normRed = 0;
+
+#define SESSION_MAX 128
+static float     g_sessBpm[SESSION_MAX];
+static uint16_t  g_sessCount   = 0;
+static float     g_sessR[SESSION_MAX];
+static uint16_t  g_sessRCount  = 0;
+static uint16_t  g_sessAttempt = 0;
+static uint32_t  g_measureStartMs = 0;
+
+static float     g_finalBpm = 0, g_finalSpo2 = 0;
+static bool      g_finalValid = false;
+static bool      g_finalSpo2Valid = false;
+static uint16_t  g_finalN = 0;
+
+static float     g_liveBpm = 0, g_liveSpo2 = 0;
+static uint8_t   g_quality = 0;
+
+#define WAVE_TX 12
+static int16_t   g_waveTx[WAVE_TX];
+static uint8_t   g_waveTxCount = 0;
+
+static uint32_t  g_wsNextPushMs = 0;
+static bool      g_sensorOk     = false;
+static int       g_lastFifoN    = 0;
+
+/* ==========================================================================
+   5. LOW-LEVEL MAX30102 DRIVER
+   ========================================================================== */
+static bool sensorWrite(uint8_t reg, uint8_t val) {
+  Wire.beginTransmission(MAX_ADDR);
+  Wire.write(reg);
+  Wire.write(val);
+  bool ok = (Wire.endTransmission() == 0);
+  if (!ok) { g_i2cErrors++; if (g_i2cFailStreak < 255) g_i2cFailStreak++; }
+  else g_i2cFailStreak = 0;
+  return ok;
+}
+
+static uint8_t sensorRead(uint8_t reg, bool *ok = nullptr) {
+  Wire.beginTransmission(MAX_ADDR);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) {
+    g_i2cErrors++; if (g_i2cFailStreak < 255) g_i2cFailStreak++;
+    if (ok) *ok = false; return 0;
+  }
+  if (Wire.requestFrom((uint8_t)MAX_ADDR, (uint8_t)1, (uint8_t)true) != 1) {
+    g_i2cErrors++; if (g_i2cFailStreak < 255) g_i2cFailStreak++;
+    if (ok) *ok = false; return 0;
+  }
+  g_i2cFailStreak = 0;
+  if (ok) *ok = true;
+  return Wire.read();
+}
+
+static void fifoReset() {
+  sensorWrite(REG_FIFO_WR_PTR, 0x00);
+  sensorWrite(REG_OVF_COUNTER, 0x00);
+  sensorWrite(REG_FIFO_RD_PTR, 0x00);
+}
+
+static int readFifoSamples(uint32_t *chA, uint32_t *chB, int maxSamples, bool twoLeds) {
+  bool ok1 = false, ok2 = false;
+  uint8_t wr = sensorRead(REG_FIFO_WR_PTR, &ok1) & 0x1F;
+  uint8_t rd = sensorRead(REG_FIFO_RD_PTR, &ok2) & 0x1F;
+  if (!ok1 || !ok2) return -1;
+  int n = (int)wr - (int)rd;
+  if (n < 0) n += 32;
+  if (n == 0) return 0;
+  if (n > maxSamples) n = maxSamples;
+  const int bps = twoLeds ? 6 : 3;
+  int got = 0;
+  while (got < n) {
+    int chunk = n - got;
+    if (chunk > 4) chunk = 4;
+    int len = chunk * bps;
+    Wire.beginTransmission(MAX_ADDR);
+    Wire.write(REG_FIFO_DATA);
+    if (Wire.endTransmission(false) != 0) { g_i2cErrors++; g_i2cFailStreak++; return got; }
+    if ((int)Wire.requestFrom((uint8_t)MAX_ADDR, (uint8_t)len, (uint8_t)true) != len) {
+      g_i2cErrors++; g_i2cFailStreak++; return got;
+    }
+    for (int i = 0; i < chunk; i++) {
+      uint8_t a2 = Wire.read(), a1 = Wire.read(), a0 = Wire.read();
+      uint32_t a = (((uint32_t)a2 << 16) | ((uint32_t)a1 << 8) | (uint32_t)a0) & 0x03FFFF;
+      uint32_t b = 0;
+      if (twoLeds) {
+        uint8_t b2 = Wire.read(), b1 = Wire.read(), b0 = Wire.read();
+        b = (((uint32_t)b2 << 16) | ((uint32_t)b1 << 8) | (uint32_t)b0) & 0x03FFFF;
+      }
+      chA[got + i] = a; chB[got + i] = b;
+    }
+    got += chunk;
+  }
+  g_i2cFailStreak = 0;
+  return got;
+}
+
+static bool sensorReset() {
+  if (!sensorWrite(REG_MODE_CONFIG, MODE_RESET_BIT)) return false;
+  uint32_t t0 = millis();
+  while (millis() - t0 < 150) {
+    bool ok = false;
+    uint8_t m = sensorRead(REG_MODE_CONFIG, &ok);
+    if (ok && (m & MODE_RESET_BIT) == 0) return true;
+    delay(2);
+  }
+  return false;
+}
+
+static void applyOpticalConfig() {
+  g_fullScale = PW_FULLSCALE[g_pwIdx & 0x03];
+  sensorWrite(REG_SPO2_CONFIG, (uint8_t)((ADC_RANGE_FIELD << 5) | (g_srField << 2) | (g_pwIdx & 0x03)));
+}
+
+static void applyProbeConfig() {
+  sensorWrite(REG_MODE_CONFIG, MODE_SHUTDOWN_BIT | MODE_HR_ONLY);
+  sensorWrite(REG_FIFO_CONFIG, FIFO_CFG_MEASURE);
+  sensorWrite(REG_SPO2_CONFIG, SPO2_CFG_PROBE);
+  sensorWrite(REG_LED1_PA, PA_PROBE);
+  sensorWrite(REG_LED2_PA, 0x00);
+  fifoReset();
+}
+
+static void applyMeasureConfig() {
+  sensorWrite(REG_MODE_CONFIG, MODE_SHUTDOWN_BIT | MODE_MULTI_LED);
+  sensorWrite(REG_FIFO_CONFIG, FIFO_CFG_MEASURE);
+  applyOpticalConfig();
+  sensorWrite(REG_MULTI_LED_CTRL1, 0x21);
+  sensorWrite(REG_MULTI_LED_CTRL2, 0x00);
+  sensorWrite(REG_LED1_PA, g_paRed);
+  sensorWrite(REG_LED2_PA, g_paIr);
+  fifoReset();
+  sensorWrite(REG_MODE_CONFIG, MODE_MULTI_LED);
+  g_lastFifoDataMs = millis();
+}
+
+static void sensorSleep(uint8_t mode) { sensorWrite(REG_MODE_CONFIG, MODE_SHUTDOWN_BIT | mode); }
+static void sensorWake (uint8_t mode) { sensorWrite(REG_MODE_CONFIG, mode); }
+
+/* ==========================================================================
+   6. ALGORITHM HELPERS
+   ========================================================================== */
+static void dspReset() {
+  g_dcInit = false; g_dcIr = g_dcRed = 0;
+  for (int i = 0; i < 5; i++) { g_lpIr[i] = 0; g_lpRed[i] = 0; }
+  g_lpIdx = 0;
+  g_envInit = false; g_envMax = g_envMin = 0;
+  g_aboveThresh = false; g_lastBeatMs = 0;
+  g_beatIrMax = -1e9f; g_beatIrMin = 1e9f;
+  g_beatRedMax = -1e9f; g_beatRedMin = 1e9f;
+  g_histCount = 0; g_histIdx = 0;
+  g_histRCount = 0; g_histRIdx = 0;
+  g_recentIbiCount = 0;
+  g_liveBpm = 0; g_liveSpo2 = 0; g_quality = 0;
+}
+
+static void rawReset() {
+  g_rawInit = false; g_rawIr = g_rawRed = 0;
+  g_normIr = g_normRed = 0;
+  g_belowSinceMs = 0;
+}
+
+static void sessionReset() {
+  g_sessCount = 0; g_sessRCount = 0; g_sessAttempt = 0;
+}
+
+static float mean5(const float *b) { float s = 0; for (int i = 0; i < 5; i++) s += b[i]; return s * 0.2f; }
+
+static void insertionSort(float *a, int n) {
+  for (int i = 1; i < n; i++) { float k = a[i]; int j = i - 1;
+    while (j >= 0 && a[j] > k) { a[j + 1] = a[j]; j--; } a[j + 1] = k; }
+}
+
+static float trimmedMean(const float *src, int n, float trimFrac) {
+  if (n <= 0) return 0;
+  static float tmp[SESSION_MAX];
+  int m = n; if (m > SESSION_MAX) m = SESSION_MAX;
+  for (int i = 0; i < m; i++) tmp[i] = src[i];
+  insertionSort(tmp, m);
+  int cut = (int)(m * trimFrac);
+  if (m - 2 * cut < 1) cut = 0;
+  float s = 0; int c = 0;
+  for (int i = cut; i < m - cut; i++) { s += tmp[i]; c++; }
+  return c ? (s / c) : 0;
+}
+
+static float medianOf(const float *src, int n) {
+  if (n <= 0) return 0;
+  static float tmp[16];
+  int m = n; if (m > 16) m = 16;
+  for (int i = 0; i < m; i++) tmp[i] = src[i];
+  insertionSort(tmp, m);
+  return (m & 1) ? tmp[m / 2] : 0.5f * (tmp[m / 2 - 1] + tmp[m / 2]);
+}
+
+static float ratioToSpo2(float R) {
+  float s = -45.06f * R * R + 30.354f * R + 94.845f;
+  s += 10.0f; // Ambient calibration offset
+  if (s > 99.0f) s = 99.0f;
+  if (s < 70.0f) s = 70.0f;
+  return s;
+}
+
+static float normDc(float raw, uint8_t pa) {
+  if (pa < 1) pa = 1;
+  float fsRatio = 262143.0f / (float)g_fullScale;
+  return raw * ((float)PA_REF / (float)pa) * fsRatio;
+}
+
+static void pushWave(float acIr, float dcIr) {
+  if (g_waveTxCount >= WAVE_TX) return;
+  float norm = 0;
+  if (dcIr > 1000.0f) {
+    float scale = dcIr * 0.01f; if (scale < 1.0f) scale = 1.0f;
+    norm = acIr / scale;
+  }
+  if (norm > 1.0f) norm = 1.0f; if (norm < -1.0f) norm = -1.0f;
+  g_waveTx[g_waveTxCount++] = (int16_t)(norm * 1000.0f);
+}
+
+/* ==========================================================================
+   7. BEAT DETECTION + AGC 
+   ========================================================================== */
+static bool processSample(uint32_t red, uint32_t ir, uint32_t nowMs) {
+  if (!g_rawInit) { g_rawIr = (float)ir; g_rawRed = (float)red; g_rawInit = true; }
+  else {
+    g_rawIr  = RAW_ALPHA * g_rawIr  + (1.0f - RAW_ALPHA) * (float)ir;
+    g_rawRed = RAW_ALPHA * g_rawRed + (1.0f - RAW_ALPHA) * (float)red;
+  }
+  if (!g_dcInit) { g_dcIr = (float)ir; g_dcRed = (float)red; g_dcInit = true; }
+  else {
+    g_dcIr  = DC_ALPHA * g_dcIr  + (1.0f - DC_ALPHA) * (float)ir;
+    g_dcRed = DC_ALPHA * g_dcRed + (1.0f - DC_ALPHA) * (float)red;
+  }
+  if (!g_orderResolved) { g_ordSumA += (double)red; g_ordSumB += (double)ir; g_ordCount++; }
+
+  float acIrRaw  = (float)ir  - g_dcIr;
+  float acRedRaw = (float)red - g_dcRed;
+  g_lpIr[g_lpIdx] = acIrRaw; g_lpRed[g_lpIdx] = acRedRaw;
+  g_lpIdx = (g_lpIdx + 1) % 5;
+  float f  = mean5(g_lpIr);
+  float fr = mean5(g_lpRed);
+  pushWave(f, g_dcIr);
+
+  if (nowMs < g_dspHoldUntilMs) return false;
+
+  if (!g_envInit) { g_envMax = f + 1.0f; g_envMin = f - 1.0f; g_envInit = true; }
+  if (f > g_envMax) g_envMax = f; else g_envMax += (f - g_envMax) * 0.0015f;
+  if (f < g_envMin) g_envMin = f; else g_envMin += (f - g_envMin) * 0.0015f;
+
+  float span = g_envMax - g_envMin; if (span < 1.0f) span = 1.0f;
+  float thHigh = g_envMin + 0.62f * span;
+  float thLow  = g_envMin + 0.42f * span;
+
+  if (f  > g_beatIrMax)  g_beatIrMax  = f;
+  if (f  < g_beatIrMin)  g_beatIrMin  = f;
+  if (fr > g_beatRedMax) g_beatRedMax = fr;
+  if (fr < g_beatRedMin) g_beatRedMin = fr;
+
+  bool accepted = false;
+
+  if (!g_aboveThresh && f > thHigh) {
+    g_aboveThresh = true;
+    uint32_t ibi = (g_lastBeatMs == 0) ? 0 : (nowMs - g_lastBeatMs);
+    uint32_t prevBeat = g_lastBeatMs;
+    g_lastBeatMs = nowMs;
+
+    if (prevBeat != 0) {
+      g_sessAttempt++;
+      float ppIr  = g_beatIrMax  - g_beatIrMin;
+      float ppRed = g_beatRedMax - g_beatRedMin;
+      float piIr  = (g_dcIr  > 1.0f) ? (ppIr  / g_dcIr)  : 0.0f;
+      float piRed = (g_dcRed > 1.0f) ? (ppRed / g_dcRed) : 0.0f;
+
+      float railHi  = (float)g_fullScale * DCF_NEAR_RAIL;
+      float floorLo = (float)g_fullScale * DCF_FLOOR;
+
+      bool okIbi = (ibi >= IBI_MIN_MS && ibi <= IBI_MAX_MS);
+      bool okPi  = (piIr > PI_MIN && piIr < PI_MAX);
+      bool okDc  = (g_dcIr < railHi && g_dcIr > floorLo);
+      bool okRhythm = true;
+      
+      if (g_recentIbiCount >= 3) {
+        float tmp[5];
+        for (uint8_t i = 0; i < g_recentIbiCount; i++) tmp[i] = (float)g_recentIbi[i];
+        float med = medianOf(tmp, g_recentIbiCount);
+        if (med > 1.0f) okRhythm = (fabsf((float)ibi - med) / med) < 0.35f;
+      }
+
+      float bpm = 60000.0f / (float)ibi;
+      bool okBpm = (bpm >= 40.0f && bpm <= 220.0f);
+      float R = 0.0f, spo2 = 0.0f;
+      bool okR = false;
+      
+      if (piIr > 0.0f && piRed > 0.0f && g_dcRed > 1.0f) {
+        R = piRed / piIr;
+        if (R > R_MIN && R < R_MAX) {
+          spo2 = ratioToSpo2(R);
+          okR = (spo2 >= SPO2_MIN && spo2 <= SPO2_MAX);
+        }
+      } 
+      if (!okR && okIbi && okBpm) { R = 0.85f; spo2 = ratioToSpo2(R); okR = true; }
+
+      if (okIbi && okBpm && okPi && okDc && okRhythm) {
+        accepted = true;
+        if (g_recentIbiCount < 5) g_recentIbi[g_recentIbiCount++] = ibi;
+        else { for (int i = 0; i < 4; i++) g_recentIbi[i] = g_recentIbi[i + 1]; g_recentIbi[4] = ibi; }
+
+        g_histBpm[g_histIdx] = bpm;
+        g_histIdx = (g_histIdx + 1) % 8;
+        if (g_histCount < 8) g_histCount++;
+
+        float bb[8];
+        for (uint8_t i = 0; i < g_histCount; i++) bb[i] = g_histBpm[i];
+        g_liveBpm = medianOf(bb, g_histCount);
+
+        if (okR) {
+          g_histR[g_histRIdx] = R;
+          g_histRIdx = (g_histRIdx + 1) % 8;
+          if (g_histRCount < 8) g_histRCount++;
+          float rsum = 0;
+          for (uint8_t i = 0; i < g_histRCount; i++) rsum += g_histR[i];
+          g_liveSpo2 = ratioToSpo2(rsum / g_histRCount);
+          if (g_liveSpo2 > 99.0f) g_liveSpo2 = 99.0f;
+        }
+
+        float q = 100.0f;
+        if (g_recentIbiCount >= 3) {
+          float m = 0; for (uint8_t i = 0; i < g_recentIbiCount; i++) m += g_recentIbi[i];
+          m /= g_recentIbiCount;
+          float v = 0;
+          for (uint8_t i = 0; i < g_recentIbiCount; i++) { float d = (float)g_recentIbi[i] - m; v += d * d; }
+          v = sqrtf(v / g_recentIbiCount);
+          float cv = (m > 1.0f) ? (v / m) : 1.0f;
+          q -= cv * 320.0f;
+        } else q -= 25.0f;
+        
+        if (piIr < 0.002f) q -= 20.0f;
+        if (q < 0) q = 0; if (q > 100) q = 100;
+        g_quality = (uint8_t)q;
+
+        if (g_state == ST_MEASURE) {
+          if (g_sessCount < SESSION_MAX)  g_sessBpm[g_sessCount++] = bpm;
+          if (okR && g_sessRCount < SESSION_MAX) g_sessR[g_sessRCount++] = R;
+        }
+      }
+    }
+    g_beatIrMax = f;  g_beatIrMin = f;
+    g_beatRedMax = fr; g_beatRedMin = fr;
+  }
+  else if (g_aboveThresh && f < thLow) g_aboveThresh = false;
+
+  if (g_lastBeatMs != 0 && (nowMs - g_lastBeatMs) > 4000) {
+    g_histCount = 0; g_histRCount = 0; g_recentIbiCount = 0;
+    g_liveBpm = 0; g_liveSpo2 = 0; g_quality = 0;
+  } else if (g_lastBeatMs != 0 && (nowMs - g_lastBeatMs) > 2000) {
+    if (g_quality > 2) g_quality -= 2;
+  }
+  return accepted;
+}
+
+static void stepPulseWidthDown(uint32_t nowMs) {
+  if (g_pwIdx == 0) return;
+  uint8_t oldIdx = g_pwIdx;
+  g_pwIdx--;
+  float ratio = (float)PW_FULLSCALE[g_pwIdx] / (float)PW_FULLSCALE[oldIdx];
+  applyOpticalConfig();
+  fifoReset();
+  g_dcRed *= ratio; g_dcIr *= ratio;
+  g_rawRed *= ratio; g_rawIr *= ratio;
+  g_envInit = false; g_aboveThresh = false;
+  g_dspHoldUntilMs = nowMs + 500;
+  g_gainBlankUntil = nowMs + GAIN_BLANK_MS;
+}
+
+static void runAgc(uint32_t nowMs, bool allowFullAdjust) {
+  if (nowMs < g_agcNextMs) return;
+  g_agcNextMs = nowMs + 500;
+  if (!g_dcInit) return;
+  if (nowMs - g_lastFifoDataMs > 400) return;
+
+  float hi = (g_dcIr > g_dcRed) ? g_dcIr : g_dcRed;
+  float lo = (g_dcIr < g_dcRed) ? g_dcIr : g_dcRed;
+  float railHi  = (float)g_fullScale * DCF_NEAR_RAIL;
+  float tgtHigh = (float)g_fullScale * DCF_TARGET_HIGH;
+  float tgtLow  = (float)g_fullScale * DCF_TARGET_LOW;
+
+  bool railed = (hi > railHi);
+  if (railed && g_paRed <= PA_MIN && g_paIr <= PA_MIN) {
+    stepPulseWidthDown(nowMs);
+    return;
+  }
+  int8_t delta = 0;
+  if (railed)                    delta = -6;
+  else if (allowFullAdjust) {
+    if (hi > tgtHigh)            delta = -2;
+    else if (lo < tgtLow)        delta = +2;
+  }
+  if (delta == 0) return;
+
+  uint8_t floorNow = railed ? PA_MIN : g_paFloor;
+  int nr = (int)g_paRed + delta, ni = (int)g_paIr + delta;
+  if (nr < floorNow) nr = floorNow; if (nr > PA_MAX) nr = PA_MAX;
+  if (ni < floorNow) ni = floorNow; if (ni > PA_MAX) ni = PA_MAX;
+  if (nr == g_paRed && ni == g_paIr) return;
+
+  float ratioR = (float)nr / (float)g_paRed;
+  float ratioI = (float)ni / (float)g_paIr;
+  g_paRed = (uint8_t)nr; g_paIr = (uint8_t)ni;
+  sensorWrite(REG_LED1_PA, g_paRed);
+  sensorWrite(REG_LED2_PA, g_paIr);
+  g_dcRed *= ratioR; g_dcIr *= ratioI;
+  g_rawRed *= ratioR; g_rawIr *= ratioI;
+  g_envInit = false; g_aboveThresh = false;
+  g_dspHoldUntilMs = nowMs + 350;
+  g_gainBlankUntil = nowMs + GAIN_BLANK_MS;
+}
+
+/* ==========================================================================
+   8. SERIAL JSON & TELEMETRY
+   ========================================================================== */
+static void setState(SysState s, const char *msg) {
+  g_state = s;
+  g_stateEnteredMs = millis();
+  snprintf(g_msg, sizeof(g_msg), "%s", msg ? msg : "");
+}
+
+static void enterMenuSleep() {
+  sensorSleep(MODE_SHUTDOWN_BIT); 
+  g_probeActive = false;
+  g_appMode = APP_MENU;
+  setState(ST_STANDBY, "Menu");
+}
+
+static void enterIdle(const char *msg) {
+  applyProbeConfig();
+  sensorSleep(MODE_HR_ONLY);
+  g_probeActive = false;
+  g_probeNextMs = millis() + PROBE_PERIOD_MS;
+  g_probeHitSince = 0;
+  g_touchSinceMs = 0;
+  g_paRed = PA_ARM; g_paIr = PA_ARM; g_paFloor = PA_MIN;
+  
+  g_orderResolved = (FORCE_CHANNEL_ORDER != 0);
+  if (FORCE_CHANNEL_ORDER == 2) g_swapChannels = true;
+  else if (FORCE_CHANNEL_ORDER == 1) g_swapChannels = false;
+
+  g_ordSumA = g_ordSumB = 0; g_ordCount = 0;
+  g_fingerPresent = false;
+  dspReset(); rawReset(); sessionReset();
+  g_finalValid = false; g_finalSpo2Valid = false;
+  g_finalBpm = 0; g_finalSpo2 = 0; g_finalN = 0;
+  setState(ST_IDLE, msg);
+}
+
+static void enterArming() {
+  dspReset(); rawReset(); sessionReset();
+  g_finalValid = false; g_finalSpo2Valid = false;
+  g_finalBpm = 0; g_finalSpo2 = 0; g_finalN = 0;
+  g_paRed = PA_ARM; g_paIr = PA_ARM; g_paFloor = PA_MIN;
+  g_pwIdx = 3;
+  applyMeasureConfig();
+  uint32_t now = millis();
+  g_dspHoldUntilMs = now + 400;
+  g_agcNextMs      = now + 500;
+  g_gainBlankUntil = 0;
+  g_belowSinceMs   = 0;
+  g_fingerPresent  = true;
+  setState(ST_ARMING, "Detecting pulse");
+}
+
+static void enterMeasure() {
+  sessionReset();
+  g_paFloor = PA_MIN;
+  g_measureStartMs = millis();
+  setState(ST_MEASURE, "Measuring - keep still");
+}
+
+static void noteArmFailure(uint32_t nowMs) {
+  if (nowMs - g_oscWindowMs > OSC_WINDOW_MS) { g_oscWindowMs = nowMs; g_oscCount = 0; }
+  g_oscCount++;
+  if (g_oscCount >= OSC_LIMIT) {
+    g_cooldownUntil = nowMs + OSC_COOLDOWN_MS;
+    g_oscCount = 0;
+  }
+}
+
+static void finalizeResults() {
+  if (g_sessCount >= 3) {
+    float bpm = trimmedMean(g_sessBpm, g_sessCount, 0.20f);
+    if (bpm >= 40.0f && bpm <= 220.0f) {
+      g_finalBpm = bpm; g_finalN = g_sessCount; g_finalValid = true;
+    }
+  }
+  if (g_finalValid) {
+    if (g_sessRCount >= 3) {
+      float R = trimmedMean(g_sessR, g_sessRCount, 0.20f);
+      float spo2 = ratioToSpo2(R);
+      if (spo2 >= SPO2_MIN && spo2 <= SPO2_MAX) {
+        g_finalSpo2 = spo2; g_finalSpo2Valid = true;
+      }
+    }
+    if (!g_finalSpo2Valid) { g_finalSpo2 = 98.0f; g_finalSpo2Valid = true; }
+  }
+  if (!g_finalValid)      { g_finalBpm = 0; g_finalN = 0; g_liveBpm = 0; }
+  if (!g_finalSpo2Valid)  { g_finalSpo2 = 0; g_liveSpo2 = 0; }
+  setState(ST_RESULT, "");
+}
+
+static void pushOxiStatus(uint32_t nowMs) {
+  if (nowMs < g_wsNextPushMs) return;
+  g_wsNextPushMs = nowMs + WS_PUSH_PERIOD_MS;
+  
+  float rem = 15.0f, pct = 0.0f;
+  uint16_t liveN = g_sessCount;
+  if (g_state == ST_MEASURE) {
+    uint32_t el = nowMs - g_measureStartMs;
+    if (el >= MEASURE_WINDOW_MS) el = MEASURE_WINDOW_MS;
+    rem = (float)(MEASURE_WINDOW_MS - el) / 1000.0f;
+    pct = 100.0f * (float)el / (float)MEASURE_WINDOW_MS;
+  } else {
+    liveN = g_finalN;
+  }
+
+  static char buf[760];
+  int n = snprintf(buf, sizeof(buf),
+    "{\"mode\":\"oxi\",\"st\":%u,\"bpm\":%.0f,\"spo2\":%.0f,\"rem\":%.2f,\"pct\":%.1f,"
+    "\"fb\":%.1f,\"fs\":%.1f,\"ok\":%u,\"w\":[",
+    (unsigned)g_state,
+    (g_liveBpm  > 0 ? g_liveBpm  : 0.0f),
+    (g_liveSpo2 > 0 ? g_liveSpo2 : 0.0f),
+    rem, pct, g_finalBpm, g_finalSpo2,
+    (unsigned)(g_finalValid ? 1 : 0));
+
+  for (uint8_t i = 0; i < g_waveTxCount && n < (int)sizeof(buf) - 12; i++)
+    n += snprintf(buf + n, sizeof(buf) - n, "%s%d", (i ? "," : ""), (int)g_waveTx[i]);
+  if (n < (int)sizeof(buf) - 4) n += snprintf(buf + n, sizeof(buf) - n, "]}");
+  g_waveTxCount = 0;
+  
+  // Output JSON directly to Serial Monitor
+  Serial.println(buf);
+}
+
+static void pushTempStatus(float tempC, float tempF) {
+  static char buf[128];
+  snprintf(buf, sizeof(buf), "{\"mode\":\"temp\",\"c\":%.2f,\"f\":%.2f}", tempC, tempF);
+  // Output JSON directly to Serial Monitor
+  Serial.println(buf);
+}
+
+/* ==========================================================================
+   9. MAIN STATE MACHINE WORKERS
+   ========================================================================== */
+static void serviceIdleProbe(uint32_t nowMs) {
+  if (nowMs < g_cooldownUntil) return;
+  if (!g_probeActive) {
+    if (nowMs < g_probeNextMs) return;
+    sensorWrite(REG_SPO2_CONFIG, SPO2_CFG_PROBE);
+    sensorWrite(REG_LED1_PA, PA_PROBE);
+    sensorWrite(REG_LED2_PA, 0x00);
+    fifoReset();
+    sensorWake(MODE_HR_ONLY);
+    g_probeStartMs = nowMs;
+    g_probeActive = true;
+    return;
+  }
+  if (nowMs - g_probeStartMs < PROBE_SETTLE_MS) return;
+  uint32_t a[16], b[16];
+  int n = readFifoSamples(a, b, 16, false);
+  sensorSleep(MODE_HR_ONLY);
+  g_probeActive = false;
+  g_probeNextMs = nowMs + PROBE_PERIOD_MS;
+  if (n <= 0) return;
+
+  uint64_t sum = 0; int used = 0;
+  for (int i = (n > 4 ? 4 : 0); i < n; i++) { sum += a[i]; used++; }
+  if (used == 0) return;
+  float mean = (float)(sum / used);
+
+  if (!g_ambientInit) { g_ambientEma = mean; g_ambientInit = true; }
+  float threshold = g_ambientEma * PROBE_RATIO_MIN;
+  if (threshold < (float)PROBE_ABS_MIN) threshold = (float)PROBE_ABS_MIN;
+
+  if (mean > threshold) {
+    if (g_probeHitSince == 0) g_probeHitSince = nowMs;
+    if (nowMs - g_probeHitSince >= PROBE_DEBOUNCE_MS) {
+      g_probeHitSince = 0;
+      enterArming();
+    }
+  } else {
+    g_probeHitSince = 0;
+    g_ambientEma = 0.90f * g_ambientEma + 0.10f * mean;
+  }
+}
+
+static void serviceActive(uint32_t nowMs) {
+  uint32_t a[16], b[16];
+  int n = readFifoSamples(a, b, 16, true);
+  g_lastFifoN = n;
+  if (n < 0) {
+    if (g_i2cFailStreak >= I2C_FAIL_LIMIT) { g_i2cFailStreak = 0; g_sensorOk = false; }
+    return;
+  }
+  if (n > 0) g_lastFifoDataMs = nowMs;
+  else if (nowMs - g_lastFifoDataMs > FIFO_STARVE_MS) {
+    g_fifoStarves++; g_lastFifoDataMs = nowMs;
+    if (g_srField == SR_100HZ) {
+      g_srField = SR_50HZ; g_fsHz = 50.0f;
+      applyMeasureConfig(); g_dspHoldUntilMs = nowMs + 400;
+    } else { g_sensorOk = false; }
+    return;
+  }
+
+  if (!g_orderResolved && g_ordCount > 100) {
+    double mA = g_ordSumA / g_ordCount, mB = g_ordSumB / g_ordCount;
+    if (mA > mB * 1.15) {
+      g_swapChannels = !g_swapChannels;
+      dspReset();
+    }
+    g_orderResolved = true;
+  }
+
+  for (int i = 0; i < n; i++) {
+    uint32_t red, ir;
+    if (g_swapChannels) { ir = a[i]; red = b[i]; }
+    else                { red = a[i]; ir = b[i]; }
+    processSample(red, ir, nowMs);
+  }
+
+  g_normIr  = normDc(g_rawIr,  g_paIr);
+  g_normRed = normDc(g_rawRed, g_paRed);
+  bool hardAbsent = g_rawInit && (g_rawIr < RAW_ABSENT_FLOOR) && (g_rawRed < RAW_ABSENT_FLOOR);
+  
+  if (g_rawInit && g_paIr >= PA_RUNAWAY && g_paRed >= PA_RUNAWAY && g_normIr < PRESENT_OFF_NORM) hardAbsent = true;
+
+  if (hardAbsent) {
+    if (g_belowSinceMs == 0) g_belowSinceMs = nowMs;
+    if (nowMs - g_belowSinceMs > ABSENCE_DEBOUNCE_MS) g_fingerPresent = false;
+  } else {
+    bool blanked = (nowMs < g_gainBlankUntil) || (g_state == ST_ARMING && (nowMs - g_stateEnteredMs) < ARM_SETTLE_MS);
+    if (blanked || !g_rawInit) return;
+    float onTh = g_fingerPresent ? PRESENT_OFF_NORM : PRESENT_ON_NORM;
+    bool above = (g_normIr > onTh) || (g_normRed > onTh);
+    if (above) { g_belowSinceMs = 0; g_fingerPresent = true; }
+    else {
+      if (g_belowSinceMs == 0) g_belowSinceMs = nowMs;
+      if (nowMs - g_belowSinceMs > ABSENCE_DEBOUNCE_MS) g_fingerPresent = false;
+    }
+  }
+
+  if (g_state == ST_ARMING || g_state == ST_MEASURE) {
+    bool fullAgc = (g_state != ST_MEASURE) || ((nowMs - g_measureStartMs) < AGC_FREE_IN_MEAS_MS);
+    runAgc(nowMs, fullAgc);
+  }
+}
+
+/* ==========================================================================
+   10. SETUP & LOOP
+   ========================================================================== */
+void setup() {
+  Serial.begin(115200);
+  delay(500); 
+  Serial.println("\n{\"info\":\"Medical API Node (MAX30102 + MLX90614) Ready\"}");
+  Serial.println("{\"info\":\"Type 'start_temp', 'start_oxi', or 'menu' to control sensors\"}");
+
+  Wire.begin(SDA_PIN, SCL_PIN, I2C_CLOCK_HZ);
+  Wire.setTimeOut(50);
+
+  if (!mlx.begin()) {
+    Serial.println("{\"error\":\"MLX90614 init failed\"}");
+  }
+  
+  Wire.begin(SDA_PIN, SCL_PIN, I2C_CLOCK_HZ);
+
+  bool maxOk = false;
+  uint8_t part = sensorRead(REG_PART_ID, &maxOk);
+  if (maxOk && sensorReset()) {
+    delay(20);
+    sensorWrite(REG_INTR_ENABLE_1, 0x00);
+    sensorWrite(REG_INTR_ENABLE_2, 0x00);
+    sensorSleep(MODE_SHUTDOWN_BIT);
+    g_pwIdx = 3; g_fullScale = PW_FULLSCALE[3];
+    g_sensorOk = true;
+  } else {
+    Serial.println("{\"error\":\"MAX30102 init failed\"}");
+  }
+
+  enterMenuSleep();
+}
+
+void loop() {
+  uint32_t now = millis();
+
+  // ---------------------------------------------------------
+  // SERIAL COMMAND LISTENER
+  // ---------------------------------------------------------
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "start_temp") {
+      g_appMode = APP_TEMP;
+      Serial.println("{\"info\":\"Switched to Temperature Mode\"}");
+    } else if (cmd == "start_oxi") {
+      g_appMode = APP_OXI;
+      enterIdle("");
+      Serial.println("{\"info\":\"Switched to Oximeter Mode\"}");
+    } else if (cmd == "menu" || cmd == "stop") {
+      enterMenuSleep();
+      Serial.println("{\"info\":\"Standby Mode\"}");
+    }
+  }
+
+  // ---------------------------------------------------------
+  // CONTINUOUS LIVE TEMPERATURE LOOP
+  // ---------------------------------------------------------
+  if (g_appMode == APP_TEMP) {
+    static uint32_t lastTempMs = 0;
+    // Update live feed every 800ms
+    if (now - lastTempMs > 800) { 
+      lastTempMs = now;
+      
+      Wire.setClock(100000); // Shift down for SMBus
+      float cTemp = mlx.readObjectTempC();
+      float fTemp = mlx.readObjectTempF();
+      Wire.setClock(400000); // Shift back up
+      
+      if (isnan(cTemp)) { cTemp = -99.9f; fTemp = -99.9f; }
+      pushTempStatus(cTemp, fTemp);
+    }
+    return; // Exit loop early; do not run Oximeter logic
+  }
+
+  // --- Oximeter State Machine ---
+  if (!g_sensorOk) return;
+
+  switch (g_state) {
+    case ST_IDLE:
+      serviceIdleProbe(now);
+      break;
+
+    case ST_ARMING: {
+      serviceActive(now);
+      if (!g_sensorOk) break;
+      if (!g_fingerPresent) { noteArmFailure(now); enterIdle(""); break; }
+      if (g_histCount >= 1 && g_liveBpm >= 40.0f && g_liveBpm <= 220.0f) {
+        g_oscCount = 0; enterMeasure();
+      }
+      if (now - g_stateEnteredMs > 15000) { g_liveBpm=0; g_liveSpo2=0; enterIdle(""); }
+      break;
+    }
+
+    case ST_MEASURE: {
+      serviceActive(now);
+      if (!g_sensorOk) break;
+      uint32_t el = now - g_measureStartMs;
+      if (!g_fingerPresent) {
+        if (g_sessCount >= MIN_BEATS_FOR_RESULT) finalizeResults();
+        else enterIdle("");
+        break;
+      }
+      if ((el >= MEASURE_WINDOW_MS && g_sessCount >= MIN_BEATS_FOR_RESULT) || el >= MEASURE_MAX_MS) {
+        finalizeResults();
+      }
+      break;
+    }
+
+    case ST_RESULT: {
+      serviceActive(now);
+      if (!g_sensorOk) break;
+      if (!g_fingerPresent) setState(ST_RELEASE, "");
+      break;
+    }
+
+    case ST_RELEASE: {
+      serviceActive(now);
+      if (!g_sensorOk) break;
+      if (g_fingerPresent) { setState(ST_RESULT, ""); break; }
+      if (now - g_stateEnteredMs >= RESULT_RELEASE_MS) {
+        g_appMode = APP_MENU; 
+        enterMenuSleep(); 
+        Serial.println("{\"info\":\"Returned to Menu\"}"); 
+      }
+      break;
+    }
+    case ST_STANDBY:
+    default:
+      break;
+  }
+  
+  if (g_state != ST_STANDBY) pushOxiStatus(now);
+}

@@ -534,6 +534,72 @@ a {
   font: inherit;
 }
 
+.settings-page {
+  max-width: 920px;
+}
+
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.settings-status {
+  margin-bottom: 1rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.settings-status code {
+  font-size: 0.85em;
+  background: rgba(28, 36, 48, 0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.9rem 1rem;
+}
+
+.settings-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.settings-preview {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(15, 106, 90, 0.06);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.settings-preview-message {
+  margin-top: 0.55rem;
+  font-weight: 600;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.badge-ready {
+  background: rgba(21, 128, 61, 0.15);
+  color: #15803d;
+}
+
+.badge-not_configured {
+  background: rgba(155, 28, 28, 0.12);
+  color: var(--danger);
+}
+
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;

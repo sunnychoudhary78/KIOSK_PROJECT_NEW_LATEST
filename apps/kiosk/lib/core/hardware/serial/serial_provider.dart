@@ -175,6 +175,23 @@ class SerialController extends Notifier<SerialUiState> {
     state = state.copyWith(incomingLines: const []);
   }
 
+  /// Send a newline-terminated command to the connected device.
+  Future<void> sendLine(String line) async {
+    if (!state.isConnected) {
+      throw StateError('Serial port is not connected');
+    }
+    try {
+      await _service.sendLine(line);
+    } catch (error) {
+      AppLogger.error('Serial send failed', error);
+      state = state.copyWith(
+        status: SerialConnectionStatus.error,
+        lastError: error.toString(),
+      );
+      rethrow;
+    }
+  }
+
   Future<void> _bindIncoming() async {
     await _incomingSub?.cancel();
     _incomingSub = _service.incoming.listen(

@@ -1,36 +1,42 @@
-/// Parser for ESP pulse-oximeter USB Serial firmware lines.
-///
-/// Expected line (every ~250ms):
-/// `RED=… IR=… HR=78|-- SpO2=98|-- validHR=0|1 validSpO2=0|1 validCount=0..3`
-///
-/// Finger detect matches firmware: `IR > 50000`.
-class VitalsLineParser {
-  VitalsLineParser({
-    this.frameTimeout = const Duration(milliseconds: 400),
-    DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+import 'dart:convert';
 
-  final Duration frameTimeout;
-  final DateTime Function() _clock;
+/// Parser for the ESP32 dual-sensor USB Serial JSON protocol (v2 firmware).
+///
+/// Commands (kiosk → device):
+/// `{"command":"start","sensor":"max30102"|"mlx90614"|"all"}`
+/// `{"command":"stop"}`
+///
+/// Status lines:
+/// `{"status":"ready","max30102":true,"mlx90614":true}`
+/// `{"status":"place_finger"}` / `finger_detected` / `sensor_started`
+/// `{"status":"recording","sensor":"max30102","elapsed":3,"remaining":17}`
+/// `{"status":"aborted","reason":"finger_removed"}`
+///
+/// Final result (no status key):
+/// `{"bpm":75.0,"spo2":98.0,"object_f":97.5,"ambient_f":75.2}`
+/// (any field may be null when that sensor was not in the session)
+class VitalsLineParser {
+  VitalsLineParser();
 
   String _buffer = '';
-  _PartialFrame? _frame;
 
-  static const double fingerThreshold = 50000;
-  static const double signalExcellentIr = 80000;
   static const double minHeartRate = 30;
-  static const double maxHeartRate = 200;
+  static const double maxHeartRate = 220;
   static const double minSpO2 = 70;
   static const double maxSpO2 = 100;
+  static const double minCaptureTempC = 30;
+  static const double maxCaptureTempC = 43;
 
-  /// Feed a raw UTF-8 chunk; returns one result per complete sample line.
+  static const int maxCollectionSeconds = 20;
+  static const int tempCollectionSeconds = 60;
+
+  /// Feed a raw UTF-8 chunk; returns one result per complete line.
   List<VitalsParseResult> addChunk(String chunk) {
     if (chunk.isEmpty) {
-      return flushTimedOut();
+      return const [];
     }
 
     final results = <VitalsParseResult>[];
-    results.addAll(flushTimedOut());
     _buffer += chunk;
 
     while (true) {
@@ -60,191 +66,195 @@ class VitalsLineParser {
       final line = _buffer.substring(0, end).trim();
       _buffer = _buffer.substring(end + skip);
       if (line.isEmpty) {
-        final flushed = _flushFrame();
-        if (flushed != null) {
-          results.add(flushed);
-        }
         continue;
       }
-      results.addAll(_ingestLine(line));
+      final parsed = parseLine(line);
+      if (parsed != null) {
+        results.add(parsed);
+      }
     }
 
-    results.addAll(flushTimedOut());
     return results;
-  }
-
-  List<VitalsParseResult> flushTimedOut() {
-    final frame = _frame;
-    if (frame == null || !frame.hasAnyField) {
-      return const [];
-    }
-    if (_clock().difference(frame.startedAt) < frameTimeout) {
-      return const [];
-    }
-    final emitted = _flushFrame();
-    return emitted == null ? const [] : [emitted];
   }
 
   void reset() {
     _buffer = '';
-    _frame = null;
   }
 
   /// Parse one complete line (tests + direct use).
   VitalsParseResult? parseLine(String line) {
-    final results = _ingestLine(line.trim());
-    if (results.isNotEmpty) {
-      return results.last;
-    }
-    return _flushFrame();
-  }
-
-  List<VitalsParseResult> _ingestLine(String line) {
     final normalized = line.trim();
     if (normalized.isEmpty) {
-      return const [];
-    }
-
-    final lower = normalized.toLowerCase();
-    if (_isBootNoise(lower) || _isJunkFragment(normalized)) {
-      return const [];
-    }
-
-    final fields = _extractFields(normalized);
-    if (fields == null) {
-      return const [];
-    }
-
-    // Full firmware sample: emit immediately (one line = one sample).
-    if (fields.isFirmwareSample) {
-      final previous = _flushFrame();
-      final sample = _resultFromFields(fields);
-      if (previous == null) {
-        return [sample];
-      }
-      return [previous, sample];
-    }
-
-    // Fragmented USB leftovers — coalesce until timeout / complete.
-    _frame ??= _PartialFrame(startedAt: _clock());
-    _frame!.merge(fields);
-    if (_frame!.isFirmwareSample) {
-      final emitted = _flushFrame();
-      return emitted == null ? const [] : [emitted];
-    }
-    return const [];
-  }
-
-  VitalsParseResult? _flushFrame() {
-    final frame = _frame;
-    _frame = null;
-    if (frame == null || !frame.hasAnyField) {
       return null;
     }
-    return _resultFromFields(frame.toFields());
-  }
-
-  VitalsParseResult _resultFromFields(_FieldBag fields) {
-    final ir = fields.ir;
-    final finger = ir != null ? ir > fingerThreshold : null;
-
-    final validHr = fields.validHr == null ? null : fields.validHr == 1;
-    final validSpo2 = fields.validSpo2 == null ? null : fields.validSpo2 == 1;
-
-    double? heartRate;
-    if (validHr == true) {
-      heartRate = _sanitizeHeartRate(fields.heartRate);
+    if (!normalized.startsWith('{') || !normalized.endsWith('}')) {
+      return null;
     }
 
-    double? spo2;
-    if (validSpo2 == true) {
-      spo2 = _sanitizeSpO2(fields.spo2);
-    }
-
-    final validCount = fields.validCount?.round().clamp(0, 3);
-
-    return VitalsParseResult(
-      heartRate: heartRate,
-      spo2: spo2,
-      temperature: fields.temperature,
-      ir: ir,
-      red: fields.red,
-      validHr: validHr,
-      validSpo2: validSpo2,
-      validCount: validCount,
-      finger: finger,
-      fingerAbsent: finger == false,
-    );
-  }
-
-  _FieldBag? _extractFields(String normalized) {
-    final validHr = _extractKeyedNumber(normalized, const ['validHR']);
-    final validSpo2 = _extractKeyedNumber(normalized, const ['validSpO2']);
-    final validCount = _extractKeyedNumber(normalized, const ['validCount']);
-    final ir = _extractKeyedNumber(normalized, const ['IR']);
-    final red = _extractKeyedNumber(normalized, const ['RED']);
-
-    final heartRate = _extractKeyedNumberOrDash(normalized, const ['HR', 'BPM']);
-    final spo2 = _extractKeyedNumberOrDash(normalized, const ['SpO2', 'SPO2']);
-    final temperature =
-        _extractKeyedNumberOrDash(normalized, const ['Temp', 'Temperature', 'TMP']);
-
-    // Also accept simple JSON if firmware is switched later.
-    final json = _parseJsonObject(normalized);
-
-    final hr = heartRate ?? json?.heartRate;
-    final sp = spo2 ?? json?.spo2;
-    final temp = temperature ?? json?.temperature;
-    final jIr = ir ?? json?.ir;
-    final jRed = red ?? json?.red;
-    final jValidHr = validHr ??
-        (json?.validHr == null ? null : (json!.validHr! ? 1.0 : 0.0));
-    final jValidSpo2 = validSpo2 ??
-        (json?.validSpo2 == null ? null : (json!.validSpo2! ? 1.0 : 0.0));
-    final jValidCount =
-        validCount ?? (json?.validCount == null ? null : json!.validCount!.toDouble());
-
-    if (jValidHr == null &&
-        jValidSpo2 == null &&
-        jIr == null &&
-        jRed == null &&
-        hr == null &&
-        sp == null &&
-        temp == null &&
-        jValidCount == null &&
-        !normalized.contains('--')) {
-      // Line had HR=-- only etc.
-      if (!_hasKeyedDash(normalized, const ['HR', 'BPM', 'SpO2', 'SPO2'])) {
+    Map<String, dynamic> json;
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
         return null;
       }
+      json = decoded.cast<String, dynamic>();
+    } catch (_) {
+      return null;
     }
 
-    return _FieldBag(
-      red: jRed,
-      ir: jIr,
-      heartRate: hr,
-      spo2: sp,
-      validHr: jValidHr,
-      validSpo2: jValidSpo2,
-      validCount: jValidCount,
-      temperature: temp,
+    final status = json['status']?.toString();
+    if (status != null && status.isNotEmpty) {
+      return _parseStatus(status, json, normalized);
+    }
+
+    // Ignore legacy stream protocol (`mode`/`st`).
+    if (json.containsKey('mode') || json.containsKey('st')) {
+      return null;
+    }
+
+    // Final vitals result: has bpm/spo2/object_f/ambient_f and no status.
+    if (json.containsKey('bpm') ||
+        json.containsKey('spo2') ||
+        json.containsKey('object_f') ||
+        json.containsKey('ambient_f')) {
+      return _parseResult(json, normalized);
+    }
+
+    return null;
+  }
+
+  VitalsParseResult _parseStatus(
+    String status,
+    Map<String, dynamic> json,
+    String raw,
+  ) {
+    final sensor = json['sensor']?.toString().toLowerCase();
+    final reason = json['reason']?.toString();
+    final elapsed = _asInt(json['elapsed']);
+    final remaining = _asInt(json['remaining']);
+    final maxOk = _asBool(json['max30102']);
+    final tempOk = _asBool(json['mlx90614']);
+
+    switch (status) {
+      case 'ready':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.ready,
+          status: status,
+          max30102Ok: maxOk,
+          mlx90614Ok: tempOk,
+          rawLine: raw,
+        );
+      case 'place_finger':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.placeFinger,
+          status: status,
+          finger: false,
+          fingerAbsent: true,
+          rawLine: raw,
+        );
+      case 'finger_detected':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.fingerDetected,
+          status: status,
+          finger: true,
+          fingerAbsent: false,
+          rawLine: raw,
+        );
+      case 'sensor_started':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.sensorStarted,
+          status: status,
+          finger: true,
+          fingerAbsent: false,
+          rawLine: raw,
+        );
+      case 'recording':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.recording,
+          status: status,
+          sensor: sensor,
+          elapsedSeconds: elapsed,
+          remSeconds: remaining?.toDouble(),
+          finger: sensor == 'max30102' ? true : null,
+          fingerAbsent: false,
+          rawLine: raw,
+        );
+      case 'aborted':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.aborted,
+          status: status,
+          abortReason: reason,
+          errorMessage: reason,
+          fingerAbsent: reason == 'finger_removed',
+          rawLine: raw,
+        );
+      case 'max30102_not_found':
+      case 'mlx90614_not_found':
+      case 'no_sensor_requested':
+      case 'unknown_sensor':
+      case 'unknown_command':
+      case 'session_in_progress':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.error,
+          status: status,
+          errorMessage: status,
+          rawLine: raw,
+        );
+      case 'already_idle':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.info,
+          status: status,
+          infoMessage: status,
+          rawLine: raw,
+        );
+      default:
+        return VitalsParseResult(
+          kind: VitalsMessageKind.info,
+          status: status,
+          infoMessage: status,
+          rawLine: raw,
+        );
+    }
+  }
+
+  VitalsParseResult _parseResult(Map<String, dynamic> json, String raw) {
+    final bpm = _sanitizeHeartRate(_asNullableDouble(json['bpm']));
+    final spo2 = _sanitizeSpO2(_asNullableDouble(json['spo2']));
+    final objectF = _asNullableDouble(json['object_f']);
+    final ambientF = _asNullableDouble(json['ambient_f']);
+
+    double? tempF;
+    double? tempC;
+    if (objectF != null) {
+      tempF = objectF;
+      tempC = (objectF - 32) * 5 / 9;
+      if (tempC < -40 || tempC > 100) {
+        tempC = null;
+        tempF = null;
+      }
+    }
+
+    final hasOxi = bpm != null || spo2 != null;
+    final hasTemp = tempC != null;
+
+    return VitalsParseResult(
+      kind: VitalsMessageKind.result,
+      heartRate: bpm,
+      spo2: spo2,
+      finalHeartRate: bpm,
+      finalSpO2: spo2,
+      temperatureC: tempC,
+      temperatureF: tempF,
+      ambientTempF: ambientF,
+      canCaptureTemp: hasTemp &&
+          tempC >= minCaptureTempC &&
+          tempC <= maxCaptureTempC,
+      ok: hasOxi || hasTemp,
+      rawLine: raw,
     );
   }
 
-  bool _hasKeyedDash(String line, List<String> keys) {
-    for (final key in keys) {
-      final pattern = RegExp(
-        '(?:^|[^A-Za-z0-9_])$key\\s*[=:]\\s*--',
-        caseSensitive: false,
-      );
-      if (pattern.hasMatch(line)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  double? _sanitizeHeartRate(double? value) {
+  static double? _sanitizeHeartRate(double? value) {
     if (value == null || value <= 0) {
       return null;
     }
@@ -254,7 +264,7 @@ class VitalsLineParser {
     return value;
   }
 
-  double? _sanitizeSpO2(double? value) {
+  static double? _sanitizeSpO2(double? value) {
     if (value == null || value <= 0) {
       return null;
     }
@@ -264,317 +274,139 @@ class VitalsLineParser {
     return value;
   }
 
-  VitalsParseResult? _parseJsonObject(String line) {
-    if (!line.startsWith('{') || !line.endsWith('}')) {
+  /// JSON null → null; numbers/strings parsed.
+  static double? _asNullableDouble(Object? value) {
+    if (value == null) {
       return null;
     }
-    final hr = _extractNumber(
-      line,
-      patterns: [
-        RegExp(
-          r'"(?:hr|heart_?rate|bpm)"\s*:\s*([0-9]+(?:\.[0-9]+)?)',
-          caseSensitive: false,
-        ),
-      ],
-    );
-    final spo2 = _extractNumber(
-      line,
-      patterns: [
-        RegExp(
-          r'"(?:spo2|sp_?o2)"\s*:\s*([0-9]+(?:\.[0-9]+)?)',
-          caseSensitive: false,
-        ),
-      ],
-    );
-    final temperature = _extractNumber(
-      line,
-      patterns: [
-        RegExp(
-          r'"(?:temp|temperature)"\s*:\s*([0-9]+(?:\.[0-9]+)?)',
-          caseSensitive: false,
-        ),
-      ],
-    );
-    final ir = _extractNumber(
-      line,
-      patterns: [RegExp(r'"ir"\s*:\s*([0-9]+(?:\.[0-9]+)?)', caseSensitive: false)],
-    );
-    final red = _extractNumber(
-      line,
-      patterns: [RegExp(r'"red"\s*:\s*([0-9]+(?:\.[0-9]+)?)', caseSensitive: false)],
-    );
-    final validCount = _extractNumber(
-      line,
-      patterns: [
-        RegExp(r'"validCount"\s*:\s*([0-9]+)', caseSensitive: false),
-      ],
-    )?.round();
-
-    bool? validHr;
-    final validHrMatch =
-        RegExp(r'"validHR"\s*:\s*(true|false|1|0)', caseSensitive: false)
-            .firstMatch(line);
-    if (validHrMatch != null) {
-      final v = validHrMatch.group(1)!.toLowerCase();
-      validHr = v == 'true' || v == '1';
-    }
-    bool? validSpo2;
-    final validSpo2Match =
-        RegExp(r'"validSpO2"\s*:\s*(true|false|1|0)', caseSensitive: false)
-            .firstMatch(line);
-    if (validSpo2Match != null) {
-      final v = validSpo2Match.group(1)!.toLowerCase();
-      validSpo2 = v == 'true' || v == '1';
-    }
-
-    if (hr == null &&
-        spo2 == null &&
-        temperature == null &&
-        ir == null &&
-        red == null &&
-        validCount == null &&
-        validHr == null &&
-        validSpo2 == null) {
-      return null;
-    }
-    return VitalsParseResult(
-      heartRate: hr,
-      spo2: spo2,
-      temperature: temperature,
-      ir: ir,
-      red: red,
-      validHr: validHr,
-      validSpo2: validSpo2,
-      validCount: validCount,
-      finger: ir == null ? null : ir > fingerThreshold,
-    );
+    return _asDouble(value);
   }
 
-  bool _isBootNoise(String lower) {
-    const markers = [
-      'wifi',
-      'wi-fi',
-      'ssid',
-      'wlan',
-      'connecting to',
-      'got ip',
-      'dhcp',
-      'mqtt',
-      'http://',
-      'https://',
-      'kiosk dashboard',
-      'max30102 not found',
-    ];
-    for (final marker in markers) {
-      if (lower.contains(marker)) {
-        return true;
-      }
+  static double? _asDouble(Object? value) {
+    if (value is num) {
+      return value.toDouble();
     }
-    if (RegExp(r'\b\d{1,3}(?:\.\d{1,3}){3}\b').hasMatch(lower) &&
-        !lower.contains('spo2') &&
-        !lower.contains('hr=')) {
-      return true;
-    }
-    return false;
-  }
-
-  bool _isJunkFragment(String line) {
-    if (line.length <= 2 && RegExp(r'^[=:\d.\s-]+$').hasMatch(line)) {
-      return true;
-    }
-    if (RegExp(r'^=\s*[0-9]+(?:\.[0-9]+)?$').hasMatch(line)) {
-      return true;
-    }
-    if (RegExp(r'^[0-9]+(?:\.[0-9]+)?$').hasMatch(line)) {
-      return true;
-    }
-    return false;
-  }
-
-  /// Number value, or null when the firmware prints `--`.
-  double? _extractKeyedNumberOrDash(String line, List<String> keys) {
-    for (final key in keys) {
-      final pattern = RegExp(
-        '(?:^|[^A-Za-z0-9_])$key\\s*[=:]\\s*(--|[0-9]+(?:\\.[0-9]+)?)',
-        caseSensitive: false,
-      );
-      final match = pattern.firstMatch(line);
-      if (match == null) {
-        continue;
-      }
-      final raw = match.group(1);
-      if (raw == null || raw == '--') {
+    if (value is String) {
+      if (value.toLowerCase() == 'null') {
         return null;
       }
-      return double.tryParse(raw);
+      return double.tryParse(value);
     }
     return null;
   }
 
-  double? _extractKeyedNumber(String line, List<String> keys) {
-    for (final key in keys) {
-      final pattern = RegExp(
-        '(?:^|[^A-Za-z0-9_])$key\\s*[=:]\\s*([0-9]+(?:\\.[0-9]+)?)',
-        caseSensitive: false,
-      );
-      final match = pattern.firstMatch(line);
-      if (match == null) {
-        continue;
-      }
-      final raw = match.group(1);
-      if (raw == null) {
-        continue;
-      }
-      return double.tryParse(raw);
+  static int? _asInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.round();
+    }
+    if (value is String) {
+      return int.tryParse(value) ?? double.tryParse(value)?.round();
     }
     return null;
   }
 
-  double? _extractNumber(
-    String line, {
-    required List<RegExp> patterns,
-  }) {
-    for (final pattern in patterns) {
-      final match = pattern.firstMatch(line);
-      if (match == null) {
-        continue;
+  static bool? _asBool(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final lower = value.toLowerCase();
+      if (lower == 'true' || lower == '1') {
+        return true;
       }
-      final raw = match.group(1);
-      if (raw == null) {
-        continue;
+      if (lower == 'false' || lower == '0') {
+        return false;
       }
-      return double.tryParse(raw);
     }
     return null;
   }
 }
 
-class _FieldBag {
-  const _FieldBag({
-    this.red,
-    this.ir,
-    this.heartRate,
-    this.spo2,
-    this.validHr,
-    this.validSpo2,
-    this.validCount,
-    this.temperature,
-  });
-
-  final double? red;
-  final double? ir;
-  final double? heartRate;
-  final double? spo2;
-  final double? validHr;
-  final double? validSpo2;
-  final double? validCount;
-  final double? temperature;
-
-  bool get isFirmwareSample =>
-      ir != null ||
-      (red != null && (validHr != null || validSpo2 != null || validCount != null));
+enum VitalsMessageKind {
+  ready,
+  placeFinger,
+  fingerDetected,
+  sensorStarted,
+  recording,
+  result,
+  aborted,
+  info,
+  error,
 }
 
-class _PartialFrame {
-  _PartialFrame({required this.startedAt});
-
-  final DateTime startedAt;
-  double? red;
-  double? ir;
-  double? heartRate;
-  double? spo2;
-  double? validHr;
-  double? validSpo2;
-  double? validCount;
-  double? temperature;
-
-  bool get hasAnyField =>
-      red != null ||
-      ir != null ||
-      heartRate != null ||
-      spo2 != null ||
-      validHr != null ||
-      validSpo2 != null ||
-      validCount != null ||
-      temperature != null;
-
-  bool get isFirmwareSample =>
-      ir != null ||
-      (red != null && (validHr != null || validSpo2 != null || validCount != null));
-
-  void merge(_FieldBag fields) {
-    red = fields.red ?? red;
-    ir = fields.ir ?? ir;
-    heartRate = fields.heartRate ?? heartRate;
-    spo2 = fields.spo2 ?? spo2;
-    validHr = fields.validHr ?? validHr;
-    validSpo2 = fields.validSpo2 ?? validSpo2;
-    validCount = fields.validCount ?? validCount;
-    temperature = fields.temperature ?? temperature;
-  }
-
-  _FieldBag toFields() {
-    return _FieldBag(
-      red: red,
-      ir: ir,
-      heartRate: heartRate,
-      spo2: spo2,
-      validHr: validHr,
-      validSpo2: validSpo2,
-      validCount: validCount,
-      temperature: temperature,
-    );
-  }
-}
-
-/// One firmware sample (or partial coalesce flush).
+/// One parsed firmware line.
 class VitalsParseResult {
   const VitalsParseResult({
+    required this.kind,
+    this.status,
+    this.sensor,
+    this.abortReason,
+    this.elapsedSeconds,
+    this.remSeconds,
     this.heartRate,
     this.spo2,
-    this.temperature,
-    this.ir,
-    this.red,
-    this.validHr,
-    this.validSpo2,
-    this.validCount,
+    this.finalHeartRate,
+    this.finalSpO2,
+    this.ok = false,
+    this.temperatureC,
+    this.temperatureF,
+    this.ambientTempF,
+    this.canCaptureTemp = false,
     this.finger,
     this.fingerAbsent = false,
+    this.max30102Ok,
+    this.mlx90614Ok,
+    this.infoMessage,
+    this.errorMessage,
     this.rawLine,
     this.recognized = true,
   });
 
-  factory VitalsParseResult.unrecognized(String line) {
-    return VitalsParseResult(rawLine: line, recognized: false);
-  }
-
+  final VitalsMessageKind kind;
+  final String? status;
+  final String? sensor;
+  final String? abortReason;
+  final int? elapsedSeconds;
+  final double? remSeconds;
   final double? heartRate;
   final double? spo2;
-  final double? temperature;
-  final double? ir;
-  final double? red;
-  final bool? validHr;
-  final bool? validSpo2;
-  final int? validCount;
+  final double? finalHeartRate;
+  final double? finalSpO2;
+  final bool ok;
+  final double? temperatureC;
+  final double? temperatureF;
+  final double? ambientTempF;
+  final bool canCaptureTemp;
   final bool? finger;
   final bool fingerAbsent;
+  final bool? max30102Ok;
+  final bool? mlx90614Ok;
+  final String? infoMessage;
+  final String? errorMessage;
   final String? rawLine;
   final bool recognized;
 
-  bool get hasAnyValue =>
-      heartRate != null || spo2 != null || temperature != null;
+  bool get isReady => kind == VitalsMessageKind.ready;
+  bool get isPlaceFinger => kind == VitalsMessageKind.placeFinger;
+  bool get isFingerDetected => kind == VitalsMessageKind.fingerDetected;
+  bool get isSensorStarted => kind == VitalsMessageKind.sensorStarted;
+  bool get isRecording => kind == VitalsMessageKind.recording;
+  bool get isResult => kind == VitalsMessageKind.result;
+  bool get isAborted => kind == VitalsMessageKind.aborted;
+  bool get isInfo => kind == VitalsMessageKind.info;
+  bool get isError => kind == VitalsMessageKind.error;
 
-  String get signalQualityLabel {
-    final value = ir;
-    if (value == null) {
-      return 'Unknown';
-    }
-    if (value > VitalsLineParser.signalExcellentIr) {
-      return 'Excellent';
-    }
-    if (value > VitalsLineParser.fingerThreshold) {
-      return 'Fair';
-    }
-    return 'Poor';
-  }
+  bool get isMaxRecording => isRecording && sensor == 'max30102';
+  bool get isTempRecording => isRecording && sensor == 'mlx90614';
+  bool get isFingerRemovedAbort =>
+      isAborted && abortReason == 'finger_removed';
+
+  /// Convenience alias used by older callers / tests.
+  double? get temperature => temperatureC;
 }

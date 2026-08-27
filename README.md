@@ -1,16 +1,20 @@
 # Smart Kiosk Platform
 
+pnpm docker:up
+pnpm dev:api  
+pnpm dev:admin
+
 Enterprise SaaS platform for a scalable public kiosk ecosystem.
 
 This monorepo contains four independently deployable applications that share one API contract, one domain vocabulary, and a modular **service plugin** model. Version 1 ships two kiosk services; more services (Health Check, Phone Charging, Astrology, Government Services, etc.) are intended to plug into the same spine without rewriting host apps.
 
-| Item | Value |
-|------|--------|
-| Package name | `smart-kiosk-platform` |
-| Version | `0.1.0` |
-| Workspace | pnpm (`apps/*`, `packages/*`) |
-| Node | `>=20` |
-| Package manager | pnpm `9.15.0` |
+| Item            | Value                         |
+| --------------- | ----------------------------- |
+| Package name    | `smart-kiosk-platform`        |
+| Version         | `0.1.0`                       |
+| Workspace       | pnpm (`apps/*`, `packages/*`) |
+| Node            | `>=20`                        |
+| Package manager | pnpm `9.15.0`                 |
 
 ---
 
@@ -50,9 +54,9 @@ Smart Kiosk Platform (SKP) is designed as a multi-tenant operator platform:
 
 ### V1 services
 
-| Service code | Name | What it does |
-|--------------|------|--------------|
-| `otp_print` | OTP Print | Citizen creates an OTP on mobile; kiosk redeems it and prints |
+| Service code       | Name             | What it does                                                            |
+| ------------------ | ---------------- | ----------------------------------------------------------------------- |
+| `otp_print`        | OTP Print        | Citizen creates an OTP on mobile; kiosk redeems it and prints           |
 | `digilocker_print` | DigiLocker Print | Kiosk starts a DigiLocker session, lists documents, creates a print job |
 
 ### Extensibility model
@@ -81,12 +85,12 @@ Shared orchestration for printing lives in the `printing` module. Enablement is 
 
 ## 2. Applications and stack
 
-| App | Path | Stack | Role |
-|-----|------|-------|------|
-| **API** | [`apps/api`](apps/api) | Node.js, Express, Prisma, PostgreSQL, Zod, JWT, Vitest | Platform backend (`/v1`) |
-| **Admin** | [`apps/admin`](apps/admin) | React 19, Vite 6, TypeScript, React Router | Operator console |
-| **Kiosk** | [`apps/kiosk`](apps/kiosk) | Flutter (Windows), Riverpod 3, http | On-site terminal |
-| **Mobile** | [`apps/mobile`](apps/mobile) | Flutter (Android/iOS), Riverpod 3, http | Citizen app |
+| App        | Path                         | Stack                                                  | Role                     |
+| ---------- | ---------------------------- | ------------------------------------------------------ | ------------------------ |
+| **API**    | [`apps/api`](apps/api)       | Node.js, Express, Prisma, PostgreSQL, Zod, JWT, Vitest | Platform backend (`/v1`) |
+| **Admin**  | [`apps/admin`](apps/admin)   | React 19, Vite 6, TypeScript, React Router             | Operator console         |
+| **Kiosk**  | [`apps/kiosk`](apps/kiosk)   | Flutter (Windows), Riverpod 3, http                    | On-site terminal         |
+| **Mobile** | [`apps/mobile`](apps/mobile) | Flutter (Android/iOS), Riverpod 3, http                | Citizen app              |
 
 Flutter apps use their own `pubspec.yaml` and are **not** part of the pnpm dependency graph. Root pnpm workspace manages JS/TS packages only.
 
@@ -144,15 +148,15 @@ flowchart LR
 
 ### Communication summary
 
-| From → To | Pattern |
-|-----------|---------|
-| Mobile → API | REST JSON + Bearer JWT (`citizen`) |
-| Kiosk → API | REST JSON + Bearer JWT (`device`) |
-| Admin → API | REST JSON + Bearer JWT (`admin`) |
-| API → DigiLocker | MeriPehchaan OAuth2 + PKCE adapter |
-| API → SMS | No-op adapter (`SKP_SMS_PROVIDER=noop`) |
-| Kiosk → Printer | Local OS print adapter (`PrintSpooler`) — **not** via backend |
-| All clients | `X-Correlation-Id` header; echoed in error envelopes and audit logs |
+| From → To        | Pattern                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| Mobile → API     | REST JSON + Bearer JWT (`citizen`)                                  |
+| Kiosk → API      | REST JSON + Bearer JWT (`device`)                                   |
+| Admin → API      | REST JSON + Bearer JWT (`admin`)                                    |
+| API → DigiLocker | MeriPehchaan OAuth2 + PKCE adapter                                  |
+| API → SMS        | No-op adapter (`SKP_SMS_PROVIDER=noop`)                             |
+| Kiosk → Printer  | Local OS print adapter (`PrintSpooler`) — **not** via backend       |
+| All clients      | `X-Correlation-Id` header; echoed in error envelopes and audit logs |
 
 ### Print job lifecycle (shared)
 
@@ -359,53 +363,53 @@ tooling/
 
 ### Modules
 
-| Module | Responsibility |
-|--------|----------------|
-| `identity` | Citizen login, admin login, device token exchange |
-| `devices` | Register kiosk, list devices, heartbeat |
-| `services` | Platform service catalog; per-device enable/disable |
-| `audit` | Append-only audit log listing (admin) |
-| `printing` | Create/list/get print jobs; device status updates |
-| `otp_print` | Create OTP challenge (citizen); redeem (device) |
+| Module       | Responsibility                                             |
+| ------------ | ---------------------------------------------------------- |
+| `identity`   | Citizen login, admin login, device token exchange          |
+| `devices`    | Register kiosk, list devices, heartbeat                    |
+| `services`   | Platform service catalog; per-device enable/disable        |
+| `audit`      | Append-only audit log listing (admin)                      |
+| `printing`   | Create/list/get print jobs; device status updates          |
+| `otp_print`  | Create OTP challenge (citizen); redeem (device)            |
 | `digilocker` | Start session, list documents, create DigiLocker print job |
 
 Module rule: depend on another module’s public `index` / shared services only; register from `app.ts`.
 
 ### HTTP API surface (`/v1`)
 
-| Method | Path | Principal | Purpose |
-|--------|------|-----------|---------|
-| `GET` | `/health` | public | Liveness |
-| `POST` | `/auth/citizen/login` | public | Citizen JWT |
-| `POST` | `/auth/admin/login` | public | Admin JWT |
-| `POST` | `/auth/device/token` | public | Device JWT from key/secret |
-| `GET` | `/devices` | admin | List devices |
-| `POST` | `/devices` | admin | Register device (returns key + secret once) |
-| `POST` | `/devices/:deviceId/heartbeat` | device | Heartbeat |
-| `GET` | `/services` | admin/device/citizen | Catalog (+ optional device enablement) |
-| `PUT` | `/services/:serviceCode/enablement` | admin | Enable/disable for a device |
-| `POST` | `/otp-challenges` | citizen | Create OTP |
-| `POST` | `/otp-challenges/redeem` | device | Redeem OTP → print job |
-| `POST` | `/digilocker/sessions` | device | Start DigiLocker OAuth (pending + authorize URL) |
-| `GET` | `/digilocker/sessions/:id` | device | Poll session status |
-| `GET` | `/digilocker/sessions/:id/documents` | device | List issued documents |
-| `POST` | `/digilocker/sessions/:id/print` | device | Download PDF → print job |
-| `GET` | `/api/v1/auth/digilocker/callback` | public | MeriPehchaan OAuth callback (exact registered URI) |
-| `GET` | `/print-jobs` | admin | List jobs |
-| `GET` | `/print-jobs/:jobId` | admin/device/citizen | Get job |
-| `GET` | `/print-jobs/:jobId/content` | device | Download job PDF |
-| `PATCH` | `/print-jobs/:jobId/status` | device | `printing` / `completed` / `failed` |
-| `GET` | `/audit-logs` | admin | Audit trail |
+| Method  | Path                                 | Principal            | Purpose                                            |
+| ------- | ------------------------------------ | -------------------- | -------------------------------------------------- |
+| `GET`   | `/health`                            | public               | Liveness                                           |
+| `POST`  | `/auth/citizen/login`                | public               | Citizen JWT                                        |
+| `POST`  | `/auth/admin/login`                  | public               | Admin JWT                                          |
+| `POST`  | `/auth/device/token`                 | public               | Device JWT from key/secret                         |
+| `GET`   | `/devices`                           | admin                | List devices                                       |
+| `POST`  | `/devices`                           | admin                | Register device (returns key + secret once)        |
+| `POST`  | `/devices/:deviceId/heartbeat`       | device               | Heartbeat                                          |
+| `GET`   | `/services`                          | admin/device/citizen | Catalog (+ optional device enablement)             |
+| `PUT`   | `/services/:serviceCode/enablement`  | admin                | Enable/disable for a device                        |
+| `POST`  | `/otp-challenges`                    | citizen              | Create OTP                                         |
+| `POST`  | `/otp-challenges/redeem`             | device               | Redeem OTP → print job                             |
+| `POST`  | `/digilocker/sessions`               | device               | Start DigiLocker OAuth (pending + authorize URL)   |
+| `GET`   | `/digilocker/sessions/:id`           | device               | Poll session status                                |
+| `GET`   | `/digilocker/sessions/:id/documents` | device               | List issued documents                              |
+| `POST`  | `/digilocker/sessions/:id/print`     | device               | Download PDF → print job                           |
+| `GET`   | `/api/v1/auth/digilocker/callback`   | public               | MeriPehchaan OAuth callback (exact registered URI) |
+| `GET`   | `/print-jobs`                        | admin                | List jobs                                          |
+| `GET`   | `/print-jobs/:jobId`                 | admin/device/citizen | Get job                                            |
+| `GET`   | `/print-jobs/:jobId/content`         | device               | Download job PDF                                   |
+| `PATCH` | `/print-jobs/:jobId/status`          | device               | `printing` / `completed` / `failed`                |
+| `GET`   | `/audit-logs`                        | admin                | Audit trail                                        |
 
 Full schemas: [`packages/api-contracts/openapi/openapi.yaml`](packages/api-contracts/openapi/openapi.yaml).
 
 ### Infrastructure adapters
 
-| Adapter | Path | V1 behavior |
-|---------|------|-------------|
+| Adapter    | Path                                           | V1 behavior                                            |
+| ---------- | ---------------------------------------------- | ------------------------------------------------------ |
 | DigiLocker | `infrastructure/external/digilocker.client.ts` | MeriPehchaan OAuth2 + PKCE; issued docs + PDF download |
-| SMS | `infrastructure/external/sms.client.ts` | No-op |
-| Prisma | `infrastructure/database/prisma.ts` | Single Postgres schema |
+| SMS        | `infrastructure/external/sms.client.ts`        | No-op                                                  |
+| Prisma     | `infrastructure/database/prisma.ts`            | Single Postgres schema                                 |
 
 ### Cross-cutting API behavior
 
@@ -422,16 +426,16 @@ Full schemas: [`packages/api-contracts/openapi/openapi.yaml`](packages/api-contr
 
 Operator console at [`apps/admin`](apps/admin).
 
-| Route / feature | Purpose |
-|-----------------|---------|
-| `/login` | Admin email/password login |
-| `/` Dashboard | Overview placeholder |
-| `/kiosks` | List devices; register new kiosk (shows one-time key/secret) |
-| `/services` | View platform service catalog |
-| `/print-jobs` | Monitor OTP + DigiLocker print jobs |
-| `/digilocker` | DigiLocker ops notes / future session UI |
-| `/audit-logs` | Security and ops audit trail |
-| `/users` | Seeded-admin note (user CRUD can expand later) |
+| Route / feature | Purpose                                                      |
+| --------------- | ------------------------------------------------------------ |
+| `/login`        | Admin email/password login                                   |
+| `/` Dashboard   | Overview placeholder                                         |
+| `/kiosks`       | List devices; register new kiosk (shows one-time key/secret) |
+| `/services`     | View platform service catalog                                |
+| `/print-jobs`   | Monitor OTP + DigiLocker print jobs                          |
+| `/digilocker`   | DigiLocker ops notes / future session UI                     |
+| `/audit-logs`   | Security and ops audit trail                                 |
+| `/users`        | Seeded-admin note (user CRUD can expand later)               |
 
 Auth token stored in `localStorage` (`skp_admin_token`). API base URL from `VITE_SKP_API_BASE_URL` (default `http://localhost:3000/v1`).
 
@@ -441,13 +445,13 @@ Auth token stored in `localStorage` (`skp_admin_token`). API base URL from `VITE
 
 Windows kiosk at [`apps/kiosk`](apps/kiosk) (`skp_kiosk`), Riverpod 3 (`Notifier` / `AsyncNotifier`).
 
-| Feature | Role |
-|---------|------|
-| `home` | Device activate (key/secret) + service picker |
-| `otp_print` | Enter OTP → redeem → local print → status report |
-| `digilocker_print` | Start session → list docs → print → status |
-| `device` | Device identity domain placeholder |
-| `session` | Idle timeout policy placeholder |
+| Feature                       | Role                                                        |
+| ----------------------------- | ----------------------------------------------------------- |
+| `home`                        | Device activate (key/secret) + service picker               |
+| `otp_print`                   | Enter OTP → redeem → local print → status report            |
+| `digilocker_print`            | Start session → list docs → print → status                  |
+| `device`                      | Device identity domain placeholder                          |
+| `session`                     | Idle timeout policy placeholder                             |
 | `services/print_spooler.dart` | Host print adapter (console stub; swap for Windows spooler) |
 
 API base URL via `--dart-define=SKP_API_BASE_URL=...` (default `http://localhost:3000/v1`).
@@ -458,13 +462,13 @@ API base URL via `--dart-define=SKP_API_BASE_URL=...` (default `http://localhost
 
 Citizen app at [`apps/mobile`](apps/mobile) (`skp_mobile`), Riverpod 3.
 
-| Feature | Role |
-|---------|------|
-| `auth` | Citizen phone/password login |
-| `home` | Service list after login |
-| `otp_print` | Generate OTP + show code for kiosk redemption |
+| Feature      | Role                                                      |
+| ------------ | --------------------------------------------------------- |
+| `auth`       | Citizen phone/password login                              |
+| `home`       | Service list after login                                  |
+| `otp_print`  | Generate OTP + show code for kiosk redemption             |
 | `digilocker` | Placeholder for future mobile-assisted DigiLocker consent |
-| `profile` | Sign out |
+| `profile`    | Sign out                                                  |
 
 DigiLocker print in V1 is **kiosk-led**; mobile focuses on OTP Print.
 
@@ -472,12 +476,12 @@ DigiLocker print in V1 is **kiosk-led**; mobile focuses on OTP Print.
 
 ## 9. Shared packages
 
-| Package | Purpose |
-|---------|---------|
-| `@skp/api-contracts` | OpenAPI YAML + validation script |
-| `@skp/docs` | Architecture handbook, ADRs, security/ops checklists |
-| `@skp/eslint-config` | Shared ESLint for API + Admin |
-| `@skp/tsconfig` | Shared TS bases (`base`, `node`, `react`) |
+| Package              | Purpose                                              |
+| -------------------- | ---------------------------------------------------- |
+| `@skp/api-contracts` | OpenAPI YAML + validation script                     |
+| `@skp/docs`          | Architecture handbook, ADRs, security/ops checklists |
+| `@skp/eslint-config` | Shared ESLint for API + Admin                        |
+| `@skp/tsconfig`      | Shared TS bases (`base`, `node`, `react`)            |
 
 Dart and TypeScript do **not** share runtime models. Clients follow OpenAPI / HTTP contracts.
 
@@ -490,30 +494,30 @@ Migration: `apps/api/prisma/migrations/20260328120000_init/`
 
 ### Enums
 
-| Enum | Values |
-|------|--------|
-| `PrincipalType` | `citizen`, `admin`, `device`, `system` |
-| `UserRole` | `citizen`, `admin`, `operator`, `viewer` |
-| `DeviceStatus` | `provisioning`, `active`, `inactive` |
-| `PrintJobStatus` | `created`, `ready`, `printing`, `completed`, `failed`, `expired` |
-| `PrintJobSource` | `otp_print`, `digilocker_print` |
-| `OtpChallengeStatus` | `pending`, `redeemed`, `expired`, `cancelled` |
-| `DigiLockerSessionStatus` | `pending`, `authorized`, `expired`, `failed` |
+| Enum                      | Values                                                           |
+| ------------------------- | ---------------------------------------------------------------- |
+| `PrincipalType`           | `citizen`, `admin`, `device`, `system`                           |
+| `UserRole`                | `citizen`, `admin`, `operator`, `viewer`                         |
+| `DeviceStatus`            | `provisioning`, `active`, `inactive`                             |
+| `PrintJobStatus`          | `created`, `ready`, `printing`, `completed`, `failed`, `expired` |
+| `PrintJobSource`          | `otp_print`, `digilocker_print`                                  |
+| `OtpChallengeStatus`      | `pending`, `redeemed`, `expired`, `cancelled`                    |
+| `DigiLockerSessionStatus` | `pending`, `authorized`, `expired`, `failed`                     |
 
 ### Models
 
-| Model | Purpose |
-|-------|---------|
-| `Tenant` | Operator organization |
-| `Site` | Physical location under a tenant |
-| `User` | Citizens and admin users |
-| `Device` | Kiosk terminal (key + secret hash) |
-| `PlatformService` | Catalog (`otp_print`, `digilocker_print`, …) |
-| `ServiceEnablement` | Per-device service on/off |
-| `OtpChallenge` | OTP print intent (hashed code, expiry) |
-| `DigiLockerSession` | Kiosk DigiLocker session |
-| `PrintJob` | Shared print work item |
-| `AuditLog` | Append-only audit events |
+| Model               | Purpose                                      |
+| ------------------- | -------------------------------------------- |
+| `Tenant`            | Operator organization                        |
+| `Site`              | Physical location under a tenant             |
+| `User`              | Citizens and admin users                     |
+| `Device`            | Kiosk terminal (key + secret hash)           |
+| `PlatformService`   | Catalog (`otp_print`, `digilocker_print`, …) |
+| `ServiceEnablement` | Per-device service on/off                    |
+| `OtpChallenge`      | OTP print intent (hashed code, expiry)       |
+| `DigiLockerSession` | Kiosk DigiLocker session                     |
+| `PrintJob`          | Shared print work item                       |
+| `AuditLog`          | Append-only audit events                     |
 
 ### Seed data (`prisma/seed.ts`)
 
@@ -535,11 +539,11 @@ flowchart LR
   Device[Kiosk Device] -->|"Device credential → JWT"| API
 ```
 
-| Principal | How obtained | Typical authorization |
-|-----------|--------------|------------------------|
-| `citizen` | `POST /auth/citizen/login` | Own OTP challenges |
-| `admin` | `POST /auth/admin/login` | Devices, services, jobs, audit (role: admin/operator/viewer) |
-| `device` | `POST /auth/device/token` with device key/secret | Redeem OTP, DigiLocker, heartbeat, job status |
+| Principal | How obtained                                     | Typical authorization                                        |
+| --------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| `citizen` | `POST /auth/citizen/login`                       | Own OTP challenges                                           |
+| `admin`   | `POST /auth/admin/login`                         | Devices, services, jobs, audit (role: admin/operator/viewer) |
+| `device`  | `POST /auth/device/token` with device key/secret | Redeem OTP, DigiLocker, heartbeat, job status                |
 
 Tokens: short-lived JWT (`SKP_JWT_SECRET`, `SKP_JWT_ACCESS_TTL_SECONDS`). TLS expected in deployed environments.
 
@@ -598,48 +602,48 @@ Access tokens never leave the API. Redirect URI must match DigiLocker portal reg
 
 ### API (`SKP_*`) — from [`apps/api/.env.example`](apps/api/.env.example)
 
-| Variable | Purpose | Local default idea |
-|----------|---------|-------------------|
-| `SKP_NODE_ENV` | `local` / `dev` / `staging` / `prod` / `test` | `local` |
-| `SKP_PORT` | HTTP port | `3000` |
-| `SKP_LOG_LEVEL` | Pino level | `info` |
-| `SKP_DATABASE_URL` | Postgres connection | `postgresql://skp:skp_dev_password@localhost:5432/skp_local` |
-| `SKP_JWT_SECRET` | JWT signing (≥32 chars) | dev-only placeholder |
-| `SKP_JWT_ACCESS_TTL_SECONDS` | Access token TTL | `3600` |
-| `SKP_CORS_ORIGINS` | Comma-separated origins | Vite `5173` |
-| `SKP_OTP_TTL_SECONDS` | OTP lifetime | `300` |
-| `SKP_OTP_LENGTH` | OTP digits | `6` |
-| `SKP_RATE_LIMIT_WINDOW_MS` / `MAX` | Rate limit | `60000` / `120` |
-| `SKP_DIGILOCKER_BASE_URL` | MeriPehchaan DigiLocker host | `https://digilocker.meripehchaan.gov.in` |
-| `SKP_DIGILOCKER_CLIENT_ID` / `CLIENT_SECRET` | Portal credentials | from DigiLocker portal |
-| `SKP_DIGILOCKER_REDIRECT_URI` | Exact registered callback | `http://localhost:3000/api/v1/auth/digilocker/callback` |
-| `SKP_DIGILOCKER_*_PATH` / `SCOPE` | OAuth + files paths | authorize/token/issued/file defaults |
-| `SKP_SMS_PROVIDER` | `noop` or future `twilio` | `noop` |
+| Variable                                     | Purpose                                       | Local default idea                                           |
+| -------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------ |
+| `SKP_NODE_ENV`                               | `local` / `dev` / `staging` / `prod` / `test` | `local`                                                      |
+| `SKP_PORT`                                   | HTTP port                                     | `3000`                                                       |
+| `SKP_LOG_LEVEL`                              | Pino level                                    | `info`                                                       |
+| `SKP_DATABASE_URL`                           | Postgres connection                           | `postgresql://skp:skp_dev_password@localhost:5432/skp_local` |
+| `SKP_JWT_SECRET`                             | JWT signing (≥32 chars)                       | dev-only placeholder                                         |
+| `SKP_JWT_ACCESS_TTL_SECONDS`                 | Access token TTL                              | `3600`                                                       |
+| `SKP_CORS_ORIGINS`                           | Comma-separated origins                       | Vite `5173`                                                  |
+| `SKP_OTP_TTL_SECONDS`                        | OTP lifetime                                  | `300`                                                        |
+| `SKP_OTP_LENGTH`                             | OTP digits                                    | `6`                                                          |
+| `SKP_RATE_LIMIT_WINDOW_MS` / `MAX`           | Rate limit                                    | `60000` / `120`                                              |
+| `SKP_DIGILOCKER_BASE_URL`                    | MeriPehchaan DigiLocker host                  | `https://digilocker.meripehchaan.gov.in`                     |
+| `SKP_DIGILOCKER_CLIENT_ID` / `CLIENT_SECRET` | Portal credentials                            | from DigiLocker portal                                       |
+| `SKP_DIGILOCKER_REDIRECT_URI`                | Exact registered callback                     | `http://localhost:3000/api/v1/auth/digilocker/callback`      |
+| `SKP_DIGILOCKER_*_PATH` / `SCOPE`            | OAuth + files paths                           | authorize/token/issued/file defaults                         |
+| `SKP_SMS_PROVIDER`                           | `noop` or future `twilio`                     | `noop`                                                       |
 
 ### Admin (`VITE_SKP_*`)
 
-| Variable | Purpose |
-|----------|---------|
+| Variable                | Purpose                  |
+| ----------------------- | ------------------------ |
 | `VITE_SKP_API_BASE_URL` | API base including `/v1` |
-| `VITE_SKP_APP_NAME` | UI title |
+| `VITE_SKP_APP_NAME`     | UI title                 |
 
 ### Flutter
 
-| Define | Purpose |
-|--------|---------|
+| Define             | Purpose                                       |
+| ------------------ | --------------------------------------------- |
 | `SKP_API_BASE_URL` | API base (default `http://localhost:3000/v1`) |
-| `SKP_ENV` | Kiosk environment label (kiosk app) |
+| `SKP_ENV`          | Kiosk environment label (kiosk app)           |
 
 ### Local Postgres (Docker)
 
 [`tooling/docker/docker-compose.yml`](tooling/docker/docker-compose.yml):
 
-| Setting | Value |
-|---------|-------|
-| Image | `postgres:16-alpine` |
-| Container | `skp-postgres` |
+| Setting              | Value                                    |
+| -------------------- | ---------------------------------------- |
+| Image                | `postgres:16-alpine`                     |
+| Container            | `skp-postgres`                           |
 | User / password / DB | `skp` / `skp_dev_password` / `skp_local` |
-| Port | `5432` |
+| Port                 | `5432`                                   |
 
 Environments intended: **local → dev → staging → prod** (separate DBs; DigiLocker credentials per environment).
 
@@ -688,10 +692,10 @@ PowerShell helper: [`tooling/scripts/bootstrap.ps1`](tooling/scripts/bootstrap.p
 
 ### Seeded credentials
 
-| Principal | Credential |
-|-----------|------------|
-| Admin | `admin@smartkiosk.local` / `Admin@12345` |
-| Citizen | `+919999999999` / `Citizen@12345` |
+| Principal | Credential                               |
+| --------- | ---------------------------------------- |
+| Admin     | `admin@smartkiosk.local` / `Admin@12345` |
+| Citizen   | `+919999999999` / `Citizen@12345`        |
 
 ### First end-to-end smoke path
 
@@ -706,17 +710,17 @@ PowerShell helper: [`tooling/scripts/bootstrap.ps1`](tooling/scripts/bootstrap.p
 
 ### Root
 
-| Script | Description |
-|--------|-------------|
-| `pnpm dev:api` | API watch mode (`tsx watch`) |
-| `pnpm dev:admin` | Vite admin dev server |
-| `pnpm build:api` | Compile API TypeScript |
-| `pnpm build:admin` | Typecheck + Vite production build |
-| `pnpm lint` | Lint apps/packages |
-| `pnpm typecheck` | Typecheck apps/packages |
-| `pnpm test:api` | Vitest for API |
-| `pnpm docker:up` / `docker:down` | Postgres Compose |
-| `pnpm bootstrap` | `pnpm install` + Prisma generate |
+| Script                           | Description                       |
+| -------------------------------- | --------------------------------- |
+| `pnpm dev:api`                   | API watch mode (`tsx watch`)      |
+| `pnpm dev:admin`                 | Vite admin dev server             |
+| `pnpm build:api`                 | Compile API TypeScript            |
+| `pnpm build:admin`               | Typecheck + Vite production build |
+| `pnpm lint`                      | Lint apps/packages                |
+| `pnpm typecheck`                 | Typecheck apps/packages           |
+| `pnpm test:api`                  | Vitest for API                    |
+| `pnpm docker:up` / `docker:down` | Postgres Compose                  |
+| `pnpm bootstrap`                 | `pnpm install` + Prisma generate  |
 
 ### API (`@skp/api`)
 
@@ -742,12 +746,12 @@ flutter run              # mobile device/emulator
 
 Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 
-| Job | What it does |
-|-----|----------------|
-| `api-contracts` | Validate OpenAPI stub |
-| `api` | Prisma generate/migrate against CI Postgres, typecheck, test |
-| `admin` | Typecheck + production build |
-| `flutter` | `pub get`, analyze, test for kiosk and mobile |
+| Job             | What it does                                                 |
+| --------------- | ------------------------------------------------------------ |
+| `api-contracts` | Validate OpenAPI stub                                        |
+| `api`           | Prisma generate/migrate against CI Postgres, typecheck, test |
+| `admin`         | Typecheck + production build                                 |
+| `flutter`       | `pub get`, analyze, test for kiosk and mobile                |
 
 Triggers: push/PR to `main` and `develop`.
 
@@ -757,17 +761,17 @@ There are **no Dockerfiles** for app images yet; only Compose for local Postgres
 
 ## 17. Coding standards and conventions
 
-| Area | Convention |
-|------|------------|
-| Repo / packages | `kebab-case` |
-| Flutter features | `snake_case` folders (`otp_print`) |
-| Backend modules | `snake_case` matching service codes |
-| Admin features | `kebab-case` folders, `PascalCase` components |
-| Service codes | Stable IDs: `otp_print`, `digilocker_print` |
-| API paths | Plural nouns under `/v1` |
-| Env vars | `SKP_*` (API), `VITE_SKP_*` (admin) |
-| Audit actions | `resource.verb` e.g. `otp.redeemed`, `print_job.completed` |
-| Commits | Conventional Commits e.g. `feat(otp_print): …` |
+| Area             | Convention                                                 |
+| ---------------- | ---------------------------------------------------------- |
+| Repo / packages  | `kebab-case`                                               |
+| Flutter features | `snake_case` folders (`otp_print`)                         |
+| Backend modules  | `snake_case` matching service codes                        |
+| Admin features   | `kebab-case` folders, `PascalCase` components              |
+| Service codes    | Stable IDs: `otp_print`, `digilocker_print`                |
+| API paths        | Plural nouns under `/v1`                                   |
+| Env vars         | `SKP_*` (API), `VITE_SKP_*` (admin)                        |
+| Audit actions    | `resource.verb` e.g. `otp.redeemed`, `print_job.completed` |
+| Commits          | Conventional Commits e.g. `feat(otp_print): …`             |
 
 Full guide: [`packages/docs/CODING_STANDARDS.md`](packages/docs/CODING_STANDARDS.md).
 
@@ -775,16 +779,17 @@ Full guide: [`packages/docs/CODING_STANDARDS.md`](packages/docs/CODING_STANDARDS
 
 ## 18. Further documentation
 
-| Document | Description |
-|----------|-------------|
-| [`packages/docs/ARCHITECTURE.md`](packages/docs/ARCHITECTURE.md) | Architecture summary |
-| [`packages/docs/adr/`](packages/docs/adr/) | ADRs: monorepo, auth principals, service plugin model |
-| [`packages/docs/CODING_STANDARDS.md`](packages/docs/CODING_STANDARDS.md) | Coding standards |
-| [`packages/docs/SECURITY_HARDENING.md`](packages/docs/SECURITY_HARDENING.md) | Security baseline |
-| [`packages/docs/KIOSK_LOCKDOWN.md`](packages/docs/KIOSK_LOCKDOWN.md) | Windows kiosk lockdown checklist |
-| [`packages/docs/NEW_SERVICE_CHECKLIST.md`](packages/docs/NEW_SERVICE_CHECKLIST.md) | How to add a new kiosk service |
-| [`packages/docs/ASYNC_QUEUE_READINESS.md`](packages/docs/ASYNC_QUEUE_READINESS.md) | When/how to add async workers later |
-| [`packages/api-contracts/openapi/openapi.yaml`](packages/api-contracts/openapi/openapi.yaml) | API contract |
+| Document                                                                                     | Description                                           |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [`packages/docs/ARCHITECTURE.md`](packages/docs/ARCHITECTURE.md)                             | Architecture summary                                  |
+| [`packages/docs/adr/`](packages/docs/adr/)                                                   | ADRs: monorepo, auth principals, service plugin model |
+| [`packages/docs/CODING_STANDARDS.md`](packages/docs/CODING_STANDARDS.md)                     | Coding standards                                      |
+| [`packages/docs/SECURITY_HARDENING.md`](packages/docs/SECURITY_HARDENING.md)                 | Security baseline                                     |
+| [`packages/docs/KIOSK_LOCKDOWN.md`](packages/docs/KIOSK_LOCKDOWN.md)                         | Windows kiosk lockdown checklist                      |
+| [`packages/docs/NEW_SERVICE_CHECKLIST.md`](packages/docs/NEW_SERVICE_CHECKLIST.md)           | How to add a new kiosk service                        |
+| [`packages/docs/ASYNC_QUEUE_READINESS.md`](packages/docs/ASYNC_QUEUE_READINESS.md)           | When/how to add async workers later                   |
+| [`packages/docs/COMPLETION_REPORT.md`](packages/docs/COMPLETION_REPORT.md)                   | Brief V1 completion status across all four apps       |
+| [`packages/api-contracts/openapi/openapi.yaml`](packages/api-contracts/openapi/openapi.yaml) | API contract                                          |
 
 ---
 

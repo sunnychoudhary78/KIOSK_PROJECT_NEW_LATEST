@@ -213,6 +213,11 @@ class _ServiceCatalog extends ConsumerWidget {
           onPressed: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
           child: const Text('Well Being'),
         ),
+        const SizedBox(height: 12),
+        FilledButton.tonal(
+          onPressed: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
+          child: const Text('Astrology'),
+        ),
         const SizedBox(height: 24),
         TextButton(
           onPressed: () => ref.read(deviceAuthProvider.notifier).deactivate(),

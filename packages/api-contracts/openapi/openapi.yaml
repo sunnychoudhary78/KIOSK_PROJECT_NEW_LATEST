@@ -18,10 +18,12 @@ tags:
   - name: Devices
   - name: Services
   - name: OtpPrint
+  - name: Payments
   - name: DigiLocker
   - name: Printing
   - name: Audit
   - name: PlatformSettings
+  - name: Astrology
 paths:
   /health:
     get:
@@ -167,6 +169,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceRegistrationResponse'
 
+  /devices/nearby:
+    get:
+      tags: [Devices]
+      summary: List nearest active kiosks for a citizen
+      operationId: listNearbyDevices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Nearby devices sorted by distance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NearbyDevice'
+
   /devices/{deviceId}/heartbeat:
     post:
       tags: [Devices]
@@ -223,6 +269,58 @@ paths:
         '200':
           description: Enablement updated
 
+  /astrology/readings:
+    post:
+      tags: [Astrology]
+      summary: Create a Vedic chart plus palm reading from a kiosk palm photo
+      operationId: createAstrologyReading
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [palm, name, gender, dateOfBirth, birthTime, birthPlace]
+              properties:
+                palm:
+                  type: string
+                  format: binary
+                  description: JPEG, PNG, or WebP palm photo (max 5 MB)
+                name:
+                  type: string
+                  maxLength: 80
+                gender:
+                  type: string
+                  enum: [male, female, other]
+                dateOfBirth:
+                  type: string
+                  format: date
+                birthTime:
+                  type: string
+                  description: HH:mm, 24-hour. Use 12:00 when unknown.
+                  example: '14:20'
+                birthPlace:
+                  type: string
+                  example: Jaipur, Rajasthan
+                birthTimeUnknown:
+                  type: string
+                  enum: ['true', 'false']
+      responses:
+        '201':
+          description: Structured reading
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AstrologyReadingResponse'
+        '400':
+          description: Validation failed
+        '403':
+          description: Service disabled for this device
+        '502':
+          description: VedAstro or OpenAI failed
+
   /otp-challenges:
     post:
       tags: [OtpPrint]
@@ -247,7 +345,7 @@ paths:
                     format: binary
       responses:
         '201':
-          description: Challenge created; OTP returned and SMS sent
+          description: Challenge created. OTP is SMS'd only when payment is not required, or after successful payment.
           content:
             application/json:
               schema:
@@ -273,6 +371,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RedeemOtpResponse'
+
+  /otp-challenges/{challengeId}:
+    get:
+      tags: [OtpPrint]
+      summary: Get OTP print session for the owning citizen (poll after payment)
+      operationId: getOtpChallenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Challenge status, quote, and OTP-sent flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpChallengeResponse'
+
+  /otp-challenges/{challengeId}/resend-otp:
+    post:
+      tags: [OtpPrint]
+      summary: Resend print OTP after a successful payment if SMS failed
+      operationId: resendOtpChallenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OTP send attempted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [otpSent]
+                properties:
+                  otpSent:
+                    type: boolean
+                  alreadyIssued:
+                    type: boolean
 
   /otp-challenges/{challengeId}/documents/{documentId}/content:
     get:
@@ -302,6 +450,66 @@ paths:
               schema:
                 type: string
                 format: binary
+
+  /payments/razorpay/order:
+    post:
+      tags: [Payments]
+      summary: Create or reuse a Razorpay order for extra print pages (citizen)
+      operationId: createRazorpayOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRazorpayOrderRequest'
+      responses:
+        '201':
+          description: Order created or reused
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RazorpayOrderResponse'
+
+  /payments/razorpay/verify:
+    post:
+      tags: [Payments]
+      summary: Verify Razorpay Checkout signature and issue print OTP
+      operationId: verifyRazorpayPayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRazorpayPaymentRequest'
+      responses:
+        '200':
+          description: Payment fulfilled; OTP SMS sent when possible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RazorpayVerifyResponse'
+
+  /payments/razorpay/webhook:
+    post:
+      tags: [Payments]
+      summary: Razorpay webhook (raw body HMAC). No JWT.
+      operationId: razorpayWebhook
+      security: []
+      responses:
+        '200':
+          description: Acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
 
   /platform-settings:
     get:
@@ -691,6 +899,40 @@ components:
           enum: [active, inactive, provisioning]
         siteName:
           type: string
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        lastHeartbeatAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    NearbyDevice:
+      type: object
+      required: [id, name, siteName, latitude, longitude, distanceKm]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        siteName:
+          type: string
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+        distanceKm:
+          type: number
         lastHeartbeatAt:
           type: string
           format: date-time
@@ -698,7 +940,7 @@ components:
 
     RegisterDeviceRequest:
       type: object
-      required: [name, siteName]
+      required: [name, siteName, latitude, longitude]
       properties:
         name:
           type: string
@@ -707,6 +949,17 @@ components:
         tenantId:
           type: string
           format: uuid
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        address:
+          type: string
+          maxLength: 240
 
     DeviceRegistrationResponse:
       allOf:
@@ -725,7 +978,7 @@ components:
       properties:
         code:
           type: string
-          enum: [otp_print, digilocker_print]
+          enum: [otp_print, digilocker_print, astrology]
         name:
           type: string
         description:
@@ -745,13 +998,18 @@ components:
 
     OtpChallengeResponse:
       type: object
-      required: [id, code, expiresAt, documentLabel, pageCount, documents]
+      required: [id, status, paymentRequired, otpSent, expiresAt, documentLabel, pageCount, documents]
       properties:
         id:
           type: string
           format: uuid
-        code:
+        status:
           type: string
+          enum: [awaiting_payment, pending, redeemed, expired, cancelled]
+        paymentRequired:
+          type: boolean
+        otpSent:
+          type: boolean
         expiresAt:
           type: string
           format: date-time
@@ -763,6 +1021,104 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OtpDocumentMeta'
+        quote:
+          $ref: '#/components/schemas/PrintQuote'
+
+    PrintQuote:
+      type: object
+      required: [pageCount, freePages, extraPages, chargePerPageRupees, amountPaise, currency, paymentRequired]
+      properties:
+        pageCount:
+          type: integer
+        freePages:
+          type: integer
+        extraPages:
+          type: integer
+        chargePerPageRupees:
+          type: integer
+        amountPaise:
+          type: integer
+        currency:
+          type: string
+          enum: [INR]
+        paymentRequired:
+          type: boolean
+
+    CreateRazorpayOrderRequest:
+      type: object
+      required: [challengeId]
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+
+    RazorpayOrderResponse:
+      type: object
+      required: [alreadyPaid, otpSent, payment, razorpay_key_id]
+      properties:
+        alreadyPaid:
+          type: boolean
+        otpSent:
+          type: boolean
+        payment:
+          $ref: '#/components/schemas/Payment'
+        razorpay_order_id:
+          type: string
+        razorpay_key_id:
+          type: string
+
+    VerifyRazorpayPaymentRequest:
+      type: object
+      required: [razorpay_order_id, razorpay_payment_id, razorpay_signature]
+      properties:
+        razorpay_order_id:
+          type: string
+        razorpay_payment_id:
+          type: string
+        razorpay_signature:
+          type: string
+
+    RazorpayVerifyResponse:
+      type: object
+      required: [alreadyPaid, otpSent, payment]
+      properties:
+        alreadyPaid:
+          type: boolean
+        otpSent:
+          type: boolean
+        payment:
+          $ref: '#/components/schemas/Payment'
+
+    Payment:
+      type: object
+      required: [id, status, pageCount, freePages, extraPages, amountPaise, currency, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, PAID, FAILED, EXPIRED, CANCELLED]
+        pageCount:
+          type: integer
+        freePages:
+          type: integer
+        extraPages:
+          type: integer
+        amountPaise:
+          type: integer
+        currency:
+          type: string
+        razorpayOrderId:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
 
     OtpDocumentMeta:
       type: object
@@ -969,3 +1325,74 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    AstrologyReadingResponse:
+      type: object
+      required: [id, disclaimer, subject, chart, palm, reading]
+      properties:
+        id:
+          type: string
+          format: uuid
+        disclaimer:
+          type: string
+        subject:
+          type: object
+          required: [name, gender, dateOfBirth, birthTime, birthPlace, birthTimeUnknown]
+          properties:
+            name:
+              type: string
+            gender:
+              type: string
+              enum: [male, female, other]
+            dateOfBirth:
+              type: string
+              format: date
+            birthTime:
+              type: string
+            birthPlace:
+              type: string
+            birthTimeUnknown:
+              type: boolean
+        chart:
+          type: object
+          properties:
+            lagna:
+              type: string
+            sunSign:
+              type: string
+            moonSign:
+              type: string
+            nakshatra:
+              type: string
+            currentDasha:
+              type: string
+        palm:
+          type: object
+          required: [summary, lifeLine, heartLine, headLine, fateLine]
+          properties:
+            summary:
+              type: string
+            lifeLine:
+              type: string
+            heartLine:
+              type: string
+            headLine:
+              type: string
+            fateLine:
+              type: string
+        reading:
+          type: object
+          required: [overview, personality, career, health, relationships, period]
+          properties:
+            overview:
+              type: string
+            personality:
+              type: string
+            career:
+              type: string
+            health:
+              type: string
+            relationships:
+              type: string
+            period:
+              type: string

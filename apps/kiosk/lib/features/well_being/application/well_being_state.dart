@@ -1,42 +1,49 @@
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
+import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
 
-/// UI state for the firmware-matched Well Being measurement flow.
+/// UI state for the dual-sensor Well Being measurement flow.
 class WellBeingUiState {
   const WellBeingUiState({
-    this.phase = WellBeingPhase.idle,
+    this.phase = WellBeingPhase.choose,
+    this.activeMode = WellBeingMode.none,
     this.connectionStatus = SerialConnectionStatus.disconnected,
     this.portName,
     this.lastError,
     this.sessionActive = false,
     this.fingerDetected = false,
-    this.validCount = 0,
-    this.secondsRemaining = measureDurationSeconds,
+    this.collectionTotalSeconds = 20,
+    this.secondsRemaining = 20,
+    this.measurePct = 0,
     this.liveHeartRate,
     this.liveSpO2,
     this.finalHeartRate,
     this.finalSpO2,
-    this.ir,
-    this.signalLabel = 'Unknown',
+    this.liveTempC,
+    this.liveTempF,
+    this.finalTempC,
+    this.finalTempF,
     this.statusMessage,
   });
 
-  static const measureDurationSeconds = 45;
-
   final WellBeingPhase phase;
+  final WellBeingMode activeMode;
   final SerialConnectionStatus connectionStatus;
   final String? portName;
   final String? lastError;
   final bool sessionActive;
   final bool fingerDetected;
-  final int validCount;
+  final int collectionTotalSeconds;
   final int secondsRemaining;
+  final double measurePct;
   final double? liveHeartRate;
   final double? liveSpO2;
   final double? finalHeartRate;
   final double? finalSpO2;
-  final double? ir;
-  final String signalLabel;
+  final double? liveTempC;
+  final double? liveTempF;
+  final double? finalTempC;
+  final double? finalTempF;
   final String? statusMessage;
 
   bool get isConnected =>
@@ -51,11 +58,11 @@ class WellBeingUiState {
       };
 
   double get measureProgress {
-    final elapsed = measureDurationSeconds - secondsRemaining;
-    if (elapsed <= 0) {
-      return 0;
+    if (measurePct > 0) {
+      return (measurePct / 100).clamp(0.0, 1.0);
     }
-    return (elapsed / measureDurationSeconds).clamp(0.0, 1.0);
+    final total = collectionTotalSeconds <= 0 ? 1 : collectionTotalSeconds;
+    return ((total - secondsRemaining) / total).clamp(0.0, 1.0);
   }
 
   String get heartRateInterpretation {
@@ -80,8 +87,26 @@ class WellBeingUiState {
     return 'Low Oxygen Level';
   }
 
+  String get temperatureInterpretation {
+    final value = finalTempC ?? liveTempC;
+    if (value == null) {
+      return '—';
+    }
+    if (value >= 36.1 && value <= 37.2) {
+      return 'Normal Range';
+    }
+    if (value > 37.2 && value <= 38.0) {
+      return 'Slightly Elevated';
+    }
+    if (value > 38.0) {
+      return 'Elevated — Seek Advice';
+    }
+    return 'Below Typical Range';
+  }
+
   WellBeingUiState copyWith({
     WellBeingPhase? phase,
+    WellBeingMode? activeMode,
     SerialConnectionStatus? connectionStatus,
     String? portName,
     bool clearPortName = false,
@@ -89,8 +114,9 @@ class WellBeingUiState {
     bool clearError = false,
     bool? sessionActive,
     bool? fingerDetected,
-    int? validCount,
+    int? collectionTotalSeconds,
     int? secondsRemaining,
+    double? measurePct,
     double? liveHeartRate,
     bool clearLiveHeartRate = false,
     double? liveSpO2,
@@ -99,29 +125,39 @@ class WellBeingUiState {
     bool clearFinalHeartRate = false,
     double? finalSpO2,
     bool clearFinalSpO2 = false,
-    double? ir,
-    bool clearIr = false,
-    String? signalLabel,
+    double? liveTempC,
+    bool clearLiveTempC = false,
+    double? liveTempF,
+    bool clearLiveTempF = false,
+    double? finalTempC,
+    bool clearFinalTempC = false,
+    double? finalTempF,
+    bool clearFinalTempF = false,
     String? statusMessage,
     bool clearStatusMessage = false,
   }) {
     return WellBeingUiState(
       phase: phase ?? this.phase,
+      activeMode: activeMode ?? this.activeMode,
       connectionStatus: connectionStatus ?? this.connectionStatus,
       portName: clearPortName ? null : (portName ?? this.portName),
       lastError: clearError ? null : (lastError ?? this.lastError),
       sessionActive: sessionActive ?? this.sessionActive,
       fingerDetected: fingerDetected ?? this.fingerDetected,
-      validCount: validCount ?? this.validCount,
+      collectionTotalSeconds:
+          collectionTotalSeconds ?? this.collectionTotalSeconds,
       secondsRemaining: secondsRemaining ?? this.secondsRemaining,
+      measurePct: measurePct ?? this.measurePct,
       liveHeartRate:
           clearLiveHeartRate ? null : (liveHeartRate ?? this.liveHeartRate),
       liveSpO2: clearLiveSpO2 ? null : (liveSpO2 ?? this.liveSpO2),
       finalHeartRate:
           clearFinalHeartRate ? null : (finalHeartRate ?? this.finalHeartRate),
       finalSpO2: clearFinalSpO2 ? null : (finalSpO2 ?? this.finalSpO2),
-      ir: clearIr ? null : (ir ?? this.ir),
-      signalLabel: signalLabel ?? this.signalLabel,
+      liveTempC: clearLiveTempC ? null : (liveTempC ?? this.liveTempC),
+      liveTempF: clearLiveTempF ? null : (liveTempF ?? this.liveTempF),
+      finalTempC: clearFinalTempC ? null : (finalTempC ?? this.finalTempC),
+      finalTempF: clearFinalTempF ? null : (finalTempF ?? this.finalTempF),
       statusMessage:
           clearStatusMessage ? null : (statusMessage ?? this.statusMessage),
     );

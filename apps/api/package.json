@@ -29,6 +29,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
     "pdf-lib": "^1.17.1",
+    "razorpay": "2.9.6",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
     "uuid": "^11.1.0",

@@ -1,40 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_mobile/core/network/api_client.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
+import 'package:skp_mobile/features/otp_print/application/otp_print_models.dart';
 
-class OtpDocumentInfo {
-  const OtpDocumentInfo({
-    required this.id,
-    required this.fileName,
-    required this.pageCount,
-    required this.byteSize,
-  });
-
-  final String id;
-  final String fileName;
-  final int pageCount;
-  final int byteSize;
-}
-
-class OtpChallenge {
-  const OtpChallenge({
-    required this.id,
-    required this.code,
-    required this.expiresAt,
-    required this.documentLabel,
-    required this.pageCount,
-    required this.documents,
-  });
-
-  final String id;
-  final String code;
-  final String expiresAt;
-  final String documentLabel;
-  final int pageCount;
-  final List<OtpDocumentInfo> documents;
-}
+export 'package:skp_mobile/features/otp_print/application/otp_print_models.dart';
 
 class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
   @override
@@ -57,25 +29,96 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
         files: files,
         fileField: 'files',
       );
-      final docs = (result['documents'] as List<dynamic>? ?? [])
-          .map(
-            (raw) => OtpDocumentInfo(
-              id: raw['id'] as String,
-              fileName: raw['fileName'] as String,
-              pageCount: raw['pageCount'] as int,
-              byteSize: raw['byteSize'] as int,
-            ),
-          )
-          .toList();
-      return OtpChallenge(
-        id: result['id'] as String,
-        code: result['code'] as String,
-        expiresAt: result['expiresAt'] as String,
-        documentLabel: result['documentLabel'] as String,
-        pageCount: result['pageCount'] as int? ?? 1,
-        documents: docs,
-      );
+      return OtpChallenge.fromJson(result);
     });
+  }
+
+  Future<RazorpayOrder> createRazorpayOrder(String challengeId) async {
+    final result = await _retry(
+      () => _api.post(
+        '/payments/razorpay/order',
+        body: {'challengeId': challengeId},
+      ),
+    );
+    return RazorpayOrder.fromJson(result);
+  }
+
+  Future<bool> verifyRazorpayPayment({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    try {
+      final result = await _retry(
+        () => _api.post(
+          '/payments/razorpay/verify',
+          body: {
+            'razorpay_order_id': orderId,
+            'razorpay_payment_id': paymentId,
+            'razorpay_signature': signature,
+          },
+        ),
+      );
+      if (result['otpSent'] == true) {
+        await refreshChallenge();
+        return true;
+      }
+    } on ApiException catch (error) {
+      if (!error.isRetryable && error.code != 'sms_failed') {
+        rethrow;
+      }
+    }
+    return pollUntilOtpSent();
+  }
+
+  Future<void> refreshChallenge() async {
+    final current = state.asData?.value;
+    if (current == null) return;
+    final result = await _api.get('/otp-challenges/${current.id}');
+    state = AsyncData(OtpChallenge.fromJson(result));
+  }
+
+  Future<bool> pollUntilOtpSent({int attempts = 8}) async {
+    final current = state.asData?.value;
+    if (current == null) return false;
+    for (var i = 0; i < attempts; i++) {
+      final result = await _api.get('/otp-challenges/${current.id}');
+      final challenge = OtpChallenge.fromJson(result);
+      state = AsyncData(challenge);
+      if (challenge.otpSent) return true;
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    return state.asData?.value?.otpSent ?? false;
+  }
+
+  Future<void> resendOtp() async {
+    final current = state.asData?.value;
+    if (current == null) return;
+    await _api.post('/otp-challenges/${current.id}/resend-otp');
+    await refreshChallenge();
+  }
+
+  void clear() {
+    state = const AsyncData(null);
+  }
+
+  Future<Map<String, dynamic>> _retry(
+    Future<Map<String, dynamic>> Function() request, {
+    int times = 3,
+  }) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < times; attempt++) {
+      try {
+        return await request();
+      } on ApiException catch (error) {
+        lastError = error;
+        if (!error.isRetryable || attempt == times - 1) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+      }
+    }
+    throw lastError ?? const ApiException('Request failed');
   }
 }
 

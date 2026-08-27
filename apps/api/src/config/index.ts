@@ -25,6 +25,21 @@ const envSchema = z.object({
   SKP_DIGILOCKER_EAADHAAR_PATH: z.string().default('/public/oauth2/3/xml/eaadhaar'),
   SKP_DIGILOCKER_SCOPE: z.string().default('openid'),
   SKP_SMS_PROVIDER: z.enum(['noop', 'msg91']).default('noop'),
+  SKP_MSG91_AUTH_KEY: z.string().default(''),
+  SKP_MSG91_SENDER_ID: z.string().default(''),
+  SKP_MSG91_FLOW_ID: z.string().default(''),
+  /** MSG91 Flow shortcode for OTP (must match ##name## in the Flow template). */
+  SKP_MSG91_OTP_VAR: z.string().default('var1'),
+  /** MSG91 Flow shortcode for expiry text (must match ##name## in the Flow template). */
+  SKP_MSG91_EXPIRY_VAR: z.string().default('var2'),
+  SKP_RAZORPAY_KEY_ID: z.string().optional().default(''),
+  SKP_RAZORPAY_KEY_SECRET: z.string().optional().default(''),
+  SKP_RAZORPAY_WEBHOOK_SECRET: z.string().optional().default(''),
+  SKP_PAYMENT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
+  SKP_VEDASTRO_BASE_URL: z.string().url().default('https://api.vedastro.org/api'),
+  SKP_AI_PROVIDER: z.enum(['openai', 'noop']).default('noop'),
+  SKP_OPENAI_API_KEY: z.string().optional().default(''),
+  SKP_OPENAI_MODEL: z.string().min(1).default('gpt-4o'),
 });
 
 export type AppConfig = {
@@ -60,6 +75,29 @@ export type AppConfig = {
     scope: string;
   };
   smsProvider: z.infer<typeof envSchema>['SKP_SMS_PROVIDER'];
+  msg91: {
+    authKey: string;
+    senderId: string;
+    flowId: string;
+    otpVar: string;
+    expiryVar: string;
+  };
+  razorpay: {
+    keyId: string;
+    keySecret: string;
+    webhookSecret: string;
+  };
+  payments: {
+    windowMinutes: number;
+  };
+  vedastro: {
+    baseUrl: string;
+  };
+  aiProvider: z.infer<typeof envSchema>['SKP_AI_PROVIDER'];
+  openai: {
+    apiKey: string;
+    model: string;
+  };
 };
 
 let cached: Readonly<AppConfig> | undefined;
@@ -117,6 +155,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
       scope: data.SKP_DIGILOCKER_SCOPE,
     },
     smsProvider: data.SKP_SMS_PROVIDER,
+    msg91: {
+      authKey: data.SKP_MSG91_AUTH_KEY.trim(),
+      senderId: data.SKP_MSG91_SENDER_ID.trim(),
+      flowId: data.SKP_MSG91_FLOW_ID.trim(),
+      otpVar: data.SKP_MSG91_OTP_VAR.trim() || 'var1',
+      expiryVar: data.SKP_MSG91_EXPIRY_VAR.trim() || 'var2',
+    },
+    razorpay: {
+      keyId: data.SKP_RAZORPAY_KEY_ID.trim(),
+      keySecret: data.SKP_RAZORPAY_KEY_SECRET.trim(),
+      webhookSecret: data.SKP_RAZORPAY_WEBHOOK_SECRET.trim(),
+    },
+    payments: {
+      windowMinutes: data.SKP_PAYMENT_WINDOW_MINUTES,
+    },
+    vedastro: {
+      baseUrl: data.SKP_VEDASTRO_BASE_URL.replace(/\/$/, ''),
+    },
+    aiProvider: data.SKP_AI_PROVIDER,
+    openai: {
+      apiKey: data.SKP_OPENAI_API_KEY.trim(),
+      model: data.SKP_OPENAI_MODEL.trim() || 'gpt-4o',
+    },
   };
 
   cached = Object.freeze(config);
