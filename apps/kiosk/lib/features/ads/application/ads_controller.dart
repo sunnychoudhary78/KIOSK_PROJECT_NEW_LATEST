@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/features/ads/data/ads_media_cache.dart';
 import 'package:skp_kiosk/features/ads/data/ads_repository.dart';
 
 final adsRepositoryProvider = Provider<AdsRepository>((ref) {
@@ -84,6 +85,7 @@ class AdsController extends Notifier<AdsUiState> {
       final playlist = await _repo.fetchPlaylist();
       state = state.copyWith(playlist: playlist, loading: false);
       _armIdleTimerIfNeeded();
+      unawaited(_prefetchIdleMedia(playlist));
     } catch (error) {
       state = state.copyWith(loading: false, error: error.toString());
     }
@@ -119,6 +121,25 @@ class AdsController extends Notifier<AdsUiState> {
   void dismissIdle() {
     state = state.copyWith(idleVisible: false);
     resetIdleTimer();
+  }
+
+  /// Show the attract loop immediately (idle-timeout visitor reset).
+  void showIdleNow() {
+    _idleTimer?.cancel();
+    _idleTimer = null;
+    if (state.playlist.idle.isEmpty) {
+      resetIdleTimer();
+      return;
+    }
+    state = state.copyWith(idleVisible: true);
+  }
+
+  Future<void> _prefetchIdleMedia(AdPlaylist playlist) async {
+    try {
+      final cache = ref.read(adsMediaCacheProvider);
+      await cache.pruneKeepIds(AdsMediaCache.idsInIdle(playlist.idle));
+      await cache.prefetchIdle(playlist.idle);
+    } catch (_) {}
   }
 
   Future<void> reportEvent({

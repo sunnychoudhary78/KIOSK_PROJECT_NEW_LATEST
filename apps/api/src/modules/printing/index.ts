@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response, Router } from 'express';
 import { UserRole } from '@prisma/client';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired, requireAdminRole } from '../../shared/auth.js';
+import { assertActiveDevice, requireDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
@@ -27,6 +28,7 @@ export function registerPrintingModule(router: Router, deps: AppDeps): void {
   router.get(
     '/print-jobs/:jobId',
     authRequired(deps.config, ['admin', 'device', 'citizen']),
+    assertActiveDevice(deps.db),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         res.json(await service.get(requireParam(req.params.jobId, 'jobId')));
@@ -38,7 +40,7 @@ export function registerPrintingModule(router: Router, deps: AppDeps): void {
 
   router.patch(
     '/print-jobs/:jobId/status',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     validateBody(updatePrintJobStatusSchema),
     async (req: Request, res: Response, next: NextFunction) => {
       try {

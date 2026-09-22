@@ -20,9 +20,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
-    if (_adsStarted) {
-      ref.read(adsControllerProvider.notifier).stopWatching();
-    }
     _deviceKeyController.dispose();
     _deviceSecretController.dispose();
     super.dispose();
@@ -58,26 +55,31 @@ class _HomePageState extends ConsumerState<HomePage> {
         constraints: const BoxConstraints(maxWidth: 560),
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: auth.bootstrapping || (auth.loading && !auth.isAuthenticated)
-              ? const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('Activating device…'),
-                  ],
-                )
-              : auth.isAuthenticated
-                  ? _ServiceCatalog(auth: auth)
-                  : _ActivationForm(
-                      keyController: _deviceKeyController,
-                      secretController: _deviceSecretController,
-                      auth: auth,
-                      onActivate: () => ref.read(deviceAuthProvider.notifier).authenticate(
-                            deviceKey: _deviceKeyController.text,
-                            deviceSecret: _deviceSecretController.text,
-                          ),
-                    ),
+          child: auth.stopped
+              ? const _StoppedNotice()
+              : auth.provisioned && !auth.isAuthenticated
+                  ? _ReconnectNotice(error: auth.error)
+                  : auth.bootstrapping || auth.loading
+                      ? const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('Activating device…'),
+                          ],
+                        )
+                      : auth.isAuthenticated
+                          ? _ServiceCatalog(auth: auth)
+                          : _ActivationForm(
+                              keyController: _deviceKeyController,
+                              secretController: _deviceSecretController,
+                              auth: auth,
+                              onActivate: () =>
+                                  ref.read(deviceAuthProvider.notifier).authenticate(
+                                        deviceKey: _deviceKeyController.text,
+                                        deviceSecret: _deviceSecretController.text,
+                                      ),
+                            ),
         ),
       ),
     );
@@ -175,13 +177,13 @@ class _ActivationForm extends StatelessWidget {
   }
 }
 
-class _ServiceCatalog extends ConsumerWidget {
+class _ServiceCatalog extends StatelessWidget {
   const _ServiceCatalog({required this.auth});
 
   final DeviceAuthState auth;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -218,11 +220,67 @@ class _ServiceCatalog extends ConsumerWidget {
           onPressed: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
           child: const Text('Astrology'),
         ),
-        const SizedBox(height: 24),
-        TextButton(
-          onPressed: () => ref.read(deviceAuthProvider.notifier).deactivate(),
-          child: const Text('Deactivate this device'),
+      ],
+    );
+  }
+}
+
+class _StoppedNotice extends StatelessWidget {
+  const _StoppedNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          'Smart Kiosk',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.headlineLarge,
         ),
+        const SizedBox(height: 16),
+        Text(
+          'This kiosk has been stopped',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'An operator turned this terminal off from the admin panel. '
+          'It will come back automatically when they start it again.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ],
+    );
+  }
+}
+
+class _ReconnectNotice extends StatelessWidget {
+  const _ReconnectNotice({this.error});
+
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 16),
+        Text(
+          'Reconnecting to server…',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        if (error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            error!,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
       ],
     );
   }

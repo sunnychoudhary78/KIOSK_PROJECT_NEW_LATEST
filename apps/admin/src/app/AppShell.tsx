@@ -24,6 +24,7 @@ export function AppShell() {
           <NavLink to="/services">Services</NavLink>
           <NavLink to="/print-jobs">Print jobs</NavLink>
           <NavLink to="/digilocker">DigiLocker</NavLink>
+          <NavLink to="/recordings">Recordings</NavLink>
           <NavLink to="/audit-logs">Audit logs</NavLink>
           <NavLink to="/users">Users</NavLink>
           <NavLink to="/platform-settings">Platform settings</NavLink>

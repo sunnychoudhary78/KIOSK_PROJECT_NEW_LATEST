@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response, Router } from 'express';
 import { UserRole } from '@prisma/client';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired, requireAdminRole } from '../../shared/auth.js';
+import { assertActiveDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
@@ -14,6 +15,7 @@ export function registerServicesModule(router: Router, deps: AppDeps): void {
   router.get(
     '/services',
     authRequired(deps.config, ['admin', 'device', 'citizen']),
+    assertActiveDevice(deps.db),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const deviceId =

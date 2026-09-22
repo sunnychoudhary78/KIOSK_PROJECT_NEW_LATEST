@@ -16,6 +16,7 @@ function mapDevice(device: {
   longitude: number | null;
   address: string | null;
   lastHeartbeatAt: Date | null;
+  surveillanceEnabled: boolean;
   site: { name: string };
 }) {
   return {
@@ -28,6 +29,7 @@ function mapDevice(device: {
     longitude: device.longitude,
     address: device.address,
     lastHeartbeatAt: device.lastHeartbeatAt?.toISOString() ?? null,
+    surveillanceEnabled: device.surveillanceEnabled,
   };
 }
 
@@ -149,6 +151,75 @@ export class DevicesService {
     };
   }
 
+  async setStatus(
+    deviceId: string,
+    status: 'active' | 'inactive',
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    const nextStatus =
+      status === 'inactive' ? DeviceStatus.inactive : DeviceStatus.active;
+
+    const updated = await this.db.device.update({
+      where: { id: deviceId },
+      data: { status: nextStatus },
+      include: { site: true },
+    });
+
+    await this.audit.record({
+      action: nextStatus === DeviceStatus.inactive ? 'device.deactivated' : 'device.activated',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: { status: nextStatus },
+    });
+
+    return mapDevice(updated);
+  }
+
+  async setSurveillance(
+    deviceId: string,
+    enabled: boolean,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    const updated = await this.db.device.update({
+      where: { id: deviceId },
+      data: { surveillanceEnabled: enabled },
+      include: { site: true },
+    });
+
+    await this.audit.record({
+      action: enabled ? 'device.surveillance_started' : 'device.surveillance_stopped',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: { surveillanceEnabled: enabled },
+    });
+
+    return mapDevice(updated);
+  }
+
   async heartbeat(deviceId: string, principalDeviceId: string, correlationId?: string) {
     if (deviceId !== principalDeviceId) {
       throw new AppError('forbidden', 'Device can only heartbeat itself', 403);
@@ -158,10 +229,18 @@ export class DevicesService {
     if (!device) {
       throw new AppError('not_found', 'Device not found', 404);
     }
+    if (device.status === DeviceStatus.inactive) {
+      throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
+    }
 
     await this.db.device.update({
       where: { id: deviceId },
-      data: { lastHeartbeatAt: new Date(), status: DeviceStatus.active },
+      data: {
+        lastHeartbeatAt: new Date(),
+        ...(device.status === DeviceStatus.provisioning
+          ? { status: DeviceStatus.active }
+          : {}),
+      },
     });
 
     await this.audit.record({
@@ -172,5 +251,7 @@ export class DevicesService {
       resourceId: deviceId,
       correlationId,
     });
+
+    return { surveillanceEnabled: device.surveillanceEnabled };
   }
 }

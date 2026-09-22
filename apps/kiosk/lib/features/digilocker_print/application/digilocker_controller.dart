@@ -62,16 +62,30 @@ class DigilockerController extends Notifier<DigilockerUiState> {
   bool _authCallbackSeen = false;
   bool _pollInFlight = false;
 
+  bool _endingSession = false;
+  bool _serverCancelled = false;
+
   @override
   DigilockerUiState build() {
-    ref.onDispose(() => _pollTimer?.cancel());
+    ref.onDispose(() {
+      _pollTimer?.cancel();
+      final sessionId = state.sessionId;
+      final previewPath = state.previewFilePath;
+      final repository = _repository;
+      final alreadyCancelled = _serverCancelled;
+      unawaited(
+        _disposeCleanup(
+          repository: repository,
+          sessionId: alreadyCancelled ? null : sessionId,
+          previewPath: previewPath,
+        ),
+      );
+    });
     return const DigilockerUiState();
   }
 
   DigilockerPrintRepository get _repository => ref.read(digilockerRepositoryProvider);
   PrintSpooler get _spooler => ref.read(printSpoolerProvider);
-
-  bool _endingSession = false;
 
   /// Cancel the current DigiLocker flow and clear local session data.
   /// Caller should navigate away (e.g. back to home) after this returns.
@@ -87,26 +101,59 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       _pollAttempts = 0;
       _pollInFlight = false;
 
+      final sessionId = state.sessionId;
       final previewPath = state.previewFilePath;
-      if (previewPath != null && previewPath.isNotEmpty) {
-        try {
-          final file = File(previewPath);
-          if (await file.exists()) {
-            await file.delete();
-          }
-        } catch (_) {}
-      }
+      await _deletePreviewFile(previewPath);
+      await _cancelServer(sessionId);
 
-      state = const DigilockerUiState();
+      if (ref.mounted) {
+        state = const DigilockerUiState();
+      }
     } finally {
       _endingSession = false;
     }
+  }
+
+  Future<void> _cancelServer(String? sessionId) async {
+    if (sessionId == null || sessionId.isEmpty || _serverCancelled) {
+      return;
+    }
+    try {
+      await _repository.cancelSession(sessionId);
+      _serverCancelled = true;
+    } catch (_) {}
+  }
+
+  Future<void> _deletePreviewFile(String? previewPath) async {
+    if (previewPath == null || previewPath.isEmpty) {
+      return;
+    }
+    try {
+      final file = File(previewPath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _disposeCleanup({
+    required DigilockerPrintRepository repository,
+    required String? sessionId,
+    required String? previewPath,
+  }) async {
+    if (sessionId != null && sessionId.isNotEmpty) {
+      try {
+        await repository.cancelSession(sessionId);
+      } catch (_) {}
+    }
+    await _deletePreviewFile(previewPath);
   }
 
   Future<void> start() async {
     _pollTimer?.cancel();
     _authCallbackSeen = false;
     _pollInFlight = false;
+    _serverCancelled = false;
     state = const DigilockerUiState(phase: DigilockerPhase.loadingDocs);
     try {
       final session = await _repository.startSession();
@@ -382,4 +429,6 @@ class DigilockerController extends Notifier<DigilockerUiState> {
 }
 
 final digilockerControllerProvider =
-    NotifierProvider<DigilockerController, DigilockerUiState>(DigilockerController.new);
+    NotifierProvider.autoDispose<DigilockerController, DigilockerUiState>(
+  DigilockerController.new,
+);

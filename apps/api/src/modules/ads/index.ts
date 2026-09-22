@@ -3,6 +3,7 @@ import multer from 'multer';
 import { AdCampaignStatus, AdCreativeType, UserRole } from '@prisma/client';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired, requireAdminRole } from '../../shared/auth.js';
+import { assertActiveDevice, requireDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
@@ -364,6 +365,7 @@ export function registerAdsModule(router: Router, deps: AppDeps): void {
   router.get(
     '/ads/media/asset/:assetId',
     authRequired(deps.config, ['admin', 'device']),
+    assertActiveDevice(deps.db),
     async (req, res, next) => {
       try {
         const media = await service.getAssetMediaBuffer(requireParam(req.params.assetId, 'assetId'));
@@ -379,6 +381,7 @@ export function registerAdsModule(router: Router, deps: AppDeps): void {
   router.get(
     '/ads/media/:creativeId',
     authRequired(deps.config, ['admin', 'device']),
+    assertActiveDevice(deps.db),
     async (req, res, next) => {
       try {
         const media = await service.getMediaBuffer(requireParam(req.params.creativeId, 'creativeId'));
@@ -394,7 +397,7 @@ export function registerAdsModule(router: Router, deps: AppDeps): void {
   // Device playlist + events
   router.get(
     '/ads/playlist',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         if (!req.principal?.deviceId) {
@@ -409,7 +412,7 @@ export function registerAdsModule(router: Router, deps: AppDeps): void {
 
   router.post(
     '/ads/events',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     validateBody(reportAdEventsSchema),
     async (req: Request, res: Response, next: NextFunction) => {
       try {

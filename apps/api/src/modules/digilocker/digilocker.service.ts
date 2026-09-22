@@ -74,6 +74,34 @@ export class DigiLockerService {
     return mapSession(session);
   }
 
+  async cancelSession(sessionId: string, deviceId: string, correlationId?: string) {
+    const session = await this.requireSession(sessionId, deviceId, false);
+    if (session.status === DigiLockerSessionStatus.expired) {
+      return mapSession(session);
+    }
+
+    const updated = await this.db.digiLockerSession.update({
+      where: { id: sessionId },
+      data: {
+        status: DigiLockerSessionStatus.expired,
+        accessToken: null,
+        idToken: null,
+        tokenExpiresAt: null,
+      },
+    });
+
+    await this.audit.record({
+      action: 'digilocker.session_cancelled',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'digilocker_session',
+      resourceId: session.id,
+      correlationId,
+    });
+
+    return mapSession(updated);
+  }
+
   async handleOAuthCallback(input: { code?: string; state?: string; error?: string }) {
     if (input.error) {
       if (input.state) {

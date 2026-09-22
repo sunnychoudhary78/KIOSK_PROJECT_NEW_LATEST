@@ -20,6 +20,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1125.0",
+    "@aws-sdk/s3-request-presigner": "^3.1125.0",
     "@prisma/client": "^6.5.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
@@ -29,9 +31,9 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
     "pdf-lib": "^1.17.1",
-    "razorpay": "2.9.6",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
+    "razorpay": "2.9.6",
     "uuid": "^11.1.0",
     "zod": "^3.24.2"
   },

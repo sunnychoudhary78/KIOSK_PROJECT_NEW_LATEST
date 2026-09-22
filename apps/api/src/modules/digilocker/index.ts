@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response, Router } from 'express';
 import type { AppDeps } from '../../types/deps.js';
-import { authRequired } from '../../shared/auth.js';
+import { requireDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
@@ -22,7 +22,7 @@ export function registerDigiLockerModule(router: Router, deps: AppDeps): void {
 
   router.post(
     '/digilocker/sessions',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     validateBody(startDigiLockerSessionSchema),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -43,7 +43,7 @@ export function registerDigiLockerModule(router: Router, deps: AppDeps): void {
 
   router.get(
     '/digilocker/sessions/:sessionId',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         if (!req.principal?.deviceId) {
@@ -60,9 +60,29 @@ export function registerDigiLockerModule(router: Router, deps: AppDeps): void {
     },
   );
 
+  router.post(
+    '/digilocker/sessions/:sessionId/cancel',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const result = await service.cancelSession(
+          requireParam(req.params.sessionId, 'sessionId'),
+          req.principal.deviceId,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.get(
     '/digilocker/sessions/:sessionId/documents',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         if (!req.principal?.deviceId) {
@@ -81,7 +101,7 @@ export function registerDigiLockerModule(router: Router, deps: AppDeps): void {
 
   router.post(
     '/digilocker/sessions/:sessionId/print',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     validateBody(printDigiLockerSchema),
     async (req: Request, res: Response, next: NextFunction) => {
       try {

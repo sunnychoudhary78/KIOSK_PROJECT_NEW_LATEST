@@ -139,13 +139,6 @@ class _LoginPageState extends ConsumerState<LoginPage>
         unawaited(_startSmsListener());
       }
 
-      if (next.devOtp != null &&
-          next.devOtp != previous?.devOtp &&
-          next.otpSent) {
-        _otp.text = next.devOtp!;
-        unawaited(_verify(next.devOtp!));
-      }
-
       if (next.otpSent && next.resendAvailableAt != null) {
         _startResendTicker();
       }
@@ -234,15 +227,6 @@ class _LoginPageState extends ConsumerState<LoginPage>
             ),
           ),
           const Spacer(),
-          if (auth.devOtp != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                'Dev OTP: ${auth.devOtp}',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
           if (auth.error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),

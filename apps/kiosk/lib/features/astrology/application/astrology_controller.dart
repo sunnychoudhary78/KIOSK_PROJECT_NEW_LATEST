@@ -19,7 +19,6 @@ class AstrologyUiState {
     this.palmBytes,
     this.reading,
     this.error,
-    this.goodStreak = 0,
   });
 
   final AstrologyPhase phase;
@@ -27,7 +26,6 @@ class AstrologyUiState {
   final Uint8List? palmBytes;
   final AstrologyReading? reading;
   final String? error;
-  final int goodStreak;
 
   bool get canCapture => quality?.ok == true;
 
@@ -41,7 +39,6 @@ class AstrologyUiState {
     bool clearReading = false,
     String? error,
     bool clearError = false,
-    int? goodStreak,
   }) {
     return AstrologyUiState(
       phase: phase ?? this.phase,
@@ -49,59 +46,83 @@ class AstrologyUiState {
       palmBytes: clearPalmBytes ? null : (palmBytes ?? this.palmBytes),
       reading: clearReading ? null : (reading ?? this.reading),
       error: clearError ? null : (error ?? this.error),
-      goodStreak: goodStreak ?? this.goodStreak,
     );
   }
 }
 
 class AstrologyController extends Notifier<AstrologyUiState> {
-  static const _streakToAutoCapture = 2;
+  static const autoCaptureHold = Duration(milliseconds: 700);
+  static const _stillsToCapture = 2;
   final PalmQualityChecker _checker = const PalmQualityChecker();
+  DateTime? _goodSince;
+  int _goodStreak = 0;
 
   @override
   AstrologyUiState build() => const AstrologyUiState();
 
   AstrologyRepository get _repository => ref.read(astrologyRepositoryProvider);
 
-  PalmQualityResult evaluateFrame(Uint8List bytes) {
+  PalmQualityResult evaluateFrame(Uint8List bytes, {DateTime? now}) {
     final quality = _checker.evaluate(bytes);
     if (state.phase != AstrologyPhase.capture || state.palmBytes != null) {
       return quality;
     }
 
-    final streak = quality.ok ? state.goodStreak + 1 : 0;
-    state = state.copyWith(
-      quality: quality,
-      goodStreak: streak,
-      clearError: true,
-    );
+    if (!quality.ok) {
+      _goodSince = null;
+      _goodStreak = 0;
+      state = state.copyWith(quality: quality, clearError: true);
+      return quality;
+    }
 
-    if (streak >= _streakToAutoCapture) {
+    final clock = now ?? DateTime.now();
+    _goodSince ??= clock;
+    _goodStreak += 1;
+    state = state.copyWith(quality: quality, clearError: true);
+
+    if (_goodStreak >= _stillsToCapture &&
+        clock.difference(_goodSince!) >= autoCaptureHold) {
       acceptPalm(bytes);
     }
     return quality;
   }
 
-  void acceptPalm(Uint8List bytes) {
-    final quality = _checker.evaluate(bytes);
+  void reportCameraStatus(String message) {
+    if (state.phase != AstrologyPhase.capture || state.palmBytes != null) {
+      return;
+    }
+    if (state.quality?.ok == true) {
+      return;
+    }
+    state = state.copyWith(
+      quality: PalmQualityResult(ok: false, message: message),
+    );
+  }
+
+  void acceptPalm(Uint8List bytes, {bool strict = true}) {
+    final quality = _checker.evaluate(bytes, strict: strict);
     if (!quality.ok) {
+      _goodSince = null;
+      _goodStreak = 0;
       state = state.copyWith(
         quality: quality,
-        goodStreak: 0,
         error: quality.message,
       );
       return;
     }
+    _goodSince = null;
+    _goodStreak = 0;
     state = state.copyWith(
       phase: AstrologyPhase.form,
       palmBytes: bytes,
       quality: quality,
-      goodStreak: 0,
       clearError: true,
     );
   }
 
   void retake() {
+    _goodSince = null;
+    _goodStreak = 0;
     state = const AstrologyUiState();
   }
 

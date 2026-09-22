@@ -40,6 +40,13 @@ const envSchema = z.object({
   SKP_AI_PROVIDER: z.enum(['openai', 'noop']).default('noop'),
   SKP_OPENAI_API_KEY: z.string().optional().default(''),
   SKP_OPENAI_MODEL: z.string().min(1).default('gpt-4o'),
+  SKP_OBJECT_STORAGE_ENDPOINT: z.string().optional().default(''),
+  SKP_OBJECT_STORAGE_REGION: z.string().min(1).default('auto'),
+  SKP_OBJECT_STORAGE_BUCKET: z.string().optional().default(''),
+  SKP_OBJECT_STORAGE_ACCESS_KEY: z.string().optional().default(''),
+  SKP_OBJECT_STORAGE_SECRET_KEY: z.string().optional().default(''),
+  SKP_OBJECT_STORAGE_PUT_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  SKP_OBJECT_STORAGE_GET_TTL_SECONDS: z.coerce.number().int().positive().default(900),
 });
 
 export type AppConfig = {
@@ -97,6 +104,15 @@ export type AppConfig = {
   openai: {
     apiKey: string;
     model: string;
+  };
+  objectStorage: {
+    endpoint: string;
+    region: string;
+    bucket: string;
+    accessKey: string;
+    secretKey: string;
+    putTtlSeconds: number;
+    getTtlSeconds: number;
   };
 };
 
@@ -177,6 +193,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
     openai: {
       apiKey: data.SKP_OPENAI_API_KEY.trim(),
       model: data.SKP_OPENAI_MODEL.trim() || 'gpt-4o',
+    },
+    objectStorage: {
+      endpoint: data.SKP_OBJECT_STORAGE_ENDPOINT.trim().replace(/\/$/, ''),
+      region: data.SKP_OBJECT_STORAGE_REGION.trim() || 'auto',
+      bucket: data.SKP_OBJECT_STORAGE_BUCKET.trim(),
+      accessKey: data.SKP_OBJECT_STORAGE_ACCESS_KEY.trim(),
+      secretKey: data.SKP_OBJECT_STORAGE_SECRET_KEY.trim(),
+      putTtlSeconds: data.SKP_OBJECT_STORAGE_PUT_TTL_SECONDS,
+      getTtlSeconds: data.SKP_OBJECT_STORAGE_GET_TTL_SECONDS,
     },
   };
 

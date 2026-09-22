@@ -23,10 +23,21 @@ Face-up trays (typical Canon rear/face-up output) land the last printed page on 
 Example run with an explicit printer:
 
 ```powershell
-flutter run -d windows --dart-define=SKP_API_BASE_URL=http://192.168.1.19:3000/v1 --dart-define=SKP_PRINTER_NAME=Canon
+flutter run -d windows --dart-define=SKP_API_BASE_URL=http://192.168.1.30:3000/v1 --dart-define=SKP_PRINTER_NAME=Canon
 ```
 
 OTP Print and DigiLocker both use silent `directPrintPdf` (no Windows print dialog).
+
+## Surveillance (Windows)
+
+When admin enables surveillance on a device, the kiosk records ~10 minute MP4 segments and uploads them to private Cloudflare R2 via API-issued presigned PUT URLs.
+
+Admin **Recordings** plays clips with short-lived presigned GET URLs. Configure the R2 bucket CORS so:
+
+- Admin origins (same as `SKP_CORS_ORIGINS`, e.g. `http://localhost:5173`) may `GET` and `HEAD` (include `Range` for seeking)
+- Kiosk / upload clients may `PUT`
+
+Without GET CORS, the clip list still works but the browser video player fails.
 
 ## Getting Started
 

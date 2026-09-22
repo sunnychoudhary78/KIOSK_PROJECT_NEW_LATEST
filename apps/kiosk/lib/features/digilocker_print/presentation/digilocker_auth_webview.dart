@@ -1,11 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:skp_kiosk/core/config/app_config.dart';
 import 'package:webview_windows/webview_windows.dart';
-
-/// DigiLocker OAuth redirect registered with MeriPehchaan (exact match prefix).
-const digilockerOAuthCallbackPrefix =
-    'http://localhost:3000/api/v1/auth/digilocker/callback';
 
 /// In-app WebView2 pane for MeriPehchaan DigiLocker authorization.
 class DigilockerAuthWebView extends StatefulWidget {
@@ -14,11 +11,13 @@ class DigilockerAuthWebView extends StatefulWidget {
     required this.authorizationUrl,
     required this.onCallbackReached,
     this.onError,
+    this.onActivity,
   });
 
   final String authorizationUrl;
   final VoidCallback onCallbackReached;
   final ValueChanged<String>? onError;
+  final VoidCallback? onActivity;
 
   @override
   State<DigilockerAuthWebView> createState() => _DigilockerAuthWebViewState();
@@ -26,6 +25,8 @@ class DigilockerAuthWebView extends StatefulWidget {
 
 class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
   final WebviewController _controller = WebviewController();
+  final String _oauthCallbackPrefix =
+      AppConfig.fromEnvironment().digilockerOAuthCallbackUrl;
   StreamSubscription<String>? _urlSub;
   StreamSubscription<WebErrorStatus>? _errorSub;
   bool _ready = false;
@@ -59,7 +60,7 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
 
       _urlSub = _controller.url.listen(_onUrl);
       _errorSub = _controller.onLoadError.listen((status) {
-        // Ignore errors after we already hit the localhost callback.
+        // Ignore errors after we already hit the OAuth callback.
         if (_callbackReported) {
           return;
         }
@@ -81,10 +82,11 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
   }
 
   void _onUrl(String url) {
+    widget.onActivity?.call();
     if (_callbackReported) {
       return;
     }
-    if (!url.startsWith(digilockerOAuthCallbackPrefix)) {
+    if (!url.startsWith(_oauthCallbackPrefix)) {
       return;
     }
     _callbackReported = true;
@@ -98,10 +100,20 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
 
   @override
   void dispose() {
-    unawaited(_urlSub?.cancel() ?? Future.value());
-    unawaited(_errorSub?.cancel() ?? Future.value());
-    unawaited(_controller.dispose());
+    unawaited(_teardown());
     super.dispose();
+  }
+
+  Future<void> _teardown() async {
+    await _urlSub?.cancel();
+    await _errorSub?.cancel();
+    try {
+      await _controller.clearCookies();
+      await _controller.clearCache();
+    } catch (_) {}
+    try {
+      await _controller.dispose();
+    } catch (_) {}
   }
 
   @override

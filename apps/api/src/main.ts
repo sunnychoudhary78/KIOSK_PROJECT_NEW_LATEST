@@ -6,6 +6,7 @@ import { createDigiLockerClient } from './infrastructure/external/digilocker.cli
 import { createMsg91FlowSmsClient } from './infrastructure/external/sms.client.js';
 import { createVedAstroClient } from './infrastructure/external/vedastro.client.js';
 import { createAstrologyLlmClient } from './infrastructure/external/openai.client.js';
+import { createObjectStorageClient } from './infrastructure/storage/s3.client.js';
 import { AuditService } from './modules/audit/audit.service.js';
 import { PlatformSettingsService } from './modules/platform_settings/platform_settings.service.js';
 import { createApp } from './app.js';
@@ -57,6 +58,7 @@ async function main() {
     vedastro: createVedAstroClient({ baseUrl: config.vedastro.baseUrl, logger }),
     astrologyLlm,
     auditService,
+    objectStorage: createObjectStorageClient(config),
   };
 
   const app = createApp(deps);

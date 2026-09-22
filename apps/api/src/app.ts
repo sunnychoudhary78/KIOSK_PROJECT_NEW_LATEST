@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import type { AppDeps } from './types/deps.js';
 import { correlationIdMiddleware } from './infrastructure/http/correlation.js';
 import { errorHandler } from './infrastructure/http/error-handler.js';
-import { authRequired } from './shared/auth.js';
+import { requireDevice } from './shared/device-guard.js';
 import { AppError } from './shared/errors.js';
 import { requireParam } from './shared/params.js';
 import { registerIdentityModule } from './modules/identity/index.js';
@@ -24,6 +24,7 @@ import { registerAdsModule } from './modules/ads/index.js';
 import { registerPlatformSettingsModule } from './modules/platform_settings/index.js';
 import { registerPaymentsModule, registerRazorpayWebhook } from './modules/payments/index.js';
 import { registerAstrologyModule } from './modules/astrology/index.js';
+import { registerSurveillanceModule } from './modules/surveillance/index.js';
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -92,11 +93,12 @@ export function createApp(deps: AppDeps): Express {
   registerAdsModule(v1, deps);
   registerPlatformSettingsModule(v1, deps);
   registerAstrologyModule(v1, deps);
+  registerSurveillanceModule(v1, deps);
 
   // Device-authenticated PDF content for print jobs
   v1.get(
     '/print-jobs/:jobId/content',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     async (req, res, next) => {
       try {
         if (!req.principal?.deviceId) {

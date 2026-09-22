@@ -2,11 +2,17 @@ import type { NextFunction, Request, Response, Router } from 'express';
 import { UserRole } from '@prisma/client';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired, requireAdminRole } from '../../shared/auth.js';
+import { requireDevice } from '../../shared/device-guard.js';
 import { validateBody, validateQuery } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { DevicesService } from './devices.service.js';
-import { nearbyDevicesQuerySchema, registerDeviceSchema } from './devices.schemas.js';
+import {
+  nearbyDevicesQuerySchema,
+  registerDeviceSchema,
+  setDeviceStatusSchema,
+  setDeviceSurveillanceSchema,
+} from './devices.schemas.js';
 import type { NearbyDevicesQuery } from './devices.schemas.js';
 
 export function registerDevicesModule(router: Router, deps: AppDeps): void {
@@ -57,20 +63,66 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
     },
   );
 
+  router.patch(
+    '/devices/:deviceId/status',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(setDeviceStatusSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.setStatus(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.body.status,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.patch(
+    '/devices/:deviceId/surveillance',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(setDeviceSurveillanceSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.setSurveillance(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.body.enabled,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.post(
     '/devices/:deviceId/heartbeat',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         if (!req.principal?.deviceId) {
           throw new AppError('unauthorized', 'Missing device principal', 401);
         }
-        await service.heartbeat(
+        const result = await service.heartbeat(
           requireParam(req.params.deviceId, 'deviceId'),
           req.principal.deviceId,
           req.correlationId,
         );
-        res.status(204).send();
+        res.json(result);
       } catch (error) {
         next(error);
       }

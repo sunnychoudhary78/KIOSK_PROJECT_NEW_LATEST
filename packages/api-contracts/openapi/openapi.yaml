@@ -223,8 +223,180 @@ paths:
       parameters:
         - $ref: '#/components/parameters/DeviceId'
       responses:
-        '204':
+        '200':
           description: Heartbeat accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [surveillanceEnabled]
+                properties:
+                  surveillanceEnabled:
+                    type: boolean
+
+  /devices/{deviceId}/status:
+    patch:
+      tags: [Devices]
+      summary: Stop or start a kiosk (admin, operator)
+      operationId: setDeviceStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [active, inactive]
+      responses:
+        '200':
+          description: Updated device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+
+  /devices/{deviceId}/surveillance:
+    patch:
+      tags: [Devices]
+      summary: Start or stop local surveillance recording on a kiosk (admin, operator)
+      operationId: setDeviceSurveillance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+
+  /devices/{deviceId}/surveillance/segments/upload-url:
+    post:
+      tags: [Devices]
+      summary: Issue a short-lived presigned PUT URL for a local surveillance segment
+      operationId: createSurveillanceUploadUrl
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SurveillanceUploadUrlRequest'
+      responses:
+        '200':
+          description: Presigned PUT URL (or alreadyUploaded if the object is already stored)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveillanceUploadUrlResponse'
+        '403':
+          description: Device JWT does not match path deviceId
+        '503':
+          description: Object storage is not configured
+
+  /devices/{deviceId}/surveillance/segments:
+    get:
+      tags: [Devices]
+      summary: List uploaded surveillance segments for a kiosk on a UTC calendar day (admin, operator, viewer)
+      operationId: listSurveillanceSegments
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: recordedOn
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: UTC calendar day (YYYY-MM-DD)
+      responses:
+        '200':
+          description: Uploaded segments for that day
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveillanceSegmentListResponse'
+        '404':
+          description: Device not found
+
+  /devices/{deviceId}/surveillance/segments/{segmentId}/playback-url:
+    get:
+      tags: [Devices]
+      summary: Issue a short-lived presigned GET URL to play an uploaded segment (admin, operator, viewer)
+      operationId: createSurveillancePlaybackUrl
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: segmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Presigned GET URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveillancePlaybackUrlResponse'
+        '404':
+          description: Segment not found for this device
+        '409':
+          description: Segment is not uploaded yet
+        '503':
+          description: Object storage is not configured
+
+  /devices/{deviceId}/surveillance/segments/{segmentId}/complete:
+    post:
+      tags: [Devices]
+      summary: Confirm a surveillance segment landed in object storage
+      operationId: completeSurveillanceSegment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: segmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Segment marked uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveillanceCompleteResponse'
+        '400':
+          description: Uploaded object size does not match
+        '409':
+          description: Object was not found in storage
 
   /services:
     get:
@@ -603,6 +775,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/DigiLockerSessionResponse'
 
+  /digilocker/sessions/{sessionId}/cancel:
+    post:
+      tags: [DigiLocker]
+      summary: Cancel a DigiLocker session and drop stored OAuth tokens (device)
+      operationId: cancelDigiLockerSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session marked expired; tokens cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigiLockerSessionResponse'
+
   /digilocker/sessions/{sessionId}/documents:
     get:
       tags: [DigiLocker]
@@ -882,10 +1076,13 @@ components:
         deviceName:
           type: string
           description: Present when principalType is device
+        surveillanceEnabled:
+          type: boolean
+          description: Present when principalType is device
 
     Device:
       type: object
-      required: [id, name, deviceKey, status, siteName]
+      required: [id, name, deviceKey, status, siteName, surveillanceEnabled]
       properties:
         id:
           type: string
@@ -912,6 +1109,104 @@ components:
           type: string
           format: date-time
           nullable: true
+        surveillanceEnabled:
+          type: boolean
+          description: When true, the kiosk records local surveillance segments
+
+    SurveillanceUploadUrlRequest:
+      type: object
+      required: [filename, bytes, recordedOn]
+      properties:
+        filename:
+          type: string
+          description: Basename of the finalized MP4 (no path separators)
+        bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        contentType:
+          type: string
+          enum: [video/mp4]
+          default: video/mp4
+        recordedOn:
+          type: string
+          description: UTC calendar day of the segment folder (YYYY-MM-DD)
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+
+    SurveillanceUploadUrlResponse:
+      type: object
+      required: [segmentId, objectKey]
+      properties:
+        segmentId:
+          type: string
+          format: uuid
+        objectKey:
+          type: string
+        uploadUrl:
+          type: string
+          format: uri
+          description: Presigned PUT URL. Omitted when alreadyUploaded is true.
+        expiresAt:
+          type: string
+          format: date-time
+        alreadyUploaded:
+          type: boolean
+
+    SurveillanceCompleteResponse:
+      type: object
+      required: [ok, status]
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+          enum: [pending_upload, uploaded]
+
+    SurveillanceSegmentListItem:
+      type: object
+      required: [id, filename, recordedOn, startedAt, byteSize]
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        recordedOn:
+          type: string
+          description: UTC calendar day (YYYY-MM-DD)
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        startedAt:
+          type: string
+          format: date-time
+          description: UTC segment start parsed from the HHmmss_ filename
+        byteSize:
+          type: integer
+          format: int64
+        uploadedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SurveillanceSegmentListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SurveillanceSegmentListItem'
+
+    SurveillancePlaybackUrlResponse:
+      type: object
+      required: [url, expiresAt]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Short-lived R2/S3 presigned GET URL for the MP4
+        expiresAt:
+          type: string
+          format: date-time
 
     NearbyDevice:
       type: object

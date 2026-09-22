@@ -6,6 +6,7 @@ import type { SmsClient } from '../infrastructure/external/sms.client.js';
 import type { VedAstroClient } from '../infrastructure/external/vedastro.client.js';
 import type { AstrologyLlmClient } from '../infrastructure/external/openai.client.js';
 import type { AuditService } from '../modules/audit/audit.service.js';
+import type { ObjectStorageClient } from '../infrastructure/storage/s3.client.js';
 
 export type AppDeps = {
   config: AppConfig;
@@ -16,4 +17,5 @@ export type AppDeps = {
   vedastro: VedAstroClient;
   astrologyLlm: AstrologyLlmClient;
   auditService: AuditService;
+  objectStorage: ObjectStorageClient;
 };

@@ -18,3 +18,15 @@ export const nearbyDevicesQuerySchema = z.object({
 });
 
 export type NearbyDevicesQuery = z.infer<typeof nearbyDevicesQuerySchema>;
+
+export const setDeviceStatusSchema = z.object({
+  status: z.enum(['active', 'inactive']),
+});
+
+export type SetDeviceStatusInput = z.infer<typeof setDeviceStatusSchema>;
+
+export const setDeviceSurveillanceSchema = z.object({
+  enabled: z.boolean(),
+});
+
+export type SetDeviceSurveillanceInput = z.infer<typeof setDeviceSurveillanceSchema>;

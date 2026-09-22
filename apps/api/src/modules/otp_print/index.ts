@@ -3,6 +3,7 @@ import multer from 'multer';
 import type { NextFunction, Request, Response, Router } from 'express';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired } from '../../shared/auth.js';
+import { requireDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
@@ -61,7 +62,7 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
 
   router.post(
     '/otp-challenges/redeem',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     validateBody(redeemOtpSchema),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -112,7 +113,7 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
 
   router.get(
     '/otp-challenges/:challengeId/documents/:documentId/content',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         if (!req.principal?.deviceId) {

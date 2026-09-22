@@ -7,6 +7,7 @@ import 'package:skp_kiosk/features/well_being/application/well_being_controller.
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
+import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
 /// Dual-sensor Well Being flow (USB Serial JSON protocol).
 class WellBeingPage extends ConsumerStatefulWidget {
@@ -34,7 +35,8 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
     final showBack = state.phase != WellBeingPhase.choose &&
         state.connectionStatus != SerialConnectionStatus.connecting;
 
-    return Scaffold(
+    return VisitorSessionPopScope(
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Well Being'),
         leading: showBack
@@ -126,6 +128,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
           ),
         ),
       ),
+    ),
     );
   }
 }

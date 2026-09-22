@@ -6,6 +6,8 @@ import 'package:skp_kiosk/features/otp_print/presentation/otp_print_page.dart';
 import 'package:skp_kiosk/features/serial_debug/presentation/serial_debug_page.dart';
 import 'package:skp_kiosk/features/well_being/presentation/well_being_page.dart';
 
+final GlobalKey<NavigatorState> kioskNavigatorKey = GlobalKey<NavigatorState>();
+
 class AppRoutes {
   static const home = '/';
   static const otpPrint = '/otp-print';

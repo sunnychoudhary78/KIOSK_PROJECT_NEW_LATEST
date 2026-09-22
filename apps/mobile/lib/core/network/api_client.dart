@@ -14,8 +14,15 @@ class ApiException implements Exception {
 
   bool get isRetryable => statusCode != null && statusCode! >= 500;
 
+  bool get isUnauthorized => statusCode == 401;
+
   @override
-  String toString() => message;
+  String toString() {
+    if (isUnauthorized) {
+      return 'Session expired. Please sign in again.';
+    }
+    return message;
+  }
 }
 
 class ApiClient {
@@ -23,6 +30,7 @@ class ApiClient {
 
   final http.Client _http;
   String? _accessToken;
+  void Function()? onUnauthorized;
 
   void setAccessToken(String? token) => _accessToken = token;
 
@@ -86,6 +94,9 @@ class ApiClient {
         ? <String, dynamic>{}
         : jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode >= 400) {
+      if (response.statusCode == 401) {
+        onUnauthorized?.call();
+      }
       throw ApiException(
         payload['message'] as String? ?? 'Request failed',
         statusCode: response.statusCode,

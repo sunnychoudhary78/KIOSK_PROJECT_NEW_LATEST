@@ -7,6 +7,7 @@ import { ServicesPage } from '../features/services/ServicesPage';
 import { PrintJobsPage } from '../features/print-jobs/PrintJobsPage';
 import { DigiLockerPage } from '../features/digilocker/DigiLockerPage';
 import { AuditLogsPage } from '../features/audit-logs/AuditLogsPage';
+import { RecordingsPage } from '../features/surveillance/RecordingsPage';
 import { UsersPage } from '../features/users/UsersPage';
 import { PlatformSettingsPage } from '../features/platform-settings/PlatformSettingsPage';
 import { AdvertisersPage } from '../features/ads/AdvertisersPage';
@@ -33,6 +34,7 @@ export function AppRouter() {
             <Route path="services" element={<ServicesPage />} />
             <Route path="print-jobs" element={<PrintJobsPage />} />
             <Route path="digilocker" element={<DigiLockerPage />} />
+            <Route path="recordings" element={<RecordingsPage />} />
             <Route path="audit-logs" element={<AuditLogsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="platform-settings" element={<PlatformSettingsPage />} />

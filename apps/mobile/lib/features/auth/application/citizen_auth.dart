@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:skp_mobile/core/auth/jwt_utils.dart';
 import 'package:skp_mobile/core/network/api_client.dart';
 
 const _tokenPrefsKey = 'skp_citizen_access_token';
@@ -13,7 +16,6 @@ class CitizenAuthState {
     this.error,
     this.loading = false,
     this.otpSent = false,
-    this.devOtp,
     this.phone,
     this.restoring = false,
     this.resendAvailableAt,
@@ -23,7 +25,6 @@ class CitizenAuthState {
   final String? error;
   final bool loading;
   final bool otpSent;
-  final String? devOtp;
   final String? phone;
   final bool restoring;
   final DateTime? resendAvailableAt;
@@ -45,26 +46,38 @@ class CitizenAuthState {
 }
 
 class CitizenAuthNotifier extends Notifier<CitizenAuthState> {
+  bool _loggingOut = false;
+
   @override
   CitizenAuthState build() {
+    _api.onUnauthorized = _handleUnauthorized;
     Future.microtask(restoreSession);
     return const CitizenAuthState(restoring: true);
   }
 
   ApiClient get _api => ref.read(apiClientProvider);
 
+  void _handleUnauthorized() {
+    unawaited(logout());
+  }
+
   Future<void> restoreSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenPrefsKey);
       final phone = prefs.getString(_phonePrefsKey);
-      if (token != null && token.isNotEmpty) {
+      if (token != null && token.isNotEmpty && !isJwtExpired(token)) {
         _api.setAccessToken(token);
         state = CitizenAuthState(token: token, phone: phone);
       } else {
+        if (token != null && token.isNotEmpty) {
+          await _persistSession();
+        }
+        _api.setAccessToken(null);
         state = const CitizenAuthState();
       }
     } catch (_) {
+      _api.setAccessToken(null);
       state = const CitizenAuthState();
     }
   }
@@ -101,14 +114,13 @@ class CitizenAuthNotifier extends Notifier<CitizenAuthState> {
     final wasOtpSent = state.otpSent;
     state = CitizenAuthState(loading: true, phone: normalized, otpSent: wasOtpSent);
     try {
-      final result = await _api.post(
+      await _api.post(
         '/auth/citizen/otp-request',
         body: {'phone': normalized},
       );
       state = CitizenAuthState(
         otpSent: true,
         phone: normalized,
-        devOtp: result['devOtp'] as String?,
         resendAvailableAt: DateTime.now().add(const Duration(seconds: 60)),
       );
     } catch (error) {
@@ -155,9 +167,15 @@ class CitizenAuthNotifier extends Notifier<CitizenAuthState> {
   }
 
   Future<void> logout() async {
-    _api.setAccessToken(null);
-    await _persistSession();
-    state = const CitizenAuthState();
+    if (_loggingOut) return;
+    _loggingOut = true;
+    try {
+      _api.setAccessToken(null);
+      await _persistSession();
+      state = const CitizenAuthState();
+    } finally {
+      _loggingOut = false;
+    }
   }
 }
 

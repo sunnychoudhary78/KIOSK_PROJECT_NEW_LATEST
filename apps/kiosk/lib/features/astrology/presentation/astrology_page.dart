@@ -5,12 +5,15 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/hardware/camera/camera_lease.dart';
+import 'package:skp_kiosk/core/hardware/camera/kiosk_camera.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_jpeg.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
 import 'package:skp_kiosk/features/astrology/presentation/palm_overlay.dart';
+import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
 class AstrologyPage extends ConsumerStatefulWidget {
   const AstrologyPage({super.key});
@@ -24,7 +27,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   String? _cameraError;
   bool _cameraReady = false;
   bool _sampling = false;
-  Timer? _sampleTimer;
+  int _cameraSession = 0;
 
   final _name = TextEditingController();
   final _place = TextEditingController();
@@ -41,75 +44,137 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
 
   @override
   void dispose() {
-    _sampleTimer?.cancel();
+    _cameraSession++;
     _name.dispose();
     _place.dispose();
-    unawaited(_camera?.dispose());
+    _releasePalmCamera();
     super.dispose();
   }
 
+  void _releasePalmCamera() {
+    final camera = _camera;
+    _camera = null;
+    if (camera != null) {
+      unawaited(camera.dispose());
+    }
+    ref.read(cameraLeaseProvider.notifier).release(CameraHolder.palm);
+  }
+
   Future<void> _openCamera() async {
+    final session = ++_cameraSession;
     setState(() {
       _cameraError = null;
       _cameraReady = false;
     });
+    final lease = ref.read(cameraLeaseProvider.notifier);
+    try {
+      await lease.acquire(CameraHolder.palm);
+    } catch (_) {
+      if (mounted && session == _cameraSession) {
+        setState(() => _cameraError = 'Could not open the camera. Check Windows camera privacy settings.');
+      }
+      return;
+    }
+    if (!mounted || session != _cameraSession) {
+      if (!mounted) {
+        lease.release(CameraHolder.palm);
+      }
+      return;
+    }
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        setState(() => _cameraError = 'No camera found. Connect the USB camera and retry.');
+        if (session == _cameraSession && _camera == null) {
+          lease.release(CameraHolder.palm);
+        }
+        if (mounted && session == _cameraSession) {
+          setState(() => _cameraError = 'No camera found. Connect the USB camera and retry.');
+        }
         return;
       }
-      final camera = cameras.first;
+      final camera = pickKioskCamera(cameras);
       final controller = CameraController(
         camera,
         ResolutionPreset.medium,
         enableAudio: false,
       );
       await controller.initialize();
-      if (!mounted) {
+      if (!mounted || session != _cameraSession) {
         await controller.dispose();
+        if (!mounted && _camera == null) {
+          lease.release(CameraHolder.palm);
+        }
         return;
       }
       await _camera?.dispose();
       _camera = controller;
       setState(() => _cameraReady = true);
-      _startSampling();
-    } catch (error) {
-      setState(() => _cameraError = 'Could not open the camera. Check Windows camera privacy settings.');
+      unawaited(_sampleLoop(session));
+    } catch (_) {
+      if (session == _cameraSession && _camera == null) {
+        lease.release(CameraHolder.palm);
+      }
+      if (mounted && session == _cameraSession) {
+        setState(() => _cameraError = 'Could not open the camera. Check Windows camera privacy settings.');
+      }
     }
   }
 
-  void _startSampling() {
-    _sampleTimer?.cancel();
-    _sampleTimer = Timer.periodic(const Duration(milliseconds: 800), (_) {
-      unawaited(_sampleFrame());
-    });
+  Future<void> _sampleLoop(int session) async {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    var backoffMs = 250;
+    while (mounted && session == _cameraSession) {
+      if (ref.read(astrologyControllerProvider).phase != AstrologyPhase.capture) {
+        break;
+      }
+
+      final bytes = await _sampleOnce();
+      if (!mounted || session != _cameraSession) {
+        break;
+      }
+
+      final notifier = ref.read(astrologyControllerProvider.notifier);
+      final state = ref.read(astrologyControllerProvider);
+      if (state.phase != AstrologyPhase.capture) {
+        break;
+      }
+
+      if (bytes == null) {
+        notifier.reportCameraStatus('Camera busy, retrying…');
+        backoffMs = (backoffMs * 2).clamp(250, 2000);
+        await Future<void>.delayed(Duration(milliseconds: backoffMs));
+        continue;
+      }
+
+      backoffMs = 250;
+      if (state.quality?.ok == true) {
+        await Future<void>.delayed(AstrologyController.autoCaptureHold);
+        continue;
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
   }
 
-  Future<void> _sampleFrame() async {
+  Future<Uint8List?> _sampleOnce() async {
     final controller = _camera;
-    final phase = ref.read(astrologyControllerProvider).phase;
-    if (!mounted ||
-        controller == null ||
+    if (controller == null ||
         !controller.value.isInitialized ||
         controller.value.isTakingPicture ||
-        _sampling ||
-        phase != AstrologyPhase.capture) {
-      return;
+        _sampling) {
+      return null;
     }
     _sampling = true;
     try {
       final shot = await controller.takePicture();
       final bytes = await _jpegFromShot(shot);
       if (!mounted) {
-        return;
+        return bytes;
       }
       ref.read(astrologyControllerProvider.notifier).evaluateFrame(bytes);
-      if (ref.read(astrologyControllerProvider).phase == AstrologyPhase.form) {
-        _sampleTimer?.cancel();
-      }
+      return bytes;
     } catch (_) {
-      // Preview can fail a frame on USB cameras; keep sampling.
+      return null;
     } finally {
       _sampling = false;
     }
@@ -117,9 +182,20 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
 
   Future<void> _captureNow() async {
     final controller = _camera;
-    if (controller == null || !controller.value.isInitialized || _sampling) {
+    if (controller == null || !controller.value.isInitialized) {
       return;
     }
+    for (var i = 0; i < 20 && _sampling; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    if (!mounted || controller != _camera) {
+      return;
+    }
+    if (ref.read(astrologyControllerProvider).phase != AstrologyPhase.capture) {
+      return;
+    }
+
+    final paused = ++_cameraSession;
     _sampling = true;
     try {
       final shot = await controller.takePicture();
@@ -127,7 +203,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
       if (!mounted) {
         return;
       }
-      ref.read(astrologyControllerProvider.notifier).acceptPalm(bytes);
+      ref.read(astrologyControllerProvider.notifier).acceptPalm(bytes, strict: false);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -136,6 +212,12 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
       }
     } finally {
       _sampling = false;
+      if (mounted &&
+          paused == _cameraSession &&
+          ref.read(astrologyControllerProvider).phase == AstrologyPhase.capture) {
+        final resume = ++_cameraSession;
+        unawaited(_sampleLoop(resume));
+      }
     }
   }
 
@@ -202,12 +284,8 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     final state = ref.watch(astrologyControllerProvider);
     ref.listen(astrologyControllerProvider, (previous, next) {
       if (previous?.phase == AstrologyPhase.capture && next.phase != AstrologyPhase.capture) {
-        _sampleTimer?.cancel();
-        final camera = _camera;
-        _camera = null;
-        if (camera != null) {
-          unawaited(camera.dispose());
-        }
+        _cameraSession++;
+        _releasePalmCamera();
         if (mounted) {
           setState(() => _cameraReady = false);
         }
@@ -217,7 +295,8 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
       }
     });
 
-    return Scaffold(
+    return VisitorSessionPopScope(
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Astrology'),
         actions: [
@@ -279,6 +358,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
           },
         ),
       ),
+      ),
     );
   }
 }
@@ -323,14 +403,21 @@ class _CaptureView extends StatelessWidget {
                     ? _CameraError(message: cameraError!, onRetry: onRetryCamera)
                     : !cameraReady || camera == null
                         ? const Center(child: CircularProgressIndicator())
-                        : Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              CameraPreview(camera!),
-                              const Positioned.fill(
-                                child: CustomPaint(painter: PalmOverlayPainter()),
+                        : Center(
+                            child: AspectRatio(
+                              aspectRatio: camera!.value.aspectRatio == 0
+                                  ? 16 / 9
+                                  : camera!.value.aspectRatio,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  CameraPreview(camera!),
+                                  const Positioned.fill(
+                                    child: CustomPaint(painter: PalmOverlayPainter()),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
               ),
             ),

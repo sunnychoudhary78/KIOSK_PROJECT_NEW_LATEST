@@ -125,4 +125,8 @@ class DigilockerPrintRepository {
       body: {'status': status},
     );
   }
+
+  Future<void> cancelSession(String sessionId) async {
+    await _api.post('/digilocker/sessions/$sessionId/cancel', body: {});
+  }
 }

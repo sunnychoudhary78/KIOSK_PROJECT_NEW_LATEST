@@ -1,18 +1,35 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:path/path.dart' as p;
-import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
+import 'package:skp_kiosk/features/ads/data/ads_media_cache.dart';
 import 'package:skp_kiosk/features/ads/data/ads_media_sniff.dart';
 import 'package:skp_kiosk/features/ads/data/ads_repository.dart';
 
 enum _IdleRenderMode { loading, video, image }
+
+class _Slot {
+  _Slot(this.player)
+      : controller = VideoController(
+          player,
+          configuration: const VideoControllerConfiguration(hwdec: 'auto-safe'),
+        );
+
+  final Player player;
+  final VideoController controller;
+  StreamSubscription<bool>? completedSub;
+  StreamSubscription<String>? errorSub;
+
+  Future<void> dispose() async {
+    await completedSub?.cancel();
+    await errorSub?.cancel();
+    await player.dispose();
+  }
+}
 
 /// Full-screen idle ads. Any pointer interaction dismisses back to home.
 class IdleAdPlayer extends ConsumerStatefulWidget {
@@ -26,33 +43,37 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
   static const _photoDwell = Duration(seconds: 6);
   static const _videoReadyTimeout = Duration(seconds: 3);
 
-  late final Player _player = Player();
-  late final VideoController _videoController = VideoController(
-    _player,
-    configuration: const VideoControllerConfiguration(
-      hwdec: 'auto-safe',
-    ),
-  );
+  late final List<_Slot> _slots;
+  int _visibleSlot = 0;
 
   int _index = 0;
   int _assetIndex = 0;
-  File? _tempFile;
+  File? _imageFile;
   _IdleRenderMode _mode = _IdleRenderMode.loading;
-  StreamSubscription<bool>? _completedSub;
-  StreamSubscription<String>? _errorSub;
   int _playGeneration = 0;
+  int _prepareEpoch = 0;
+  Future<void>? _prepareFuture;
+  bool _hiddenReady = false;
+  int? _hiddenReadyForIndex;
+  bool _handlingComplete = false;
+
+  AdsMediaCache get _cache => ref.read(adsMediaCacheProvider);
 
   @override
   void initState() {
     super.initState();
-    _completedSub = _player.stream.completed.listen((done) {
-      if (done && _mode == _IdleRenderMode.video) {
-        unawaited(_onVideoCompleted());
-      }
-    });
-    _errorSub = _player.stream.error.listen((message) {
-      debugPrint('IdleAdPlayer media_kit error: $message');
-    });
+    _slots = [_Slot(Player()), _Slot(Player())];
+    for (var i = 0; i < _slots.length; i++) {
+      final slot = i;
+      _slots[i].completedSub = _slots[i].player.stream.completed.listen((done) {
+        if (done) {
+          unawaited(_onSlotCompleted(slot));
+        }
+      });
+      _slots[i].errorSub = _slots[i].player.stream.error.listen((message) {
+        debugPrint('IdleAdPlayer media_kit error (slot $slot): $message');
+      });
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_playCurrent());
     });
@@ -61,16 +82,9 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
   @override
   void dispose() {
     _playGeneration += 1;
-    unawaited(_completedSub?.cancel());
-    unawaited(_errorSub?.cancel());
-    unawaited(_player.dispose());
-    final file = _tempFile;
-    if (file != null) {
-      unawaited(() async {
-        try {
-          await file.delete();
-        } catch (_) {}
-      }());
+    _prepareEpoch += 1;
+    for (final slot in _slots) {
+      unawaited(slot.dispose());
     }
     super.dispose();
   }
@@ -78,35 +92,30 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
   List<AdPlaylistItem> get _idle =>
       ref.read(adsControllerProvider).playlist.idle;
 
-  Future<({File file, AdMediaSniff sniff, Uint8List bytes})> _downloadToTemp({
-    required String id,
-    required String mediaUrl,
-    required String? mimeType,
-    required String? creativeType,
-  }) async {
-    final api = ref.read(apiClientProvider);
-    final bytes = await api.getBytes(mediaUrl);
-    final sniff = sniffAdMedia(
-      bytes: bytes,
-      mimeType: mimeType,
-      creativeType: creativeType,
-    );
-    final dir = Directory(p.join(Directory.systemTemp.path, 'skp_ads'));
-    await dir.create(recursive: true);
-    final file = File(p.join(dir.path, '$id${sniff.extension}'));
-    await file.writeAsBytes(bytes, flush: true);
-    return (file: file, sniff: sniff, bytes: bytes);
+  bool _declaredVideo(AdPlaylistItem ad) {
+    return ad.type == 'video' ||
+        (ad.mimeType ?? '').toLowerCase().startsWith('video/');
   }
 
-  Future<bool> _waitForVideoReady(int generation) async {
+  Future<void> _onSlotCompleted(int slot) async {
+    if (_mode != _IdleRenderMode.video || slot != _visibleSlot) {
+      return;
+    }
+    await _onVideoCompleted();
+  }
+
+  Future<bool> _waitForVideoReady(
+    Player player, {
+    required bool Function() isCurrent,
+  }) async {
     final deadline = DateTime.now().add(_videoReadyTimeout);
-    while (mounted && generation == _playGeneration) {
-      final width = _player.state.width;
-      final height = _player.state.height;
-      final playing = _player.state.playing;
-      final buffering = _player.state.buffering;
+    while (mounted && isCurrent()) {
+      final width = player.state.width;
+      final height = player.state.height;
+      final playing = player.state.playing;
+      final buffering = player.state.buffering;
       if ((width != null && width > 0 && height != null && height > 0) ||
-          (playing && !buffering && (_player.state.duration > Duration.zero))) {
+          (playing && !buffering && (player.state.duration > Duration.zero))) {
         return true;
       }
       if (DateTime.now().isAfter(deadline)) {
@@ -117,34 +126,210 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
     return false;
   }
 
-  Future<bool> _openVideo(File file, {required bool softwareDecode}) async {
+  Future<bool> _openVideoOnSlot(
+    int slot,
+    File file, {
+    required bool softwareDecode,
+    required bool Function() isCurrent,
+  }) async {
+    final player = _slots[slot].player;
     try {
       if (softwareDecode) {
-        // NativePlayer.setProperty — not on PlatformPlayer interface.
-        final native = _player.platform;
+        final native = player.platform;
         if (native != null) {
           await (native as dynamic).setProperty('hwdec', 'no');
         }
-        debugPrint('IdleAdPlayer: retrying with hwdec=no');
+        debugPrint('IdleAdPlayer: retrying slot $slot with hwdec=no');
       }
-      await _player.stop();
-      await _player.open(Media(file.path), play: true);
-      return true;
+      await player.setVolume(0);
+      await player.stop();
+      await player.open(Media(file.path), play: false);
+      var ready = await _waitForVideoReady(player, isCurrent: isCurrent);
+      if (!ready && isCurrent() && !softwareDecode) {
+        return _openVideoOnSlot(
+          slot,
+          file,
+          softwareDecode: true,
+          isCurrent: isCurrent,
+        );
+      }
+      return ready && isCurrent();
     } catch (error, stack) {
-      debugPrint('IdleAdPlayer open failed (software=$softwareDecode): $error');
+      debugPrint(
+        'IdleAdPlayer open failed slot=$slot software=$softwareDecode: $error',
+      );
       debugPrint('$stack');
       return false;
     }
   }
 
-  Future<void> _playCurrent() async {
-    final generation = ++_playGeneration;
+  Future<void> _revealSlot(int slot) async {
+    await _slots[slot].player.setVolume(100);
+    if (!_slots[slot].player.state.playing) {
+      await _slots[slot].player.play();
+    }
     if (mounted) {
       setState(() {
-        _mode = _IdleRenderMode.loading;
-        _tempFile = null;
+        _visibleSlot = slot;
+        _mode = _IdleRenderMode.video;
       });
     }
+  }
+
+  Future<void> _swapToHidden() async {
+    final hidden = 1 - _visibleSlot;
+    final old = _visibleSlot;
+    await _revealSlot(hidden);
+    unawaited(() async {
+      try {
+        await _slots[old].player.setVolume(0);
+        await _slots[old].player.stop();
+      } catch (_) {}
+    }());
+  }
+
+  void _startPrepareNextVideo() {
+    _prepareFuture = _prepareNextVideo(_prepareEpoch);
+  }
+
+  Future<void> _prepareNextVideo(int epoch) async {
+    try {
+      final items = _idle;
+      if (items.isEmpty) {
+        return;
+      }
+      final nextIndex = (_index + 1) % items.length;
+      final next = items[nextIndex];
+      if (!_declaredVideo(next) || next.mediaUrl == null) {
+        return;
+      }
+      final cached = await _cache.ensure(
+        id: next.id,
+        mediaUrl: next.mediaUrl!,
+        mimeType: next.mimeType,
+        creativeType: next.type,
+      );
+      if (!mounted || epoch != _prepareEpoch) {
+        return;
+      }
+      if (!looksLikeVideo(
+        bytes: cached.bytes,
+        mimeType: next.mimeType,
+        creativeType: next.type,
+      )) {
+        return;
+      }
+      final hidden = 1 - _visibleSlot;
+      final opened = await _openVideoOnSlot(
+        hidden,
+        cached.file,
+        softwareDecode: false,
+        isCurrent: () => mounted && epoch == _prepareEpoch,
+      );
+      if (!opened || epoch != _prepareEpoch) {
+        return;
+      }
+      _hiddenReady = true;
+      _hiddenReadyForIndex = nextIndex;
+    } catch (error, stack) {
+      debugPrint('IdleAdPlayer prepare next failed: $error');
+      debugPrint('$stack');
+    }
+  }
+
+  void _prefetchNeighbors() {
+    final items = _idle;
+    if (items.isEmpty) {
+      return;
+    }
+    unawaited(_prefetchItem(items[(_index + 1) % items.length]));
+    final current = items[_index % items.length];
+    if (current.type == 'carousel' && current.assets.length > 1) {
+      final nextAsset = current.assets[(_assetIndex + 1) % current.assets.length];
+      if (nextAsset.mediaUrl != null) {
+        unawaited(
+          _cache.ensure(
+            id: nextAsset.id,
+            mediaUrl: nextAsset.mediaUrl!,
+            mimeType: nextAsset.mimeType,
+            creativeType: current.type,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _prefetchItem(AdPlaylistItem ad) async {
+    try {
+      if (ad.type == 'carousel' && ad.assets.isNotEmpty) {
+        for (final asset in ad.assets.take(2)) {
+          if (asset.mediaUrl != null) {
+            await _cache.ensure(
+              id: asset.id,
+              mediaUrl: asset.mediaUrl!,
+              mimeType: asset.mimeType,
+              creativeType: ad.type,
+            );
+          }
+        }
+        return;
+      }
+      if (ad.mediaUrl != null) {
+        await _cache.ensure(
+          id: ad.id,
+          mediaUrl: ad.mediaUrl!,
+          mimeType: ad.mimeType,
+          creativeType: ad.type,
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> _showVideo(File file, int generation) async {
+    final target =
+        _mode == _IdleRenderMode.video ? 1 - _visibleSlot : _visibleSlot;
+    final opened = await _openVideoOnSlot(
+      target,
+      file,
+      softwareDecode: false,
+      isCurrent: () => mounted && generation == _playGeneration,
+    );
+    if (!opened || generation != _playGeneration) {
+      return false;
+    }
+    if (_mode == _IdleRenderMode.video && target != _visibleSlot) {
+      await _swapToHidden();
+    } else {
+      await _revealSlot(target);
+    }
+    return _mode == _IdleRenderMode.video && generation == _playGeneration;
+  }
+
+  Future<void> _showImage(File file, int generation) async {
+    if (!mounted || generation != _playGeneration) {
+      return;
+    }
+    setState(() {
+      _imageFile = file;
+      _mode = _IdleRenderMode.image;
+    });
+    unawaited(() async {
+      try {
+        await _slots[_visibleSlot].player.setVolume(0);
+        await _slots[_visibleSlot].player.stop();
+      } catch (_) {}
+    }());
+  }
+
+  Future<void> _playCurrent() async {
+    _prepareEpoch += 1;
+    _hiddenReady = false;
+    _hiddenReadyForIndex = null;
+    final pending = _prepareFuture;
+    if (pending != null) {
+      await pending;
+    }
+    final generation = ++_playGeneration;
 
     final items = _idle;
     if (items.isEmpty) {
@@ -157,16 +342,12 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
     final ad = items[_index];
 
     try {
-      // Prefer playlist type/mime, then refine with magic after download.
-      final declaredVideo =
-          ad.type == 'video' || (ad.mimeType ?? '').toLowerCase().startsWith('video/');
-
-      if (declaredVideo) {
+      if (_declaredVideo(ad)) {
         if (ad.mediaUrl == null) {
           await _advancePlaylistItem();
           return;
         }
-        final downloaded = await _downloadToTemp(
+        final cached = await _cache.ensure(
           id: ad.id,
           mediaUrl: ad.mediaUrl!,
           mimeType: ad.mimeType,
@@ -177,21 +358,18 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
         }
 
         final isVideo = looksLikeVideo(
-          bytes: downloaded.bytes,
+          bytes: cached.bytes,
           mimeType: ad.mimeType,
           creativeType: ad.type,
         );
         if (!isVideo) {
-          // Declared video but bytes look like an image — show as image.
-          _tempFile = downloaded.file;
-          if (mounted) {
-            setState(() => _mode = _IdleRenderMode.image);
-          }
+          await _showImage(cached.file, generation);
           await ref.read(adsControllerProvider.notifier).reportEvent(
                 campaignId: ad.campaignId,
                 creativeId: ad.id,
                 eventType: 'play_start',
               );
+          _prefetchNeighbors();
           await Future<void>.delayed(
             Duration(seconds: ad.durationSec ?? _photoDwell.inSeconds),
           );
@@ -207,9 +385,17 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
           return;
         }
 
-        _tempFile = downloaded.file;
-        if (mounted) {
-          setState(() => _mode = _IdleRenderMode.video);
+        final shown = await _showVideo(cached.file, generation);
+        if (!mounted || generation != _playGeneration) {
+          return;
+        }
+        if (!shown) {
+          debugPrint(
+            'IdleAdPlayer: video never produced frames for ${ad.id} '
+            '(${cached.sniff.extension}, mime=${ad.mimeType})',
+          );
+          await _advancePlaylistItem();
+          return;
         }
 
         await ref.read(adsControllerProvider.notifier).reportEvent(
@@ -217,41 +403,18 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
               creativeId: ad.id,
               eventType: 'play_start',
             );
-
-        var opened = await _openVideo(downloaded.file, softwareDecode: false);
-        if (!opened || generation != _playGeneration) {
-          if (generation == _playGeneration) {
-            await _advancePlaylistItem();
-          }
-          return;
-        }
-
-        var ready = await _waitForVideoReady(generation);
-        if (!ready && generation == _playGeneration) {
-          opened = await _openVideo(downloaded.file, softwareDecode: true);
-          if (opened) {
-            ready = await _waitForVideoReady(generation);
-          }
-        }
-
-        if (!ready) {
-          debugPrint(
-            'IdleAdPlayer: video never produced frames for ${ad.id} '
-            '(${downloaded.sniff.extension}, mime=${ad.mimeType})',
-          );
-          if (generation == _playGeneration) {
-            await _advancePlaylistItem();
-          }
-        }
+        _prefetchNeighbors();
+        _startPrepareNextVideo();
         return;
       }
 
-      // Image or carousel: cycle photo URLs every 6s.
       final photoUrls = <({String id, String url, String? mime})>[];
       if (ad.type == 'carousel' && ad.assets.isNotEmpty) {
         for (final asset in ad.assets) {
           if (asset.mediaUrl != null) {
-            photoUrls.add((id: asset.id, url: asset.mediaUrl!, mime: asset.mimeType));
+            photoUrls.add(
+              (id: asset.id, url: asset.mediaUrl!, mime: asset.mimeType),
+            );
           }
         }
       } else if (ad.mediaUrl != null) {
@@ -275,7 +438,7 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
 
       while (mounted && generation == _playGeneration) {
         final photo = photoUrls[_assetIndex];
-        final downloaded = await _downloadToTemp(
+        final cached = await _cache.ensure(
           id: photo.id,
           mediaUrl: photo.url,
           mimeType: photo.mime,
@@ -285,29 +448,19 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
           return;
         }
 
-        // If a "photo" slot is actually video bytes, play via media_kit.
-        if (downloaded.sniff.isVideo) {
-          _tempFile = downloaded.file;
-          if (mounted) {
-            setState(() => _mode = _IdleRenderMode.video);
-          }
-          var opened = await _openVideo(downloaded.file, softwareDecode: false);
-          var ready = opened && await _waitForVideoReady(generation);
-          if (!ready && generation == _playGeneration) {
-            opened = await _openVideo(downloaded.file, softwareDecode: true);
-            ready = opened && await _waitForVideoReady(generation);
-          }
-          if (!ready) {
+        if (cached.sniff.isVideo) {
+          final shown = await _showVideo(cached.file, generation);
+          if (!shown) {
             await _advancePlaylistItem();
+            return;
           }
-          // Video completion handler advances playlist.
+          _prefetchNeighbors();
+          _startPrepareNextVideo();
           return;
         }
 
-        _tempFile = downloaded.file;
-        if (mounted) {
-          setState(() => _mode = _IdleRenderMode.image);
-        }
+        await _showImage(cached.file, generation);
+        _prefetchNeighbors();
 
         final dwell = Duration(seconds: ad.durationSec ?? _photoDwell.inSeconds);
         await Future<void>.delayed(dwell);
@@ -336,23 +489,68 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
   }
 
   Future<void> _onVideoCompleted() async {
-    final items = _idle;
-    if (items.isEmpty) {
+    if (_handlingComplete) {
       return;
     }
-    final current = items[_index % items.length];
-    await ref.read(adsControllerProvider.notifier).reportEvent(
-          campaignId: current.campaignId,
-          creativeId: current.id,
-          eventType: 'play_complete',
-        );
-    await _advancePlaylistItem();
+    _handlingComplete = true;
+    try {
+      final items = _idle;
+      if (items.isEmpty) {
+        return;
+      }
+      final current = items[_index % items.length];
+      await ref.read(adsControllerProvider.notifier).reportEvent(
+            campaignId: current.campaignId,
+            creativeId: current.id,
+            eventType: 'play_complete',
+          );
+      final nextIndex = (_index + 1) % items.length;
+      if (_hiddenReady && _hiddenReadyForIndex == nextIndex) {
+        await _swapToHidden();
+        _index = nextIndex;
+        _assetIndex = 0;
+        final next = items[_index];
+        await ref.read(adsControllerProvider.notifier).reportEvent(
+              campaignId: next.campaignId,
+              creativeId: next.id,
+              eventType: 'play_start',
+            );
+        _hiddenReady = false;
+        _hiddenReadyForIndex = null;
+        _prefetchNeighbors();
+        _startPrepareNextVideo();
+        return;
+      }
+      await _advancePlaylistItem();
+    } finally {
+      _handlingComplete = false;
+    }
   }
 
   Future<void> _advancePlaylistItem() async {
     _assetIndex = 0;
     _index = (_index + 1) % (_idle.isEmpty ? 1 : _idle.length);
     await _playCurrent();
+  }
+
+  List<Widget> _videoLayers() {
+    final hidden = 1 - _visibleSlot;
+    final visible = _visibleSlot;
+    Widget video(int slot) {
+      return Video(
+        key: ValueKey('idle-ad-slot-$slot'),
+        controller: _slots[slot].controller,
+        fit: BoxFit.contain,
+      );
+    }
+
+    return [
+      video(hidden),
+      if (_mode == _IdleRenderMode.video)
+        ColoredBox(color: Colors.black, child: video(visible))
+      else
+        video(visible),
+    ];
   }
 
   @override
@@ -366,18 +564,29 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (_mode == _IdleRenderMode.video)
-              Video(controller: _videoController, fit: BoxFit.contain)
-            else if (_mode == _IdleRenderMode.image && _tempFile != null)
-              Image.file(_tempFile!, fit: BoxFit.contain)
-            else
-              const Center(child: CircularProgressIndicator(color: Colors.white)),
+            const ColoredBox(color: Colors.black),
+            ..._videoLayers(),
+            if (_mode == _IdleRenderMode.image && _imageFile != null)
+              ColoredBox(
+                color: Colors.black,
+                child: Image.file(
+                  _imageFile!,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                ),
+              )
+            else if (_mode == _IdleRenderMode.loading)
+              const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
             Positioned(
               left: 16,
               bottom: 16,
               child: Text(
                 'Tap anywhere to continue',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white70),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.white70,
+                    ),
               ),
             ),
           ],

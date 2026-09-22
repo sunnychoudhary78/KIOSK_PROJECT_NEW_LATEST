@@ -50,5 +50,14 @@ describe('loadConfig', () => {
       apiKey: '',
       model: 'gpt-4o',
     });
+    expect(config.objectStorage).toEqual({
+      endpoint: '',
+      region: 'auto',
+      bucket: '',
+      accessKey: '',
+      secretKey: '',
+      putTtlSeconds: 3600,
+      getTtlSeconds: 900,
+    });
   });
 });

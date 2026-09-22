@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -131,6 +132,32 @@ class ApiClient {
       );
     }
     return payload;
+  }
+
+  /// PUT a local file to a presigned URL. Never attaches the device JWT.
+  Future<void> putFileToUrl({
+    required String url,
+    required File file,
+    String contentType = 'video/mp4',
+  }) async {
+    final length = await file.length();
+    final request = http.StreamedRequest('PUT', Uri.parse(url));
+    request.headers['Content-Type'] = contentType;
+    request.contentLength = length;
+    file.openRead().listen(
+      request.sink.add,
+      onError: request.sink.addError,
+      onDone: request.sink.close,
+      cancelOnError: true,
+    );
+    final streamed = await _http.send(request);
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode >= 400) {
+      throw ApiException(
+        code: 'upload_failed',
+        message: response.reasonPhrase ?? 'Upload failed',
+      );
+    }
   }
 }
 

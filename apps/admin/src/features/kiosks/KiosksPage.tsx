@@ -13,6 +13,7 @@ type Device = {
   longitude: number | null;
   address: string | null;
   lastHeartbeatAt: string | null;
+  surveillanceEnabled: boolean;
 };
 
 type CreatedCredentials = {
@@ -103,6 +104,56 @@ export function KiosksPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to register device');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onSetStatus(device: Device, status: 'active' | 'inactive') {
+    if (status === 'inactive') {
+      const ok = window.confirm(
+        `Stop “${device.name}”? This kiosk will go offline until you Start it again.`,
+      );
+      if (!ok) {
+        return;
+      }
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await apiRequest(`/devices/${device.id}/status`, {
+        method: 'PATCH',
+        token,
+        body: { status },
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update kiosk');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onSetSurveillance(device: Device, enabled: boolean) {
+    if (enabled) {
+      const ok = window.confirm(
+        `Start 24/7 camera recording on “${device.name}”? Visitors at this kiosk must be notified that video surveillance is in use.`,
+      );
+      if (!ok) {
+        return;
+      }
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await apiRequest(`/devices/${device.id}/surveillance`, {
+        method: 'PATCH',
+        token,
+        body: { enabled },
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update surveillance');
     } finally {
       setSubmitting(false);
     }
@@ -228,12 +279,14 @@ export function KiosksPage() {
               <th>Status</th>
               <th>Device key</th>
               <th>Last heartbeat</th>
+              <th>Surveillance</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={6}>No devices registered yet.</td>
+                <td colSpan={8}>No devices registered yet.</td>
               </tr>
             ) : (
               items.map((device) => (
@@ -249,6 +302,47 @@ export function KiosksPage() {
                     {device.lastHeartbeatAt
                       ? new Date(device.lastHeartbeatAt).toLocaleString()
                       : '—'}
+                  </td>
+                  <td>{device.surveillanceEnabled ? 'On' : 'Off'}</td>
+                  <td>
+                    {device.status === 'inactive' ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={submitting}
+                        onClick={() => void onSetStatus(device, 'active')}
+                      >
+                        Start
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        disabled={submitting}
+                        onClick={() => void onSetStatus(device, 'inactive')}
+                      >
+                        Stop
+                      </Button>
+                    )}{' '}
+                    {device.surveillanceEnabled ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={submitting || device.status === 'inactive'}
+                        onClick={() => void onSetSurveillance(device, false)}
+                      >
+                        Stop surveillance
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={submitting || device.status === 'inactive'}
+                        onClick={() => void onSetSurveillance(device, true)}
+                      >
+                        Start surveillance
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))

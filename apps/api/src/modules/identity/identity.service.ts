@@ -199,8 +199,11 @@ export class IdentityService {
 
   async deviceToken(input: DeviceTokenInput, correlationId?: string) {
     const device = await this.db.device.findUnique({ where: { deviceKey: input.deviceKey } });
-    if (!device || device.status === DeviceStatus.inactive) {
+    if (!device) {
       throw new AppError('invalid_credentials', 'Invalid device credentials', 401);
+    }
+    if (device.status === DeviceStatus.inactive) {
+      throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
     }
 
     const ok = await bcrypt.compare(input.deviceSecret, device.deviceSecretHash);
@@ -238,6 +241,7 @@ export class IdentityService {
       principalType: 'device' as const,
       deviceId: device.id,
       deviceName: device.name,
+      surveillanceEnabled: device.surveillanceEnabled,
     };
   }
 }

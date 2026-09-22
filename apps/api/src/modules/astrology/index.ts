@@ -1,7 +1,7 @@
 import multer from 'multer';
 import type { NextFunction, Request, Response, Router } from 'express';
 import type { AppDeps } from '../../types/deps.js';
-import { authRequired } from '../../shared/auth.js';
+import { requireDevice } from '../../shared/device-guard.js';
 import { AppError } from '../../shared/errors.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { createReadingFieldsSchema, type UploadedPalm } from './astrology.schemas.js';
@@ -25,7 +25,7 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
 
   router.post(
     '/astrology/readings',
-    authRequired(deps.config, ['device']),
+    ...requireDevice(deps),
     upload.single('palm'),
     async (req: Request, res: Response, next: NextFunction) => {
       try {

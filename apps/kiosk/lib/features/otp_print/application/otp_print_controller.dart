@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/features/otp_print/data/otp_print_repository.dart';
@@ -232,7 +231,18 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
   void reset() {
     state = const OtpPrintUiState();
   }
+
+  @visibleForTesting
+  void debugLoadRedeemResult(OtpRedeemResult result) {
+    state = OtpPrintUiState(
+      phase: OtpPrintPhase.documents,
+      redeemResult: result,
+      message: 'Select a document to preview',
+    );
+  }
 }
 
 final otpPrintControllerProvider =
-    NotifierProvider<OtpPrintController, OtpPrintUiState>(OtpPrintController.new);
+    NotifierProvider.autoDispose<OtpPrintController, OtpPrintUiState>(
+  OtpPrintController.new,
+);
