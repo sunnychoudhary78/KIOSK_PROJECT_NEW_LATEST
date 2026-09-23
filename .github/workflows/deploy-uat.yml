@@ -1,0 +1,83 @@
+# UAT deploy only. Does not change CI, Nginx, Postgres, or the existing PM2 process.
+name: Deploy UAT
+
+on:
+  push:
+    branches: [uat]
+
+jobs:
+  deploy-api:
+    name: Deploy API
+    runs-on: ubuntu-latest
+    environment: UAT
+    steps:
+      - name: Deploy API on VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          # pnpm install + Prisma generate/deploy + tsc can exceed the 10m default
+          command_timeout: 20m
+          script: |
+            # Fail immediately (ssh-action v1 removed script_stop)
+            set -euo pipefail
+
+            # Repo root only. Do not touch apps/api/.env, Nginx, or Postgres.
+            cd /var/www/kiosk-v2
+
+            git fetch origin
+            git checkout uat
+            git pull --ff-only origin uat
+
+            # Full install: typescript and prisma are devDependencies
+            pnpm install --frozen-lockfile
+
+            # generate + migrate deploy only — never prisma migrate dev or seed
+            pnpm --filter @skp/api prisma:generate
+            pnpm --filter @skp/api prisma:deploy
+            pnpm --filter @skp/api build
+
+            # Process already exists; restart only (no pm2 startup / no new process)
+            pm2 restart KIOSK_UAT_API
+
+  deploy-admin:
+    name: Deploy Admin
+    runs-on: ubuntu-latest
+    environment: UAT
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build admin
+        env:
+          # Vite bakes these in at compile time
+          VITE_SKP_API_BASE_URL: ${{ vars.VITE_SKP_API_BASE_URL }}
+          VITE_SKP_APP_NAME: ${{ vars.VITE_SKP_APP_NAME }}
+        run: pnpm --filter @skp/admin build
+
+      - name: Upload admin dist to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          # Only apps/admin/dist contents; do not set rm (would wipe the target)
+          source: "apps/admin/dist/*"
+          target: "/var/www/kiosk-v2/apps/admin/dist"
+          strip_components: 3
+          overwrite: true
