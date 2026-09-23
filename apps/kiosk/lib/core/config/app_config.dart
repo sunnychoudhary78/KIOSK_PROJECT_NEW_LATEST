@@ -46,7 +46,7 @@ class AppConfig {
     const env = String.fromEnvironment('SKP_ENV', defaultValue: 'local');
     const apiBaseUrl = String.fromEnvironment(
       'SKP_API_BASE_URL',
-      defaultValue: 'http://192.168.1.35:3000/v1',
+      defaultValue: 'https://uat-kiosk-api.immortaltechnovation.com/v1',
     );
     const printerName = String.fromEnvironment(
       'SKP_PRINTER_NAME',

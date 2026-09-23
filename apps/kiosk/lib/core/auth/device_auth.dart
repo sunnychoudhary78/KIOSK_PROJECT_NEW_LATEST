@@ -162,6 +162,10 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
         _enterStopped(deviceName: state.deviceName, deviceId: state.deviceId);
         return;
       }
+      if (_isInvalidCredentials(error)) {
+        await _clearInvalidCredentials(_messageFor(error));
+        return;
+      }
       _api.setAccessToken(null);
       state = DeviceAuthState(
         provisioned: _credentials != null,
@@ -171,6 +175,15 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
       );
       _armLoop();
     }
+  }
+
+  Future<void> _clearInvalidCredentials(String message) async {
+    _api.setAccessToken(null);
+    _loop?.cancel();
+    _loop = null;
+    _credentials = null;
+    await _store.clear();
+    state = DeviceAuthState(error: message);
   }
 
   Future<void> _tick() async {
@@ -245,6 +258,10 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
 
   bool _isInactive(Object error) {
     return error is ApiException && error.code == 'device_inactive';
+  }
+
+  bool _isInvalidCredentials(Object error) {
+    return error is ApiException && error.code == 'invalid_credentials';
   }
 
   String _messageFor(Object error) {

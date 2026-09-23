@@ -129,4 +129,42 @@ void main() {
     expect(store.saved?.deviceKey, 'dk_saved');
     expect(store.clearCount, 0);
   });
+
+  test('invalid_credentials clears saved credentials for re-activation', () async {
+    final store = MemoryCredentialStore(
+      const DeviceCredentials(deviceKey: 'dk_local', deviceSecret: 'ds_local'),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        deviceCredentialStoreProvider.overrideWithValue(store),
+        apiClientProvider.overrideWithValue(
+          ApiClient(
+            config: config,
+            httpClient: MockClient(
+              (_) async => http.Response(
+                jsonEncode({
+                  'code': 'invalid_credentials',
+                  'message': 'Invalid device credentials',
+                }),
+                401,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.listen(deviceAuthProvider, (_, _) {});
+
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    final auth = container.read(deviceAuthProvider);
+    expect(auth.provisioned, isFalse);
+    expect(auth.stopped, isFalse);
+    expect(auth.isAuthenticated, isFalse);
+    expect(auth.error, 'Invalid device credentials');
+    expect(store.saved, isNull);
+    expect(store.clearCount, 1);
+  });
 }

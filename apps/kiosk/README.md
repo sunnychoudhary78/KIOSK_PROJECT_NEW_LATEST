@@ -23,7 +23,7 @@ Face-up trays (typical Canon rear/face-up output) land the last printed page on 
 Example run with an explicit printer:
 
 ```powershell
-flutter run -d windows --dart-define=SKP_API_BASE_URL=http://192.168.1.30:3000/v1 --dart-define=SKP_PRINTER_NAME=Canon
+flutter run -d windows --dart-define=SKP_API_BASE_URL=https://uat-kiosk-api.immortaltechnovation.com/v1 --dart-define=SKP_PRINTER_NAME=Canon
 ```
 
 OTP Print and DigiLocker both use silent `directPrintPdf` (no Windows print dialog).
