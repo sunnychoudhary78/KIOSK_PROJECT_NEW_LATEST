@@ -25,6 +25,7 @@ jobs:
 
             # Repo root only. Do not touch apps/api/.env, Nginx, or Postgres.
             cd /var/www/kiosk-v2
+            export PATH="/root/.nvm/versions/node/v22.23.2/bin:$PATH"
 
             git fetch origin
             git checkout uat
