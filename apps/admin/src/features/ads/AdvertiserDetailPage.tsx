@@ -11,9 +11,8 @@ import {
   Panel,
   StatusBadge,
 } from '../../core/ui/primitives';
+import { CreativeUploadModal } from './CreativeUploadModal';
 import { formatDate, type Advertiser, type Campaign, type Creative } from './types';
-
-type UploadPurpose = 'idle' | 'banner';
 
 export function AdvertiserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,9 +26,6 @@ export function AdvertiserDetailPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [name, setName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [uploadTitle, setUploadTitle] = useState('');
-  const [uploadPurpose, setUploadPurpose] = useState<UploadPurpose>('idle');
-  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -92,35 +88,6 @@ export function AdvertiserDetailPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update status');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onUpload(event: FormEvent) {
-    event.preventDefault();
-    if (!id || !uploadTitle.trim() || uploadFiles.length === 0) {
-      setError('Title and at least one file are required');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    const form = new FormData();
-    form.append('advertiserId', id);
-    form.append('title', uploadTitle.trim());
-    form.append('purpose', uploadPurpose);
-    for (const file of uploadFiles) {
-      form.append('files', file);
-    }
-    try {
-      await apiRequest('/ads/creatives', { method: 'POST', token, formData: form });
-      setUploadOpen(false);
-      setUploadTitle('');
-      setUploadFiles([]);
-      setUploadPurpose('idle');
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setBusy(false);
     }
@@ -286,77 +253,15 @@ export function AdvertiserDetailPage() {
         </form>
       </Modal>
 
-      <Modal
+      <CreativeUploadModal
         open={uploadOpen}
-        title="Upload creative"
+        advertiserId={advertiser.id}
         onClose={() => setUploadOpen(false)}
-        footer={
-          <>
-            <Button type="button" variant="ghost" onClick={() => setUploadOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" form="upload-creative-form" disabled={busy}>
-              {busy ? 'Uploading…' : 'Upload'}
-            </Button>
-          </>
-        }
-      >
-        <form id="upload-creative-form" className="stack" onSubmit={(e) => void onUpload(e)}>
-          <fieldset className="stack" style={{ border: 'none', padding: 0, margin: 0 }}>
-            <legend className="muted">Purpose</legend>
-            <label>
-              <input
-                type="radio"
-                name="purpose"
-                checked={uploadPurpose === 'idle'}
-                onChange={() => {
-                  setUploadPurpose('idle');
-                  setUploadFiles([]);
-                }}
-              />{' '}
-              Idle media (video or photos)
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="purpose"
-                checked={uploadPurpose === 'banner'}
-                onChange={() => {
-                  setUploadPurpose('banner');
-                  setUploadFiles([]);
-                }}
-              />{' '}
-              Home banner (single image)
-            </label>
-          </fieldset>
-          <label>
-            Title
-            <Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} required />
-          </label>
-          <label>
-            {uploadPurpose === 'idle' ? 'Files' : 'Image'}
-            <Input
-              type="file"
-              accept={
-                uploadPurpose === 'idle'
-                  ? 'video/mp4,video/webm,video/quicktime,video/x-matroska,video/x-msvideo,video/*,image/*'
-                  : 'image/*'
-              }
-              multiple={uploadPurpose === 'idle'}
-              onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []))}
-              required
-            />
-          </label>
-          <p className="muted">
-            {uploadPurpose === 'idle'
-              ? 'One video, or one or more photos (1 photo = image, 2+ = carousel).'
-              : 'Upload a single image for the home screen banner.'}
-          </p>
-          {uploadFiles.length > 0 ? (
-            <p className="muted">{uploadFiles.length} file(s) selected</p>
-          ) : null}
-        </form>
-      </Modal>
+        onUploaded={() => {
+          setUploadOpen(false);
+          void load();
+        }}
+      />
     </div>
   );
 }

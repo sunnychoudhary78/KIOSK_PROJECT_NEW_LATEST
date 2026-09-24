@@ -10,6 +10,7 @@ import {
   Select,
   Stepper,
 } from '../../core/ui/primitives';
+import { CreativeUploadModal } from './CreativeUploadModal';
 import type { Advertiser, Creative, Device, Site } from './types';
 
 const STEPS = ['Basics', 'Creatives', 'Targeting', 'Review'];
@@ -48,6 +49,7 @@ export function CampaignWizardPage() {
   const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [startNow, setStartNow] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -240,10 +242,20 @@ export function CampaignWizardPage() {
 
         {step === 1 ? (
           <div className="stack">
-            <p className="muted">
-              Upload idle video/photos or a home banner from the advertiser page first. At least
-              one is required.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="muted m-0">
+                Choose existing media or upload new idle video/photos or a home banner. At least
+                one is required.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!advertiserId}
+                onClick={() => setUploadOpen(true)}
+              >
+                Upload media
+              </Button>
+            </div>
             <label>
               Idle media
               <Select
@@ -385,6 +397,22 @@ export function CampaignWizardPage() {
             </label>
           </div>
         ) : null}
+
+        <CreativeUploadModal
+          open={uploadOpen}
+          advertiserId={advertiserId}
+          onClose={() => setUploadOpen(false)}
+          onUploaded={(created) => {
+            setCreatives((list) => [created, ...list.filter((c) => c.id !== created.id)]);
+            if (created.type === 'banner') {
+              setBannerCreativeId(created.id);
+            } else {
+              setIdleCreativeId(created.id);
+            }
+            setUploadOpen(false);
+            setError(null);
+          }}
+        />
 
         <div className="wizard-nav">
           <Button type="button" variant="ghost" onClick={() => navigate('/campaigns')}>

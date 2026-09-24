@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/jwt_utils.dart';
 import 'package:skp_kiosk/core/network/api_client.dart';
+import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/device/data/device_credential_store.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -264,12 +265,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
     return error is ApiException && error.code == 'invalid_credentials';
   }
 
-  String _messageFor(Object error) {
-    if (error is ApiException) {
-      return error.message;
-    }
-    return error.toString();
-  }
+  String _messageFor(Object error) => userFacingError(error);
 }
 
 final deviceAuthProvider =

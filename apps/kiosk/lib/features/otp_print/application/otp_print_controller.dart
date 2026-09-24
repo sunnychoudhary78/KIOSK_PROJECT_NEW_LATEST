@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/otp_print/data/otp_print_repository.dart';
 import 'package:skp_kiosk/features/otp_print/domain/otp_redeem_result.dart';
 import 'package:skp_kiosk/services/print_spooler.dart';
@@ -114,7 +115,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
     } catch (error) {
       state = state.copyWith(
         phase: OtpPrintPhase.error,
-        error: error.toString(),
+        error: userFacingError(error),
         clearRedeemResult: true,
       );
     }
@@ -147,7 +148,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
         phase: OtpPrintPhase.documents,
         clearPreviewDoc: true,
         clearPreviewBytes: true,
-        error: error.toString(),
+        error: userFacingError(error),
         message: 'Select a document to preview',
       );
     }
@@ -212,7 +213,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       } catch (_) {}
       state = state.copyWith(
         phase: OtpPrintPhase.previewing,
-        error: error.toString(),
+        error: userFacingError(error),
         clearMessage: true,
       );
     }

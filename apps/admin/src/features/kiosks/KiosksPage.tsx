@@ -1,7 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Video, VideoOff } from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, EmptyState, Input, PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  Input,
+  Modal,
+  PageHeader,
+  Panel,
+  StatusBadge,
+} from '../../core/ui/primitives';
 
 type Device = {
   id: string;
@@ -34,6 +43,8 @@ export function KiosksPage() {
   const { token } = useAuth();
   const [items, setItems] = useState<Device[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState('');
   const [siteName, setSiteName] = useState('');
   const [latitude, setLatitude] = useState('');
@@ -57,6 +68,20 @@ export function KiosksPage() {
     void load();
   }, [token]);
 
+  function resetForm() {
+    setName('');
+    setSiteName('');
+    setLatitude('');
+    setLongitude('');
+    setAddress('');
+    setFormError(null);
+  }
+
+  function openAdd() {
+    resetForm();
+    setAddOpen(true);
+  }
+
   async function onRegister(event: FormEvent) {
     event.preventDefault();
     const trimmedName = name.trim();
@@ -64,20 +89,20 @@ export function KiosksPage() {
     const lat = Number(latitude);
     const lng = Number(longitude);
     if (!trimmedName || !trimmedSite) {
-      setError('Device name and site name are required');
+      setFormError('Device name and site name are required');
       return;
     }
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      setError('Latitude and longitude are required numbers');
+      setFormError('Latitude and longitude are required numbers');
       return;
     }
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      setError('Latitude must be −90…90 and longitude −180…180');
+      setFormError('Latitude must be −90…90 and longitude −180…180');
       return;
     }
 
     setSubmitting(true);
-    setError(null);
+    setFormError(null);
     try {
       const result = await apiRequest<Device & { deviceSecret: string }>('/devices', {
         method: 'POST',
@@ -95,15 +120,12 @@ export function KiosksPage() {
         deviceKey: result.deviceKey,
         deviceSecret: result.deviceSecret,
       });
-      setName('');
-      setSiteName('');
-      setLatitude('');
-      setLongitude('');
-      setAddress('');
       setCopiedField(null);
+      setAddOpen(false);
+      resetForm();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register device');
+      setFormError(err instanceof Error ? err.message : 'Failed to register device');
     } finally {
       setSubmitting(false);
     }
@@ -173,10 +195,182 @@ export function KiosksPage() {
       <PageHeader
         title="Kiosks"
         subtitle="Register a Windows terminal, then paste the credentials into the kiosk Activate screen"
+        actions={
+          <Button type="button" onClick={openAdd}>
+            Add kiosk
+          </Button>
+        }
       />
 
-      <Panel title="Register a kiosk">
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={(e) => void onRegister(e)}>
+      {error ? <p className="error mb-4">{error}</p> : null}
+
+      {credentials ? (
+        <Panel title={`Device credentials for ${credentials.name}`}>
+          <div className="credentials-panel">
+            <p className="warning">
+              The device secret is shown only once. Copy both values now and paste them into the
+              Windows kiosk Activate screen.
+            </p>
+
+            <div className="credential-row">
+              <label>
+                Device key
+                <Input readOnly value={credentials.deviceKey} />
+              </label>
+              <Button type="button" onClick={() => void copyValue('key', credentials.deviceKey)}>
+                {copiedField === 'key' ? 'Copied' : 'Copy key'}
+              </Button>
+            </div>
+
+            <div className="credential-row">
+              <label>
+                Device secret
+                <Input readOnly value={credentials.deviceSecret} />
+              </label>
+              <Button
+                type="button"
+                onClick={() => void copyValue('secret', credentials.deviceSecret)}
+              >
+                {copiedField === 'secret' ? 'Copied' : 'Copy secret'}
+              </Button>
+            </div>
+
+            <Button type="button" variant="secondary" onClick={() => setCredentials(null)}>
+              Dismiss
+            </Button>
+          </div>
+        </Panel>
+      ) : null}
+
+      <Panel title="Registered kiosks">
+        {items.length === 0 ? (
+          <EmptyState
+            title="No devices registered yet"
+            description="Add a kiosk, then paste the credentials into the Windows Activate screen."
+            action={
+              <Button type="button" onClick={openAdd}>
+                Add kiosk
+              </Button>
+            }
+          />
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Site</th>
+                <th>Location</th>
+                <th>Status</th>
+                <th>Device key</th>
+                <th>Last heartbeat</th>
+                <th>Recording</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((device) => (
+                <tr key={device.id}>
+                  <td className="font-medium">{device.name}</td>
+                  <td>{device.siteName}</td>
+                  <td>{formatLocation(device)}</td>
+                  <td>
+                    <StatusBadge status={device.status} />
+                  </td>
+                  <td>
+                    <code>{device.deviceKey}</code>
+                  </td>
+                  <td className="text-muted-foreground">
+                    {device.lastHeartbeatAt
+                      ? new Date(device.lastHeartbeatAt).toLocaleString()
+                      : '—'}
+                  </td>
+                  <td>
+                    {device.surveillanceEnabled ? (
+                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+                        <Video className="h-4 w-4" />
+                        Recording
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                        <VideoOff className="h-4 w-4" />
+                        Off
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      {device.status === 'inactive' ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={submitting}
+                          onClick={() => void onSetStatus(device, 'active')}
+                        >
+                          Start
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          disabled={submitting}
+                          onClick={() => void onSetStatus(device, 'inactive')}
+                        >
+                          Stop
+                        </Button>
+                      )}
+                      {device.surveillanceEnabled ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={submitting || device.status === 'inactive'}
+                          onClick={() => void onSetSurveillance(device, false)}
+                        >
+                          Stop surveillance
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={submitting || device.status === 'inactive'}
+                          onClick={() => void onSetSurveillance(device, true)}
+                        >
+                          Start surveillance
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+
+      <Modal
+        open={addOpen}
+        title="Add kiosk"
+        onClose={() => {
+          if (!submitting) {
+            setAddOpen(false);
+          }
+        }}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={submitting}
+              onClick={() => setAddOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" form="register-kiosk-form" disabled={submitting}>
+              {submitting ? 'Registering…' : 'Register device'}
+            </Button>
+          </>
+        }
+      >
+        <form id="register-kiosk-form" className="grid gap-4 md:grid-cols-2" onSubmit={(e) => void onRegister(e)}>
           <label>
             Device name
             <Input
@@ -223,142 +417,9 @@ export function KiosksPage() {
               placeholder="City Mall, Gate 2"
             />
           </label>
-          <div className="md:col-span-2">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Registering…' : 'Register device'}
-            </Button>
-          </div>
+          {formError ? <p className="error md:col-span-2">{formError}</p> : null}
         </form>
-        {error ? <p className="error mt-3">{error}</p> : null}
-      </Panel>
-
-      {credentials ? (
-        <Panel>
-          <div className="credentials-panel">
-            <h2>Device credentials for {credentials.name}</h2>
-            <p className="warning">
-              The device secret is shown only once. Copy both values now and paste them into the
-              Windows kiosk Activate screen.
-            </p>
-
-            <div className="credential-row">
-              <label>
-                Device key
-                <Input readOnly value={credentials.deviceKey} />
-              </label>
-              <Button type="button" onClick={() => void copyValue('key', credentials.deviceKey)}>
-                {copiedField === 'key' ? 'Copied' : 'Copy key'}
-              </Button>
-            </div>
-
-            <div className="credential-row">
-              <label>
-                Device secret
-                <Input readOnly value={credentials.deviceSecret} />
-              </label>
-              <Button
-                type="button"
-                onClick={() => void copyValue('secret', credentials.deviceSecret)}
-              >
-                {copiedField === 'secret' ? 'Copied' : 'Copy secret'}
-              </Button>
-            </div>
-
-            <Button type="button" onClick={() => setCredentials(null)}>
-              Dismiss
-            </Button>
-          </div>
-        </Panel>
-      ) : null}
-
-      <Panel title="Registered kiosks">
-        {items.length === 0 ? (
-          <EmptyState
-            title="No devices registered yet"
-            description="Register a Windows terminal above, then paste the credentials into the kiosk Activate screen."
-          />
-        ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Site</th>
-              <th>Location</th>
-              <th>Status</th>
-              <th>Device key</th>
-              <th>Last heartbeat</th>
-              <th>Surveillance</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((device) => (
-                <tr key={device.id}>
-                  <td className="font-medium">{device.name}</td>
-                  <td>{device.siteName}</td>
-                  <td>{formatLocation(device)}</td>
-                  <td>
-                    <StatusBadge status={device.status} />
-                  </td>
-                  <td>
-                    <code>{device.deviceKey}</code>
-                  </td>
-                  <td className="text-muted-foreground">
-                    {device.lastHeartbeatAt
-                      ? new Date(device.lastHeartbeatAt).toLocaleString()
-                      : '—'}
-                  </td>
-                  <td>
-                    <StatusBadge status={device.surveillanceEnabled ? 'on' : 'off'} />
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                    {device.status === 'inactive' ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={submitting}
-                        onClick={() => void onSetStatus(device, 'active')}
-                      >
-                        Start
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="danger"
-                        disabled={submitting}
-                        onClick={() => void onSetStatus(device, 'inactive')}
-                      >
-                        Stop
-                      </Button>
-                    )}
-                    {device.surveillanceEnabled ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={submitting || device.status === 'inactive'}
-                        onClick={() => void onSetSurveillance(device, false)}
-                      >
-                        Stop surveillance
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={submitting || device.status === 'inactive'}
-                        onClick={() => void onSetSurveillance(device, true)}
-                      >
-                        Start surveillance
-                      </Button>
-                    )}
-                    </div>
-                  </td>
-                </tr>
-            ))}
-          </tbody>
-        </table>
-        )}
-      </Panel>
+      </Modal>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
-import 'package:skp_kiosk/core/network/api_client.dart';
+import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_phase.dart';
@@ -178,7 +178,7 @@ class AstrologyController extends Notifier<AstrologyUiState> {
       }
       state = state.copyWith(
         phase: AstrologyPhase.form,
-        error: error is ApiException ? error.message : error.toString(),
+        error: userFacingError(error),
       );
     }
   }

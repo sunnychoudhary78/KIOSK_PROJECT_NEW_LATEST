@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/digilocker_print/data/digilocker_print_repository.dart';
 import 'package:skp_kiosk/services/print_spooler.dart';
 
@@ -167,7 +168,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     } catch (error) {
       state = DigilockerUiState(
         phase: DigilockerPhase.error,
-        error: error.toString(),
+        error: userFacingError(error),
       );
     }
   }
@@ -266,7 +267,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           sessionId: sessionId,
           authorizationUrl: state.authorizationUrl,
           message: state.message,
-          error: error.toString(),
+          error: userFacingError(error),
         );
       }
     } finally {
@@ -293,7 +294,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       state = DigilockerUiState(
         phase: DigilockerPhase.error,
         sessionId: sessionId,
-        error: error.toString(),
+        error: userFacingError(error),
       );
     }
   }
@@ -341,7 +342,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         phase: DigilockerPhase.error,
         sessionId: sessionId,
         documents: documents,
-        error: error.toString(),
+        error: userFacingError(error),
       );
     }
   }
@@ -398,7 +399,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         previewBytes: bytes,
         previewFilePath: filePath,
         previewJobId: jobId,
-        error: error.toString(),
+        error: userFacingError(error),
       );
     }
   }
