@@ -8,6 +8,7 @@ type PrintJob = {
   status: string;
   source: string;
   title: string;
+  printColorMode?: 'bw' | 'color';
   createdAt: string;
 };
 
@@ -37,6 +38,7 @@ export function PrintJobsPage() {
             <tr>
               <th>Title</th>
               <th>Source</th>
+              <th>Color</th>
               <th>Status</th>
               <th>Created</th>
             </tr>
@@ -46,6 +48,7 @@ export function PrintJobsPage() {
               <tr key={job.id}>
                 <td>{job.title}</td>
                 <td>{job.source}</td>
+                <td>{job.printColorMode === 'color' ? 'Color' : 'B/W'}</td>
                 <td>{job.status}</td>
                 <td>{new Date(job.createdAt).toLocaleString()}</td>
               </tr>

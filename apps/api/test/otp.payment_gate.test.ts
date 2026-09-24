@@ -8,6 +8,8 @@ describe('OTP is deferred until payment for extra pages', () => {
     const quote = quoteOtpPrintPages(8, {
       freePagesPerSession: 5,
       extraPageChargeRupees: 10,
+      freeColorPagesPerSession: 0,
+      extraColorPageChargeRupees: 20,
     });
     expect(quote.paymentRequired).toBe(true);
   });
@@ -17,6 +19,8 @@ describe('OTP is deferred until payment for extra pages', () => {
     const quote = quoteOtpPrintPages(8, {
       freePagesPerSession: 5,
       extraPageChargeRupees: 10,
+      freeColorPagesPerSession: 0,
+      extraColorPageChargeRupees: 20,
     });
     const expiresAt = new Date('2026-08-26T12:00:00.000Z');
     const publicChallenge = service.toPublicChallenge(
@@ -27,6 +31,7 @@ describe('OTP is deferred until payment for extra pages', () => {
         codeHint: null,
         documentLabel: 'Certificates',
         pageCount: 8,
+        printColorMode: 'bw',
         attemptCount: 0,
         status: OtpChallengeStatus.awaiting_payment,
         expiresAt,
@@ -63,6 +68,8 @@ describe('OTP is deferred until payment for extra pages', () => {
     const quote = quoteOtpPrintPages(8, {
       freePagesPerSession: 5,
       extraPageChargeRupees: 10,
+      freeColorPagesPerSession: 0,
+      extraColorPageChargeRupees: 20,
     });
     const expiresAt = new Date('2026-08-26T12:00:00.000Z');
     const publicChallenge = service.toPublicChallenge(
@@ -73,6 +80,7 @@ describe('OTP is deferred until payment for extra pages', () => {
         codeHint: '12',
         documentLabel: 'Certificates',
         pageCount: 8,
+        printColorMode: 'bw',
         attemptCount: 0,
         status: OtpChallengeStatus.pending,
         expiresAt,

@@ -120,6 +120,8 @@ async function main() {
         maxFileSizeMb: 15,
         freePagesPerSession: 5,
         extraPageChargeRupees: 10,
+        freeColorPagesPerSession: 0,
+        extraColorPageChargeRupees: 20,
       },
     },
   });

@@ -144,18 +144,41 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Material(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Text('Sign in to DigiLocker — stay in this window'),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF132029),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2A3A42)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFF2A3A42))),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_outline, color: Color(0xFF2EC4A0)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Sign in here — do not leave this screen',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        Expanded(child: Webview(_controller)),
-      ],
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+              child: Webview(_controller),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

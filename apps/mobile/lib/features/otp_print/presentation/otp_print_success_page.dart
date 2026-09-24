@@ -166,7 +166,7 @@ class _OtpPrintSuccessPageState extends ConsumerState<OtpPrintSuccessPage>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${challenge.pageCount} page(s) · ${challenge.documents.length} file(s)',
+                  '${challenge.pageCount} page(s) · ${challenge.printColorLabel} · ${challenge.documents.length} file(s)',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: SkpColors.muted,

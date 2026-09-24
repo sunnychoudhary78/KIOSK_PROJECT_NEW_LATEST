@@ -17,6 +17,7 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
   Future<void> createChallenge({
     required List<File> files,
     String? documentLabel,
+    String printColorMode = 'bw',
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
@@ -25,6 +26,7 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
         fields: {
           if (documentLabel != null && documentLabel.isNotEmpty)
             'documentLabel': documentLabel,
+          'printColorMode': printColorMode == 'color' ? 'color' : 'bw',
         },
         files: files,
         fileField: 'files',

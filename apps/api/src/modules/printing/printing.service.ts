@@ -1,4 +1,4 @@
-import { PrintJobSource, PrintJobStatus } from '@prisma/client';
+import { PrintColorMode, PrintJobSource, PrintJobStatus } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
@@ -10,6 +10,7 @@ function mapJob(job: {
   source: PrintJobSource;
   title: string;
   pageCount: number;
+  printColorMode?: PrintColorMode | null;
   deviceId: string | null;
   payloadUrl: string | null;
   payloadPath?: string | null;
@@ -22,6 +23,7 @@ function mapJob(job: {
     source: job.source,
     title: job.title,
     pageCount: job.pageCount,
+    printColorMode: job.printColorMode === PrintColorMode.color ? 'color' : 'bw',
     deviceId: job.deviceId,
     payloadUrl: job.payloadUrl,
     createdAt: job.createdAt.toISOString(),
@@ -33,6 +35,7 @@ export type CreatePrintJobInput = {
   source: PrintJobSource;
   title: string;
   pageCount?: number;
+  printColorMode?: PrintColorMode;
   deviceId?: string;
   payloadUrl?: string;
   payloadPath?: string;
@@ -61,6 +64,7 @@ export class PrintingService {
         source: input.source,
         title: input.title,
         pageCount: input.pageCount ?? 1,
+        printColorMode: input.printColorMode ?? PrintColorMode.bw,
         deviceId: input.deviceId,
         payloadUrl: input.payloadUrl,
         payloadPath: input.payloadPath,
@@ -77,7 +81,7 @@ export class PrintingService {
       resourceType: 'print_job',
       resourceId: job.id,
       correlationId,
-      metadata: { source: job.source, title: job.title },
+      metadata: { source: job.source, title: job.title, printColorMode: job.printColorMode },
     });
 
     return mapJob(job);

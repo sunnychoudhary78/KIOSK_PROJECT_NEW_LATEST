@@ -41,6 +41,11 @@ enum PrintJobSource {
   digilocker_print
 }
 
+enum PrintColorMode {
+  bw
+  color
+}
+
 enum OtpChallengeStatus {
   awaiting_payment
   pending
@@ -357,6 +362,7 @@ model OtpChallenge {
   codeHint      String?            @map("code_hint")
   documentLabel String             @map("document_label")
   pageCount     Int                @default(1) @map("page_count")
+  printColorMode PrintColorMode    @default(bw) @map("print_color_mode")
   attemptCount  Int                @default(0) @map("attempt_count")
   status        OtpChallengeStatus @default(pending)
   expiresAt     DateTime           @map("expires_at")
@@ -384,6 +390,7 @@ model Payment {
   pageCount         Int           @map("page_count")
   freePages         Int           @map("free_pages")
   extraPages        Int           @map("extra_pages")
+  printColorMode    PrintColorMode @default(bw) @map("print_color_mode")
   amountPaise       Int           @map("amount_paise")
   currency          String        @default("INR")
   razorpayOrderId   String?       @unique @map("razorpay_order_id")
@@ -449,6 +456,7 @@ model PrintJob {
   status           PrintJobStatus @default(created)
   title            String
   pageCount        Int            @default(1) @map("page_count")
+  printColorMode   PrintColorMode @default(bw) @map("print_color_mode")
   payloadUrl       String?        @map("payload_url")
   payloadPath      String?        @map("payload_path")
   errorMessage     String?        @map("error_message")

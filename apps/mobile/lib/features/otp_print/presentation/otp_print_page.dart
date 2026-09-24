@@ -18,6 +18,7 @@ class OtpPrintPage extends ConsumerStatefulWidget {
 class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
   final _label = TextEditingController();
   final List<File> _files = [];
+  String _printColorMode = 'bw';
 
   @override
   void dispose() {
@@ -46,6 +47,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
     await ref.read(otpPrintControllerProvider.notifier).createChallenge(
           files: List<File>.from(_files),
           documentLabel: _label.text.trim(),
+          printColorMode: _printColorMode,
         );
     if (!mounted) return;
     final state = ref.read(otpPrintControllerProvider);
@@ -190,6 +192,24 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             ),
           ),
           const SizedBox(height: 16),
+          Text(
+            'Print color',
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          _PrintColorChooser(
+            value: _printColorMode,
+            enabled: !loading,
+            onChanged: (mode) => setState(() => _printColorMode = mode),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _printColorMode == 'color'
+                ? 'Color prints use a higher extra-page rate set by the operator.'
+                : 'Black & white is the default and usually costs less per extra page.',
+            style: theme.textTheme.bodySmall?.copyWith(color: SkpColors.muted),
+          ),
+          const SizedBox(height: 16),
           if (_files.isNotEmpty)
             Expanded(
               child: ListView.separated(
@@ -246,6 +266,74 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             ),
           const SizedBox(height: 12),
         ],
+      ),
+    );
+  }
+}
+
+class _PrintColorChooser extends StatelessWidget {
+  const _PrintColorChooser({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String value;
+  final bool enabled;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: SkpColors.panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: SkpColors.line),
+      ),
+      child: Row(
+        children: [
+          _option(theme, 'bw', 'Black & white', Icons.filter_b_and_w_rounded),
+          _option(theme, 'color', 'Color', Icons.palette_outlined),
+        ],
+      ),
+    );
+  }
+
+  Widget _option(ThemeData theme, String mode, String label, IconData icon) {
+    final selected = value == mode;
+    return Expanded(
+      child: Material(
+        color: selected ? SkpColors.accent.withValues(alpha: 0.12) : Colors.transparent,
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          onTap: enabled ? () => onChanged(mode) : null,
+          borderRadius: BorderRadius.circular(13),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? SkpColors.accent : SkpColors.muted,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: selected ? SkpColors.accent : SkpColors.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

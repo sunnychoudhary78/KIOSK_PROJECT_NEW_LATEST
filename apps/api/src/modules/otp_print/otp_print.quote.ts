@@ -1,6 +1,9 @@
 import type { OtpPrintConfig } from '../platform_settings/platform_settings.defaults.js';
 
+export type PrintColorMode = 'bw' | 'color';
+
 export type PrintQuote = {
+  printColorMode: PrintColorMode;
   pageCount: number;
   freePages: number;
   extraPages: number;
@@ -12,13 +15,28 @@ export type PrintQuote = {
 
 export function quoteOtpPrintPages(
   pageCount: number,
-  config: Pick<OtpPrintConfig, 'freePagesPerSession' | 'extraPageChargeRupees'>,
+  config: Pick<
+    OtpPrintConfig,
+    | 'freePagesPerSession'
+    | 'extraPageChargeRupees'
+    | 'freeColorPagesPerSession'
+    | 'extraColorPageChargeRupees'
+  >,
+  printColorMode: PrintColorMode = 'bw',
 ): PrintQuote {
-  const freePages = Math.max(0, config.freePagesPerSession);
+  const color = printColorMode === 'color';
+  const freePages = Math.max(
+    0,
+    color ? config.freeColorPagesPerSession : config.freePagesPerSession,
+  );
   const extraPages = Math.max(0, pageCount - freePages);
-  const chargePerPageRupees = Math.max(0, config.extraPageChargeRupees);
+  const chargePerPageRupees = Math.max(
+    0,
+    color ? config.extraColorPageChargeRupees : config.extraPageChargeRupees,
+  );
   const amountPaise = extraPages * chargePerPageRupees * 100;
   return {
+    printColorMode: color ? 'color' : 'bw',
     pageCount,
     freePages,
     extraPages,

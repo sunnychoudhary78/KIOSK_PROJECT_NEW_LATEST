@@ -190,6 +190,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
         jobId: result.printJobId,
         title: doc.fileName,
         pdfBytes: bytes,
+        colorMode: result.printColorMode,
       );
       await _repository.reportStatus(
         jobId: result.printJobId,

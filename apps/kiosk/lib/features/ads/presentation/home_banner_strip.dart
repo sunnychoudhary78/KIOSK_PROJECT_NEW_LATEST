@@ -37,10 +37,10 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(16),
               child: data == null
                   ? const ColoredBox(
-                      color: Color(0xFFE8E8E8),
+                      color: Color(0xFF1A2A32),
                       child: Center(child: CircularProgressIndicator()),
                     )
                   : Image.memory(data, fit: BoxFit.cover, width: double.infinity),

@@ -2,7 +2,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
-import { OtpChallengeStatus, PaymentStatus, PrintJobSource } from '@prisma/client';
+import { OtpChallengeStatus, PaymentStatus, PrintColorMode, PrintJobSource } from '@prisma/client';
 import type { OtpChallenge, OtpDocument, Payment } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
@@ -13,7 +13,7 @@ import type { AuditService } from '../audit/audit.service.js';
 import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
-import { quoteOtpPrintPages, type PrintQuote } from './otp_print.quote.js';
+import { quoteOtpPrintPages, type PrintColorMode as QuoteColorMode, type PrintQuote } from './otp_print.quote.js';
 import type { RedeemOtpInput, UploadedPdf } from './otp_print.schemas.js';
 
 const OTP_UPLOAD_DIR = join(process.cwd(), 'uploads', 'otp-print');
@@ -30,6 +30,7 @@ async function countPdfPages(buffer: Buffer): Promise<number> {
 
 function quoteFromPayment(payment: Payment): PrintQuote {
   return {
+    printColorMode: payment.printColorMode === PrintColorMode.color ? 'color' : 'bw',
     pageCount: payment.pageCount,
     freePages: payment.freePages,
     extraPages: payment.extraPages,
@@ -59,6 +60,7 @@ export class OtpPrintService {
     files: UploadedPdf[],
     documentLabel: string | undefined,
     correlationId?: string,
+    printColorMode: QuoteColorMode = 'bw',
   ) {
     const printConfig = await this.settings.getOtpPrintConfig();
     const otpLength = printConfig.otpLength || this.config.otp.length;
@@ -124,7 +126,9 @@ export class OtpPrintService {
       throw new AppError('phone_required', 'Citizen account must have a phone number', 400);
     }
 
-    const quote = quoteOtpPrintPages(totalPages, printConfig);
+    const quote = quoteOtpPrintPages(totalPages, printConfig, printColorMode);
+    const persistedColorMode =
+      printColorMode === 'color' ? PrintColorMode.color : PrintColorMode.bw;
     const paymentRequired = quote.paymentRequired;
     if (paymentRequired && (!this.config.razorpay.keyId || !this.config.razorpay.keySecret)) {
       throw new AppError(
@@ -174,6 +178,7 @@ export class OtpPrintService {
             userId,
             documentLabel: label,
             pageCount: totalPages,
+            printColorMode: persistedColorMode,
             expiresAt,
             status: OtpChallengeStatus.awaiting_payment,
             documents: { create: documentRows },
@@ -184,6 +189,7 @@ export class OtpPrintService {
                 pageCount: quote.pageCount,
                 freePages: quote.freePages,
                 extraPages: quote.extraPages,
+                printColorMode: persistedColorMode,
                 amountPaise: quote.amountPaise,
                 currency: quote.currency,
                 expiresAt,
@@ -204,6 +210,7 @@ export class OtpPrintService {
             documentLabel: label,
             pageCount: totalPages,
             documentCount: prepared.length,
+            printColorMode: quote.printColorMode,
             paymentRequired: true,
             extraPages: quote.extraPages,
             amountPaise: quote.amountPaise,
@@ -222,6 +229,7 @@ export class OtpPrintService {
           codeHint: code.slice(-2),
           documentLabel: label,
           pageCount: totalPages,
+          printColorMode: persistedColorMode,
           expiresAt,
           status: OtpChallengeStatus.pending,
           documents: { create: documentRows },
@@ -244,7 +252,13 @@ export class OtpPrintService {
         resourceType: 'otp_challenge',
         resourceId: challenge.id,
         correlationId,
-        metadata: { documentLabel: label, pageCount: totalPages, documentCount: prepared.length, paymentRequired: false },
+        metadata: {
+          documentLabel: label,
+          pageCount: totalPages,
+          documentCount: prepared.length,
+          printColorMode: quote.printColorMode,
+          paymentRequired: false,
+        },
       });
 
       return this.toPublicChallenge(challenge, quote);
@@ -265,7 +279,11 @@ export class OtpPrintService {
     const printConfig = await this.settings.getOtpPrintConfig();
     const quote = challenge.payment
       ? quoteFromPayment(challenge.payment)
-      : quoteOtpPrintPages(challenge.pageCount, printConfig);
+      : quoteOtpPrintPages(
+          challenge.pageCount,
+          printConfig,
+          challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
+        );
     return this.toPublicChallenge(challenge, quote);
   }
 
@@ -417,6 +435,7 @@ export class OtpPrintService {
         source: PrintJobSource.otp_print,
         title: challenge.documentLabel,
         pageCount: challenge.pageCount,
+        printColorMode: challenge.printColorMode,
         deviceId,
         payloadUrl: `/v1/otp-challenges/${challenge.id}/documents`,
         idempotencyKey: input.idempotencyKey ?? `otp-redeem-${challenge.id}`,
@@ -443,7 +462,7 @@ export class OtpPrintService {
       resourceType: 'otp_challenge',
       resourceId: challenge.id,
       correlationId,
-      metadata: { printJobId: printJob.id },
+      metadata: { printJobId: printJob.id, printColorMode: challenge.printColorMode },
     });
 
     return {
@@ -491,6 +510,7 @@ export class OtpPrintService {
       expiresAt: challenge.expiresAt.toISOString(),
       documentLabel: challenge.documentLabel,
       pageCount: challenge.pageCount,
+      printColorMode: challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
       documents: challenge.documents.map((d) => ({
         id: d.id,
         fileName: d.fileName,

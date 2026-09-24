@@ -19,11 +19,15 @@ class OtpRedeemResult {
     required this.title,
     required this.documents,
     this.payloadUrl,
+    this.printColorMode = 'bw',
   });
 
   final String challengeId;
   final String printJobId;
   final String title;
   final String? payloadUrl;
+  final String printColorMode;
   final List<OtpDocumentRef> documents;
+
+  String get printColorLabel => printColorMode == 'color' ? 'Color' : 'B/W';
 }

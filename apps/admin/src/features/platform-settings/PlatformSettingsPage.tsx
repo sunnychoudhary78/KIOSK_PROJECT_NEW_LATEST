@@ -21,6 +21,8 @@ type OtpPrintForm = {
   maxFileSizeMb: number;
   freePagesPerSession: number;
   extraPageChargeRupees: number;
+  freeColorPagesPerSession: number;
+  extraColorPageChargeRupees: number;
 };
 
 type CitizenAuthForm = {
@@ -46,6 +48,8 @@ const DEFAULT_OTP_PRINT: OtpPrintForm = {
   maxFileSizeMb: 15,
   freePagesPerSession: 5,
   extraPageChargeRupees: 10,
+  freeColorPagesPerSession: 0,
+  extraColorPageChargeRupees: 20,
 };
 
 const DEFAULT_CITIZEN_AUTH: CitizenAuthForm = {
@@ -197,6 +201,8 @@ export function PlatformSettingsPage() {
         maxFileSizeMb: Number(otpPrint.maxFileSizeMb),
         freePagesPerSession: Number(otpPrint.freePagesPerSession),
         extraPageChargeRupees: Number(otpPrint.extraPageChargeRupees),
+        freeColorPagesPerSession: Number(otpPrint.freeColorPagesPerSession),
+        extraColorPageChargeRupees: Number(otpPrint.extraColorPageChargeRupees),
       });
       printSaved = true;
     } catch (err) {
@@ -377,7 +383,7 @@ export function PlatformSettingsPage() {
               />
             </label>
             <label>
-              Free pages / session
+              Black & white free pages / session
               <Input
                 type="number"
                 min={0}
@@ -392,7 +398,7 @@ export function PlatformSettingsPage() {
               />
             </label>
             <label>
-              Extra page charge (₹)
+              Black & white extra page charge (₹)
               <Input
                 type="number"
                 min={0}
@@ -406,10 +412,42 @@ export function PlatformSettingsPage() {
                 }
               />
             </label>
+            <label>
+              Color free pages / session
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={otpPrint.freeColorPagesPerSession}
+                onChange={(e) =>
+                  setOtpPrint((s) => ({
+                    ...s,
+                    freeColorPagesPerSession: Number(e.target.value),
+                  }))
+                }
+              />
+            </label>
+            <label>
+              Color extra page charge (₹)
+              <Input
+                type="number"
+                min={0}
+                max={1000}
+                value={otpPrint.extraColorPageChargeRupees}
+                onChange={(e) =>
+                  setOtpPrint((s) => ({
+                    ...s,
+                    extraColorPageChargeRupees: Number(e.target.value),
+                  }))
+                }
+              />
+            </label>
           </div>
           <p className="muted" style={{ margin: '0.75rem 0 0' }}>
-            First {otpPrint.freePagesPerSession} page(s) are free. Each extra page costs ₹
-            {otpPrint.extraPageChargeRupees}. Max pages remains a hard cap.
+            Black & white: first {otpPrint.freePagesPerSession} page(s) free, then ₹
+            {otpPrint.extraPageChargeRupees} each. Color: first {otpPrint.freeColorPagesPerSession}{' '}
+            page(s) free, then ₹{otpPrint.extraColorPageChargeRupees} each. Max pages remains a hard
+            cap.
           </p>
         </Panel>
 

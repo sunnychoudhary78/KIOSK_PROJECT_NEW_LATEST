@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -13,6 +14,7 @@ abstract class PrintSpooler {
     String? payloadUrl,
     String? filePath,
     Uint8List? pdfBytes,
+    String colorMode = 'color',
   });
 }
 
@@ -44,6 +46,7 @@ class WindowsPdfPrintSpooler implements PrintSpooler {
     String? payloadUrl,
     String? filePath,
     Uint8List? pdfBytes,
+    String colorMode = 'color',
   }) async {
     final bytes = pdfBytes;
     if (bytes == null || bytes.isEmpty) {
@@ -51,11 +54,14 @@ class WindowsPdfPrintSpooler implements PrintSpooler {
     }
 
     final printer = await _resolvePrinter();
-    final layoutBytes =
-        reversePages ? await _reversePdfPages(bytes) : bytes;
+    final grayscale = colorMode == 'bw';
+    final layoutBytes = (reversePages || grayscale)
+        ? await _layoutPdfPages(bytes, grayscale: grayscale)
+        : bytes;
     debugPrint(
       '[PrintSpooler] job=$jobId → "${printer.name}" '
-      '(default=${printer.isDefault}, reversePages=$reversePages)',
+      '(default=${printer.isDefault}, reversePages=$reversePages, '
+      'colorMode=$colorMode)',
     );
 
     // Request A4 explicitly so the Windows job matches typical Canon cassette
@@ -74,17 +80,30 @@ class WindowsPdfPrintSpooler implements PrintSpooler {
     }
   }
 
-  /// Rebuild PDF with pages in reverse order for face-up tray stacking.
-  Future<Uint8List> _reversePdfPages(Uint8List input) async {
+  /// Rebuild PDF with optional reverse order and grayscale conversion.
+  Future<Uint8List> _layoutPdfPages(
+    Uint8List input, {
+    required bool grayscale,
+  }) async {
     const dpi = 200.0;
     final rasters = await Printing.raster(input, dpi: dpi).toList();
-    if (rasters.length <= 1) {
+    if (rasters.isEmpty) {
+      return input;
+    }
+    if (!grayscale && rasters.length <= 1) {
       return input;
     }
 
+    final pages = reversePages && rasters.length > 1
+        ? rasters.reversed
+        : rasters;
+
     final doc = pw.Document();
-    for (final page in rasters.reversed) {
-      final png = await page.toPng();
+    for (final page in pages) {
+      var png = await page.toPng();
+      if (grayscale) {
+        png = _toGrayscalePng(png);
+      }
       final image = pw.MemoryImage(png);
       final width = page.width * PdfPageFormat.inch / dpi;
       final height = page.height * PdfPageFormat.inch / dpi;
@@ -96,6 +115,15 @@ class WindowsPdfPrintSpooler implements PrintSpooler {
       );
     }
     return Uint8List.fromList(await doc.save());
+  }
+
+  Uint8List _toGrayscalePng(Uint8List png) {
+    final decoded = img.decodePng(png);
+    if (decoded == null) {
+      return png;
+    }
+    img.grayscale(decoded);
+    return Uint8List.fromList(img.encodePng(decoded));
   }
 
   Future<Printer> _resolvePrinter() async {

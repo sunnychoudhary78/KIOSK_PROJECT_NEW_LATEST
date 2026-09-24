@@ -7,7 +7,7 @@ class PalmOverlayPainter extends CustomPainter {
   const PalmOverlayPainter();
 
   static const _gold = Color(0xFFE8C872);
-  static const _teal = Color(0xFF0F6A5A);
+  static const _teal = Color(0xFF2EC4A0);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -22,15 +22,24 @@ class PalmOverlayPainter extends CustomPainter {
       ..addRect(Offset.zero & size)
       ..addPath(palm, Offset.zero)
       ..fillType = PathFillType.evenOdd;
-    canvas.drawPath(dim, Paint()..color = const Color(0xD6101816));
+    canvas.drawPath(dim, Paint()..color = const Color(0xD60B1419));
 
     canvas.drawPath(
       palm,
       Paint()
-        ..color = _gold.withValues(alpha: 0.38)
+        ..color = _gold.withValues(alpha: 0.22)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = (size.shortestSide * 0.028).clamp(10, 18)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10)
+        ..strokeWidth = (size.shortestSide * 0.034).clamp(12, 22)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14)
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawPath(
+      palm,
+      Paint()
+        ..color = _gold.withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5.5
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3)
         ..strokeJoin = StrokeJoin.round,
     );
     canvas.drawPath(
@@ -38,52 +47,35 @@ class PalmOverlayPainter extends CustomPainter {
       Paint()
         ..color = _gold
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.2
+        ..strokeWidth = 2.4
         ..strokeJoin = StrokeJoin.round
         ..strokeCap = StrokeCap.round,
     );
     canvas.drawPath(
       palm,
       Paint()
-        ..color = _teal
+        ..color = _teal.withValues(alpha: 0.85)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.25
-        ..strokeJoin = StrokeJoin.round,
+        ..strokeWidth = 1.05
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round,
     );
 
     final inset = Matrix4.identity()
       ..translateByDouble(bounds.center.dx, bounds.center.dy, 0, 1)
-      ..scaleByDouble(0.91, 0.91, 1, 1)
+      ..scaleByDouble(0.965, 0.965, 1, 1)
       ..translateByDouble(-bounds.center.dx, -bounds.center.dy, 0, 1);
-    final inner = palm.transform(inset.storage);
     canvas.drawPath(
-      dashedPath(inner, dash: 9, gap: 7),
+      palm.transform(inset.storage),
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.72)
+        ..color = Colors.white.withValues(alpha: 0.18)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.15
+        ..strokeWidth = 1.0
+        ..strokeJoin = StrokeJoin.round
         ..strokeCap = StrokeCap.round,
     );
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-Path dashedPath(Path source, {double dash = 8, double gap = 6}) {
-  final dest = Path();
-  for (final metric in source.computeMetrics()) {
-    var distance = 0.0;
-    var draw = true;
-    while (distance < metric.length) {
-      final length = draw ? dash : gap;
-      final next = (distance + length).clamp(0.0, metric.length);
-      if (draw) {
-        dest.addPath(metric.extractPath(distance, next), Offset.zero);
-      }
-      distance = next;
-      draw = !draw;
-    }
-  }
-  return dest;
 }

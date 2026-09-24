@@ -9,10 +9,14 @@ export type OtpPrintConfig = {
   maxDocumentsPerSession: number;
   maxVerifyAttempts: number;
   maxFileSizeMb: number;
-  /** Pages included at no charge per OTP print session. */
+  /** B/W pages included at no charge per OTP print session. */
   freePagesPerSession: number;
-  /** Rupees charged for each page above the free allowance. */
+  /** Rupees charged for each B/W page above the free allowance. */
   extraPageChargeRupees: number;
+  /** Color pages included at no charge per OTP print session. */
+  freeColorPagesPerSession: number;
+  /** Rupees charged for each color page above the free allowance. */
+  extraColorPageChargeRupees: number;
 };
 
 export type CitizenAuthConfig = {
@@ -31,6 +35,8 @@ export const DEFAULT_OTP_PRINT_CONFIG: OtpPrintConfig = {
   maxFileSizeMb: 15,
   freePagesPerSession: 5,
   extraPageChargeRupees: 10,
+  freeColorPagesPerSession: 0,
+  extraColorPageChargeRupees: 20,
 };
 
 export const DEFAULT_CITIZEN_AUTH_CONFIG: CitizenAuthConfig = {

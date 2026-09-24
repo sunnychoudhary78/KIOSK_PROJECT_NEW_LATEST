@@ -25,6 +25,7 @@ dependencies:
   camera_windows: ^0.2.6
   image: ^4.5.4
   http_parser: ^4.1.2
+  window_manager: ^0.5.1
 
 dev_dependencies:
   flutter_test:
@@ -34,3 +35,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700

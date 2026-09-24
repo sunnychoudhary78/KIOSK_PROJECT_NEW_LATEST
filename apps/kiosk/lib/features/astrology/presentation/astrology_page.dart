@@ -7,12 +7,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/hardware/camera/camera_lease.dart';
 import 'package:skp_kiosk/core/hardware/camera/kiosk_camera.dart';
+import 'package:skp_kiosk/core/theme/skp_tokens.dart';
+import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_jpeg.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
 import 'package:skp_kiosk/features/astrology/presentation/palm_overlay.dart';
+import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
 class AstrologyPage extends ConsumerStatefulWidget {
@@ -31,10 +34,11 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
 
   final _name = TextEditingController();
   final _place = TextEditingController();
-  DateTime? _dob;
+  DateTime _dob = DateTime(1995, 1, 1);
   TimeOfDay _birthTime = const TimeOfDay(hour: 12, minute: 0);
   bool _timeUnknown = false;
   String _gender = 'female';
+  int _focus = 0;
 
   @override
   void initState() {
@@ -49,6 +53,12 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     _place.dispose();
     _releasePalmCamera();
     super.dispose();
+  }
+
+  Future<void> _endSession() {
+    return ref
+        .read(kioskSessionControllerProvider.notifier)
+        .endVisitorSession(attract: false);
   }
 
   void _releasePalmCamera() {
@@ -229,26 +239,6 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     return toJpegBytes(raw);
   }
 
-  Future<void> _pickDob() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dob ?? DateTime(1995, 1, 1),
-      firstDate: DateTime(1920),
-      lastDate: now,
-    );
-    if (picked != null) {
-      setState(() => _dob = picked);
-    }
-  }
-
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(context: context, initialTime: _birthTime);
-    if (picked != null) {
-      setState(() => _birthTime = picked);
-    }
-  }
-
   String _formatDob(DateTime date) {
     final y = date.year.toString().padLeft(4, '0');
     final m = date.month.toString().padLeft(2, '0');
@@ -263,20 +253,36 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   }
 
   void _submit() {
-    if (_dob == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select date of birth')),
-      );
-      return;
-    }
     ref.read(astrologyControllerProvider.notifier).submit(
           name: _name.text,
           gender: _gender,
-          dateOfBirth: _formatDob(_dob!),
+          dateOfBirth: _formatDob(_dob),
           birthTime: _formatTime(_birthTime),
           birthPlace: _place.text,
           birthTimeUnknown: _timeUnknown,
         );
+  }
+
+  void _type(String value) {
+    final controller = _focus == 0 ? _name : _place;
+    appendToController(controller, value, maxLength: 64);
+    setState(() {});
+  }
+
+  void _backspace() {
+    backspaceController(_focus == 0 ? _name : _place);
+    setState(() {});
+  }
+
+  void _resetForm() {
+    _name.clear();
+    _place.clear();
+    setState(() {
+      _dob = DateTime(1995, 1, 1);
+      _timeUnknown = false;
+      _focus = 0;
+    });
+    ref.read(astrologyControllerProvider.notifier).retake();
   }
 
   @override
@@ -295,33 +301,40 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
       }
     });
 
+    Widget? leading;
+    Widget? trailing;
+    String step = 'Palm';
+    switch (state.phase) {
+      case AstrologyPhase.capture:
+        leading = KioskGhostButton(label: 'Cancel', onPressed: _endSession);
+        trailing = KioskPrimaryButton(
+          label: 'Capture palm',
+          onPressed: _cameraReady ? _captureNow : null,
+        );
+        step = 'Palm';
+      case AstrologyPhase.form:
+        leading = KioskGhostButton(
+          label: 'Retake palm',
+          onPressed: () => ref.read(astrologyControllerProvider.notifier).retake(),
+        );
+        trailing = KioskPrimaryButton(label: 'Get reading', onPressed: _submit);
+        step = 'Details';
+      case AstrologyPhase.submitting:
+        step = 'Reading';
+      case AstrologyPhase.result:
+        leading = KioskGhostButton(label: 'New reading', onPressed: _resetForm);
+        trailing = KioskPrimaryButton(label: 'Done', onPressed: _endSession);
+        step = 'Result';
+    }
+
     return VisitorSessionPopScope(
-      child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Astrology'),
-        actions: [
-          if (state.phase == AstrologyPhase.form)
-            TextButton(
-              onPressed: () => ref.read(astrologyControllerProvider.notifier).retake(),
-              child: const Text('Retake palm'),
-            ),
-          if (state.phase == AstrologyPhase.result)
-            TextButton(
-              onPressed: () {
-                _name.clear();
-                _place.clear();
-                setState(() {
-                  _dob = null;
-                  _timeUnknown = false;
-                });
-                ref.read(astrologyControllerProvider.notifier).retake();
-              },
-              child: const Text('New reading'),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: AnimatedSwitcher(
+      child: KioskShell(
+        title: 'Astrology',
+        onHome: _endSession,
+        stepLabel: step,
+        footerLeading: leading,
+        footerTrailing: trailing,
+        body: AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
           child: switch (state.phase) {
             AstrologyPhase.capture => _CaptureView(
@@ -331,7 +344,6 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 cameraError: _cameraError,
                 quality: state.quality,
                 onRetryCamera: _openCamera,
-                onCapture: _captureNow,
               ),
             AstrologyPhase.form => _FormView(
                 key: const ValueKey('form'),
@@ -343,21 +355,29 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 gender: _gender,
                 palmPreview: state.palmBytes,
                 error: state.error,
-                onPickDob: _pickDob,
-                onPickTime: _pickTime,
+                focus: _focus,
+                onFocus: (value) => setState(() => _focus = value),
+                onDob: (value) => setState(() => _dob = value),
+                onTime: (value) => setState(() => _birthTime = value),
                 onTimeUnknown: (value) => setState(() => _timeUnknown = value),
                 onGender: (value) => setState(() => _gender = value),
-                onSubmit: _submit,
+                onKey: _type,
+                onBackspace: _backspace,
               ),
-            AstrologyPhase.submitting => const _SubmittingView(key: ValueKey('submitting')),
+            AstrologyPhase.submitting => const KioskLoading(
+                key: ValueKey('submitting'),
+                message: 'Preparing your reading…',
+              ),
             AstrologyPhase.result when state.reading != null => _ResultView(
                 key: const ValueKey('result'),
                 reading: state.reading!,
               ),
-            AstrologyPhase.result => const _SubmittingView(key: ValueKey('result-empty')),
+            AstrologyPhase.result => const KioskLoading(
+                key: ValueKey('result-empty'),
+                message: 'Preparing your reading…',
+              ),
           },
         ),
-      ),
       ),
     );
   }
@@ -371,7 +391,6 @@ class _CaptureView extends StatelessWidget {
     required this.cameraError,
     required this.quality,
     required this.onRetryCamera,
-    required this.onCapture,
   });
 
   final CameraController? camera;
@@ -379,24 +398,23 @@ class _CaptureView extends StatelessWidget {
   final String? cameraError;
   final PalmQualityResult? quality;
   final VoidCallback onRetryCamera;
-  final VoidCallback onCapture;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+      padding: const EdgeInsets.fromLTRB(32, 12, 32, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             'Place your open palm inside the outline',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 12),
           Expanded(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
               child: ColoredBox(
                 color: Colors.black,
                 child: cameraError != null
@@ -424,11 +442,6 @@ class _CaptureView extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _QualityBanner(quality: quality),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: cameraReady ? onCapture : null,
-            child: const Text('Capture palm'),
-          ),
         ],
       ),
     );
@@ -451,7 +464,7 @@ class _CameraError extends StatelessWidget {
           children: [
             Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
             const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child: const Text('Retry camera')),
+            KioskPrimaryButton(label: 'Retry camera', onPressed: onRetry, expand: false),
           ],
         ),
       ),
@@ -467,18 +480,10 @@ class _QualityBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ok = quality?.ok == true;
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: ok ? scheme.primaryContainer : scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        quality?.message ?? 'Align your palm with the outline',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
+    return KioskStatusBanner(
+      message: quality?.message ?? 'Align your palm with the outline',
+      tone: ok ? KioskBannerTone.success : KioskBannerTone.info,
+      icon: ok ? Icons.check_circle_outline : Icons.back_hand_outlined,
     );
   }
 }
@@ -494,122 +499,191 @@ class _FormView extends StatelessWidget {
     required this.gender,
     required this.palmPreview,
     required this.error,
-    required this.onPickDob,
-    required this.onPickTime,
+    required this.focus,
+    required this.onFocus,
+    required this.onDob,
+    required this.onTime,
     required this.onTimeUnknown,
     required this.onGender,
-    required this.onSubmit,
+    required this.onKey,
+    required this.onBackspace,
   });
 
   final TextEditingController nameController;
   final TextEditingController placeController;
-  final DateTime? dob;
+  final DateTime dob;
   final TimeOfDay birthTime;
   final bool timeUnknown;
   final String gender;
   final Uint8List? palmPreview;
   final String? error;
-  final VoidCallback onPickDob;
-  final VoidCallback onPickTime;
+  final int focus;
+  final ValueChanged<int> onFocus;
+  final ValueChanged<DateTime> onDob;
+  final ValueChanged<TimeOfDay> onTime;
   final ValueChanged<bool> onTimeUnknown;
   final ValueChanged<String> onGender;
-  final VoidCallback onSubmit;
+  final ValueChanged<String> onKey;
+  final VoidCallback onBackspace;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            if (palmPreview != null)
-              Align(
-                alignment: Alignment.center,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.memory(palmPreview!, height: 140, fit: BoxFit.cover),
+    final showKeyboard = focus == 0 || focus == 1;
+    final showDate = focus == 2;
+    final showTime = focus == 3 && !timeUnknown;
+
+    return Column(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(32, 8, 32, 8),
+            child: Row(
+              children: [
+                if (palmPreview != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 20),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.memory(palmPreview!, width: 140, height: 180, fit: BoxFit.cover),
+                    ),
+                  ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      KioskTextTapField(
+                        label: 'Name',
+                        hint: 'Your name',
+                        value: nameController.text,
+                        focused: focus == 0,
+                        onTap: () => onFocus(0),
+                      ),
+                      const SizedBox(height: 10),
+                      KioskTextTapField(
+                        label: 'Place of birth',
+                        hint: 'City, State',
+                        value: placeController.text,
+                        focused: focus == 1,
+                        onTap: () => onFocus(1),
+                      ),
+                      const SizedBox(height: 14),
+                      Text('Gender', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          for (final option in const [
+                            ('female', 'Female'),
+                            ('male', 'Male'),
+                            ('other', 'Other'),
+                          ]) ...[
+                            Expanded(
+                              child: _ChoiceTile(
+                                label: option.$2,
+                                selected: gender == option.$1,
+                                onTap: () => onGender(option.$1),
+                              ),
+                            ),
+                            if (option.$1 != 'other') const SizedBox(width: 8),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      KioskTextTapField(
+                        label: 'Date of birth',
+                        value: dob.toIso8601String().split('T').first,
+                        focused: focus == 2,
+                        onTap: () => onFocus(2),
+                      ),
+                      const SizedBox(height: 10),
+                      _ChoiceTile(
+                        label: 'I do not know the birth time',
+                        selected: timeUnknown,
+                        onTap: () => onTimeUnknown(!timeUnknown),
+                      ),
+                      if (!timeUnknown) ...[
+                        const SizedBox(height: 10),
+                        KioskTextTapField(
+                          label: 'Birth time',
+                          value:
+                              '${birthTime.hour.toString().padLeft(2, '0')}:${birthTime.minute.toString().padLeft(2, '0')}',
+                          focused: focus == 3,
+                          onTap: () => onFocus(3),
+                        ),
+                      ],
+                      if (error != null) ...[
+                        const SizedBox(height: 12),
+                        KioskStatusBanner(
+                          message: error!,
+                          tone: KioskBannerTone.danger,
+                          icon: Icons.error_outline,
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Gender', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'female', label: Text('Female')),
-                ButtonSegment(value: 'male', label: Text('Male')),
-                ButtonSegment(value: 'other', label: Text('Other')),
               ],
-              selected: {gender},
-              onSelectionChanged: (value) => onGender(value.first),
             ),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Date of birth'),
-              subtitle: Text(dob == null ? 'Tap to select' : dob!.toIso8601String().split('T').first),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: onPickDob,
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('I do not know the birth time'),
-              value: timeUnknown,
-              onChanged: onTimeUnknown,
-            ),
-            if (!timeUnknown)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Birth time'),
-                subtitle: Text(birthTime.format(context)),
-                trailing: const Icon(Icons.schedule),
-                onTap: onPickTime,
-              ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: placeController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Place of birth',
-                hintText: 'City, State',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 12),
-              Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ],
-            const SizedBox(height: 24),
-            FilledButton(onPressed: onSubmit, child: const Text('Get reading')),
-          ],
+          ),
         ),
-      ),
+        if (showKeyboard)
+          SizedBox(
+            height: 220,
+            child: KioskKeyboard(onKey: onKey, onBackspace: onBackspace),
+          )
+        else if (showDate)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
+            child: SizedBox(
+              height: 200,
+              child: KioskDateStepper(value: dob, onChanged: onDob),
+            ),
+          )
+        else if (showTime)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
+            child: SizedBox(
+              height: 200,
+              child: KioskTimeStepper(value: birthTime, onChanged: onTime),
+            ),
+          ),
+      ],
     );
   }
 }
 
-class _SubmittingView extends StatelessWidget {
-  const _SubmittingView({super.key});
+class _ChoiceTile extends StatelessWidget {
+  const _ChoiceTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('Preparing your reading…'),
-        ],
+    return Material(
+      color: selected ? SkpColors.accent.withValues(alpha: 0.28) : SkpColors.raised,
+      borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        child: Container(
+          height: 64,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+            border: Border.all(color: selected ? SkpColors.accentBright : SkpColors.line),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: selected ? SkpColors.accentBright : SkpColors.text,
+                ),
+          ),
+        ),
       ),
     );
   }
@@ -630,11 +704,25 @@ class _ResultView extends StatelessWidget {
       if (reading.chart.currentDasha != null) 'Dasha ${reading.chart.currentDasha}',
     ];
 
+    final sections = <(String, String)>[
+      ('Overview', reading.sections.overview),
+      ('Palm', reading.palm.summary),
+      ('Life line', reading.palm.lifeLine),
+      ('Heart line', reading.palm.heartLine),
+      ('Head line', reading.palm.headLine),
+      ('Fate line', reading.palm.fateLine),
+      ('Personality', reading.sections.personality),
+      ('Career', reading.sections.career),
+      ('Health', reading.sections.health),
+      ('Relationships', reading.sections.relationships),
+      ('This period', reading.sections.period),
+    ].where((item) => item.$2.trim().isNotEmpty).toList();
+
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
+        constraints: const BoxConstraints(maxWidth: 860),
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(32, 12, 32, 16),
           children: [
             Text(
               reading.name.isEmpty ? 'Your reading' : '${reading.name}\'s reading',
@@ -652,22 +740,21 @@ class _ResultView extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   for (final bit in chartBits)
-                    Chip(label: Text(bit)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: SkpColors.raised,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: SkpColors.line),
+                      ),
+                      child: Text(bit, style: Theme.of(context).textTheme.titleSmall),
+                    ),
                 ],
               ),
             ],
             const SizedBox(height: 16),
-            _SectionCard(title: 'Overview', body: reading.sections.overview),
-            _SectionCard(title: 'Palm', body: reading.palm.summary),
-            _SectionCard(title: 'Life line', body: reading.palm.lifeLine),
-            _SectionCard(title: 'Heart line', body: reading.palm.heartLine),
-            _SectionCard(title: 'Head line', body: reading.palm.headLine),
-            _SectionCard(title: 'Fate line', body: reading.palm.fateLine),
-            _SectionCard(title: 'Personality', body: reading.sections.personality),
-            _SectionCard(title: 'Career', body: reading.sections.career),
-            _SectionCard(title: 'Health', body: reading.sections.health),
-            _SectionCard(title: 'Relationships', body: reading.sections.relationships),
-            _SectionCard(title: 'This period', body: reading.sections.period),
+            for (var i = 0; i < sections.length; i++)
+              _SectionCard(index: i + 1, title: sections[i].$1, body: sections[i].$2),
           ],
         ),
       ),
@@ -676,28 +763,49 @@ class _ResultView extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.body});
+  const _SectionCard({required this.index, required this.title, required this.body});
 
+  final int index;
   final String title;
   final String body;
 
   @override
   Widget build(BuildContext context) {
-    if (body.trim().isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(body),
-          ],
-        ),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: SkpColors.panel,
+        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+        border: Border.all(color: SkpColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: SkpColors.accent.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$index',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: SkpColors.accentBright,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(body, style: Theme.of(context).textTheme.bodyLarge),
+        ],
       ),
     );
   }

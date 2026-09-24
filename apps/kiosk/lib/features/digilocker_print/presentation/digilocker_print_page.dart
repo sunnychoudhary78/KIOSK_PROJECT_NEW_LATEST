@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_auth_webview.dart';
-import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_pdf_preview.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -39,17 +39,46 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
           );
     });
 
+    final previewing = state.phase == DigilockerPhase.previewing ||
+        state.phase == DigilockerPhase.printing;
+    final listing = state.phase == DigilockerPhase.ready ||
+        state.phase == DigilockerPhase.done;
+
+    Widget? leading;
+    Widget? trailing;
+    String? step;
+    if (previewing) {
+      leading = KioskGhostButton(
+        label: 'Back',
+        icon: Icons.arrow_back,
+        onPressed: state.phase == DigilockerPhase.printing
+            ? null
+            : controller.backToDocuments,
+      );
+      trailing = KioskPrimaryButton(
+        label: state.phase == DigilockerPhase.printing ? 'Printing…' : 'Print',
+        icon: Icons.print,
+        loading: state.phase == DigilockerPhase.printing,
+        onPressed: state.phase == DigilockerPhase.printing
+            ? null
+            : () => controller.confirmPrint(),
+      );
+      step = 'Preview';
+    } else if (listing) {
+      leading = KioskGhostButton(label: 'End session', onPressed: _endSessionAndGoHome);
+      step = 'Documents';
+    } else if (state.phase == DigilockerPhase.awaitingConsent) {
+      leading = KioskGhostButton(label: 'Cancel', onPressed: _endSessionAndGoHome);
+      step = 'Sign in';
+    }
+
     return VisitorSessionPopScope(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('DigiLocker Print'),
-          actions: [
-            TextButton(
-              onPressed: _endSessionAndGoHome,
-              child: const Text('End session'),
-            ),
-          ],
-        ),
+      child: KioskShell(
+        title: 'DigiLocker Print',
+        onHome: _endSessionAndGoHome,
+        stepLabel: step,
+        footerLeading: leading,
+        footerTrailing: trailing,
         body: switch (state.phase) {
           DigilockerPhase.awaitingConsent => _AuthBody(
               authorizationUrl: state.authorizationUrl,
@@ -62,70 +91,52 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
           DigilockerPhase.idle ||
           DigilockerPhase.loadingDocs ||
           DigilockerPhase.preparingPreview =>
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(
-                    state.phase == DigilockerPhase.preparingPreview
-                        ? 'Preparing document preview…'
-                        : (state.message ?? 'Loading…'),
-                  ),
-                ],
-              ),
+            KioskLoading(
+              message: state.phase == DigilockerPhase.preparingPreview
+                  ? 'Preparing document preview…'
+                  : (state.message ?? 'Loading…'),
             ),
           DigilockerPhase.previewing || DigilockerPhase.printing
               when state.previewBytes != null =>
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: DigilockerPdfPreviewPage(
-                title: state.previewTitle ?? 'Document',
-                pdfBytes: state.previewBytes!,
-                printing: state.phase == DigilockerPhase.printing,
-                error: state.error,
-                onBack: controller.backToDocuments,
-                onPrint: () => controller.confirmPrint(),
-                onDone: _endSessionAndGoHome,
-              ),
+            KioskPdfPreview(
+              title: state.previewTitle ?? 'Document',
+              pdfBytes: state.previewBytes!,
+              error: state.error,
             ),
           _ => Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (state.error != null)
-                    Text(
-                      state.error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    KioskStatusBanner(
+                      message: state.error!,
+                      tone: KioskBannerTone.danger,
+                      icon: Icons.error_outline,
                     ),
-                  if (state.message != null) Text(state.message!),
+                  if (state.message != null) ...[
+                    const SizedBox(height: 8),
+                    Text(state.message!, style: Theme.of(context).textTheme.bodyLarge),
+                  ],
                   const SizedBox(height: 12),
                   Expanded(
                     child: state.documents.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No DigiLocker documents were shared for this session.',
-                              textAlign: TextAlign.center,
-                            ),
+                        ? const KioskEmpty(
+                            message:
+                                'No DigiLocker documents were shared for this session.',
                           )
                         : ListView.separated(
                             itemCount: state.documents.length,
-                            separatorBuilder: (context, index) => const Divider(),
+                            separatorBuilder: (_, _) => const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final doc = state.documents[index];
-                              return ListTile(
-                                title: Text(doc.name),
-                                subtitle: Text(
-                                  doc.subtitle.isEmpty ? doc.issuer : doc.subtitle,
-                                ),
-                                trailing: FilledButton(
-                                  onPressed: state.loading
-                                      ? null
-                                      : () => controller.preparePreview(doc.id),
-                                  child: const Text('Preview'),
-                                ),
+                              return KioskDocCard(
+                                title: doc.name,
+                                subtitle: doc.subtitle.isEmpty ? doc.issuer : doc.subtitle,
+                                actionLabel: 'Preview',
+                                onAction: state.loading
+                                    ? null
+                                    : () => controller.preparePreview(doc.id),
                               );
                             },
                           ),
@@ -157,32 +168,32 @@ class _AuthBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (authorizationUrl == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const KioskLoading(message: 'Starting DigiLocker…');
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (error != null)
-          Material(
-            color: Theme.of(context).colorScheme.errorContainer,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
-              ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (error != null) ...[
+            KioskStatusBanner(
+              message: error!,
+              tone: KioskBannerTone.danger,
+              icon: Icons.error_outline,
+            ),
+            const SizedBox(height: 12),
+          ],
+          Expanded(
+            child: DigilockerAuthWebView(
+              authorizationUrl: authorizationUrl!,
+              onCallbackReached: onCallback,
+              onError: onWebViewError,
+              onActivity: onActivity,
             ),
           ),
-        Expanded(
-          child: DigilockerAuthWebView(
-            authorizationUrl: authorizationUrl!,
-            onCallbackReached: onCallback,
-            onError: onWebViewError,
-            onActivity: onActivity,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

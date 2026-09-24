@@ -181,6 +181,7 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 16),
+                _row(theme, 'Print color', quote.printColorLabel),
                 _row(theme, 'Total pages', '${quote.pageCount}'),
                 _row(theme, 'Free pages', '${quote.freePages}'),
                 _row(theme, 'Extra pages', '${quote.extraPages}'),

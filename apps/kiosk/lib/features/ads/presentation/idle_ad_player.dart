@@ -579,17 +579,89 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
               const Center(
                 child: CircularProgressIndicator(color: Colors.white),
               ),
-            Positioned(
-              left: 16,
-              bottom: 16,
-              child: Text(
-                'Tap anywhere to continue',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white70,
-                    ),
+            const Positioned(
+              left: 32,
+              top: 28,
+              child: IgnorePointer(
+                child: Text(
+                  'SMART KIOSK',
+                  style: TextStyle(
+                    color: Color(0x66F5F1E8),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 3.2,
+                  ),
+                ),
               ),
             ),
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 48,
+              child: IgnorePointer(child: _TouchToBeginPill()),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TouchToBeginPill extends StatefulWidget {
+  const _TouchToBeginPill();
+
+  @override
+  State<_TouchToBeginPill> createState() => _TouchToBeginPillState();
+}
+
+class _TouchToBeginPillState extends State<_TouchToBeginPill>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.72, end: 1).animate(
+        CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+      ),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8C872),
+            borderRadius: BorderRadius.circular(40),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x66000000),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Text(
+            'Touch to begin',
+            style: TextStyle(
+              color: Color(0xFF0B1419),
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+          ),
         ),
       ),
     );

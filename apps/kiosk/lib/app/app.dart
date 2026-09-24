@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/app/router.dart';
@@ -34,19 +35,33 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
     return MaterialApp(
       title: 'Smart Kiosk',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
+      theme: AppTheme.kiosk(),
       navigatorKey: kioskNavigatorKey,
       navigatorObservers: [_routeObserver],
       initialRoute: AppRoutes.home,
       onGenerateRoute: AppRouter.onGenerateRoute,
       builder: (context, child) {
-        return KioskActivityScope(
+        final media = MediaQuery.of(context);
+        final scaled = media.copyWith(
+          textScaler: media.textScaler.clamp(
+            minScaleFactor: 0.9,
+            maxScaleFactor: 1.15,
+          ),
+        );
+        final surface = KioskActivityScope(
           child: Stack(
             fit: StackFit.expand,
             children: [
               child ?? const SizedBox.shrink(),
               const SessionTimeoutOverlay(),
             ],
+          ),
+        );
+        return MediaQuery(
+          data: scaled,
+          child: MouseRegion(
+            cursor: kDebugMode ? MouseCursor.defer : SystemMouseCursors.none,
+            child: surface,
           ),
         );
       },

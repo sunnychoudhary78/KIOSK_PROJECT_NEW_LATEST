@@ -32,6 +32,7 @@ class OtpPrintRepository {
       printJobId: printJob['id'] as String,
       title: printJob['title'] as String,
       payloadUrl: printJob['payloadUrl'] as String?,
+      printColorMode: printJob['printColorMode'] == 'color' ? 'color' : 'bw',
       documents: docs,
     );
   }

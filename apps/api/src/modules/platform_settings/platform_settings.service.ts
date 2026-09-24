@@ -119,7 +119,10 @@ export class PlatformSettingsService {
 
   private validateValue(settingKey: string, raw: unknown): unknown {
     if (settingKey === OTP_PRINT_CONFIG_KEY) {
-      const parsed = otpPrintConfigSchema.safeParse(raw);
+      const parsed = otpPrintConfigSchema.safeParse({
+        ...DEFAULT_OTP_PRINT_CONFIG,
+        ...asObject(raw),
+      });
       if (!parsed.success) {
         throw new AppError(
           'validation_error',

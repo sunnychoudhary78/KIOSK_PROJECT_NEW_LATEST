@@ -44,6 +44,7 @@ void main() {
             challengeId: 'c1',
             printJobId: 'j1',
             title: 'Prior visitor',
+            printColorMode: 'bw',
             documents: [
               OtpDocumentRef(
                 id: 'd1',
@@ -57,7 +58,7 @@ void main() {
     await tester.pump();
     expect(find.text('secret.pdf'), findsOneWidget);
 
-    await tester.pageBack();
+    await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
 
     expect(find.byType(OtpPrintPage), findsNothing);

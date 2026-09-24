@@ -1,5 +1,6 @@
 class PrintQuote {
   const PrintQuote({
+    required this.printColorMode,
     required this.pageCount,
     required this.freePages,
     required this.extraPages,
@@ -9,6 +10,7 @@ class PrintQuote {
     required this.paymentRequired,
   });
 
+  final String printColorMode;
   final int pageCount;
   final int freePages;
   final int extraPages;
@@ -19,8 +21,11 @@ class PrintQuote {
 
   double get amountRupees => amountPaise / 100;
 
+  String get printColorLabel => printColorMode == 'color' ? 'Color' : 'Black & white';
+
   factory PrintQuote.fromJson(Map<String, dynamic> json) {
     return PrintQuote(
+      printColorMode: _asPrintColorMode(json['printColorMode']),
       pageCount: _asInt(json['pageCount']),
       freePages: _asInt(json['freePages']),
       extraPages: _asInt(json['extraPages']),
@@ -64,6 +69,7 @@ class OtpChallenge {
     required this.expiresAt,
     required this.documentLabel,
     required this.pageCount,
+    required this.printColorMode,
     required this.documents,
     this.quote,
   });
@@ -75,8 +81,11 @@ class OtpChallenge {
   final String expiresAt;
   final String documentLabel;
   final int pageCount;
+  final String printColorMode;
   final List<OtpDocumentInfo> documents;
   final PrintQuote? quote;
+
+  String get printColorLabel => printColorMode == 'color' ? 'Color' : 'Black & white';
 
   factory OtpChallenge.fromJson(Map<String, dynamic> json) {
     final docs = (json['documents'] as List<dynamic>? ?? [])
@@ -91,6 +100,7 @@ class OtpChallenge {
       expiresAt: json['expiresAt'] as String,
       documentLabel: json['documentLabel'] as String? ?? '',
       pageCount: _asInt(json['pageCount'], 1),
+      printColorMode: _asPrintColorMode(json['printColorMode']),
       documents: docs,
       quote: quoteRaw is Map<String, dynamic> ? PrintQuote.fromJson(quoteRaw) : null,
     );
@@ -132,3 +142,5 @@ int _asInt(dynamic value, [int fallback = 0]) {
   if (value is num) return value.toInt();
   return fallback;
 }
+
+String _asPrintColorMode(dynamic value) => value == 'color' ? 'color' : 'bw';

@@ -10,7 +10,7 @@ import { requireParam } from '../../shared/params.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { OtpPrintService } from './otp_print.service.js';
-import { redeemOtpSchema, type UploadedPdf } from './otp_print.schemas.js';
+import { parsePrintColorMode, redeemOtpSchema, type UploadedPdf } from './otp_print.schemas.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -47,11 +47,13 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
         }));
         const documentLabel =
           typeof req.body?.documentLabel === 'string' ? req.body.documentLabel : undefined;
+        const printColorMode = parsePrintColorMode(req.body?.printColorMode);
         const result = await service.createChallenge(
           req.principal.id,
           uploaded,
           documentLabel,
           req.correlationId,
+          printColorMode,
         );
         res.status(201).json(result);
       } catch (error) {

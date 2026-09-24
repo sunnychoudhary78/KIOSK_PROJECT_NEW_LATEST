@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/theme/skp_tokens.dart';
+import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/ads/presentation/home_banner_strip.dart';
 import 'package:skp_kiosk/features/ads/presentation/idle_ad_player.dart';
@@ -50,55 +52,40 @@ class _HomePageState extends ConsumerState<HomePage> {
       });
     }
 
-    final body = Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: auth.stopped
-              ? const _StoppedNotice()
-              : auth.provisioned && !auth.isAuthenticated
-                  ? _ReconnectNotice(error: auth.error)
-                  : auth.bootstrapping || auth.loading
-                      ? const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('Activating device…'),
-                          ],
-                        )
-                      : auth.isAuthenticated
-                          ? _ServiceCatalog(auth: auth)
-                          : _ActivationForm(
-                              keyController: _deviceKeyController,
-                              secretController: _deviceSecretController,
-                              auth: auth,
-                              onActivate: () =>
-                                  ref.read(deviceAuthProvider.notifier).authenticate(
-                                        deviceKey: _deviceKeyController.text,
-                                        deviceSecret: _deviceSecretController.text,
-                                      ),
-                            ),
-        ),
-      ),
-    );
+    final Widget body;
+    if (auth.stopped) {
+      body = const _StoppedNotice();
+    } else if (auth.provisioned && !auth.isAuthenticated) {
+      body = _ReconnectNotice(error: auth.error);
+    } else if (auth.bootstrapping || auth.loading) {
+      body = const KioskLoading(message: 'Activating device…');
+    } else if (auth.isAuthenticated) {
+      body = _ServiceCatalog(auth: auth);
+    } else {
+      body = _ActivationForm(
+        keyController: _deviceKeyController,
+        secretController: _deviceSecretController,
+        auth: auth,
+        onActivate: () => ref.read(deviceAuthProvider.notifier).authenticate(
+              deviceKey: _deviceKeyController.text,
+              deviceSecret: _deviceSecretController.text,
+            ),
+      );
+    }
 
-    return Scaffold(
-      body: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) {
-          if (auth.isAuthenticated && !ads.idleVisible) {
-            ref.read(adsControllerProvider.notifier).resetIdleTimer();
-          }
-        },
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            body,
-            if (auth.isAuthenticated && ads.idleVisible) const IdleAdPlayer(),
-          ],
-        ),
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) {
+        if (auth.isAuthenticated && !ads.idleVisible) {
+          ref.read(adsControllerProvider.notifier).resetIdleTimer();
+        }
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          body,
+          if (auth.isAuthenticated && ads.idleVisible) const IdleAdPlayer(),
+        ],
       ),
     );
   }
@@ -119,60 +106,80 @@ class _ActivationForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Smart Kiosk',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineLarge,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Activate this terminal',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Paste the Device key and Device secret from Admin → Kiosks after registering this device.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 24),
-        TextField(
-          controller: keyController,
-          decoration: const InputDecoration(
-            labelText: 'Device key',
-            hintText: 'dk_…',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: secretController,
-          obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Device secret',
-            hintText: 'ds_…',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        FilledButton(
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      child: KioskShell(
+        showHome: false,
+        footerTrailing: KioskPrimaryButton(
+          label: auth.loading ? 'Activating…' : 'Activate device',
+          loading: auth.loading,
           onPressed: auth.loading ? null : onActivate,
-          child: Text(auth.loading ? 'Activating…' : 'Activate device'),
         ),
-        if (auth.error != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            auth.error!,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+        body: Material(
+          color: Colors.transparent,
+          child: Center(
+          child: SingleChildScrollView(
+            padding: SkpTokens.pagePadding,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: Column(
+                children: [
+                  Text(
+                    'Activate this terminal',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Paste the Device key and Device secret from Admin → Kiosks after registering this device.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: SkpColors.muted,
+                        ),
+                  ),
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: keyController,
+                    enabled: !auth.loading,
+                    enableInteractiveSelection: true,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Device key',
+                      hintText: 'dk_…',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: secretController,
+                    enabled: !auth.loading,
+                    obscureText: true,
+                    enableInteractiveSelection: true,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) {
+                      if (!auth.loading) {
+                        onActivate();
+                      }
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Device secret',
+                      hintText: 'ds_…',
+                    ),
+                  ),
+                  if (auth.error != null) ...[
+                    const SizedBox(height: 16),
+                    KioskStatusBanner(
+                      message: auth.error!,
+                      tone: KioskBannerTone.danger,
+                      icon: Icons.error_outline,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-        ],
-      ],
+        ),
+        ),
+      ),
     );
   }
 }
@@ -184,43 +191,84 @@ class _ServiceCatalog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Smart Kiosk',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineLarge,
+    return KioskShell(
+      showHome: false,
+      subtitle: auth.deviceName,
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 8, 32, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const HomeBannerStrip(),
+            const SizedBox(height: 8),
+            Text(
+              'Select a service',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Touch a tile to begin. Your session ends automatically when you leave.',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const gap = 16.0;
+                  final tileW = (constraints.maxWidth - gap) / 2;
+                  final tileH = (constraints.maxHeight - gap) / 2;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      SizedBox(
+                        width: tileW,
+                        height: tileH,
+                        child: KioskServiceTile(
+                          icon: Icons.print_outlined,
+                          title: 'OTP Print',
+                          subtitle: 'Print documents using the code from the mobile app',
+                          onTap: () => Navigator.of(context).pushNamed(AppRoutes.otpPrint),
+                        ),
+                      ),
+                      SizedBox(
+                        width: tileW,
+                        height: tileH,
+                        child: KioskServiceTile(
+                          icon: Icons.account_balance_outlined,
+                          title: 'DigiLocker Print',
+                          subtitle: 'Sign in and print government documents',
+                          onTap: () => Navigator.of(context).pushNamed(AppRoutes.digilockerPrint),
+                        ),
+                      ),
+                      SizedBox(
+                        width: tileW,
+                        height: tileH,
+                        child: KioskServiceTile(
+                          icon: Icons.favorite_outline,
+                          title: 'Well Being',
+                          subtitle: 'Heart rate, blood oxygen, and temperature',
+                          onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
+                        ),
+                      ),
+                      SizedBox(
+                        width: tileW,
+                        height: tileH,
+                        child: KioskServiceTile(
+                          icon: Icons.back_hand_outlined,
+                          title: 'Astrology',
+                          subtitle: 'Palm reading and birth chart',
+                          onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          auth.deviceName == null ? 'Select a service' : auth.deviceName!,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const HomeBannerStrip(),
-        const SizedBox(height: 16),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pushNamed(AppRoutes.otpPrint),
-          child: const Text('OTP Print'),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.tonal(
-          onPressed: () => Navigator.of(context).pushNamed(AppRoutes.digilockerPrint),
-          child: const Text('DigiLocker Print'),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.tonal(
-          onPressed: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
-          child: const Text('Well Being'),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.tonal(
-          onPressed: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
-          child: const Text('Astrology'),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -230,28 +278,37 @@ class _StoppedNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Smart Kiosk',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineLarge,
+    return KioskShell(
+      showHome: false,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Padding(
+            padding: SkpTokens.pagePadding,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.pause_circle_outline, size: 72, color: SkpColors.gold),
+                const SizedBox(height: 20),
+                Text(
+                  'This kiosk has been stopped',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'An operator turned this terminal off from the admin panel. '
+                  'It will come back automatically when they start it again.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: SkpColors.muted,
+                      ),
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          'This kiosk has been stopped',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'An operator turned this terminal off from the admin panel. '
-          'It will come back automatically when they start it again.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-      ],
+      ),
     );
   }
 }
@@ -263,25 +320,40 @@ class _ReconnectNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const CircularProgressIndicator(),
-        const SizedBox(height: 16),
-        Text(
-          'Reconnecting to server…',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        if (error != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            error!,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+    return KioskShell(
+      showHome: false,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Padding(
+            padding: SkpTokens.pagePadding,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: CircularProgressIndicator(strokeWidth: 4),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Reconnecting to server…',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 16),
+                  KioskStatusBanner(
+                    message: error!,
+                    tone: KioskBannerTone.warning,
+                    icon: Icons.wifi_off,
+                  ),
+                ],
+              ],
+            ),
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }

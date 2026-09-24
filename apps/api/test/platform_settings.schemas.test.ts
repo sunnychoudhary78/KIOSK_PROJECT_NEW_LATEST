@@ -15,6 +15,8 @@ describe('platform settings schemas', () => {
     expect(parsed.ttlSeconds).toBe(1800);
     expect(parsed.freePagesPerSession).toBe(5);
     expect(parsed.extraPageChargeRupees).toBe(10);
+    expect(parsed.freeColorPagesPerSession).toBe(0);
+    expect(parsed.extraColorPageChargeRupees).toBe(20);
   });
 
   it('fills new pricing fields when merging an older stored row', () => {
@@ -29,12 +31,23 @@ describe('platform settings schemas', () => {
     });
     expect(parsed.freePagesPerSession).toBe(5);
     expect(parsed.extraPageChargeRupees).toBe(10);
+    expect(parsed.freeColorPagesPerSession).toBe(0);
+    expect(parsed.extraColorPageChargeRupees).toBe(20);
   });
 
   it('rejects free pages above the hard session cap', () => {
     const result = otpPrintConfigSchema.safeParse({
       ...DEFAULT_OTP_PRINT_CONFIG,
       freePagesPerSession: 20,
+      maxPagesPerSession: 10,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects color free pages above the hard session cap', () => {
+    const result = otpPrintConfigSchema.safeParse({
+      ...DEFAULT_OTP_PRINT_CONFIG,
+      freeColorPagesPerSession: 20,
       maxPagesPerSession: 10,
     });
     expect(result.success).toBe(false);
