@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { PageHeader, Panel } from '../../core/ui/primitives';
+import { EmptyState, PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
 
 type PlatformService = {
   code: string;
@@ -31,14 +31,24 @@ export function ServicesPage() {
       <PageHeader title="Services" subtitle="Platform service catalog" />
       <Panel>
         {error ? <p className="error">{error}</p> : null}
-        <ul className="list">
-          {items.map((service) => (
-            <li key={service.code}>
-              <strong>{service.name}</strong> <code>{service.code}</code>
-              <div>{service.description}</div>
-            </li>
-          ))}
-        </ul>
+        {items.length === 0 && !error ? (
+          <EmptyState title="No services" description="The service catalog is empty." />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {items.map((service) => (
+              <div key={service.code} className="rounded-xl border border-border p-4">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <p className="font-semibold">{service.name}</p>
+                  <StatusBadge status={service.enabled ? 'active' : 'inactive'} />
+                </div>
+                <p className="mb-2 font-mono text-xs text-muted-foreground">{service.code}</p>
+                {service.description ? (
+                  <p className="text-sm text-muted-foreground">{service.description}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </Panel>
     </div>
   );

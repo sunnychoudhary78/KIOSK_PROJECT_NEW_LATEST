@@ -56,6 +56,41 @@ void main() {
       expect(result.ok, isTrue);
     });
 
+    test('parses firmware complete oxi result', () {
+      final result = parser.parseLine(
+        '{"status":"complete","bpm":75.5,"spo2":98.0,"object_f":null,"ambient_f":null}',
+      );
+      expect(result!.kind, VitalsMessageKind.result);
+      expect(result.finalHeartRate, 75.5);
+      expect(result.finalSpO2, 98.0);
+      expect(result.temperatureC, isNull);
+      expect(result.ok, isTrue);
+    });
+
+    test('parses firmware complete temp result', () {
+      final result = parser.parseLine(
+        '{"status":"complete","bpm":null,"spo2":null,"object_f":98.6,"ambient_f":75.20}',
+      );
+      expect(result!.kind, VitalsMessageKind.result);
+      expect(result.heartRate, isNull);
+      expect(result.spo2, isNull);
+      expect(result.temperatureF, closeTo(98.6, 0.01));
+      expect(result.temperatureC, closeTo(37.0, 0.05));
+      expect(result.ambientTempF, closeTo(75.2, 0.01));
+      expect(result.ok, isTrue);
+    });
+
+    test('parses complete with all-null vitals as unsuccessful result', () {
+      final result = parser.parseLine(
+        '{"status":"complete","bpm":null,"spo2":null,"object_f":null,"ambient_f":null}',
+      );
+      expect(result!.kind, VitalsMessageKind.result);
+      expect(result.heartRate, isNull);
+      expect(result.spo2, isNull);
+      expect(result.temperatureC, isNull);
+      expect(result.ok, isFalse);
+    });
+
     test('parses temp result and converts F to C', () {
       final result = parser.parseLine(
         '{"bpm":null,"spo2":null,"object_f":98.6,"ambient_f":75.20}',

@@ -1,6 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { apiRequest } from '../api/client';
-import { clearAccessToken, getAccessToken, setAccessToken } from './session';
+import {
+  clearAccessToken,
+  clearAdminEmail,
+  getAccessToken,
+  getAdminEmail,
+  setAccessToken,
+  setAdminEmail,
+} from './session';
 import { AuthContext } from './auth-context';
 
 type TokenResponse = {
@@ -9,24 +16,30 @@ type TokenResponse = {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => getAccessToken());
+  const [email, setEmail] = useState<string | null>(() => getAdminEmail());
 
   const value = useMemo(
     () => ({
       token,
-      async login(email: string, password: string) {
+      email,
+      async login(nextEmail: string, password: string) {
         const result = await apiRequest<TokenResponse>('/auth/admin/login', {
           method: 'POST',
-          body: { email, password },
+          body: { email: nextEmail, password },
         });
         setAccessToken(result.accessToken);
+        setAdminEmail(nextEmail);
         setToken(result.accessToken);
+        setEmail(nextEmail);
       },
       logout() {
         clearAccessToken();
+        clearAdminEmail();
         setToken(null);
+        setEmail(null);
       },
     }),
-    [token],
+    [token, email],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

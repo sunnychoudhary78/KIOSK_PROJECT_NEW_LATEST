@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, Input, PageHeader, Panel, Select } from '../../core/ui/primitives';
+import { Button, EmptyState, Input, PageHeader, Panel, Select } from '../../core/ui/primitives';
 
 type Device = {
   id: string;
@@ -102,7 +102,7 @@ export function RecordingsPage() {
       />
 
       <Panel>
-        <div className="stack" style={{ marginBottom: '1rem' }}>
+        <div className="mb-4 grid gap-4 sm:grid-cols-2">
           <label>
             Kiosk
             <Select
@@ -128,49 +128,51 @@ export function RecordingsPage() {
           </label>
         </div>
 
-        {error ? <p className="error">{error}</p> : null}
-        {loading ? <p>Loading…</p> : null}
+        {error ? <p className="error mb-3">{error}</p> : null}
+        {loading ? <p className="muted mb-3">Loading…</p> : null}
 
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Started</th>
-              <th>Filename</th>
-              <th>Size</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && items.length === 0 ? (
+        {!loading && items.length === 0 ? (
+          <EmptyState
+            title="No uploaded clips"
+            description="No recordings for this kiosk and UTC day."
+          />
+        ) : (
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={4}>No uploaded clips for this kiosk and day.</td>
+                <th>Started</th>
+                <th>Filename</th>
+                <th>Size</th>
+                <th />
               </tr>
-            ) : null}
-            {items.map((segment) => (
-              <tr key={segment.id}>
-                <td>{new Date(segment.startedAt).toLocaleString()}</td>
-                <td>{segment.filename}</td>
-                <td>{formatBytes(segment.byteSize)}</td>
-                <td>
-                  <Button type="button" onClick={() => void onPlay(segment)}>
-                    {playingId === segment.id ? 'Playing' : 'Play'}
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((segment) => (
+                <tr key={segment.id}>
+                  <td>{new Date(segment.startedAt).toLocaleString()}</td>
+                  <td>{segment.filename}</td>
+                  <td>{formatBytes(segment.byteSize)}</td>
+                  <td>
+                    <Button type="button" onClick={() => void onPlay(segment)}>
+                      {playingId === segment.id ? 'Playing' : 'Play'}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
 
         {playbackUrl ? (
-          <div className="stack" style={{ marginTop: '1.25rem' }}>
-            <p>
+          <div className="mt-5 space-y-3">
+            <p className="text-sm text-muted-foreground">
               Playing {playingLabel ?? 'clip'} (signed URL expires after a few minutes)
             </p>
             <video
               key={playbackUrl}
               controls
               src={playbackUrl}
-              style={{ width: '100%', maxHeight: '480px', background: '#111' }}
+              className="max-h-[480px] w-full rounded-lg bg-black"
             />
             <p>
               <a href={playbackUrl} download target="_blank" rel="noreferrer">

@@ -120,7 +120,9 @@ export function CampaignDetailPage() {
           Schedule: {formatDate(campaign.startsAt)} → {formatDate(campaign.endsAt)}
         </p>
         <p>
-          <Link to="/campaigns">← Back to campaigns</Link>
+          <Link to="/campaigns" className="text-sm font-medium text-primary hover:underline">
+            Back to campaigns
+          </Link>
         </p>
       </Panel>
 

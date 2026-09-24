@@ -30,6 +30,7 @@ export class AuditService {
 
   async list(limit = 50) {
     const items = await this.db.auditLog.findMany({
+      where: { action: { not: 'device.heartbeat' } },
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 200),
     });

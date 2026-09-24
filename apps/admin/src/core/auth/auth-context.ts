@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 
 export type AuthContextValue = {
   token: string | null;
+  email: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 };

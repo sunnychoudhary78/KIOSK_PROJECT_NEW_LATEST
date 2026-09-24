@@ -167,6 +167,7 @@ describe('DevicesService.heartbeat', () => {
       where: { id: deviceId },
       data: { lastHeartbeatAt: expect.any(Date) },
     });
+    expect(audit.record).not.toHaveBeenCalled();
   });
 
   it('returns the surveillance flag', async () => {

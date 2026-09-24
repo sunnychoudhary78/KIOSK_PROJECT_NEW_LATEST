@@ -120,7 +120,6 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
         const result = await service.heartbeat(
           requireParam(req.params.deviceId, 'deviceId'),
           req.principal.deviceId,
-          req.correlationId,
         );
         res.json(result);
       } catch (error) {

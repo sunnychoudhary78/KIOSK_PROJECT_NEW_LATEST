@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, Input, PageHeader, Panel } from '../../core/ui/primitives';
+import { Button, EmptyState, Input, PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
 
 type Device = {
   id: string;
@@ -175,8 +175,8 @@ export function KiosksPage() {
         subtitle="Register a Windows terminal, then paste the credentials into the kiosk Activate screen"
       />
 
-      <Panel>
-        <form className="stack" onSubmit={(e) => void onRegister(e)}>
+      <Panel title="Register a kiosk">
+        <form className="grid gap-4 md:grid-cols-2" onSubmit={(e) => void onRegister(e)}>
           <label>
             Device name
             <Input
@@ -215,7 +215,7 @@ export function KiosksPage() {
               required
             />
           </label>
-          <label>
+          <label className="md:col-span-2">
             Address (optional)
             <Input
               value={address}
@@ -223,11 +223,13 @@ export function KiosksPage() {
               placeholder="City Mall, Gate 2"
             />
           </label>
-          <Button type="submit" disabled={submitting}>
-            {submitting ? 'Registering…' : 'Register device'}
-          </Button>
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Registering…' : 'Register device'}
+            </Button>
+          </div>
         </form>
-        {error ? <p className="error">{error}</p> : null}
+        {error ? <p className="error mt-3">{error}</p> : null}
       </Panel>
 
       {credentials ? (
@@ -269,7 +271,13 @@ export function KiosksPage() {
         </Panel>
       ) : null}
 
-      <Panel>
+      <Panel title="Registered kiosks">
+        {items.length === 0 ? (
+          <EmptyState
+            title="No devices registered yet"
+            description="Register a Windows terminal above, then paste the credentials into the kiosk Activate screen."
+          />
+        ) : (
         <table className="table">
           <thead>
             <tr>
@@ -284,27 +292,27 @@ export function KiosksPage() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={8}>No devices registered yet.</td>
-              </tr>
-            ) : (
-              items.map((device) => (
+            {items.map((device) => (
                 <tr key={device.id}>
-                  <td>{device.name}</td>
+                  <td className="font-medium">{device.name}</td>
                   <td>{device.siteName}</td>
                   <td>{formatLocation(device)}</td>
-                  <td>{device.status}</td>
+                  <td>
+                    <StatusBadge status={device.status} />
+                  </td>
                   <td>
                     <code>{device.deviceKey}</code>
                   </td>
-                  <td>
+                  <td className="text-muted-foreground">
                     {device.lastHeartbeatAt
                       ? new Date(device.lastHeartbeatAt).toLocaleString()
                       : '—'}
                   </td>
-                  <td>{device.surveillanceEnabled ? 'On' : 'Off'}</td>
                   <td>
+                    <StatusBadge status={device.surveillanceEnabled ? 'on' : 'off'} />
+                  </td>
+                  <td>
+                    <div className="row-actions">
                     {device.status === 'inactive' ? (
                       <Button
                         type="button"
@@ -323,7 +331,7 @@ export function KiosksPage() {
                       >
                         Stop
                       </Button>
-                    )}{' '}
+                    )}
                     {device.surveillanceEnabled ? (
                       <Button
                         type="button"
@@ -343,12 +351,13 @@ export function KiosksPage() {
                         Start surveillance
                       </Button>
                     )}
+                    </div>
                   </td>
                 </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
+        )}
       </Panel>
     </div>
   );

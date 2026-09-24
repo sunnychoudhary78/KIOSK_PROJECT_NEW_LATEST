@@ -73,7 +73,7 @@ export function CampaignsPage() {
         subtitle="Create, target, and run ad campaigns across kiosks"
       />
 
-      {error ? <p className="error">{error}</p> : null}
+      {error ? <p className="error mb-4">{error}</p> : null}
 
       <Panel>
         <Toolbar

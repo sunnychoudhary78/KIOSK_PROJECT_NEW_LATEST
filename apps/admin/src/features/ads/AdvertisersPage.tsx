@@ -101,7 +101,7 @@ export function AdvertisersPage() {
         subtitle="Clients and brands that run kiosk ad campaigns"
       />
 
-      {error ? <p className="error">{error}</p> : null}
+      {error ? <p className="error mb-4">{error}</p> : null}
 
       <Panel>
         <Toolbar

@@ -250,7 +250,7 @@ class _ChooseView extends StatelessWidget {
                 child: _ModeOptionCard(
                   icon: Icons.thermostat_outlined,
                   title: 'Temperature',
-                  subtitle: 'Non-contact reading — hold near the sensor (~60s)',
+                  subtitle: 'Non-contact reading — hold near the sensor (~30s)',
                   enabled: connected,
                   onTap: onTemperature,
                 ),

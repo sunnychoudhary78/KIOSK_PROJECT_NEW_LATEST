@@ -12,8 +12,8 @@ import 'dart:convert';
 /// `{"status":"recording","sensor":"max30102","elapsed":3,"remaining":17}`
 /// `{"status":"aborted","reason":"finger_removed"}`
 ///
-/// Final result (no status key):
-/// `{"bpm":75.0,"spo2":98.0,"object_f":97.5,"ambient_f":75.2}`
+/// Final result (`status` is `complete` on current firmware; omitted on older builds):
+/// `{"status":"complete","bpm":75.0,"spo2":98.0,"object_f":97.5,"ambient_f":75.2}`
 /// (any field may be null when that sensor was not in the session)
 class VitalsLineParser {
   VitalsLineParser();
@@ -28,7 +28,7 @@ class VitalsLineParser {
   static const double maxCaptureTempC = 43;
 
   static const int maxCollectionSeconds = 20;
-  static const int tempCollectionSeconds = 60;
+  static const int tempCollectionSeconds = 30;
 
   /// Feed a raw UTF-8 chunk; returns one result per complete line.
   List<VitalsParseResult> addChunk(String chunk) {
@@ -103,6 +103,9 @@ class VitalsLineParser {
     }
 
     final status = json['status']?.toString();
+    if (status == 'complete') {
+      return _parseResult(json, normalized);
+    }
     if (status != null && status.isNotEmpty) {
       return _parseStatus(status, json, normalized);
     }
@@ -112,7 +115,7 @@ class VitalsLineParser {
       return null;
     }
 
-    // Final vitals result: has bpm/spo2/object_f/ambient_f and no status.
+    // Legacy final result: bpm/spo2/object_f/ambient_f and no status.
     if (json.containsKey('bpm') ||
         json.containsKey('spo2') ||
         json.containsKey('object_f') ||

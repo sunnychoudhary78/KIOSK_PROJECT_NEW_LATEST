@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Clapperboard, Megaphone, PlayCircle } from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { PageHeader, Panel } from '../../core/ui/primitives';
+import { PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
 
 type Campaign = {
   id: string;
@@ -33,42 +34,70 @@ export function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Platform overview" />
-      <Panel>
-        <p>Monitor kiosks, print jobs, DigiLocker sessions, and ad campaigns from the sidebar.</p>
-      </Panel>
-      <Panel>
-        <h2>Ads overview</h2>
-        {error ? <p className="error">{error}</p> : null}
-        <ul>
-          <li>Active campaigns: {active.length}</li>
-          <li>Total campaigns: {campaigns.length}</li>
-          <li>Playback events recorded: {totalEvents}</li>
-        </ul>
-        <p>
-          Manage creatives and targeting in <Link to="/campaigns">Campaigns</Link> ·{' '}
-          <Link to="/advertisers">Advertisers</Link>
-        </p>
-        {active.length > 0 ? (
+      <PageHeader title="Dashboard" subtitle="Live snapshot of ads and campaign delivery" />
+
+      {error ? <p className="error">{error}</p> : null}
+
+      <div className="mb-5 grid gap-4 sm:grid-cols-3">
+        <div className="stat-card">
+          <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <Clapperboard className="h-4 w-4" />
+          </div>
+          <strong>{active.length}</strong>
+          <span>Active campaigns</span>
+        </div>
+        <div className="stat-card">
+          <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <Megaphone className="h-4 w-4" />
+          </div>
+          <strong>{campaigns.length}</strong>
+          <span>Total campaigns</span>
+        </div>
+        <div className="stat-card">
+          <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <PlayCircle className="h-4 w-4" />
+          </div>
+          <strong>{totalEvents}</strong>
+          <span>Playback events</span>
+        </div>
+      </div>
+
+      <Panel
+        title="Active campaigns"
+        actions={
+          <Link to="/campaigns" className="text-sm font-medium text-primary hover:underline">
+            View all
+          </Link>
+        }
+      >
+        {active.length === 0 ? (
+          <p className="muted">No campaigns are live. Start one from Campaigns when creatives and targets are ready.</p>
+        ) : (
           <table className="table">
             <thead>
               <tr>
-                <th>Active campaign</th>
+                <th>Campaign</th>
                 <th>Advertiser</th>
+                <th>Status</th>
                 <th>Events</th>
               </tr>
             </thead>
             <tbody>
               {active.map((c) => (
                 <tr key={c.id}>
-                  <td>{c.name}</td>
+                  <td className="font-medium">
+                    <Link to={`/campaigns/${c.id}`}>{c.name}</Link>
+                  </td>
                   <td>{c.advertiserName ?? '—'}</td>
+                  <td>
+                    <StatusBadge status={c.status} />
+                  </td>
                   <td>{c.eventCount ?? 0}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        ) : null}
+        )}
       </Panel>
     </div>
   );

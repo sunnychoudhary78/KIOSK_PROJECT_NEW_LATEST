@@ -220,7 +220,7 @@ export class DevicesService {
     return mapDevice(updated);
   }
 
-  async heartbeat(deviceId: string, principalDeviceId: string, correlationId?: string) {
+  async heartbeat(deviceId: string, principalDeviceId: string) {
     if (deviceId !== principalDeviceId) {
       throw new AppError('forbidden', 'Device can only heartbeat itself', 403);
     }
@@ -241,15 +241,6 @@ export class DevicesService {
           ? { status: DeviceStatus.active }
           : {}),
       },
-    });
-
-    await this.audit.record({
-      action: 'device.heartbeat',
-      principalType: 'device',
-      principalId: deviceId,
-      resourceType: 'device',
-      resourceId: deviceId,
-      correlationId,
     });
 
     return { surveillanceEnabled: device.surveillanceEnabled };

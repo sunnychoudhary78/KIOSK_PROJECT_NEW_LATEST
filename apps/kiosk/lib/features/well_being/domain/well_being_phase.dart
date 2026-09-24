@@ -15,7 +15,7 @@ enum WellBeingPhase {
   /// Oximeter: finals available from result line.
   oxiComplete,
 
-  /// Temperature: firmware collecting (~60s).
+  /// Temperature: firmware collecting (~30s).
   tempMeasuring,
 
   /// Temperature: finals available from result line.
