@@ -60,6 +60,20 @@ class OtpDocumentInfo {
   }
 }
 
+class PrintJobSummary {
+  const PrintJobSummary({required this.id, required this.status});
+
+  final String id;
+  final String status;
+
+  factory PrintJobSummary.fromJson(Map<String, dynamic> json) {
+    return PrintJobSummary(
+      id: json['id'] as String,
+      status: json['status'] as String? ?? 'created',
+    );
+  }
+}
+
 class OtpChallenge {
   const OtpChallenge({
     required this.id,
@@ -72,6 +86,8 @@ class OtpChallenge {
     required this.printColorMode,
     required this.documents,
     this.quote,
+    this.createdAt,
+    this.printJob,
   });
 
   final String id;
@@ -84,14 +100,29 @@ class OtpChallenge {
   final String printColorMode;
   final List<OtpDocumentInfo> documents;
   final PrintQuote? quote;
+  final String? createdAt;
+  final PrintJobSummary? printJob;
 
   String get printColorLabel => printColorMode == 'color' ? 'Color' : 'Black & white';
+
+  String get displayLabel => documentLabel.isEmpty ? '' : documentLabel;
+
+  bool get isExpired {
+    final expires = DateTime.tryParse(expiresAt);
+    return expires != null && expires.isBefore(DateTime.now());
+  }
+
+  bool get isActive {
+    if (status != 'pending' && status != 'awaiting_payment') return false;
+    return !isExpired;
+  }
 
   factory OtpChallenge.fromJson(Map<String, dynamic> json) {
     final docs = (json['documents'] as List<dynamic>? ?? [])
         .map((raw) => OtpDocumentInfo.fromJson(raw as Map<String, dynamic>))
         .toList();
     final quoteRaw = json['quote'];
+    final jobRaw = json['printJob'];
     return OtpChallenge(
       id: json['id'] as String,
       status: json['status'] as String? ?? 'pending',
@@ -103,6 +134,8 @@ class OtpChallenge {
       printColorMode: _asPrintColorMode(json['printColorMode']),
       documents: docs,
       quote: quoteRaw is Map<String, dynamic> ? PrintQuote.fromJson(quoteRaw) : null,
+      createdAt: json['createdAt'] as String?,
+      printJob: jobRaw is Map<String, dynamic> ? PrintJobSummary.fromJson(jobRaw) : null,
     );
   }
 }

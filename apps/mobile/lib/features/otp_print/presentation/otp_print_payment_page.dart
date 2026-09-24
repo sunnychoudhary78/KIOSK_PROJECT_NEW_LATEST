@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_mobile/app/router.dart';
+import 'package:skp_mobile/core/format.dart';
 import 'package:skp_mobile/core/network/api_client.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 import 'package:skp_mobile/core/ui/ui.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 import 'package:skp_mobile/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_mobile/features/otp_print/data/razorpay_checkout.dart';
+import 'package:skp_mobile/l10n/app_localizations.dart';
 
 class OtpPrintPaymentPage extends ConsumerStatefulWidget {
   const OtpPrintPaymentPage({super.key});
@@ -88,30 +90,24 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final challenge = ref.watch(otpPrintControllerProvider).asData?.value;
     final quote = challenge?.quote;
 
     if (challenge == null || quote == null) {
       return SkpScaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'No payment due.',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 20),
-              SkpPrimaryButton(
-                label: 'Upload documents',
-                onPressed: () =>
-                    Navigator.of(context).pushReplacementNamed(AppRoutes.otpPrint),
-              ),
-            ],
-          ),
+        body: SkpEmptyState(
+          icon: Icons.payments_outlined,
+          title: l10n.noPaymentDue,
+          message: l10n.noActiveSessionHelper,
+          actionLabel: l10n.uploadDocuments,
+          onAction: () =>
+              Navigator.of(context).pushReplacementNamed(AppRoutes.otpPrint),
         ),
       );
     }
+
+    final amount = formatRupees(quote.amountRupees);
 
     return SkpScaffold(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
@@ -121,16 +117,11 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_error != null) ...[
-            Text(
-              _error!,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
-            ),
+            SkpStatusBanner(message: _error!, tone: SkpBannerTone.danger),
             const SizedBox(height: 8),
           ],
           SkpPrimaryButton(
-            label: _busy
-                ? 'Processing…'
-                : 'Pay ₹${quote.amountRupees.toStringAsFixed(0)}',
+            label: _busy ? l10n.processing : l10n.payAmount(amount),
             loading: _busy,
             onPressed: _busy ? null : _pay,
           ),
@@ -139,60 +130,46 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              onPressed: _busy ? null : () => Navigator.of(context).maybePop(),
-              style: IconButton.styleFrom(
-                backgroundColor: SkpColors.panel,
-                side: const BorderSide(color: SkpColors.line),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              icon: const Icon(Icons.arrow_back_rounded),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Pay for extra pages',
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'The first ${quote.freePages} page(s) are free. OTP is sent only after payment succeeds.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: SkpColors.muted),
+          SkpPageHeader(
+            title: l10n.payExtraPages,
+            subtitle: l10n.payHelper(quote.freePages),
+            showBack: true,
+            backEnabled: !_busy,
           ),
           const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: SkpColors.panel,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: SkpColors.line),
-            ),
+          SkpPanelCard(
             child: Column(
               children: [
                 Text(
-                  challenge.documentLabel.isEmpty
-                      ? 'Documents ready'
-                      : challenge.documentLabel,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  amount,
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    color: SkpColors.accent,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.amountDue,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: SkpColors.muted,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                _row(theme, 'Print color', quote.printColorLabel),
-                _row(theme, 'Total pages', '${quote.pageCount}'),
-                _row(theme, 'Free pages', '${quote.freePages}'),
-                _row(theme, 'Extra pages', '${quote.extraPages}'),
-                _row(theme, 'Charge per extra page', '₹${quote.chargePerPageRupees}'),
-                const Divider(height: 28),
-                _row(
-                  theme,
-                  'Amount due',
-                  '₹${quote.amountRupees.toStringAsFixed(0)}',
-                  emphasize: true,
+                Text(
+                  challenge.documentLabel.isEmpty
+                      ? l10n.documentsReady
+                      : challenge.documentLabel,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
+                const SizedBox(height: 16),
+                _row(theme, l10n.printColorLabel, quote.printColorLabel),
+                _row(theme, l10n.totalPages, '${quote.pageCount}'),
+                _row(theme, l10n.freePages, '${quote.freePages}'),
+                _row(theme, l10n.extraPages, '${quote.extraPages}'),
+                _row(theme, l10n.chargePerPage, '₹${quote.chargePerPageRupees}'),
               ],
             ),
           ),
@@ -201,7 +178,7 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
     );
   }
 
-  Widget _row(ThemeData theme, String label, String value, {bool emphasize = false}) {
+  Widget _row(ThemeData theme, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -210,8 +187,8 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
             child: Text(
               label,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: emphasize ? SkpColors.ink : SkpColors.muted,
-                fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
+                color: SkpColors.muted,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),

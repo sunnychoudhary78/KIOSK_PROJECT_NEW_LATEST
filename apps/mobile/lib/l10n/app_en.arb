@@ -1,0 +1,174 @@
+{
+  "@@locale": "en",
+  "appTitle": "Smart Kiosk Mobile",
+  "brandName": "Smart Kiosk",
+  "guestSubtitle": "Upload documents, get a print OTP by SMS, and collect prints at any Smart Kiosk.",
+  "signInCta": "Sign in with mobile OTP",
+  "tabHome": "Home",
+  "tabHistory": "History",
+  "tabNearby": "Nearby",
+  "tabProfile": "Profile",
+  "stepUpload": "Upload",
+  "stepOtpSms": "OTP SMS",
+  "stepPrint": "Print",
+  "howItWorksTitle": "How it works",
+  "homeHeadline": "Print at a kiosk",
+  "homeHelper": "Upload PDFs on your phone, receive an OTP by SMS, then enter it on the kiosk.",
+  "greetingReady": "Ready to print",
+  "signedInAs": "Signed in · {phone}",
+  "@signedInAs": {
+    "placeholders": {
+      "phone": { "type": "String" }
+    }
+  },
+  "uploadTileTitle": "Upload & get print OTP",
+  "uploadTileSubtitle": "Select documents and receive your kiosk OTP by SMS.",
+  "nearbyTileTitle": "Find nearest kiosk",
+  "nearbyTileSubtitle": "See active kiosks sorted by distance from you.",
+  "activeSessionTitle": "Active print session",
+  "statusPayNow": "Pay now",
+  "statusOtpSent": "OTP sent",
+  "statusPrinted": "Printed",
+  "statusExpired": "Expired",
+  "statusCancelled": "Cancelled",
+  "statusReady": "Ready",
+  "resendOtp": "Resend OTP",
+  "findKiosk": "Find nearest kiosk",
+  "pay": "Pay",
+  "validFor": "Valid for {time}",
+  "@validFor": {
+    "placeholders": {
+      "time": { "type": "String" }
+    }
+  },
+  "otpExpired": "OTP expired",
+  "expiredLabel": "Expired",
+  "loginWelcome": "Welcome",
+  "loginHelper": "Sign in with your mobile number to upload documents and print at a kiosk.",
+  "enterOtp": "Enter OTP",
+  "otpSentTo": "We sent a one-time code to {phone}",
+  "@otpSentTo": {
+    "placeholders": {
+      "phone": { "type": "String" }
+    }
+  },
+  "mobileNumber": "Mobile number",
+  "mobileHint": "10-digit mobile",
+  "sendOtp": "Send OTP",
+  "verifyContinue": "Verify & continue",
+  "changeNumber": "Change number",
+  "resendIn": "Resend in {seconds}s",
+  "@resendIn": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "stepOf": "Step {current} of {total}",
+  "@stepOf": {
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "profileTitle": "Profile",
+  "citizenAccount": "Citizen account",
+  "language": "Language",
+  "languageEnglish": "English",
+  "languageHindi": "हिंदी",
+  "howItWorks": "How it works",
+  "about": "About Smart Kiosk",
+  "signOut": "Sign out",
+  "chooseLanguage": "Choose language",
+  "uploadTitle": "Upload documents",
+  "uploadHelper": "After upload, free sessions get an OTP by SMS. Extra pages require payment first, then the OTP is sent.",
+  "labelOptional": "Label (optional)",
+  "labelHint": "e.g. School certificates",
+  "tapToAddPdfs": "Tap to add PDF documents",
+  "pdfsSelected": "{count} PDF(s) selected — tap to replace",
+  "@pdfsSelected": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "pdfOnlyHint": "PDF only · page limits enforced by server",
+  "printColor": "Print color",
+  "colorBw": "Black & white",
+  "colorColor": "Color",
+  "colorHelp": "Color prints use a higher extra-page rate set by the operator.",
+  "bwHelp": "Black & white is the default and usually costs less per extra page.",
+  "addPdfsToContinue": "Add one or more PDFs to continue.",
+  "uploadContinue": "Upload & continue",
+  "uploading": "Uploading…",
+  "payExtraPages": "Pay for extra pages",
+  "payHelper": "The first {count} page(s) are free. OTP is sent only after payment succeeds.",
+  "@payHelper": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "noPaymentDue": "No payment due.",
+  "documentsReady": "Documents ready",
+  "printColorLabel": "Print color",
+  "totalPages": "Total pages",
+  "freePages": "Free pages",
+  "extraPages": "Extra pages",
+  "chargePerPage": "Charge per extra page",
+  "amountDue": "Amount due",
+  "payAmount": "Pay {amount}",
+  "@payAmount": {
+    "placeholders": {
+      "amount": { "type": "String" }
+    }
+  },
+  "processing": "Processing…",
+  "otpSentTitle": "OTP sent by SMS",
+  "otpSentHelper": "Check your messages, then enter the OTP on the kiosk to preview and print.",
+  "pagesColorFiles": "{pages} page(s) · {color} · {files} file(s)",
+  "@pagesColorFiles": {
+    "placeholders": {
+      "pages": { "type": "int" },
+      "color": { "type": "String" },
+      "files": { "type": "int" }
+    }
+  },
+  "done": "Done",
+  "uploadMore": "Upload more documents",
+  "noActiveSession": "No active print session.",
+  "noActiveSessionHelper": "Upload documents first to receive a print OTP.",
+  "uploadDocuments": "Upload documents",
+  "nearestKiosks": "Nearest kiosks",
+  "nearestHelper": "Sorted by distance from your current location.",
+  "viewOnMap": "View on map",
+  "noKiosks": "No kiosks nearby right now.",
+  "noKiosksHelper": "Pull to refresh, or try again when you are closer to a Smart Kiosk.",
+  "locationRequired": "Location permission is required to find nearby kiosks.",
+  "directions": "Directions",
+  "refresh": "Refresh",
+  "retry": "Retry",
+  "tryAgain": "Try again",
+  "kiosksOnMap": "{count} kiosk{suffix} on map",
+  "@kiosksOnMap": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "suffix": { "type": "String" }
+    }
+  },
+  "noKiosksOnMap": "No kiosks to show on the map.",
+  "couldNotOpenMaps": "Could not open Maps",
+  "historyTitle": "Print history",
+  "historyHelper": "Your recent OTP print sessions.",
+  "historyEmpty": "No print sessions yet",
+  "historyEmptyHelper": "Upload a PDF to get a kiosk OTP. Your sessions will appear here.",
+  "activeSection": "Active",
+  "pastSection": "Earlier",
+  "aboutTitle": "About Smart Kiosk",
+  "aboutBody": "Smart Kiosk Platform lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.",
+  "howItWorksIntro": "Three steps from your phone to a printed copy.",
+  "howItWorksStep1Title": "Upload on your phone",
+  "howItWorksStep1Body": "Choose one or more PDFs, pick black & white or color, and add an optional label.",
+  "howItWorksStep2Title": "Get an OTP by SMS",
+  "howItWorksStep2Body": "Free pages are issued immediately. Extra pages are paid first, then the OTP is sent to your number.",
+  "howItWorksStep3Title": "Print at a kiosk",
+  "howItWorksStep3Body": "Find a nearby Smart Kiosk, enter the OTP on the screen, preview, and collect your prints.",
+  "sessionExpired": "Session expired. Please sign in again."
+}

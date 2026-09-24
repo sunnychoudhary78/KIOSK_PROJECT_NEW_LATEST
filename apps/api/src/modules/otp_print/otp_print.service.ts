@@ -21,6 +21,7 @@ const OTP_UPLOAD_DIR = join(process.cwd(), 'uploads', 'otp-print');
 type ChallengeWithDocs = OtpChallenge & {
   documents: OtpDocument[];
   payment?: Payment | null;
+  printJob?: { id: string; status: string } | null;
 };
 
 async function countPdfPages(buffer: Buffer): Promise<number> {
@@ -285,6 +286,38 @@ export class OtpPrintService {
           challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
         );
     return this.toPublicChallenge(challenge, quote);
+  }
+
+  async listForCitizen(userId: string) {
+    const rows = await this.db.otpChallenge.findMany({
+      where: { userId },
+      include: {
+        documents: { orderBy: { sortOrder: 'asc' } },
+        payment: true,
+        printJob: { select: { id: true, status: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    const printConfig = await this.settings.getOtpPrintConfig();
+    return {
+      items: rows.map((challenge) => {
+        const quote = challenge.payment
+          ? quoteFromPayment(challenge.payment)
+          : quoteOtpPrintPages(
+              challenge.pageCount,
+              printConfig,
+              challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
+            );
+        return {
+          ...this.toPublicChallenge(challenge, quote),
+          createdAt: challenge.createdAt.toISOString(),
+          printJob: challenge.printJob
+            ? { id: challenge.printJob.id, status: challenge.printJob.status }
+            : null,
+        };
+      }),
+    };
   }
 
   /**

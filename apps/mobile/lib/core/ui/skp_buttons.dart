@@ -18,12 +18,12 @@ class SkpPrimaryButton extends StatelessWidget {
     return FilledButton(
       onPressed: loading ? null : onPressed,
       child: loading
-          ? const SizedBox(
+          ? SizedBox(
               height: 22,
               width: 22,
               child: CircularProgressIndicator(
                 strokeWidth: 2.4,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.onPrimary,
               ),
             )
           : Text(label),
@@ -65,7 +65,7 @@ class SkpTextLink extends StatelessWidget {
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        foregroundColor: SkpColors.accent,
+        foregroundColor: SkpColors.accentBright,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       ),
       child: Text(label),

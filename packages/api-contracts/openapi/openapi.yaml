@@ -494,6 +494,25 @@ paths:
           description: VedAstro or OpenAI failed
 
   /otp-challenges:
+    get:
+      tags: [OtpPrint]
+      summary: List the signed-in citizen's recent OTP print sessions
+      operationId: listOtpChallenges
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Up to 50 recent challenges owned by the caller
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OtpChallengeListItem'
     post:
       tags: [OtpPrint]
       summary: Upload PDFs and create OTP print challenge (citizen)
@@ -1290,6 +1309,27 @@ components:
           format: uuid
         enabled:
           type: boolean
+
+    OtpChallengeListItem:
+      allOf:
+        - $ref: '#/components/schemas/OtpChallengeResponse'
+        - type: object
+          required: [createdAt]
+          properties:
+            createdAt:
+              type: string
+              format: date-time
+            printJob:
+              nullable: true
+              type: object
+              required: [id, status]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                  enum: [created, ready, printing, completed, failed, expired]
 
     OtpChallengeResponse:
       type: object

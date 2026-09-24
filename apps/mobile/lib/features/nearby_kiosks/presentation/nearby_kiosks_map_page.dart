@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 import 'package:skp_mobile/core/ui/ui.dart';
 import 'package:skp_mobile/features/nearby_kiosks/application/nearby_kiosks_controller.dart';
+import 'package:skp_mobile/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class NearbyKiosksMapPage extends StatefulWidget {
@@ -19,49 +20,34 @@ class _NearbyKiosksMapPageState extends State<NearbyKiosksMapPage> {
   final _mapController = MapController();
 
   Future<void> _openDirections(NearbyKiosk kiosk) async {
+    final l10n = AppLocalizations.of(context);
     final uri = Uri.parse(
       'https://www.google.com/maps/dir/?api=1&destination=${kiosk.latitude},${kiosk.longitude}',
     );
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open Maps')),
+        SnackBar(content: Text(l10n.couldNotOpenMaps)),
       );
     }
   }
 
   void _showKioskSheet(NearbyKiosk kiosk) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: SkpColors.panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: SkpColors.line,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
                 Text(
                   kiosk.name,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: theme.textTheme.titleLarge,
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -70,17 +56,23 @@ class _NearbyKiosksMapPageState extends State<NearbyKiosksMapPage> {
                     color: SkpColors.muted,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  kiosk.distanceLabel,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: SkpColors.accent,
-                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Text(
+                      kiosk.distanceLabel,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: SkpColors.accent,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SkpStatusChip(label: l10n.statusReady),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 SkpPrimaryButton(
-                  label: 'Directions',
+                  label: l10n.directions,
                   onPressed: () {
                     Navigator.of(context).pop();
                     _openDirections(kiosk);
@@ -123,41 +115,26 @@ class _NearbyKiosksMapPageState extends State<NearbyKiosksMapPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     if (widget.kiosks.isEmpty) {
-      return Scaffold(
-        backgroundColor: SkpColors.cream,
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    style: IconButton.styleFrom(
-                      backgroundColor: SkpColors.panel,
-                      side: const BorderSide(color: SkpColors.line),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'No kiosks to show on the map.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const Spacer(),
-              ],
+      return SkpScaffold(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: SkpBackButton(),
             ),
-          ),
+            Expanded(
+              child: SkpEmptyState(
+                icon: Icons.map_outlined,
+                title: l10n.noKiosksOnMap,
+                message: l10n.noKiosksHelper,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -180,7 +157,7 @@ class _NearbyKiosksMapPageState extends State<NearbyKiosksMapPage> {
                     Marker(
                       point: LatLng(kiosk.latitude, kiosk.longitude),
                       width: 44,
-                      height: 44,
+                      height: 52,
                       alignment: Alignment.bottomCenter,
                       child: GestureDetector(
                         onTap: () => _showKioskSheet(kiosk),
@@ -215,17 +192,7 @@ class _NearbyKiosksMapPageState extends State<NearbyKiosksMapPage> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    style: IconButton.styleFrom(
-                      backgroundColor: SkpColors.panel,
-                      side: const BorderSide(color: SkpColors.line),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
+                  const SkpBackButton(),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Container(
@@ -239,7 +206,10 @@ class _NearbyKiosksMapPageState extends State<NearbyKiosksMapPage> {
                         border: Border.all(color: SkpColors.line),
                       ),
                       child: Text(
-                        '${widget.kiosks.length} kiosk${widget.kiosks.length == 1 ? '' : 's'} on map',
+                        l10n.kiosksOnMap(
+                          widget.kiosks.length,
+                          widget.kiosks.length == 1 ? '' : 's',
+                        ),
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),

@@ -29,6 +29,21 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
     deps.sms,
   );
 
+  router.get(
+    '/otp-challenges',
+    authRequired(deps.config, ['citizen']),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        res.json(await service.listForCitizen(req.principal.id));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.post(
     '/otp-challenges',
     authRequired(deps.config, ['citizen']),

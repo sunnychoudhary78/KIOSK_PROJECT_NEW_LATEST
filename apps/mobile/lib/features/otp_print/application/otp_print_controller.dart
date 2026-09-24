@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_mobile/core/network/api_client.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 import 'package:skp_mobile/features/otp_print/application/otp_print_models.dart';
+import 'package:skp_mobile/features/otp_print/application/print_history_controller.dart';
 
 export 'package:skp_mobile/features/otp_print/application/otp_print_models.dart';
 
@@ -31,6 +32,17 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
         files: files,
         fileField: 'files',
       );
+      return OtpChallenge.fromJson(result);
+    });
+    if (state.hasValue && state.value != null) {
+      ref.invalidate(printHistoryProvider);
+    }
+  }
+
+  Future<void> loadChallenge(String challengeId) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final result = await _api.get('/otp-challenges/$challengeId');
       return OtpChallenge.fromJson(result);
     });
   }
@@ -98,6 +110,7 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
     if (current == null) return;
     await _api.post('/otp-challenges/${current.id}/resend-otp');
     await refreshChallenge();
+    ref.invalidate(printHistoryProvider);
   }
 
   void clear() {

@@ -3,9 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_mobile/app/router.dart';
+import 'package:skp_mobile/core/format.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 import 'package:skp_mobile/core/ui/ui.dart';
+import 'package:skp_mobile/features/otp_print/application/open_print_session.dart';
 import 'package:skp_mobile/features/otp_print/application/otp_print_controller.dart';
+import 'package:skp_mobile/l10n/app_localizations.dart';
 
 class OtpPrintSuccessPage extends ConsumerStatefulWidget {
   const OtpPrintSuccessPage({super.key});
@@ -41,19 +44,6 @@ class _OtpPrintSuccessPageState extends ConsumerState<OtpPrintSuccessPage>
     super.dispose();
   }
 
-  String _formatRemaining(DateTime expiresAt) {
-    final remaining = expiresAt.difference(DateTime.now());
-    if (remaining.isNegative) return 'Expired';
-    final totalSeconds = remaining.inSeconds;
-    final hours = totalSeconds ~/ 3600;
-    final minutes = (totalSeconds % 3600) ~/ 60;
-    final seconds = totalSeconds % 60;
-    if (hours > 0) {
-      return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s left';
-    }
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')} left';
-  }
-
   void _uploadMore() {
     ref.read(otpPrintControllerProvider.notifier).clear();
     Navigator.of(context).pushNamedAndRemoveUntil(
@@ -70,42 +60,29 @@ class _OtpPrintSuccessPageState extends ConsumerState<OtpPrintSuccessPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final challenge = ref.watch(otpPrintControllerProvider).asData?.value;
 
     if (challenge == null) {
       return SkpScaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'No active print session.',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Upload documents first to receive a print OTP.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: SkpColors.muted,
-                ),
-              ),
-              const SizedBox(height: 20),
-              SkpPrimaryButton(
-                label: 'Upload documents',
-                onPressed: () =>
-                    Navigator.of(context).pushReplacementNamed(AppRoutes.otpPrint),
-              ),
-            ],
-          ),
+        body: SkpEmptyState(
+          icon: Icons.sms_outlined,
+          title: l10n.noActiveSession,
+          message: l10n.noActiveSessionHelper,
+          actionLabel: l10n.uploadDocuments,
+          onAction: () =>
+              Navigator.of(context).pushReplacementNamed(AppRoutes.otpPrint),
         ),
       );
     }
 
     final expiresAt = DateTime.tryParse(challenge.expiresAt)?.toLocal();
     final expired = expiresAt != null && expiresAt.isBefore(DateTime.now());
+    final remaining = expiresAt == null
+        ? null
+        : formatRemaining(expiresAt, expiredLabel: l10n.expiredLabel);
+    final colorLabel =
+        challenge.printColorMode == 'color' ? l10n.colorColor : l10n.colorBw;
 
     return SkpScaffold(
       body: Column(
@@ -120,44 +97,36 @@ class _OtpPrintSuccessPageState extends ConsumerState<OtpPrintSuccessPage>
                 height: 88,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: SkpColors.accent.withValues(alpha: 0.12),
+                  color: SkpColors.success.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  Icons.sms_rounded,
-                  size: 40,
-                  color: SkpColors.accent,
+                  Icons.check_rounded,
+                  size: 44,
+                  color: SkpColors.success,
                 ),
               ),
             ),
           ),
           const SizedBox(height: 24),
           Text(
-            'OTP sent by SMS',
+            l10n.otpSentTitle,
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+            style: theme.textTheme.headlineSmall,
           ),
           const SizedBox(height: 12),
           Text(
-            'Check your messages, then enter the OTP on the kiosk to preview and print.',
+            l10n.otpSentHelper,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
           ),
           const SizedBox(height: 28),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: SkpColors.panel,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: SkpColors.line),
-            ),
+          SkpPanelCard(
             child: Column(
               children: [
                 Text(
                   challenge.documentLabel.isEmpty
-                      ? 'Documents ready'
+                      ? l10n.documentsReady
                       : challenge.documentLabel,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium?.copyWith(
@@ -166,34 +135,21 @@ class _OtpPrintSuccessPageState extends ConsumerState<OtpPrintSuccessPage>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${challenge.pageCount} page(s) · ${challenge.printColorLabel} · ${challenge.documents.length} file(s)',
+                  l10n.pagesColorFiles(
+                    challenge.pageCount,
+                    colorLabel,
+                    challenge.documents.length,
+                  ),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: SkpColors.muted,
                   ),
                 ),
-                if (expiresAt != null) ...[
+                if (remaining != null) ...[
                   const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: expired
-                          ? SkpColors.danger.withValues(alpha: 0.08)
-                          : SkpColors.accent.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      expired
-                          ? 'OTP expired'
-                          : 'Valid for ${_formatRemaining(expiresAt)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: expired ? SkpColors.danger : SkpColors.accent,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  SkpStatusChip(
+                    label: expired ? l10n.otpExpired : l10n.validFor(remaining),
+                    color: expired ? SkpColors.danger : SkpColors.accent,
                   ),
                 ],
               ],
@@ -201,13 +157,18 @@ class _OtpPrintSuccessPageState extends ConsumerState<OtpPrintSuccessPage>
           ),
           const Spacer(flex: 2),
           SkpPrimaryButton(
-            label: 'Done',
-            onPressed: _done,
+            label: l10n.findKiosk,
+            onPressed: () => goToNearbyTab(context, ref),
           ),
           const SizedBox(height: 8),
           SkpSecondaryButton(
-            label: 'Upload more documents',
+            label: l10n.uploadMore,
             onPressed: _uploadMore,
+          ),
+          const SizedBox(height: 4),
+          SkpTextLink(
+            label: l10n.done,
+            onPressed: _done,
           ),
           const SizedBox(height: 8),
         ],

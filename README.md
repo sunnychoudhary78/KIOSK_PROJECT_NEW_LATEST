@@ -312,6 +312,7 @@ apps/mobile/
 │   └── features/
 │       ├── auth/
 │       ├── home/
+│       ├── history/
 │       ├── otp_print/
 │       ├── digilocker/      # placeholder for future mobile-assisted flows
 │       └── profile/
@@ -388,6 +389,7 @@ Module rule: depend on another module’s public `index` / shared services only;
 | `POST`  | `/devices/:deviceId/heartbeat`       | device               | Heartbeat                                          |
 | `GET`   | `/services`                          | admin/device/citizen | Catalog (+ optional device enablement)             |
 | `PUT`   | `/services/:serviceCode/enablement`  | admin                | Enable/disable for a device                        |
+| `GET`   | `/otp-challenges`                    | citizen              | List own recent OTP print sessions                 |
 | `POST`  | `/otp-challenges`                    | citizen              | Create OTP                                         |
 | `POST`  | `/otp-challenges/redeem`             | device               | Redeem OTP → print job                             |
 | `POST`  | `/digilocker/sessions`               | device               | Start DigiLocker OAuth (pending + authorize URL)   |
@@ -464,11 +466,13 @@ Citizen app at [`apps/mobile`](apps/mobile) (`skp_mobile`), Riverpod 3.
 
 | Feature      | Role                                                      |
 | ------------ | --------------------------------------------------------- |
-| `auth`       | Citizen phone/password login                              |
-| `home`       | Service list after login                                  |
-| `otp_print`  | Generate OTP + show code for kiosk redemption             |
+| `auth`       | Citizen mobile OTP login                                  |
+| `home`       | Welcome + signed-in hub (active OTP, upload, nearby)      |
+| `history`    | Recent OTP print sessions                                 |
+| `otp_print`  | Upload PDFs, pay extra pages, receive kiosk OTP by SMS    |
+| `nearby`     | Distance-sorted kiosks + map                              |
 | `digilocker` | Placeholder for future mobile-assisted DigiLocker consent |
-| `profile`    | Sign out                                                  |
+| `profile`    | Language, how it works, about, sign out                   |
 
 DigiLocker print in V1 is **kiosk-led**; mobile focuses on OTP Print.
 

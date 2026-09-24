@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
+import 'package:skp_mobile/l10n/app_localizations.dart';
 
 class SkpBrandHeader extends StatelessWidget {
   const SkpBrandHeader({
@@ -16,6 +17,7 @@ class SkpBrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final align = centered ? TextAlign.center : TextAlign.start;
     final cross = centered ? CrossAxisAlignment.center : CrossAxisAlignment.start;
 
@@ -23,11 +25,11 @@ class SkpBrandHeader extends StatelessWidget {
       crossAxisAlignment: cross,
       children: [
         Text(
-          'Smart Kiosk',
+          l10n.brandName,
           textAlign: align,
           style: (compact ? theme.textTheme.headlineSmall : theme.textTheme.displaySmall)
               ?.copyWith(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             letterSpacing: -1.0,
             color: SkpColors.ink,
             height: 1.05,

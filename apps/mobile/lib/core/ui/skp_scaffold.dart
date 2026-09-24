@@ -8,7 +8,7 @@ class SkpScaffold extends StatelessWidget {
     required this.body,
     this.appBar,
     this.bottom,
-    this.padding = const EdgeInsets.symmetric(horizontal: 24),
+    this.padding = SkpTokens.pagePadding,
     this.safeAreaBottom = true,
     this.useAtmosphere = true,
   });
@@ -66,20 +66,20 @@ class _Atmosphere extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            const Color(0xFFF7F3EA),
+            SkpColors.atmosphere,
             SkpColors.cream,
             SkpColors.creamDeep.withValues(alpha: 0.85),
           ],
         ),
       ),
-      child: Stack(
+      child: const Stack(
         children: [
           Positioned(
             top: -80,
             right: -60,
             child: _Blob(
               size: 220,
-              color: SkpColors.accent.withValues(alpha: 0.10),
+              color: Color(0x1A0F6A5A),
             ),
           ),
           Positioned(
@@ -87,7 +87,7 @@ class _Atmosphere extends StatelessWidget {
             left: -90,
             child: _Blob(
               size: 260,
-              color: SkpColors.accent.withValues(alpha: 0.07),
+              color: Color(0x120F6A5A),
             ),
           ),
         ],

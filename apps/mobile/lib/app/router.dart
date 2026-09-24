@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_mobile/core/ui/ui.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 import 'package:skp_mobile/features/auth/presentation/login_page.dart';
 import 'package:skp_mobile/features/home/presentation/home_page.dart';
@@ -9,6 +10,8 @@ import 'package:skp_mobile/features/nearby_kiosks/presentation/nearby_kiosks_pag
 import 'package:skp_mobile/features/otp_print/presentation/otp_print_page.dart';
 import 'package:skp_mobile/features/otp_print/presentation/otp_print_payment_page.dart';
 import 'package:skp_mobile/features/otp_print/presentation/otp_print_success_page.dart';
+import 'package:skp_mobile/features/profile/presentation/about_page.dart';
+import 'package:skp_mobile/features/profile/presentation/how_it_works_page.dart';
 import 'package:skp_mobile/features/profile/presentation/profile_page.dart';
 
 class AppRoutes {
@@ -20,6 +23,8 @@ class AppRoutes {
   static const nearbyKiosks = '/nearby-kiosks';
   static const nearbyKiosksMap = '/nearby-kiosks/map';
   static const profile = '/profile';
+  static const howItWorks = '/how-it-works';
+  static const about = '/about';
 }
 
 class AppRouter {
@@ -57,6 +62,14 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (_) => const _AuthGate(child: ProfilePage()),
         );
+      case AppRoutes.howItWorks:
+        return MaterialPageRoute(
+          builder: (_) => const _AuthGate(child: HowItWorksPage()),
+        );
+      case AppRoutes.about:
+        return MaterialPageRoute(
+          builder: (_) => const _AuthGate(child: AboutPage()),
+        );
       case AppRoutes.home:
       default:
         return MaterialPageRoute(builder: (_) => const HomePage());
@@ -75,7 +88,7 @@ class _AuthGate extends ConsumerWidget {
     final auth = ref.watch(citizenAuthProvider);
 
     if (auth.restoring) {
-      return const Scaffold(
+      return const SkpScaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -86,7 +99,7 @@ class _AuthGate extends ConsumerWidget {
           Navigator.of(context).pushReplacementNamed(AppRoutes.login);
         }
       });
-      return const Scaffold(
+      return const SkpScaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }

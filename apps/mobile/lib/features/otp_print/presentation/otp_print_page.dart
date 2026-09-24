@@ -4,9 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_mobile/app/router.dart';
+import 'package:skp_mobile/core/format.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 import 'package:skp_mobile/core/ui/ui.dart';
 import 'package:skp_mobile/features/otp_print/application/otp_print_controller.dart';
+import 'package:skp_mobile/l10n/app_localizations.dart';
 
 class OtpPrintPage extends ConsumerStatefulWidget {
   const OtpPrintPage({super.key});
@@ -71,6 +73,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(otpPrintControllerProvider);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final loading = state.isLoading;
 
     return SkpScaffold(
@@ -81,11 +84,9 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (state.hasError) ...[
-            Text(
-              state.error.toString(),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
+            SkpStatusBanner(
+              message: state.error.toString(),
+              tone: SkpBannerTone.danger,
             ),
             const SizedBox(height: 8),
           ],
@@ -94,7 +95,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             const SizedBox(height: 12),
           ],
           SkpPrimaryButton(
-            label: loading ? 'Uploading…' : 'Upload & continue',
+            label: loading ? l10n.uploading : l10n.uploadContinue,
             loading: loading,
             onPressed: loading || _files.isEmpty ? null : _upload,
           ),
@@ -103,39 +104,19 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              onPressed: loading ? null : () => Navigator.of(context).maybePop(),
-              style: IconButton.styleFrom(
-                backgroundColor: SkpColors.panel,
-                side: const BorderSide(color: SkpColors.line),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              icon: const Icon(Icons.arrow_back_rounded),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Upload documents',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'After upload, free sessions get an OTP by SMS. Extra pages require payment first, then the OTP is sent.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: SkpColors.muted),
+          SkpPageHeader(
+            title: l10n.uploadTitle,
+            subtitle: l10n.uploadHelper,
+            showBack: true,
+            backEnabled: !loading,
           ),
           const SizedBox(height: 20),
           TextField(
             controller: _label,
             enabled: !loading,
-            decoration: const InputDecoration(
-              labelText: 'Label (optional)',
-              hintText: 'e.g. School certificates',
+            decoration: InputDecoration(
+              labelText: l10n.labelOptional,
+              hintText: l10n.labelHint,
             ),
           ),
           const SizedBox(height: 16),
@@ -156,23 +137,12 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
                   padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
                   child: Column(
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: SkpColors.accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.upload_file_rounded,
-                          color: SkpColors.accent,
-                        ),
-                      ),
+                      const SkpIconWell(icon: Icons.upload_file_rounded, size: 48),
                       const SizedBox(height: 12),
                       Text(
                         _files.isEmpty
-                            ? 'Tap to add PDF documents'
-                            : '${_files.length} PDF(s) selected — tap to replace',
+                            ? l10n.tapToAddPdfs
+                            : l10n.pdfsSelected(_files.length),
                         textAlign: TextAlign.center,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
@@ -180,7 +150,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'PDF only · page limits enforced by server',
+                        l10n.pdfOnlyHint,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: SkpColors.muted,
                         ),
@@ -193,20 +163,20 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Print color',
+            l10n.printColor,
             style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           _PrintColorChooser(
             value: _printColorMode,
             enabled: !loading,
+            bwLabel: l10n.colorBw,
+            colorLabel: l10n.colorColor,
             onChanged: (mode) => setState(() => _printColorMode = mode),
           ),
           const SizedBox(height: 6),
           Text(
-            _printColorMode == 'color'
-                ? 'Color prints use a higher extra-page rate set by the operator.'
-                : 'Black & white is the default and usually costs less per extra page.',
+            _printColorMode == 'color' ? l10n.colorHelp : l10n.bwHelp,
             style: theme.textTheme.bodySmall?.copyWith(color: SkpColors.muted),
           ),
           const SizedBox(height: 16),
@@ -217,13 +187,10 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
                 separatorBuilder: (context, index) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final file = _files[index];
-                  return Container(
+                  final bytes = file.existsSync() ? file.lengthSync() : 0;
+                  return SkpPanelCard(
                     padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-                    decoration: BoxDecoration(
-                      color: SkpColors.panel,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: SkpColors.line),
-                    ),
+                    radius: 14,
                     child: Row(
                       children: [
                         const Icon(
@@ -232,13 +199,25 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            _fileName(file),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _fileName(file),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (bytes > 0)
+                                Text(
+                                  formatBytes(bytes),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: SkpColors.muted,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         IconButton(
@@ -255,13 +234,10 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             )
           else
             Expanded(
-              child: Center(
-                child: Text(
-                  'Add one or more PDFs to continue.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: SkpColors.muted,
-                  ),
-                ),
+              child: SkpEmptyState(
+                icon: Icons.picture_as_pdf_outlined,
+                title: l10n.addPdfsToContinue,
+                message: l10n.pdfOnlyHint,
               ),
             ),
           const SizedBox(height: 12),
@@ -276,11 +252,15 @@ class _PrintColorChooser extends StatelessWidget {
     required this.value,
     required this.enabled,
     required this.onChanged,
+    required this.bwLabel,
+    required this.colorLabel,
   });
 
   final String value;
   final bool enabled;
   final ValueChanged<String> onChanged;
+  final String bwLabel;
+  final String colorLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -293,8 +273,8 @@ class _PrintColorChooser extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _option(theme, 'bw', 'Black & white', Icons.filter_b_and_w_rounded),
-          _option(theme, 'color', 'Color', Icons.palette_outlined),
+          _option(theme, 'bw', bwLabel, Icons.filter_b_and_w_rounded),
+          _option(theme, 'color', colorLabel, Icons.palette_outlined),
         ],
       ),
     );

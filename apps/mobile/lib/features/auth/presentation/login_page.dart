@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_mobile/app/router.dart';
+import 'package:skp_mobile/core/format.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 import 'package:skp_mobile/core/ui/ui.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 import 'package:skp_mobile/features/auth/application/sms_otp_listener.dart';
+import 'package:skp_mobile/l10n/app_localizations.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -105,16 +107,11 @@ class _LoginPageState extends ConsumerState<LoginPage>
     await _animateStepChange();
   }
 
-  String _maskPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 4) return phone;
-    return '+91 ${digits.substring(0, 2)}••••${digits.substring(digits.length - 2)}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(citizenAuthProvider);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     ref.listen(citizenAuthProvider, (previous, next) {
       if (next.isAuthenticated) {
@@ -135,7 +132,6 @@ class _LoginPageState extends ConsumerState<LoginPage>
           if (mounted) _otpFocus.requestFocus();
         });
       } else if (otpRequestSucceeded && (previous?.otpSent ?? false)) {
-        // Resend — restart User Consent listener for the new SMS.
         unawaited(_startSmsListener());
       }
 
@@ -161,92 +157,86 @@ class _LoginPageState extends ConsumerState<LoginPage>
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(
+          const Align(
             alignment: Alignment.centerLeft,
-            child: IconButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-              style: IconButton.styleFrom(
-                backgroundColor: SkpColors.panel,
-                side: const BorderSide(color: SkpColors.line),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              icon: const Icon(Icons.arrow_back_rounded),
+            child: SkpBackButton(),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.stepOf(auth.otpSent ? 2 : 1, 2),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: SkpColors.accent,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 20),
-          FadeTransition(
-            opacity: _stepFade,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  auth.otpSent ? 'Enter OTP' : 'Welcome',
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.6,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  auth.otpSent
-                      ? 'We sent a one-time code to ${_maskPhone(auth.phone ?? _phone.text)}'
-                      : 'Sign in with your mobile number to upload documents and print at a kiosk.',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: SkpColors.muted,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                if (!auth.otpSent)
-                  TextField(
-                    controller: _phone,
-                    keyboardType: TextInputType.phone,
-                    enabled: !auth.loading,
-                    maxLength: 10,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.6,
+          const SizedBox(height: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              child: FadeTransition(
+                opacity: _stepFade,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      auth.otpSent ? l10n.enterOtp : l10n.loginWelcome,
+                      style: theme.textTheme.headlineMedium,
                     ),
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile number',
-                      hintText: '10-digit mobile',
-                      prefixText: '+91  ',
-                      counterText: '',
+                    const SizedBox(height: 10),
+                    Text(
+                      auth.otpSent
+                          ? l10n.otpSentTo(maskPhone(auth.phone ?? _phone.text))
+                          : l10n.loginHelper,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: SkpColors.muted,
+                      ),
                     ),
-                  )
-                else
-                  SkpOtpPinField(
-                    controller: _otp,
-                    focusNode: _otpFocus,
-                    enabled: !auth.loading,
-                    onCompleted: _verify,
-                  ),
-              ],
-            ),
-          ),
-          const Spacer(),
-          if (auth.error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                auth.error!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.error,
+                    const SizedBox(height: 32),
+                    if (!auth.otpSent)
+                      TextField(
+                        controller: _phone,
+                        keyboardType: TextInputType.phone,
+                        enabled: !auth.loading,
+                        maxLength: 10,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.6,
+                        ),
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          labelText: l10n.mobileNumber,
+                          hintText: l10n.mobileHint,
+                          prefixText: '+91  ',
+                          counterText: '',
+                        ),
+                      )
+                    else
+                      SkpOtpPinField(
+                        controller: _otp,
+                        focusNode: _otpFocus,
+                        enabled: !auth.loading,
+                        onCompleted: _verify,
+                      ),
+                  ],
                 ),
               ),
             ),
+          ),
+          if (auth.error != null) ...[
+            SkpStatusBanner(
+              message: auth.error!,
+              tone: SkpBannerTone.danger,
+            ),
+            const SizedBox(height: 12),
+          ],
           if (!auth.otpSent)
             SkpPrimaryButton(
-              label: 'Send OTP',
+              label: l10n.sendOtp,
               loading: auth.loading,
               onPressed: _requestOtp,
             )
           else ...[
             SkpPrimaryButton(
-              label: 'Verify & continue',
+              label: l10n.verifyContinue,
               loading: auth.loading,
               onPressed: () => _verify(_otp.text),
             ),
@@ -254,14 +244,14 @@ class _LoginPageState extends ConsumerState<LoginPage>
             Row(
               children: [
                 SkpTextLink(
-                  label: 'Change number',
+                  label: l10n.changeNumber,
                   onPressed: auth.loading ? null : _changeNumber,
                 ),
                 const Spacer(),
                 SkpTextLink(
                   label: auth.canResend
-                      ? 'Resend OTP'
-                      : 'Resend in ${auth.resendSecondsLeft}s',
+                      ? l10n.resendOtp
+                      : l10n.resendIn(auth.resendSecondsLeft),
                   onPressed: auth.loading || !auth.canResend
                       ? null
                       : () async {
