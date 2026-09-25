@@ -30,3 +30,22 @@ export const setDeviceSurveillanceSchema = z.object({
 });
 
 export type SetDeviceSurveillanceInput = z.infer<typeof setDeviceSurveillanceSchema>;
+
+export const setDevicePrintLimitsSchema = z
+  .object({
+    maxPagesPerSession: z.number().int().min(1).max(100),
+    freePagesPerSession: z.number().int().min(0).max(100),
+    extraPageChargeRupees: z.number().int().min(0).max(1000),
+    freeColorPagesPerSession: z.number().int().min(0).max(100),
+    extraColorPageChargeRupees: z.number().int().min(0).max(1000),
+  })
+  .refine((value) => value.freePagesPerSession <= value.maxPagesPerSession, {
+    message: 'freePagesPerSession cannot exceed maxPagesPerSession',
+    path: ['freePagesPerSession'],
+  })
+  .refine((value) => value.freeColorPagesPerSession <= value.maxPagesPerSession, {
+    message: 'freeColorPagesPerSession cannot exceed maxPagesPerSession',
+    path: ['freeColorPagesPerSession'],
+  });
+
+export type SetDevicePrintLimitsInput = z.infer<typeof setDevicePrintLimitsSchema>;

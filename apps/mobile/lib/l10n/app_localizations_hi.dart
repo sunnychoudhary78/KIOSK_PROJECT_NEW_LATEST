@@ -221,6 +221,22 @@ class AppLocalizationsHi extends AppLocalizations {
   String get bwHelp => 'काले-सफेद डिफ़ॉल्ट है और आमतौर पर सस्ता पड़ता है।';
 
   @override
+  String get selectKiosk => 'प्रिंट कियोस्क';
+
+  @override
+  String get chooseKioskToContinue => 'जिस कियोस्क पर प्रिंट लेंगे, उसे चुनें';
+
+  @override
+  String kioskPrintPricing(int free, int charge, int max) {
+    return 'पहले $free पन्ने मुफ़्त, फिर प्रत्येक ₹$charge। अधिकतम $max पन्ने।';
+  }
+
+  @override
+  String printOnlyAtKiosk(String name) {
+    return 'केवल $name पर प्रिंट करें';
+  }
+
+  @override
   String get addPdfsToContinue => 'आगे बढ़ने के लिए एक या अधिक पीडीएफ जोड़ें।';
 
   @override
@@ -274,7 +290,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get otpSentHelper =>
-      'अपने संदेश देखें, फिर कियोस्क पर ओटीपी दर्ज करके प्रिंट लें।';
+      'अपने संदेश देखें, फिर चुने हुए कियोस्क पर ओटीपी दर्ज करके प्रिंट लें।';
 
   @override
   String pagesColorFiles(int pages, String color, int files) {

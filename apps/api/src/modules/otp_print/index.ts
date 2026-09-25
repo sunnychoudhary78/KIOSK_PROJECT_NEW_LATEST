@@ -63,12 +63,15 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
         const documentLabel =
           typeof req.body?.documentLabel === 'string' ? req.body.documentLabel : undefined;
         const printColorMode = parsePrintColorMode(req.body?.printColorMode);
+        const deviceId =
+          typeof req.body?.deviceId === 'string' ? req.body.deviceId.trim() : undefined;
         const result = await service.createChallenge(
           req.principal.id,
           uploaded,
           documentLabel,
           req.correlationId,
           printColorMode,
+          deviceId,
         );
         res.status(201).json(result);
       } catch (error) {

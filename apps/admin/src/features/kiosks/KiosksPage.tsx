@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Video, VideoOff } from 'lucide-react';
+import { Settings, Video, VideoOff } from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import {
@@ -23,7 +23,40 @@ type Device = {
   address: string | null;
   lastHeartbeatAt: string | null;
   surveillanceEnabled: boolean;
+  maxPagesPerSession: number;
+  freePagesPerSession: number;
+  extraPageChargeRupees: number;
+  freeColorPagesPerSession: number;
+  extraColorPageChargeRupees: number;
 };
+
+type PrintLimitsForm = {
+  maxPagesPerSession: number;
+  freePagesPerSession: number;
+  extraPageChargeRupees: number;
+  freeColorPagesPerSession: number;
+  extraColorPageChargeRupees: number;
+};
+
+const DEFAULT_PRINT_LIMITS: PrintLimitsForm = {
+  maxPagesPerSession: 10,
+  freePagesPerSession: 5,
+  extraPageChargeRupees: 10,
+  freeColorPagesPerSession: 0,
+  extraColorPageChargeRupees: 20,
+};
+
+function printLimitsFromDevice(device: Device): PrintLimitsForm {
+  return {
+    maxPagesPerSession: device.maxPagesPerSession ?? DEFAULT_PRINT_LIMITS.maxPagesPerSession,
+    freePagesPerSession: device.freePagesPerSession ?? DEFAULT_PRINT_LIMITS.freePagesPerSession,
+    extraPageChargeRupees: device.extraPageChargeRupees ?? DEFAULT_PRINT_LIMITS.extraPageChargeRupees,
+    freeColorPagesPerSession:
+      device.freeColorPagesPerSession ?? DEFAULT_PRINT_LIMITS.freeColorPagesPerSession,
+    extraColorPageChargeRupees:
+      device.extraColorPageChargeRupees ?? DEFAULT_PRINT_LIMITS.extraColorPageChargeRupees,
+  };
+}
 
 type CreatedCredentials = {
   name: string;
@@ -53,6 +86,10 @@ export function KiosksPage() {
   const [submitting, setSubmitting] = useState(false);
   const [credentials, setCredentials] = useState<CreatedCredentials | null>(null);
   const [copiedField, setCopiedField] = useState<'key' | 'secret' | null>(null);
+  const [settingsDevice, setSettingsDevice] = useState<Device | null>(null);
+  const [printLimits, setPrintLimits] = useState<PrintLimitsForm>(DEFAULT_PRINT_LIMITS);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   async function load() {
     try {
@@ -178,6 +215,48 @@ export function KiosksPage() {
       setError(err instanceof Error ? err.message : 'Failed to update surveillance');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function openSettings(device: Device) {
+    setSettingsDevice(device);
+    setPrintLimits(printLimitsFromDevice(device));
+    setSettingsError(null);
+  }
+
+  async function onSavePrintLimits(event: FormEvent) {
+    event.preventDefault();
+    if (!settingsDevice) {
+      return;
+    }
+    if (printLimits.freePagesPerSession > printLimits.maxPagesPerSession) {
+      setSettingsError('Black & white free pages cannot exceed max pages');
+      return;
+    }
+    if (printLimits.freeColorPagesPerSession > printLimits.maxPagesPerSession) {
+      setSettingsError('Color free pages cannot exceed max pages');
+      return;
+    }
+    setSettingsSaving(true);
+    setSettingsError(null);
+    try {
+      await apiRequest(`/devices/${settingsDevice.id}/print-limits`, {
+        method: 'PATCH',
+        token,
+        body: {
+          maxPagesPerSession: Number(printLimits.maxPagesPerSession),
+          freePagesPerSession: Number(printLimits.freePagesPerSession),
+          extraPageChargeRupees: Number(printLimits.extraPageChargeRupees),
+          freeColorPagesPerSession: Number(printLimits.freeColorPagesPerSession),
+          extraColorPageChargeRupees: Number(printLimits.extraColorPageChargeRupees),
+        },
+      });
+      setSettingsDevice(null);
+      await load();
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Failed to save print limits');
+    } finally {
+      setSettingsSaving(false);
     }
   }
 
@@ -318,6 +397,17 @@ export function KiosksPage() {
                           Stop
                         </Button>
                       )}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={submitting}
+                        onClick={() => openSettings(device)}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Settings className="h-4 w-4" />
+                          Settings
+                        </span>
+                      </Button>
                       {device.surveillanceEnabled ? (
                         <Button
                           type="button"
@@ -418,6 +508,111 @@ export function KiosksPage() {
             />
           </label>
           {formError ? <p className="error md:col-span-2">{formError}</p> : null}
+        </form>
+      </Modal>
+
+      <Modal
+        open={settingsDevice != null}
+        title={settingsDevice ? `Print limits · ${settingsDevice.name}` : 'Print limits'}
+        onClose={() => {
+          if (!settingsSaving) {
+            setSettingsDevice(null);
+          }
+        }}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={settingsSaving}
+              onClick={() => setSettingsDevice(null)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" form="kiosk-print-limits-form" disabled={settingsSaving}>
+              {settingsSaving ? 'Saving…' : 'Save limits'}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="kiosk-print-limits-form"
+          className="grid gap-4 md:grid-cols-2"
+          onSubmit={(e) => void onSavePrintLimits(e)}
+        >
+          <label>
+            Max pages / session
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={printLimits.maxPagesPerSession}
+              onChange={(e) =>
+                setPrintLimits((s) => ({ ...s, maxPagesPerSession: Number(e.target.value) }))
+              }
+            />
+          </label>
+          <label>
+            Black & white free pages
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={printLimits.freePagesPerSession}
+              onChange={(e) =>
+                setPrintLimits((s) => ({ ...s, freePagesPerSession: Number(e.target.value) }))
+              }
+            />
+          </label>
+          <label>
+            Black & white extra page charge (₹)
+            <Input
+              type="number"
+              min={0}
+              max={1000}
+              value={printLimits.extraPageChargeRupees}
+              onChange={(e) =>
+                setPrintLimits((s) => ({ ...s, extraPageChargeRupees: Number(e.target.value) }))
+              }
+            />
+          </label>
+          <label>
+            Color free pages
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={printLimits.freeColorPagesPerSession}
+              onChange={(e) =>
+                setPrintLimits((s) => ({
+                  ...s,
+                  freeColorPagesPerSession: Number(e.target.value),
+                }))
+              }
+            />
+          </label>
+          <label>
+            Color extra page charge (₹)
+            <Input
+              type="number"
+              min={0}
+              max={1000}
+              value={printLimits.extraColorPageChargeRupees}
+              onChange={(e) =>
+                setPrintLimits((s) => ({
+                  ...s,
+                  extraColorPageChargeRupees: Number(e.target.value),
+                }))
+              }
+            />
+          </label>
+          <p className="muted md:col-span-2" style={{ margin: 0 }}>
+            Black & white: first {printLimits.freePagesPerSession} page(s) free, then ₹
+            {printLimits.extraPageChargeRupees} each. Color: first {printLimits.freeColorPagesPerSession}{' '}
+            page(s) free, then ₹{printLimits.extraColorPageChargeRupees} each. Max pages is a hard
+            cap.
+          </p>
+          {settingsError ? <p className="error md:col-span-2">{settingsError}</p> : null}
         </form>
       </Modal>
     </div>

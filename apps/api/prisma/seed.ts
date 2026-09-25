@@ -114,14 +114,9 @@ async function main() {
       settingValue: {
         ttlSeconds: 1800,
         otpLength: 6,
-        maxPagesPerSession: 10,
         maxDocumentsPerSession: 5,
         maxVerifyAttempts: 5,
         maxFileSizeMb: 15,
-        freePagesPerSession: 5,
-        extraPageChargeRupees: 10,
-        freeColorPagesPerSession: 0,
-        extraColorPageChargeRupees: 20,
       },
     },
   });

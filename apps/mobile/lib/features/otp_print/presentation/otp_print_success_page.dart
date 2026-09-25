@@ -116,7 +116,9 @@ class _OtpPrintSuccessPageState extends ConsumerState<OtpPrintSuccessPage>
           ),
           const SizedBox(height: 12),
           Text(
-            l10n.otpSentHelper,
+            challenge.deviceName != null && challenge.deviceName!.isNotEmpty
+                ? l10n.printOnlyAtKiosk(challenge.deviceName!)
+                : l10n.otpSentHelper,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
           ),

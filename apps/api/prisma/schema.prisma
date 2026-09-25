@@ -184,6 +184,11 @@ model Device {
   address              String?
   lastHeartbeatAt      DateTime?    @map("last_heartbeat_at")
   surveillanceEnabled  Boolean      @default(false) @map("surveillance_enabled")
+  maxPagesPerSession         Int @default(10) @map("max_pages_per_session")
+  freePagesPerSession        Int @default(5) @map("free_pages_per_session")
+  extraPageChargeRupees      Int @default(10) @map("extra_page_charge_rupees")
+  freeColorPagesPerSession   Int @default(0) @map("free_color_pages_per_session")
+  extraColorPageChargeRupees Int @default(20) @map("extra_color_page_charge_rupees")
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 

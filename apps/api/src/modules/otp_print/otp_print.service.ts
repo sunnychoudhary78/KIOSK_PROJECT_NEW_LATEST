@@ -2,7 +2,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
-import { OtpChallengeStatus, PaymentStatus, PrintColorMode, PrintJobSource } from '@prisma/client';
+import { DeviceStatus, OtpChallengeStatus, PaymentStatus, PrintColorMode, PrintJobSource } from '@prisma/client';
 import type { OtpChallenge, OtpDocument, Payment } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
@@ -13,6 +13,7 @@ import type { AuditService } from '../audit/audit.service.js';
 import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
+import { printLimitsFromDevice } from '../devices/device_print_limits.js';
 import { quoteOtpPrintPages, type PrintColorMode as QuoteColorMode, type PrintQuote } from './otp_print.quote.js';
 import type { RedeemOtpInput, UploadedPdf } from './otp_print.schemas.js';
 
@@ -22,7 +23,26 @@ type ChallengeWithDocs = OtpChallenge & {
   documents: OtpDocument[];
   payment?: Payment | null;
   printJob?: { id: string; status: string } | null;
+  device?: {
+    id: string;
+    name: string;
+    maxPagesPerSession?: number;
+    freePagesPerSession?: number;
+    extraPageChargeRupees?: number;
+    freeColorPagesPerSession?: number;
+    extraColorPageChargeRupees?: number;
+  } | null;
 };
+
+const deviceQuoteSelect = {
+  id: true,
+  name: true,
+  maxPagesPerSession: true,
+  freePagesPerSession: true,
+  extraPageChargeRupees: true,
+  freeColorPagesPerSession: true,
+  extraColorPageChargeRupees: true,
+} as const;
 
 async function countPdfPages(buffer: Buffer): Promise<number> {
   const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
@@ -62,7 +82,34 @@ export class OtpPrintService {
     documentLabel: string | undefined,
     correlationId?: string,
     printColorMode: QuoteColorMode = 'bw',
+    deviceId?: string,
   ) {
+    if (!deviceId) {
+      throw new AppError('validation_error', 'A kiosk must be selected before uploading', 400);
+    }
+
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        maxPagesPerSession: true,
+        freePagesPerSession: true,
+        extraPageChargeRupees: true,
+        freeColorPagesPerSession: true,
+        extraColorPageChargeRupees: true,
+      },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Selected kiosk was not found', 404);
+    }
+    if (device.status !== DeviceStatus.active) {
+      throw new AppError('kiosk_unavailable', 'Selected kiosk is not available', 400);
+    }
+    await this.services.assertEnabled(device.id, 'otp_print');
+
+    const printLimits = printLimitsFromDevice(device);
     const printConfig = await this.settings.getOtpPrintConfig();
     const otpLength = printConfig.otpLength || this.config.otp.length;
     const ttlSeconds = printConfig.ttlSeconds || this.config.otp.ttlSeconds;
@@ -114,10 +161,10 @@ export class OtpPrintService {
       });
     }
 
-    if (totalPages > printConfig.maxPagesPerSession) {
+    if (totalPages > printLimits.maxPagesPerSession) {
       throw new AppError(
         'page_limit_exceeded',
-        `Total pages (${totalPages}) exceed the limit of ${printConfig.maxPagesPerSession}`,
+        `Total pages (${totalPages}) exceed the limit of ${printLimits.maxPagesPerSession}`,
         400,
       );
     }
@@ -127,7 +174,7 @@ export class OtpPrintService {
       throw new AppError('phone_required', 'Citizen account must have a phone number', 400);
     }
 
-    const quote = quoteOtpPrintPages(totalPages, printConfig, printColorMode);
+    const quote = quoteOtpPrintPages(totalPages, printLimits, printColorMode);
     const persistedColorMode =
       printColorMode === 'color' ? PrintColorMode.color : PrintColorMode.bw;
     const paymentRequired = quote.paymentRequired;
@@ -177,6 +224,7 @@ export class OtpPrintService {
           data: {
             id: challengeId,
             userId,
+            deviceId: device.id,
             documentLabel: label,
             pageCount: totalPages,
             printColorMode: persistedColorMode,
@@ -197,7 +245,11 @@ export class OtpPrintService {
               },
             },
           },
-          include: { documents: { orderBy: { sortOrder: 'asc' } }, payment: true },
+          include: {
+            documents: { orderBy: { sortOrder: 'asc' } },
+            payment: true,
+            device: { select: deviceQuoteSelect },
+          },
         });
 
         await this.audit.record({
@@ -211,6 +263,7 @@ export class OtpPrintService {
             documentLabel: label,
             pageCount: totalPages,
             documentCount: prepared.length,
+            deviceId: device.id,
             printColorMode: quote.printColorMode,
             paymentRequired: true,
             extraPages: quote.extraPages,
@@ -223,20 +276,25 @@ export class OtpPrintService {
 
       const code = generateNumericOtp(otpLength);
       const challenge = await this.db.otpChallenge.create({
-        data: {
-          id: challengeId,
-          userId,
-          codeHash: hashOtp(code),
-          codeHint: code.slice(-2),
-          documentLabel: label,
-          pageCount: totalPages,
-          printColorMode: persistedColorMode,
-          expiresAt,
-          status: OtpChallengeStatus.pending,
-          documents: { create: documentRows },
-        },
-        include: { documents: { orderBy: { sortOrder: 'asc' } }, payment: true },
-      });
+          data: {
+            id: challengeId,
+            userId,
+            deviceId: device.id,
+            codeHash: hashOtp(code),
+            codeHint: code.slice(-2),
+            documentLabel: label,
+            pageCount: totalPages,
+            printColorMode: persistedColorMode,
+            expiresAt,
+            status: OtpChallengeStatus.pending,
+            documents: { create: documentRows },
+          },
+          include: {
+            documents: { orderBy: { sortOrder: 'asc' } },
+            payment: true,
+            device: { select: deviceQuoteSelect },
+          },
+        });
 
       try {
         await this.sms.sendOtp(user.phone, code, ttlSeconds);
@@ -257,6 +315,7 @@ export class OtpPrintService {
           documentLabel: label,
           pageCount: totalPages,
           documentCount: prepared.length,
+          deviceId: device.id,
           printColorMode: quote.printColorMode,
           paymentRequired: false,
         },
@@ -272,20 +331,16 @@ export class OtpPrintService {
   async getChallengeForCitizen(userId: string, challengeId: string) {
     const challenge = await this.db.otpChallenge.findUnique({
       where: { id: challengeId },
-      include: { documents: { orderBy: { sortOrder: 'asc' } }, payment: true },
+      include: {
+        documents: { orderBy: { sortOrder: 'asc' } },
+        payment: true,
+        device: { select: deviceQuoteSelect },
+      },
     });
     if (!challenge || challenge.userId !== userId) {
       throw new AppError('not_found', 'Print session not found', 404);
     }
-    const printConfig = await this.settings.getOtpPrintConfig();
-    const quote = challenge.payment
-      ? quoteFromPayment(challenge.payment)
-      : quoteOtpPrintPages(
-          challenge.pageCount,
-          printConfig,
-          challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
-        );
-    return this.toPublicChallenge(challenge, quote);
+    return this.toPublicChallenge(challenge, this.quoteForChallenge(challenge));
   }
 
   async listForCitizen(userId: string) {
@@ -295,20 +350,14 @@ export class OtpPrintService {
         documents: { orderBy: { sortOrder: 'asc' } },
         payment: true,
         printJob: { select: { id: true, status: true } },
+        device: { select: deviceQuoteSelect },
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
-    const printConfig = await this.settings.getOtpPrintConfig();
     return {
       items: rows.map((challenge) => {
-        const quote = challenge.payment
-          ? quoteFromPayment(challenge.payment)
-          : quoteOtpPrintPages(
-              challenge.pageCount,
-              printConfig,
-              challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
-            );
+        const quote = this.quoteForChallenge(challenge);
         return {
           ...this.toPublicChallenge(challenge, quote),
           createdAt: challenge.createdAt.toISOString(),
@@ -443,6 +492,14 @@ export class OtpPrintService {
       throw new AppError('otp_invalid', 'Invalid or already used OTP', 400);
     }
 
+    if (challenge.deviceId && challenge.deviceId !== deviceId) {
+      throw new AppError(
+        'otp_wrong_kiosk',
+        'This OTP is for a different kiosk. Use the kiosk selected in the app.',
+        400,
+      );
+    }
+
     if (challenge.attemptCount >= printConfig.maxVerifyAttempts) {
       await this.db.otpChallenge.update({
         where: { id: challenge.id },
@@ -529,6 +586,17 @@ export class OtpPrintService {
     return doc;
   }
 
+  quoteForChallenge(challenge: ChallengeWithDocs): PrintQuote {
+    if (challenge.payment) {
+      return quoteFromPayment(challenge.payment);
+    }
+    return quoteOtpPrintPages(
+      challenge.pageCount,
+      printLimitsFromDevice(challenge.device),
+      challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
+    );
+  }
+
   toPublicChallenge(challenge: ChallengeWithDocs, quote: PrintQuote) {
     const paymentRequired =
       challenge.status === OtpChallengeStatus.awaiting_payment || quote.paymentRequired;
@@ -544,6 +612,8 @@ export class OtpPrintService {
       documentLabel: challenge.documentLabel,
       pageCount: challenge.pageCount,
       printColorMode: challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
+      deviceId: challenge.deviceId,
+      deviceName: challenge.device?.name ?? null,
       documents: challenge.documents.map((d) => ({
         id: d.id,
         fileName: d.fileName,

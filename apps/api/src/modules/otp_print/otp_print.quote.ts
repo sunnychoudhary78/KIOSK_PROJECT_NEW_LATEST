@@ -1,4 +1,4 @@
-import type { OtpPrintConfig } from '../platform_settings/platform_settings.defaults.js';
+import type { DevicePrintLimits } from '../devices/device_print_limits.js';
 
 export type PrintColorMode = 'bw' | 'color';
 
@@ -16,7 +16,7 @@ export type PrintQuote = {
 export function quoteOtpPrintPages(
   pageCount: number,
   config: Pick<
-    OtpPrintConfig,
+    DevicePrintLimits,
     | 'freePagesPerSession'
     | 'extraPageChargeRupees'
     | 'freeColorPagesPerSession'

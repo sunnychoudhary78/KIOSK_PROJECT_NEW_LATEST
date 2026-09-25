@@ -7,6 +7,7 @@ import 'package:skp_mobile/app/router.dart';
 import 'package:skp_mobile/core/format.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 import 'package:skp_mobile/core/ui/ui.dart';
+import 'package:skp_mobile/features/nearby_kiosks/application/nearby_kiosks_controller.dart';
 import 'package:skp_mobile/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_mobile/l10n/app_localizations.dart';
 
@@ -21,6 +22,15 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
   final _label = TextEditingController();
   final List<File> _files = [];
   String _printColorMode = 'bw';
+  NearbyKiosk? _kiosk;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(nearbyKiosksProvider.notifier).load();
+    });
+  }
 
   @override
   void dispose() {
@@ -46,8 +56,11 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
   }
 
   Future<void> _upload() async {
+    final kiosk = _kiosk;
+    if (kiosk == null) return;
     await ref.read(otpPrintControllerProvider.notifier).createChallenge(
           files: List<File>.from(_files),
+          deviceId: kiosk.id,
           documentLabel: _label.text.trim(),
           printColorMode: _printColorMode,
         );
@@ -75,6 +88,8 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final loading = state.isLoading;
+    final nearby = ref.watch(nearbyKiosksProvider);
+    final selected = nearby.items.where((item) => item.id == _kiosk?.id).firstOrNull;
 
     return SkpScaffold(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
@@ -97,7 +112,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           SkpPrimaryButton(
             label: loading ? l10n.uploading : l10n.uploadContinue,
             loading: loading,
-            onPressed: loading || _files.isEmpty ? null : _upload,
+            onPressed: loading || _files.isEmpty || selected == null ? null : _upload,
           ),
         ],
       ),
@@ -111,6 +126,46 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             backEnabled: !loading,
           ),
           const SizedBox(height: 20),
+          Text(
+            l10n.selectKiosk,
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            key: ValueKey(nearby.items.map((item) => item.id).join(',')),
+            initialValue: selected?.id,
+            isExpanded: true,
+            hint: Text(l10n.chooseKioskToContinue),
+            items: nearby.items
+                .map(
+                  (kiosk) => DropdownMenuItem(
+                    value: kiosk.id,
+                    child: Text(
+                      '${kiosk.name} · ${kiosk.distanceLabel}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: loading
+                ? null
+                : (id) {
+                    setState(() {
+                      _kiosk = nearby.items.where((item) => item.id == id).firstOrNull;
+                    });
+                  },
+          ),
+          if (nearby.loading) ...[
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(minHeight: 2),
+          ] else if (nearby.error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              nearby.error!,
+              style: theme.textTheme.bodySmall?.copyWith(color: SkpColors.danger),
+            ),
+          ],
+          const SizedBox(height: 16),
           TextField(
             controller: _label,
             enabled: !loading,
@@ -176,7 +231,17 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            _printColorMode == 'color' ? l10n.colorHelp : l10n.bwHelp,
+            selected == null
+                ? (_printColorMode == 'color' ? l10n.colorHelp : l10n.bwHelp)
+                : l10n.kioskPrintPricing(
+                    _printColorMode == 'color'
+                        ? selected.freeColorPagesPerSession
+                        : selected.freePagesPerSession,
+                    _printColorMode == 'color'
+                        ? selected.extraColorPageChargeRupees
+                        : selected.extraPageChargeRupees,
+                    selected.maxPagesPerSession,
+                  ),
             style: theme.textTheme.bodySmall?.copyWith(color: SkpColors.muted),
           ),
           const SizedBox(height: 16),

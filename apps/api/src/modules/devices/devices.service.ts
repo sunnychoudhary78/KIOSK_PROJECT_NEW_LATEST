@@ -5,7 +5,12 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
 import type { AuditService } from '../audit/audit.service.js';
-import type { NearbyDevicesQuery, RegisterDeviceInput } from './devices.schemas.js';
+import type {
+  NearbyDevicesQuery,
+  RegisterDeviceInput,
+  SetDevicePrintLimitsInput,
+} from './devices.schemas.js';
+import { printLimitsFromDevice } from './device_print_limits.js';
 
 function mapDevice(device: {
   id: string;
@@ -17,6 +22,11 @@ function mapDevice(device: {
   address: string | null;
   lastHeartbeatAt: Date | null;
   surveillanceEnabled: boolean;
+  maxPagesPerSession?: number;
+  freePagesPerSession?: number;
+  extraPageChargeRupees?: number;
+  freeColorPagesPerSession?: number;
+  extraColorPageChargeRupees?: number;
   site: { name: string };
 }) {
   return {
@@ -30,6 +40,7 @@ function mapDevice(device: {
     address: device.address,
     lastHeartbeatAt: device.lastHeartbeatAt?.toISOString() ?? null,
     surveillanceEnabled: device.surveillanceEnabled,
+    ...printLimitsFromDevice(device),
   };
 }
 
@@ -75,6 +86,7 @@ export class DevicesService {
           longitude: device.longitude,
           distanceKm,
           lastHeartbeatAt: device.lastHeartbeatAt?.toISOString() ?? null,
+          ...printLimitsFromDevice(device),
         };
       })
       .sort((a, b) => a.distanceKm - b.distanceKm)
@@ -215,6 +227,45 @@ export class DevicesService {
       resourceId: deviceId,
       correlationId,
       metadata: { surveillanceEnabled: enabled },
+    });
+
+    return mapDevice(updated);
+  }
+
+  async setPrintLimits(
+    deviceId: string,
+    input: SetDevicePrintLimitsInput,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    const updated = await this.db.device.update({
+      where: { id: deviceId },
+      data: {
+        maxPagesPerSession: input.maxPagesPerSession,
+        freePagesPerSession: input.freePagesPerSession,
+        extraPageChargeRupees: input.extraPageChargeRupees,
+        freeColorPagesPerSession: input.freeColorPagesPerSession,
+        extraColorPageChargeRupees: input.extraColorPageChargeRupees,
+      },
+      include: { site: true },
+    });
+
+    await this.audit.record({
+      action: 'device.print_limits_updated',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: { ...input },
     });
 
     return mapDevice(updated);

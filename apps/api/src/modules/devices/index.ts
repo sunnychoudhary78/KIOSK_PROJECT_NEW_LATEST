@@ -10,6 +10,7 @@ import { DevicesService } from './devices.service.js';
 import {
   nearbyDevicesQuerySchema,
   registerDeviceSchema,
+  setDevicePrintLimitsSchema,
   setDeviceStatusSchema,
   setDeviceSurveillanceSchema,
 } from './devices.schemas.js';
@@ -76,6 +77,29 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
         const result = await service.setStatus(
           requireParam(req.params.deviceId, 'deviceId'),
           req.body.status,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.patch(
+    '/devices/:deviceId/print-limits',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(setDevicePrintLimitsSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.setPrintLimits(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.body,
           req.principal.id,
           req.correlationId,
         );

@@ -12,6 +12,11 @@ class NearbyKiosk {
     required this.distanceKm,
     this.address,
     this.lastHeartbeatAt,
+    this.maxPagesPerSession = 10,
+    this.freePagesPerSession = 5,
+    this.extraPageChargeRupees = 10,
+    this.freeColorPagesPerSession = 0,
+    this.extraColorPageChargeRupees = 20,
   });
 
   final String id;
@@ -22,6 +27,11 @@ class NearbyKiosk {
   final double longitude;
   final double distanceKm;
   final String? lastHeartbeatAt;
+  final int maxPagesPerSession;
+  final int freePagesPerSession;
+  final int extraPageChargeRupees;
+  final int freeColorPagesPerSession;
+  final int extraColorPageChargeRupees;
 
   factory NearbyKiosk.fromJson(Map<String, dynamic> json) {
     return NearbyKiosk(
@@ -33,6 +43,11 @@ class NearbyKiosk {
       longitude: (json['longitude'] as num).toDouble(),
       distanceKm: (json['distanceKm'] as num).toDouble(),
       lastHeartbeatAt: json['lastHeartbeatAt'] as String?,
+      maxPagesPerSession: _asInt(json['maxPagesPerSession'], 10),
+      freePagesPerSession: _asInt(json['freePagesPerSession'], 5),
+      extraPageChargeRupees: _asInt(json['extraPageChargeRupees'], 10),
+      freeColorPagesPerSession: _asInt(json['freeColorPagesPerSession'], 0),
+      extraColorPageChargeRupees: _asInt(json['extraColorPageChargeRupees'], 20),
     );
   }
 
@@ -136,3 +151,9 @@ final nearbyKiosksProvider =
     NotifierProvider<NearbyKiosksNotifier, NearbyKiosksState>(
   NearbyKiosksNotifier.new,
 );
+
+int _asInt(dynamic value, int fallback) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return fallback;
+}

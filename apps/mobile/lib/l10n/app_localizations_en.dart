@@ -224,6 +224,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Black & white is the default and usually costs less per extra page.';
 
   @override
+  String get selectKiosk => 'Print kiosk';
+
+  @override
+  String get chooseKioskToContinue => 'Choose the kiosk where you will print';
+
+  @override
+  String kioskPrintPricing(int free, int charge, int max) {
+    return 'First $free page(s) free, then ₹$charge each. Max $max pages.';
+  }
+
+  @override
+  String printOnlyAtKiosk(String name) {
+    return 'Print only at $name';
+  }
+
+  @override
   String get addPdfsToContinue => 'Add one or more PDFs to continue.';
 
   @override
@@ -277,7 +293,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get otpSentHelper =>
-      'Check your messages, then enter the OTP on the kiosk to preview and print.';
+      'Check your messages, then enter the OTP on the chosen kiosk to preview and print.';
 
   @override
   String pagesColorFiles(int pages, String color, int files) {

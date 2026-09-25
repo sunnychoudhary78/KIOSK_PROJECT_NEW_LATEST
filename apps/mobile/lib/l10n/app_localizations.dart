@@ -488,6 +488,30 @@ abstract class AppLocalizations {
   /// **'Black & white is the default and usually costs less per extra page.'**
   String get bwHelp;
 
+  /// No description provided for @selectKiosk.
+  ///
+  /// In en, this message translates to:
+  /// **'Print kiosk'**
+  String get selectKiosk;
+
+  /// No description provided for @chooseKioskToContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the kiosk where you will print'**
+  String get chooseKioskToContinue;
+
+  /// No description provided for @kioskPrintPricing.
+  ///
+  /// In en, this message translates to:
+  /// **'First {free} page(s) free, then ₹{charge} each. Max {max} pages.'**
+  String kioskPrintPricing(int free, int charge, int max);
+
+  /// No description provided for @printOnlyAtKiosk.
+  ///
+  /// In en, this message translates to:
+  /// **'Print only at {name}'**
+  String printOnlyAtKiosk(String name);
+
   /// No description provided for @addPdfsToContinue.
   ///
   /// In en, this message translates to:
@@ -587,7 +611,7 @@ abstract class AppLocalizations {
   /// No description provided for @otpSentHelper.
   ///
   /// In en, this message translates to:
-  /// **'Check your messages, then enter the OTP on the kiosk to preview and print.'**
+  /// **'Check your messages, then enter the OTP on the chosen kiosk to preview and print.'**
   String get otpSentHelper;
 
   /// No description provided for @pagesColorFiles.

@@ -17,6 +17,7 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
 
   Future<void> createChallenge({
     required List<File> files,
+    required String deviceId,
     String? documentLabel,
     String printColorMode = 'bw',
   }) async {
@@ -25,6 +26,7 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
       final result = await _api.postMultipart(
         '/otp-challenges',
         fields: {
+          'deviceId': deviceId,
           if (documentLabel != null && documentLabel.isNotEmpty)
             'documentLabel': documentLabel,
           'printColorMode': printColorMode == 'color' ? 'color' : 'bw',

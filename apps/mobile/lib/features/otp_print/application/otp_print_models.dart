@@ -88,6 +88,8 @@ class OtpChallenge {
     this.quote,
     this.createdAt,
     this.printJob,
+    this.deviceId,
+    this.deviceName,
   });
 
   final String id;
@@ -102,6 +104,8 @@ class OtpChallenge {
   final PrintQuote? quote;
   final String? createdAt;
   final PrintJobSummary? printJob;
+  final String? deviceId;
+  final String? deviceName;
 
   String get printColorLabel => printColorMode == 'color' ? 'Color' : 'Black & white';
 
@@ -136,6 +140,8 @@ class OtpChallenge {
       quote: quoteRaw is Map<String, dynamic> ? PrintQuote.fromJson(quoteRaw) : null,
       createdAt: json['createdAt'] as String?,
       printJob: jobRaw is Map<String, dynamic> ? PrintJobSummary.fromJson(jobRaw) : null,
+      deviceId: json['deviceId'] as String?,
+      deviceName: json['deviceName'] as String?,
     );
   }
 }

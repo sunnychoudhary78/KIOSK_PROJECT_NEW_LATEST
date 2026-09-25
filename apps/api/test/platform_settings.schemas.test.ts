@@ -9,48 +9,28 @@ import {
 } from '../src/modules/platform_settings/platform_settings.defaults.js';
 
 describe('platform settings schemas', () => {
-  it('accepts default otp print config with 10 page / 30 min defaults', () => {
+  it('accepts default otp print config without page-price fields', () => {
     const parsed = otpPrintConfigSchema.parse(DEFAULT_OTP_PRINT_CONFIG);
-    expect(parsed.maxPagesPerSession).toBe(10);
     expect(parsed.ttlSeconds).toBe(1800);
-    expect(parsed.freePagesPerSession).toBe(5);
-    expect(parsed.extraPageChargeRupees).toBe(10);
-    expect(parsed.freeColorPagesPerSession).toBe(0);
-    expect(parsed.extraColorPageChargeRupees).toBe(20);
+    expect(parsed.otpLength).toBe(6);
+    expect(parsed.maxDocumentsPerSession).toBe(5);
+    expect(parsed.maxVerifyAttempts).toBe(5);
+    expect(parsed.maxFileSizeMb).toBe(15);
+    expect(parsed).not.toHaveProperty('maxPagesPerSession');
+    expect(parsed).not.toHaveProperty('freePagesPerSession');
   });
 
-  it('fills new pricing fields when merging an older stored row', () => {
+  it('strips leftover page-price fields from an older stored row', () => {
     const parsed = otpPrintConfigSchema.parse({
       ...DEFAULT_OTP_PRINT_CONFIG,
-      ttlSeconds: 1800,
-      otpLength: 6,
       maxPagesPerSession: 10,
-      maxDocumentsPerSession: 5,
-      maxVerifyAttempts: 5,
-      maxFileSizeMb: 15,
+      freePagesPerSession: 5,
+      extraPageChargeRupees: 10,
+      freeColorPagesPerSession: 0,
+      extraColorPageChargeRupees: 20,
     });
-    expect(parsed.freePagesPerSession).toBe(5);
-    expect(parsed.extraPageChargeRupees).toBe(10);
-    expect(parsed.freeColorPagesPerSession).toBe(0);
-    expect(parsed.extraColorPageChargeRupees).toBe(20);
-  });
-
-  it('rejects free pages above the hard session cap', () => {
-    const result = otpPrintConfigSchema.safeParse({
-      ...DEFAULT_OTP_PRINT_CONFIG,
-      freePagesPerSession: 20,
-      maxPagesPerSession: 10,
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects color free pages above the hard session cap', () => {
-    const result = otpPrintConfigSchema.safeParse({
-      ...DEFAULT_OTP_PRINT_CONFIG,
-      freeColorPagesPerSession: 20,
-      maxPagesPerSession: 10,
-    });
-    expect(result.success).toBe(false);
+    expect(parsed.maxDocumentsPerSession).toBe(5);
+    expect(parsed).not.toHaveProperty('maxPagesPerSession');
   });
 
   it('accepts citizen auth defaults', () => {
