@@ -17,6 +17,14 @@ void main() {
       );
     });
 
+    test('hideCursor defaults to false for laptop use', () {
+      const config = AppConfig(
+        apiBaseUrl: 'http://localhost:3000/v1',
+        environment: 'local',
+      );
+      expect(config.hideCursor, isFalse);
+    });
+
     test('digilockerOAuthCallbackUrl on AppConfig instance matches helper', () {
       const config = AppConfig(
         apiBaseUrl: 'http://192.168.1.30:3000/v1',

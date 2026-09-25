@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
+import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_auth_webview.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
@@ -91,7 +92,7 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
           DigilockerPhase.idle ||
           DigilockerPhase.loadingDocs ||
           DigilockerPhase.preparingPreview =>
-            KioskLoading(
+            KioskWaitAds(
               message: state.phase == DigilockerPhase.preparingPreview
                   ? 'Preparing document preview…'
                   : (state.message ?? 'Loading…'),
@@ -168,7 +169,7 @@ class _AuthBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (authorizationUrl == null) {
-      return const KioskLoading(message: 'Starting DigiLocker…');
+      return const KioskWaitAds(message: 'Starting DigiLocker…');
     }
 
     return Padding(

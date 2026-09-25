@@ -99,6 +99,26 @@ void main() {
     });
   });
 
+  test('waiting holds the idle timer', () {
+    fakeAsync((async) {
+      final resets = <bool>[];
+      final container = containerOf(resets);
+      addTearDown(container.dispose);
+      container.listen(kioskSessionControllerProvider, (_, _) {});
+      final session = container.read(kioskSessionControllerProvider.notifier);
+
+      session.setOnHome(false);
+      container.read(kioskSessionHoldProvider.notifier).set(waiting: true);
+      async.elapse(const Duration(minutes: 2));
+      expect(container.read(kioskSessionControllerProvider).phase, KioskSessionPhase.inService);
+      expect(resets, isEmpty);
+
+      container.read(kioskSessionHoldProvider.notifier).set(waiting: false);
+      async.elapse(const Duration(seconds: 5));
+      expect(container.read(kioskSessionControllerProvider).phase, KioskSessionPhase.warning);
+    });
+  });
+
   test('catalog does not warn', () {
     fakeAsync((async) {
       final resets = <bool>[];

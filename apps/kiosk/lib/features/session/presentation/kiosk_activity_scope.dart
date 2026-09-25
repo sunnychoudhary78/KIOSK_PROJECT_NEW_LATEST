@@ -15,7 +15,8 @@ class KioskActivityScope extends ConsumerWidget {
         ref.read(kioskSessionControllerProvider.notifier).noteActivity();
 
     return Focus(
-      autofocus: true,
+      canRequestFocus: false,
+      descendantsAreFocusable: true,
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent) {
           note();

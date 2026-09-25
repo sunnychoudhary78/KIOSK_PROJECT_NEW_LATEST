@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/app/router.dart';
+import 'package:skp_kiosk/core/config/app_config.dart';
 import 'package:skp_kiosk/core/theme/app_theme.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/kiosk_activity_scope.dart';
@@ -57,10 +57,11 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
             ],
           ),
         );
+        final hideCursor = AppConfig.fromEnvironment().hideCursor;
         return MediaQuery(
           data: scaled,
           child: MouseRegion(
-            cursor: kDebugMode ? MouseCursor.defer : SystemMouseCursors.none,
+            cursor: hideCursor ? SystemMouseCursors.none : SystemMouseCursors.basic,
             child: surface,
           ),
         );

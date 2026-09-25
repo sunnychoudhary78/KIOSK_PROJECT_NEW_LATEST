@@ -35,6 +35,34 @@ class KioskDateStepper extends StatelessWidget {
     onChanged(next);
   }
 
+  static DateTime stepColumn(
+    DateTime value, {
+    required int column,
+    required int delta,
+    int firstYear = 1920,
+  }) {
+    final last = DateTime.now();
+    final maxDay = DateTime(value.year, value.month + 1, 0).day;
+    var year = value.year;
+    var month = value.month;
+    var day = value.day;
+    switch (column) {
+      case 1:
+        month = ((month - 1 + delta) % 12 + 12) % 12 + 1;
+      case 2:
+        year = (year + delta).clamp(firstYear, last.year);
+      default:
+        day = ((day - 1 + delta) % maxDay + maxDay) % maxDay + 1;
+    }
+    final maxD = DateTime(year, month + 1, 0).day;
+    day = day.clamp(1, maxD);
+    var next = DateTime(year, month, day);
+    if (next.isAfter(last)) {
+      next = last;
+    }
+    return next;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -103,6 +131,14 @@ class KioskTimeStepper extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static TimeOfDay stepColumn(TimeOfDay value, {required int column, required int delta}) {
+    int wrap(int current, int mod) => ((current + delta) % mod + mod) % mod;
+    if (column == 1) {
+      return TimeOfDay(hour: value.hour, minute: wrap(value.minute, 60));
+    }
+    return TimeOfDay(hour: wrap(value.hour, 24), minute: value.minute);
   }
 }
 

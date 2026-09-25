@@ -1,4 +1,5 @@
 export 'kiosk_buttons.dart';
+export 'kiosk_hardware_keys.dart';
 export 'kiosk_clock.dart';
 export 'kiosk_date_stepper.dart';
 export 'kiosk_keyboard.dart';

@@ -106,9 +106,7 @@ class _ActivationForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.basic,
-      child: KioskShell(
+    return KioskShell(
         showHome: false,
         footerTrailing: KioskPrimaryButton(
           label: auth.loading ? 'Activating…' : 'Activate device',
@@ -179,7 +177,6 @@ class _ActivationForm extends StatelessWidget {
           ),
         ),
         ),
-      ),
     );
   }
 }

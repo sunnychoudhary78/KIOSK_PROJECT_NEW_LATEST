@@ -10,6 +10,7 @@ class AppConfig {
     this.surveillanceFps = 15,
     this.surveillanceBitrate = 1200000,
     this.surveillanceMaxCacheBytes = 30 * 1024 * 1024 * 1024,
+    this.hideCursor = false,
   });
 
   final String apiBaseUrl;
@@ -29,6 +30,10 @@ class AppConfig {
   final int surveillanceFps;
   final int surveillanceBitrate;
   final int surveillanceMaxCacheBytes;
+
+  /// When true, hide the mouse pointer (touch-only fleet). Default false so
+  /// laptop testing still shows a cursor.
+  final bool hideCursor;
 
   /// DigiLocker OAuth redirect registered with MeriPehchaan (exact match).
   /// Derived from [apiBaseUrl] host so LAN kiosks hit the same backend.
@@ -78,6 +83,10 @@ class AppConfig {
       'SKP_SURVEILLANCE_MAX_CACHE_GB',
       defaultValue: 30,
     );
+    const hideCursorRaw = String.fromEnvironment(
+      'SKP_KIOSK_HIDE_CURSOR',
+      defaultValue: 'false',
+    );
     return AppConfig(
       apiBaseUrl: apiBaseUrl,
       environment: env,
@@ -89,6 +98,7 @@ class AppConfig {
       surveillanceFps: fps,
       surveillanceBitrate: bitrate,
       surveillanceMaxCacheBytes: maxCacheGb * 1024 * 1024 * 1024,
+      hideCursor: hideCursorRaw.toLowerCase() == 'true',
     );
   }
 }

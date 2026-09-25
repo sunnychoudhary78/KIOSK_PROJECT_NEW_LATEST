@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
+import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
@@ -102,7 +104,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
       step = 'Documents';
     }
 
-    return VisitorSessionPopScope(
+    Widget page = VisitorSessionPopScope(
       child: KioskShell(
         title: 'OTP Print',
         onHome: _endSession,
@@ -110,7 +112,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
         footerLeading: leading,
         footerTrailing: trailing,
         body: switch (state.phase) {
-          OtpPrintPhase.redeeming || OtpPrintPhase.preparingPreview => KioskLoading(
+          OtpPrintPhase.redeeming || OtpPrintPhase.preparingPreview => KioskWaitAds(
               message: state.phase == OtpPrintPhase.preparingPreview
                   ? 'Preparing document preview…'
                   : 'Fetching documents…',
@@ -151,6 +153,32 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             ),
         },
       ),
+    );
+
+    if (!entering) {
+      return page;
+    }
+    return KioskHardwareKeys(
+      onKeyEvent: (event) {
+        final command = mapOtpHardwareKey(event);
+        if (command == null) {
+          return KeyEventResult.ignored;
+        }
+        switch (command.action) {
+          case OtpHardwareAction.digit:
+            _appendDigit(command.digit ?? '');
+          case OtpHardwareAction.backspace:
+            _backspace();
+          case OtpHardwareAction.clear:
+            _clear();
+          case OtpHardwareAction.submit:
+            if (!state.loading && _otp.length >= 4) {
+              controller.redeem(_otp);
+            }
+        }
+        return KeyEventResult.handled;
+      },
+      child: page,
     );
   }
 }

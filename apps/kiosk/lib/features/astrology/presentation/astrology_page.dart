@@ -4,11 +4,14 @@ import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/hardware/camera/camera_lease.dart';
+import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/hardware/camera/kiosk_camera.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
+import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_jpeg.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
@@ -39,6 +42,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   bool _timeUnknown = false;
   String _gender = 'female';
   int _focus = 0;
+  int _stepperColumn = 0;
 
   @override
   void initState() {
@@ -274,6 +278,82 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     setState(() {});
   }
 
+  void _cycleFocus({required bool reverse}) {
+    final max = _timeUnknown ? 2 : 3;
+    setState(() {
+      _focus = reverse ? (_focus == 0 ? max : _focus - 1) : (_focus == max ? 0 : _focus + 1);
+      _clampStepperColumn();
+    });
+  }
+
+  void _clampStepperColumn() {
+    final maxColumn = _focus == 3 ? 1 : 2;
+    if (_stepperColumn > maxColumn) {
+      _stepperColumn = maxColumn;
+    }
+  }
+
+  void _nudgeStepper(int delta, {required bool moveColumn}) {
+    if (_focus == 2) {
+      setState(() {
+        if (moveColumn) {
+          _stepperColumn = nextStepperColumn(_stepperColumn, 3, delta);
+        } else {
+          _dob = KioskDateStepper.stepColumn(_dob, column: _stepperColumn, delta: delta);
+        }
+      });
+      return;
+    }
+    if (_focus == 3 && !_timeUnknown) {
+      setState(() {
+        if (moveColumn) {
+          _stepperColumn = nextStepperColumn(_stepperColumn, 2, delta);
+        } else {
+          _birthTime = KioskTimeStepper.stepColumn(
+            _birthTime,
+            column: _stepperColumn,
+            delta: delta,
+          );
+        }
+      });
+    }
+  }
+
+  KeyEventResult _handleFormKey(KeyEvent event) {
+    final command = mapAstrologyHardwareKey(
+      event,
+      shiftPressed: HardwareKeyboard.instance.isShiftPressed,
+    );
+    if (command == null) {
+      return KeyEventResult.ignored;
+    }
+    switch (command.action) {
+      case AstrologyHardwareAction.character:
+        if ((_focus == 0 || _focus == 1) && command.character != null) {
+          _type(command.character!);
+        }
+      case AstrologyHardwareAction.backspace:
+        if (_focus == 0 || _focus == 1) {
+          _backspace();
+        }
+      case AstrologyHardwareAction.tab:
+        _cycleFocus(reverse: false);
+      case AstrologyHardwareAction.shiftTab:
+        _cycleFocus(reverse: true);
+      case AstrologyHardwareAction.arrowLeft:
+        _nudgeStepper(-1, moveColumn: true);
+      case AstrologyHardwareAction.arrowRight:
+        _nudgeStepper(1, moveColumn: true);
+      case AstrologyHardwareAction.arrowUp:
+        _nudgeStepper(1, moveColumn: false);
+      case AstrologyHardwareAction.arrowDown:
+        _nudgeStepper(-1, moveColumn: false);
+      case AstrologyHardwareAction.submit:
+        _submit();
+    }
+    return KeyEventResult.handled;
+  }
+
   void _resetForm() {
     _name.clear();
     _place.clear();
@@ -327,7 +407,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
         step = 'Result';
     }
 
-    return VisitorSessionPopScope(
+    Widget page = VisitorSessionPopScope(
       child: KioskShell(
         title: 'Astrology',
         onHome: _endSession,
@@ -356,7 +436,10 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 palmPreview: state.palmBytes,
                 error: state.error,
                 focus: _focus,
-                onFocus: (value) => setState(() => _focus = value),
+                onFocus: (value) => setState(() {
+                  _focus = value;
+                  _clampStepperColumn();
+                }),
                 onDob: (value) => setState(() => _dob = value),
                 onTime: (value) => setState(() => _birthTime = value),
                 onTimeUnknown: (value) => setState(() => _timeUnknown = value),
@@ -364,7 +447,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 onKey: _type,
                 onBackspace: _backspace,
               ),
-            AstrologyPhase.submitting => const KioskLoading(
+            AstrologyPhase.submitting => const KioskWaitAds(
                 key: ValueKey('submitting'),
                 message: 'Preparing your reading…',
               ),
@@ -372,13 +455,21 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 key: const ValueKey('result'),
                 reading: state.reading!,
               ),
-            AstrologyPhase.result => const KioskLoading(
+            AstrologyPhase.result => const KioskWaitAds(
                 key: ValueKey('result-empty'),
                 message: 'Preparing your reading…',
               ),
           },
         ),
       ),
+    );
+
+    if (state.phase != AstrologyPhase.form) {
+      return page;
+    }
+    return KioskHardwareKeys(
+      onKeyEvent: _handleFormKey,
+      child: page,
     );
   }
 }

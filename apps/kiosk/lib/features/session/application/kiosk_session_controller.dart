@@ -77,7 +77,7 @@ class KioskSessionController extends Notifier<KioskSessionState> {
       if (state.phase != KioskSessionPhase.inService) {
         return;
       }
-      if (next.printing) {
+      if (next.printing || next.waiting) {
         _cancelTimers();
         return;
       }
@@ -178,7 +178,7 @@ class KioskSessionController extends Notifier<KioskSessionState> {
       return;
     }
     final hold = ref.read(kioskSessionHoldProvider);
-    if (hold.printing) {
+    if (hold.printing || hold.waiting) {
       return;
     }
     final timeout =
@@ -190,7 +190,8 @@ class KioskSessionController extends Notifier<KioskSessionState> {
     if (state.phase != KioskSessionPhase.inService) {
       return;
     }
-    if (ref.read(kioskSessionHoldProvider).printing) {
+    final hold = ref.read(kioskSessionHoldProvider);
+    if (hold.printing || hold.waiting) {
       return;
     }
     state = state.copyWith(

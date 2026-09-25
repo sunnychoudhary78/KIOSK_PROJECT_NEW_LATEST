@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/features/ads/data/ads_media_cache.dart';
 import 'package:skp_kiosk/features/ads/data/ads_repository.dart';
+import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 
 final adsRepositoryProvider = Provider<AdsRepository>((ref) {
   return AdsRepository(ref.watch(apiClientProvider));
@@ -55,6 +57,16 @@ class AdsController extends Notifier<AdsUiState> {
       _pollTimer?.cancel();
       _idleTimer?.cancel();
     });
+    ref.listen<KioskSessionState>(kioskSessionControllerProvider, (previous, next) {
+      if (previous?.onHome == next.onHome) {
+        return;
+      }
+      if (next.onHome) {
+        resetIdleTimer();
+      } else {
+        _pauseAttract();
+      }
+    });
     return const AdsUiState();
   }
 
@@ -100,8 +112,24 @@ class AdsController extends Notifier<AdsUiState> {
     _armIdleTimerIfNeeded();
   }
 
-  /// Arm timer only when overlay is hidden and idle creatives exist.
+  /// Hide attract immediately and do not re-arm while a service route is open.
+  void _pauseAttract() {
+    _idleTimer?.cancel();
+    _idleTimer = null;
+    if (state.idleVisible) {
+      state = state.copyWith(idleVisible: false);
+    }
+  }
+
+  bool get _onHome => ref.read(kioskSessionControllerProvider).onHome;
+
+  /// Arm timer only on home, when overlay is hidden and idle creatives exist.
   void _armIdleTimerIfNeeded() {
+    if (!_onHome) {
+      _idleTimer?.cancel();
+      _idleTimer = null;
+      return;
+    }
     if (state.idleVisible) {
       return;
     }
@@ -112,10 +140,17 @@ class AdsController extends Notifier<AdsUiState> {
     }
     _idleTimer?.cancel();
     _idleTimer = Timer(idleTimeout, () {
-      if (state.playlist.idle.isNotEmpty) {
-        state = state.copyWith(idleVisible: true);
+      if (!_onHome || state.playlist.idle.isEmpty) {
+        return;
       }
+      state = state.copyWith(idleVisible: true);
     });
+  }
+
+  @visibleForTesting
+  void replacePlaylist(AdPlaylist playlist) {
+    state = state.copyWith(playlist: playlist);
+    _armIdleTimerIfNeeded();
   }
 
   void dismissIdle() {
