@@ -216,16 +216,10 @@ class _ServiceCatalog extends StatelessWidget {
                   const tileH = 210.0;
                   final tiles = [
                     KioskServiceTile(
-                      icon: Icons.qr_code_2_outlined,
-                      title: 'Quick Print',
-                      subtitle: 'Scan a QR and upload from your phone browser',
-                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.quickPrint),
-                    ),
-                    KioskServiceTile(
                       icon: Icons.print_outlined,
-                      title: 'OTP Print',
-                      subtitle: 'Print documents using the code from the mobile app',
-                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.otpPrint),
+                      title: 'Print',
+                      subtitle: 'Upload from your phone or enter the app OTP',
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.print),
                     ),
                     KioskServiceTile(
                       icon: Icons.account_balance_outlined,
