@@ -82,3 +82,42 @@ jobs:
           target: "/var/www/kiosk-v2/apps/admin/dist"
           strip_components: 3
           overwrite: true
+
+  deploy-print-web:
+    name: Deploy Print Web
+    runs-on: ubuntu-latest
+    environment: UAT
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build print-web
+        env:
+          VITE_SKP_API_BASE_URL: ${{ vars.VITE_SKP_API_BASE_URL }}
+          VITE_PLAY_STORE_URL: ${{ vars.VITE_PLAY_STORE_URL }}
+        run: pnpm --filter @skp/print-web build
+
+      - name: Upload print-web dist to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          source: "apps/print-web/dist/*"
+          target: "/var/www/kiosk-v2/apps/print-web/dist"
+          strip_components: 3
+          overwrite: true
