@@ -70,6 +70,7 @@ void main() {
     );
     await tester.pump();
     expect(find.text('OTP Print'), findsOneWidget);
+    expect(find.text('Quick Print'), findsOneWidget);
     expect(find.text('Deactivate this device'), findsNothing);
     expect(find.text('Activate this terminal'), findsNothing);
   });

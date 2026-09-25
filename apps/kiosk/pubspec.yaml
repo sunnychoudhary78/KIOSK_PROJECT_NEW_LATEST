@@ -26,6 +26,7 @@ dependencies:
   image: ^4.5.4
   http_parser: ^4.1.2
   window_manager: ^0.5.1
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,4 @@
-import { OtpChallengeStatus, PaymentStatus } from '@prisma/client';
+import { OtpChallengeStatus, PaymentStatus, QuickPrintSessionStatus } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError, isAppError } from '../../shared/errors.js';
@@ -189,6 +189,18 @@ export class PaymentsService {
     }
 
     if (payment.status === PaymentStatus.PAID) {
+      if (payment.quickPrintSessionId) {
+        await this.markQuickPrintReady(payment.quickPrintSessionId, input.correlationId);
+        return {
+          alreadyPaid: true,
+          otpSent: false,
+          sessionReady: true,
+          payment: this.toPublicPayment(payment),
+        };
+      }
+      if (!payment.challengeId) {
+        throw new AppError('not_found', 'Payment is not linked to a print session', 404);
+      }
       const issued = await this.otpPrint.issueOtpAndNotify(payment.challengeId, input.correlationId);
       return {
         alreadyPaid: true,
@@ -222,13 +234,30 @@ export class PaymentsService {
 
     await this.audit.record({
       action: 'payment.paid',
-      principalType: 'citizen',
+      principalType: payment.userId ? 'citizen' : 'system',
       principalId: payment.userId,
       resourceType: 'payment',
       resourceId: payment.id,
       correlationId: input.correlationId,
-      metadata: { challengeId: payment.challengeId, razorpayOrderId: input.razorpayOrderId },
+      metadata: {
+        challengeId: payment.challengeId,
+        quickPrintSessionId: payment.quickPrintSessionId,
+        razorpayOrderId: input.razorpayOrderId,
+      },
     });
+
+    if (payment.quickPrintSessionId) {
+      await this.markQuickPrintReady(payment.quickPrintSessionId, input.correlationId);
+      return {
+        alreadyPaid: false,
+        otpSent: false,
+        sessionReady: true,
+        payment: this.toPublicPayment(updated),
+      };
+    }
+    if (!payment.challengeId) {
+      throw new AppError('not_found', 'Payment is not linked to a print session', 404);
+    }
 
     const issued = await this.otpPrint.issueOtpAndNotify(payment.challengeId, input.correlationId);
     return {
@@ -236,6 +265,36 @@ export class PaymentsService {
       otpSent: issued.issued || issued.alreadyIssued,
       payment: this.toPublicPayment(updated),
     };
+  }
+
+  private async markQuickPrintReady(sessionId: string, correlationId?: string) {
+    const session = await this.db.quickPrintSession.findUnique({ where: { id: sessionId } });
+    if (!session) {
+      return;
+    }
+    if (
+      session.status === QuickPrintSessionStatus.ready ||
+      session.status === QuickPrintSessionStatus.consumed
+    ) {
+      return;
+    }
+    const paidGraceMs = 5 * 60 * 1000;
+    await this.db.quickPrintSession.update({
+      where: { id: sessionId },
+      data: {
+        status: QuickPrintSessionStatus.ready,
+        expiresAt: new Date(Math.max(session.expiresAt.getTime(), Date.now() + paidGraceMs)),
+      },
+    });
+    await this.audit.record({
+      action: 'quick_print.paid',
+      principalType: 'system',
+      principalId: session.deviceId,
+      resourceType: 'quick_print_session',
+      resourceId: sessionId,
+      correlationId,
+      metadata: { afterPayment: true },
+    });
   }
 
   async markRazorpayPaymentFailed(razorpayOrderId: string, reason?: string) {

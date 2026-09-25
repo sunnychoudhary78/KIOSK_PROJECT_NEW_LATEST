@@ -7,8 +7,10 @@
   "scripts": {
     "dev:api": "pnpm --filter @skp/api dev",
     "dev:admin": "pnpm --filter @skp/admin dev",
+    "dev:print-web": "pnpm --filter @skp/print-web dev",
     "build:api": "pnpm --filter @skp/api build",
     "build:admin": "pnpm --filter @skp/admin build",
+    "build:print-web": "pnpm --filter @skp/print-web build",
     "lint": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" lint",
     "typecheck": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" typecheck",
     "test:api": "pnpm --filter @skp/api test",

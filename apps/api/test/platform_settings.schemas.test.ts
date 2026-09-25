@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   citizenAuthConfigSchema,
   otpPrintConfigSchema,
+  quickPrintConfigSchema,
 } from '../src/modules/platform_settings/platform_settings.schemas.js';
 import {
   DEFAULT_CITIZEN_AUTH_CONFIG,
   DEFAULT_OTP_PRINT_CONFIG,
+  DEFAULT_QUICK_PRINT_CONFIG,
 } from '../src/modules/platform_settings/platform_settings.defaults.js';
 
 describe('platform settings schemas', () => {
@@ -31,6 +33,10 @@ describe('platform settings schemas', () => {
     });
     expect(parsed.maxDocumentsPerSession).toBe(5);
     expect(parsed).not.toHaveProperty('maxPagesPerSession');
+  });
+
+  it('accepts quick print defaults', () => {
+    expect(quickPrintConfigSchema.parse(DEFAULT_QUICK_PRINT_CONFIG).ttlSeconds).toBe(600);
   });
 
   it('accepts citizen auth defaults', () => {

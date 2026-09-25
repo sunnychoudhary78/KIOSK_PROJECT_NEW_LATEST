@@ -213,52 +213,48 @@ class _ServiceCatalog extends StatelessWidget {
                 builder: (context, constraints) {
                   const gap = 16.0;
                   final tileW = (constraints.maxWidth - gap) / 2;
-                  final tileH = (constraints.maxHeight - gap) / 2;
-                  return Wrap(
-                    spacing: gap,
-                    runSpacing: gap,
-                    children: [
-                      SizedBox(
-                        width: tileW,
-                        height: tileH,
-                        child: KioskServiceTile(
-                          icon: Icons.print_outlined,
-                          title: 'OTP Print',
-                          subtitle: 'Print documents using the code from the mobile app',
-                          onTap: () => Navigator.of(context).pushNamed(AppRoutes.otpPrint),
-                        ),
-                      ),
-                      SizedBox(
-                        width: tileW,
-                        height: tileH,
-                        child: KioskServiceTile(
-                          icon: Icons.account_balance_outlined,
-                          title: 'DigiLocker Print',
-                          subtitle: 'Sign in and print government documents',
-                          onTap: () => Navigator.of(context).pushNamed(AppRoutes.digilockerPrint),
-                        ),
-                      ),
-                      SizedBox(
-                        width: tileW,
-                        height: tileH,
-                        child: KioskServiceTile(
-                          icon: Icons.favorite_outline,
-                          title: 'Well Being',
-                          subtitle: 'Heart rate, blood oxygen, and temperature',
-                          onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
-                        ),
-                      ),
-                      SizedBox(
-                        width: tileW,
-                        height: tileH,
-                        child: KioskServiceTile(
-                          icon: Icons.back_hand_outlined,
-                          title: 'Astrology',
-                          subtitle: 'Palm reading and birth chart',
-                          onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
-                        ),
-                      ),
-                    ],
+                  const tileH = 210.0;
+                  final tiles = [
+                    KioskServiceTile(
+                      icon: Icons.qr_code_2_outlined,
+                      title: 'Quick Print',
+                      subtitle: 'Scan a QR and upload from your phone browser',
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.quickPrint),
+                    ),
+                    KioskServiceTile(
+                      icon: Icons.print_outlined,
+                      title: 'OTP Print',
+                      subtitle: 'Print documents using the code from the mobile app',
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.otpPrint),
+                    ),
+                    KioskServiceTile(
+                      icon: Icons.account_balance_outlined,
+                      title: 'DigiLocker Print',
+                      subtitle: 'Sign in and print government documents',
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.digilockerPrint),
+                    ),
+                    KioskServiceTile(
+                      icon: Icons.favorite_outline,
+                      title: 'Well Being',
+                      subtitle: 'Heart rate, blood oxygen, and temperature',
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
+                    ),
+                    KioskServiceTile(
+                      icon: Icons.back_hand_outlined,
+                      title: 'Astrology',
+                      subtitle: 'Palm reading and birth chart',
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
+                    ),
+                  ];
+                  return SingleChildScrollView(
+                    child: Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        for (final tile in tiles)
+                          SizedBox(width: tileW, height: tileH, child: tile),
+                      ],
+                    ),
                   );
                 },
               ),

@@ -30,13 +30,13 @@ export function PrintJobsPage() {
 
   return (
     <div>
-      <PageHeader title="Print jobs" subtitle="OTP and DigiLocker print activity" />
+      <PageHeader title="Print jobs" subtitle="OTP, Quick Print, and DigiLocker activity" />
       <Panel>
         {error ? <p className="error">{error}</p> : null}
         {items.length === 0 && !error ? (
           <EmptyState
             title="No print jobs yet"
-            description="OTP uploads and DigiLocker prints will appear here when a kiosk queues them."
+            description="OTP, Quick Print, and DigiLocker jobs will appear here when a kiosk queues them."
           />
         ) : (
           <table className="table">

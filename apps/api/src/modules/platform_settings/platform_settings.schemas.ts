@@ -8,6 +8,10 @@ export const otpPrintConfigSchema = z.object({
   maxFileSizeMb: z.number().int().min(1).max(50),
 });
 
+export const quickPrintConfigSchema = z.object({
+  ttlSeconds: z.number().int().min(60).max(3600),
+});
+
 export const citizenAuthConfigSchema = z.object({
   ttlSeconds: z.number().int().min(60).max(3600),
   otpLength: z.number().int().min(4).max(8),

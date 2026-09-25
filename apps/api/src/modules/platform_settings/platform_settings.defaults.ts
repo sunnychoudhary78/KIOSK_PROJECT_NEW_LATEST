@@ -1,5 +1,6 @@
 export const SMS_CONFIG_KEY = 'sms_config';
 export const OTP_PRINT_CONFIG_KEY = 'otp_print_config';
+export const QUICK_PRINT_CONFIG_KEY = 'quick_print_config';
 export const CITIZEN_AUTH_CONFIG_KEY = 'citizen_auth_config';
 
 export type OtpPrintConfig = {
@@ -8,6 +9,10 @@ export type OtpPrintConfig = {
   maxDocumentsPerSession: number;
   maxVerifyAttempts: number;
   maxFileSizeMb: number;
+};
+
+export type QuickPrintConfig = {
+  ttlSeconds: number;
 };
 
 export type CitizenAuthConfig = {
@@ -23,6 +28,10 @@ export const DEFAULT_OTP_PRINT_CONFIG: OtpPrintConfig = {
   maxDocumentsPerSession: 5,
   maxVerifyAttempts: 5,
   maxFileSizeMb: 15,
+};
+
+export const DEFAULT_QUICK_PRINT_CONFIG: QuickPrintConfig = {
+  ttlSeconds: 600,
 };
 
 export const DEFAULT_CITIZEN_AUTH_CONFIG: CitizenAuthConfig = {

@@ -36,6 +36,11 @@ const ACTION_LABELS: Record<string, string> = {
   'otp.created': 'Print OTP created',
   'otp.issued': 'Print OTP issued',
   'otp.redeemed': 'Print OTP redeemed',
+  'quick_print.session_started': 'Quick Print session started',
+  'quick_print.uploaded': 'Quick Print documents uploaded',
+  'quick_print.paid': 'Quick Print payment received',
+  'quick_print.claimed': 'Quick Print claimed',
+  'quick_print.cancelled': 'Quick Print cancelled',
   'payment.order_created': 'Payment order created',
   'payment.paid': 'Payment received',
   'platform_setting.updated': 'Platform setting updated',
@@ -65,6 +70,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   device: 'Kiosk',
   digilocker_session: 'DigiLocker session',
   otp_session: 'Print OTP',
+  quick_print_session: 'Quick Print',
   payment: 'Payment',
   platform_setting: 'Platform setting',
   print_job: 'Print job',
@@ -107,7 +113,7 @@ function resourceLabel(resourceType: string | null): string {
 
 function categoryOf(action: string): Exclude<Category, 'all'> {
   if (action.startsWith('auth.')) return 'auth';
-  if (action.startsWith('print_job.') || action.startsWith('otp.')) return 'print';
+  if (action.startsWith('print_job.') || action.startsWith('otp.') || action.startsWith('quick_print.')) return 'print';
   if (action.startsWith('digilocker.')) return 'digilocker';
   if (action.startsWith('device.')) return 'device';
   if (action.startsWith('ads.')) return 'ads';

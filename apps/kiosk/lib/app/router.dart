@@ -3,6 +3,7 @@ import 'package:skp_kiosk/features/astrology/presentation/astrology_page.dart';
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_print_page.dart';
 import 'package:skp_kiosk/features/home/presentation/home_page.dart';
 import 'package:skp_kiosk/features/otp_print/presentation/otp_print_page.dart';
+import 'package:skp_kiosk/features/quick_print/presentation/quick_print_page.dart';
 import 'package:skp_kiosk/features/serial_debug/presentation/serial_debug_page.dart';
 import 'package:skp_kiosk/features/well_being/presentation/well_being_page.dart';
 
@@ -11,6 +12,7 @@ final GlobalKey<NavigatorState> kioskNavigatorKey = GlobalKey<NavigatorState>();
 class AppRoutes {
   static const home = '/';
   static const otpPrint = '/otp-print';
+  static const quickPrint = '/quick-print';
   static const digilockerPrint = '/digilocker-print';
   static const wellBeing = '/well-being';
   static const astrology = '/astrology';
@@ -22,6 +24,8 @@ class AppRouter {
     switch (settings.name) {
       case AppRoutes.otpPrint:
         return MaterialPageRoute(builder: (_) => const OtpPrintPage());
+      case AppRoutes.quickPrint:
+        return MaterialPageRoute(builder: (_) => const QuickPrintPage());
       case AppRoutes.digilockerPrint:
         return MaterialPageRoute(builder: (_) => const DigilockerPrintPage());
       case AppRoutes.wellBeing:

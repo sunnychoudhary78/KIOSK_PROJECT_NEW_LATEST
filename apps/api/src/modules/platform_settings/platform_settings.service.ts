@@ -6,14 +6,18 @@ import {
   CITIZEN_AUTH_CONFIG_KEY,
   DEFAULT_CITIZEN_AUTH_CONFIG,
   DEFAULT_OTP_PRINT_CONFIG,
+  DEFAULT_QUICK_PRINT_CONFIG,
   OTP_PRINT_CONFIG_KEY,
+  QUICK_PRINT_CONFIG_KEY,
   SMS_CONFIG_KEY,
   type CitizenAuthConfig,
   type OtpPrintConfig,
+  type QuickPrintConfig,
 } from './platform_settings.defaults.js';
 import {
   citizenAuthConfigSchema,
   otpPrintConfigSchema,
+  quickPrintConfigSchema,
   type UpdatePlatformSettingInput,
 } from './platform_settings.schemas.js';
 
@@ -55,6 +59,18 @@ export class PlatformSettingsService {
       ...asObject(row.settingValue),
     });
     return parsed.success ? parsed.data : { ...DEFAULT_OTP_PRINT_CONFIG };
+  }
+
+  async getQuickPrintConfig(): Promise<QuickPrintConfig> {
+    const row = await this.getRaw(QUICK_PRINT_CONFIG_KEY);
+    if (!row) {
+      return { ...DEFAULT_QUICK_PRINT_CONFIG };
+    }
+    const parsed = quickPrintConfigSchema.safeParse({
+      ...DEFAULT_QUICK_PRINT_CONFIG,
+      ...asObject(row.settingValue),
+    });
+    return parsed.success ? parsed.data : { ...DEFAULT_QUICK_PRINT_CONFIG };
   }
 
   async getCitizenAuthConfig(): Promise<CitizenAuthConfig> {
@@ -127,6 +143,20 @@ export class PlatformSettingsService {
         throw new AppError(
           'validation_error',
           parsed.error.issues[0]?.message ?? 'Invalid otp_print_config',
+          400,
+        );
+      }
+      return parsed.data;
+    }
+    if (settingKey === QUICK_PRINT_CONFIG_KEY) {
+      const parsed = quickPrintConfigSchema.safeParse({
+        ...DEFAULT_QUICK_PRINT_CONFIG,
+        ...asObject(raw),
+      });
+      if (!parsed.success) {
+        throw new AppError(
+          'validation_error',
+          parsed.error.issues[0]?.message ?? 'Invalid quick_print_config',
           400,
         );
       }

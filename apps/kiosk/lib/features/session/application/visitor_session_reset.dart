@@ -8,6 +8,7 @@ import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
 import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
+import 'package:skp_kiosk/features/quick_print/application/quick_print_controller.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_controller.dart';
 
 typedef VisitorSessionResetFn = Future<void> Function({required bool attract});
@@ -31,6 +32,11 @@ Future<void> resetVisitorSession(
       ref.read(otpPrintControllerProvider.notifier).reset();
     } catch (_) {}
   }
+  if (ref.exists(quickPrintControllerProvider)) {
+    try {
+      await ref.read(quickPrintControllerProvider.notifier).reset();
+    } catch (_) {}
+  }
 
   // Allow PopScope(canPop: false) to rebuild as canPop: true before we pop.
   WidgetsBinding.instance.scheduleFrame();
@@ -40,6 +46,7 @@ Future<void> resetVisitorSession(
 
   ref.invalidate(digilockerControllerProvider);
   ref.invalidate(otpPrintControllerProvider);
+  ref.invalidate(quickPrintControllerProvider);
   ref.invalidate(astrologyControllerProvider);
   ref.invalidate(wellBeingControllerProvider);
 

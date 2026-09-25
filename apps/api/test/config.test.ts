@@ -43,6 +43,7 @@ describe('loadConfig', () => {
       keySecret: '',
       webhookSecret: '',
     });
+    expect(config.printWeb.publicUrl).toBe('http://localhost:5174');
     expect(config.payments.windowMinutes).toBe(15);
     expect(config.vedastro.baseUrl).toBe('https://api.vedastro.org/api');
     expect(config.aiProvider).toBe('noop');

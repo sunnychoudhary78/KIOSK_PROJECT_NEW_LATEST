@@ -69,6 +69,11 @@ async function main() {
       name: 'Astrology & Palm Reading',
       description: 'Vedic chart plus palm reading from the kiosk camera',
     },
+    {
+      code: 'quick_print',
+      name: 'Quick Print',
+      description: 'Scan a QR on the kiosk and upload documents from a phone browser',
+    },
   ]) {
     await prisma.platformService.upsert({
       where: { code: service.code },
@@ -81,27 +86,30 @@ async function main() {
     });
   }
 
-  const astrologyService = await prisma.platformService.findUnique({
-    where: { code: 'astrology' },
+  const extraServices = await prisma.platformService.findMany({
+    where: { code: { in: ['astrology', 'quick_print'] } },
+    select: { id: true, code: true },
   });
-  if (astrologyService) {
+  if (extraServices.length) {
     const devices = await prisma.device.findMany({ select: { id: true, tenantId: true } });
     for (const device of devices) {
-      await prisma.serviceEnablement.upsert({
-        where: {
-          deviceId_serviceId: {
-            deviceId: device.id,
-            serviceId: astrologyService.id,
+      for (const extra of extraServices) {
+        await prisma.serviceEnablement.upsert({
+          where: {
+            deviceId_serviceId: {
+              deviceId: device.id,
+              serviceId: extra.id,
+            },
           },
-        },
-        update: {},
-        create: {
-          tenantId: device.tenantId,
-          deviceId: device.id,
-          serviceId: astrologyService.id,
-          enabled: true,
-        },
-      });
+          update: {},
+          create: {
+            tenantId: device.tenantId,
+            deviceId: device.id,
+            serviceId: extra.id,
+            enabled: true,
+          },
+        });
+      }
     }
   }
 
@@ -117,6 +125,18 @@ async function main() {
         maxDocumentsPerSession: 5,
         maxVerifyAttempts: 5,
         maxFileSizeMb: 15,
+      },
+    },
+  });
+
+  await prisma.platformSetting.upsert({
+    where: { settingKey: 'quick_print_config' },
+    update: {},
+    create: {
+      settingKey: 'quick_print_config',
+      description: 'Walk-up Quick Print session TTL',
+      settingValue: {
+        ttlSeconds: 600,
       },
     },
   });

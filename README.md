@@ -3,10 +3,11 @@
 pnpm docker:up
 pnpm dev:api  
 pnpm dev:admin
+pnpm dev:print-web
 
 Enterprise SaaS platform for a scalable public kiosk ecosystem.
 
-This monorepo contains four independently deployable applications that share one API contract, one domain vocabulary, and a modular **service plugin** model. Version 1 ships two kiosk services; more services (Health Check, Phone Charging, Astrology, Government Services, etc.) are intended to plug into the same spine without rewriting host apps.
+This monorepo contains independently deployable applications that share one API contract, one domain vocabulary, and a modular **service plugin** model. Version 1 ships OTP Print, Quick Print, and DigiLocker Print; more services are intended to plug into the same spine without rewriting host apps.
 
 | Item            | Value                         |
 | --------------- | ----------------------------- |
@@ -57,6 +58,7 @@ Smart Kiosk Platform (SKP) is designed as a multi-tenant operator platform:
 | Service code       | Name             | What it does                                                            |
 | ------------------ | ---------------- | ----------------------------------------------------------------------- |
 | `otp_print`        | OTP Print        | Citizen creates an OTP on mobile; kiosk redeems it and prints           |
+| `quick_print`      | Quick Print      | Kiosk shows a QR; phone browser uploads (and pays) without the app      |
 | `digilocker_print` | DigiLocker Print | Kiosk starts a DigiLocker session, lists documents, creates a print job |
 
 ### Extensibility model
@@ -87,10 +89,11 @@ Shared orchestration for printing lives in the `printing` module. Enablement is 
 
 | App        | Path                         | Stack                                                  | Role                     |
 | ---------- | ---------------------------- | ------------------------------------------------------ | ------------------------ |
-| **API**    | [`apps/api`](apps/api)       | Node.js, Express, Prisma, PostgreSQL, Zod, JWT, Vitest | Platform backend (`/v1`) |
-| **Admin**  | [`apps/admin`](apps/admin)   | React 19, Vite 6, TypeScript, React Router             | Operator console         |
-| **Kiosk**  | [`apps/kiosk`](apps/kiosk)   | Flutter (Windows), Riverpod 3, http                    | On-site terminal         |
-| **Mobile** | [`apps/mobile`](apps/mobile) | Flutter (Android/iOS), Riverpod 3, http                | Citizen app              |
+| **API**       | [`apps/api`](apps/api)             | Node.js, Express, Prisma, PostgreSQL, Zod, JWT, Vitest | Platform backend (`/v1`) |
+| **Admin**     | [`apps/admin`](apps/admin)         | React 19, Vite 6, TypeScript, React Router             | Operator console         |
+| **Print web** | [`apps/print-web`](apps/print-web) | React 19, Vite 6, TypeScript, React Router             | Guest Quick Print site   |
+| **Kiosk**     | [`apps/kiosk`](apps/kiosk)         | Flutter (Windows), Riverpod 3, http                    | On-site terminal         |
+| **Mobile**    | [`apps/mobile`](apps/mobile)       | Flutter (Android/iOS), Riverpod 3, http                | Citizen app              |
 
 Flutter apps use their own `pubspec.yaml` and are **not** part of the pnpm dependency graph. Root pnpm workspace manages JS/TS packages only.
 
@@ -106,6 +109,7 @@ flowchart TB
     Kiosk["Flutter Windows Kiosk"]
     Mobile["Flutter Mobile Android/iOS"]
     Admin["React Vite Admin Panel"]
+    PrintWeb["React Vite Print Web"]
   end
 
   subgraph backend [Backend Platform]
@@ -166,7 +170,7 @@ created → ready → printing → completed
                           ↘ expired (where applicable)
 ```
 
-OTP Print and DigiLocker Print both create jobs through the **`printing`** module. Kiosk reports status with `PATCH /v1/print-jobs/:jobId/status`.
+OTP Print, Quick Print, and DigiLocker Print all create jobs through the **`printing`** module. Kiosk reports status with `PATCH /v1/print-jobs/:jobId/status`.
 
 ---
 
@@ -179,6 +183,7 @@ smart-kiosk-platform/
 ├── apps/
 │   ├── api/                 # Node.js + Express + Prisma backend
 │   ├── admin/               # React + Vite admin panel
+│   ├── print-web/           # Public Quick Print site (QR guest upload)
 │   ├── kiosk/               # Flutter Windows kiosk
 │   └── mobile/              # Flutter Android & iOS citizen app
 ├── packages/
@@ -191,7 +196,7 @@ smart-kiosk-platform/
 │   └── scripts/             # bootstrap.ps1
 ├── .github/
 │   └── workflows/
-│       └── ci.yml           # api-contracts, api, admin, flutter jobs
+│       └── ci.yml           # api-contracts, api, admin, print-web, flutter jobs
 ├── .vscode/
 │   └── extensions.json
 ├── .editorconfig
@@ -291,6 +296,7 @@ apps/kiosk/
 │   ├── features/
 │   │   ├── home/
 │   │   ├── otp_print/       # domain, data, application, presentation
+│   │   ├── quick_print/
 │   │   ├── digilocker_print/
 │   │   ├── device/
 │   │   └── session/
@@ -339,7 +345,8 @@ packages/
 │   └── adr/
 │       ├── 0001-monorepo.md
 │       ├── 0002-auth-principals.md
-│       └── 0003-service-plugin-model.md
+│       ├── 0003-service-plugin-model.md
+│       └── 0004-quick-print-session-token.md
 ├── eslint-config/
 │   ├── index.js
 │   └── react.js
@@ -581,6 +588,20 @@ sequenceDiagram
   Kiosk->>API: PATCH /print-jobs/:id/status
 ```
 
+### Quick Print
+
+```text
+Kiosk → POST /quick-print/sessions
+     ← session + publicUrl (QR)
+Phone → GET/POST /quick-print/public/sessions/:token  (no login)
+     → optional Razorpay order/verify
+Kiosk → poll GET /quick-print/sessions/:id
+Kiosk → POST /quick-print/sessions/:id/claim → printJob
+Kiosk → GET document content → PrintSpooler
+```
+
+Guest payments attach to the session (`userId` null). See [`adr/0004-quick-print-session-token.md`](packages/docs/adr/0004-quick-print-session-token.md).
+
 ### DigiLocker Print
 
 ```text
@@ -614,7 +635,8 @@ Access tokens never leave the API. Redirect URI must match DigiLocker portal reg
 | `SKP_DATABASE_URL`                           | Postgres connection                           | `postgresql://skp:skp_dev_password@localhost:5432/skp_local` |
 | `SKP_JWT_SECRET`                             | JWT signing (≥32 chars)                       | dev-only placeholder                                         |
 | `SKP_JWT_ACCESS_TTL_SECONDS`                 | Access token TTL                              | `3600`                                                       |
-| `SKP_CORS_ORIGINS`                           | Comma-separated origins                       | Vite `5173`                                                  |
+| `SKP_CORS_ORIGINS`                           | Comma-separated origins                       | Vite admin `5173`, print-web `5174`                          |
+| `SKP_PRINT_WEB_PUBLIC_URL`                   | Public Quick Print origin used in kiosk QRs   | `http://localhost:5174`                                      |
 | `SKP_OTP_TTL_SECONDS`                        | OTP lifetime                                  | `300`                                                        |
 | `SKP_OTP_LENGTH`                             | OTP digits                                    | `6`                                                          |
 | `SKP_RATE_LIMIT_WINDOW_MS` / `MAX`           | Rate limit                                    | `60000` / `120`                                              |
@@ -687,7 +709,12 @@ cp apps/admin/.env.example apps/admin/.env
 pnpm dev:admin
 # → http://localhost:5173
 
-# 6) Flutter clients
+# 6) Public Quick Print site
+cp apps/print-web/.env.example apps/print-web/.env
+pnpm dev:print-web
+# → http://localhost:5174
+
+# 7) Flutter clients
 cd apps/kiosk && flutter pub get
 cd apps/mobile && flutter pub get
 ```
@@ -718,6 +745,7 @@ PowerShell helper: [`tooling/scripts/bootstrap.ps1`](tooling/scripts/bootstrap.p
 | -------------------------------- | --------------------------------- |
 | `pnpm dev:api`                   | API watch mode (`tsx watch`)      |
 | `pnpm dev:admin`                 | Vite admin dev server             |
+| `pnpm dev:print-web`             | Vite public Quick Print site      |
 | `pnpm build:api`                 | Compile API TypeScript            |
 | `pnpm build:admin`               | Typecheck + Vite production build |
 | `pnpm lint`                      | Lint apps/packages                |

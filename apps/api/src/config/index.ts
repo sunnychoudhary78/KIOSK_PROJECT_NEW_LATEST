@@ -7,7 +7,8 @@ const envSchema = z.object({
   SKP_DATABASE_URL: z.string().min(1),
   SKP_JWT_SECRET: z.string().min(32),
   SKP_JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
-  SKP_CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  SKP_CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174'),
+  SKP_PRINT_WEB_PUBLIC_URL: z.string().url().default('http://localhost:5174'),
   SKP_OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   SKP_OTP_LENGTH: z.coerce.number().int().min(4).max(8).default(6),
   SKP_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
@@ -59,6 +60,9 @@ export type AppConfig = {
     accessTtlSeconds: number;
   };
   corsOrigins: string[];
+  printWeb: {
+    publicUrl: string;
+  };
   otp: {
     ttlSeconds: number;
     length: number;
@@ -148,6 +152,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
       accessTtlSeconds: data.SKP_JWT_ACCESS_TTL_SECONDS,
     },
     corsOrigins: data.SKP_CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
+    printWeb: {
+      publicUrl: data.SKP_PRINT_WEB_PUBLIC_URL.replace(/\/$/, ''),
+    },
     otp: {
       ttlSeconds: data.SKP_OTP_TTL_SECONDS,
       length: data.SKP_OTP_LENGTH,

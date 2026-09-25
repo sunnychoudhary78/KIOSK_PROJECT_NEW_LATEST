@@ -4,6 +4,10 @@ export function hashOtp(code: string): string {
   return createHash('sha256').update(code).digest('hex');
 }
 
+export function hashSecret(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 export function generateNumericOtp(length: number): string {
   const max = 10 ** length;
   return String(randomInt(0, max)).padStart(length, '0');

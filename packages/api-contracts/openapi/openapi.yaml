@@ -9,6 +9,7 @@ info:
     DigiLocker OAuth callback is mounted outside this prefix at
     GET /api/v1/auth/digilocker/callback (exact MeriPehchaan registered redirect).
     Access tokens stay server-side; kiosks poll session status and download print PDFs via device JWT.
+    Quick Print public session routes are authorized by an unguessable token in the path, not a JWT.
 servers:
   - url: http://localhost:3000/v1
     description: Local
@@ -18,6 +19,7 @@ tags:
   - name: Devices
   - name: Services
   - name: OtpPrint
+  - name: QuickPrint
   - name: Payments
   - name: DigiLocker
   - name: Printing
@@ -642,6 +644,222 @@ paths:
                 type: string
                 format: binary
 
+  /quick-print/sessions:
+    post:
+      tags: [QuickPrint]
+      summary: Start a walk-up Quick Print session (device)
+      operationId: createQuickPrintSession
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Session created with a one-time public URL for the QR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickPrintSessionCreated'
+
+  /quick-print/sessions/{sessionId}:
+    get:
+      tags: [QuickPrint]
+      summary: Poll Quick Print session status (device)
+      operationId: getQuickPrintSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session status, quote, and documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickPrintSessionResponse'
+
+  /quick-print/sessions/{sessionId}/claim:
+    post:
+      tags: [QuickPrint]
+      summary: Claim a ready Quick Print session and create a print job (device)
+      operationId: claimQuickPrintSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Print job and document download paths
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickPrintClaimResponse'
+
+  /quick-print/sessions/{sessionId}/cancel:
+    post:
+      tags: [QuickPrint]
+      summary: Cancel an in-progress Quick Print session (device)
+      operationId: cancelQuickPrintSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cancelled]
+                properties:
+                  cancelled:
+                    type: boolean
+
+  /quick-print/sessions/{sessionId}/documents/{documentId}/content:
+    get:
+      tags: [QuickPrint]
+      summary: Download a claimed Quick Print PDF (device)
+      operationId: getQuickPrintDocumentContent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: PDF bytes
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /quick-print/public/sessions/{token}:
+    get:
+      tags: [QuickPrint]
+      summary: Load a Quick Print session from the QR token
+      operationId: getQuickPrintPublicSession
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Public session view including kiosk print limits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickPrintSessionResponse'
+
+  /quick-print/public/sessions/{token}/documents:
+    post:
+      tags: [QuickPrint]
+      summary: Upload PDFs to a Quick Print session
+      operationId: uploadQuickPrintDocuments
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                printColorMode:
+                  type: string
+                  enum: [bw, color]
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '201':
+          description: Documents stored; session is ready or awaiting payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickPrintSessionResponse'
+
+  /quick-print/public/sessions/{token}/razorpay/order:
+    post:
+      tags: [QuickPrint]
+      summary: Create or reuse a Razorpay order for a guest Quick Print session
+      operationId: createQuickPrintRazorpayOrder
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Checkout order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickPrintRazorpayOrderResponse'
+
+  /quick-print/public/sessions/{token}/razorpay/verify:
+    post:
+      tags: [QuickPrint]
+      summary: Verify Razorpay checkout for a guest Quick Print session
+      operationId: verifyQuickPrintRazorpayPayment
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRazorpayPaymentRequest'
+      responses:
+        '200':
+          description: Payment fulfilled; session ready to print
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickPrintRazorpayVerifyResponse'
+
   /payments/razorpay/order:
     post:
       tags: [Payments]
@@ -736,7 +954,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [sms_config, otp_print_config, citizen_auth_config]
+            enum: [sms_config, otp_print_config, quick_print_config, citizen_auth_config]
       requestBody:
         required: true
         content:
@@ -1292,7 +1510,7 @@ components:
       properties:
         code:
           type: string
-          enum: [otp_print, digilocker_print, astrology]
+          enum: [otp_print, digilocker_print, astrology, quick_print]
         name:
           type: string
         description:
@@ -1378,6 +1596,122 @@ components:
           enum: [INR]
         paymentRequired:
           type: boolean
+
+    QuickPrintSessionResponse:
+      type: object
+      required: [id, status, expiresAt, documentLabel, pageCount, paymentRequired, documents, printLimits]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [waiting_upload, awaiting_payment, ready, consumed, expired, cancelled]
+        expiresAt:
+          type: string
+          format: date-time
+        documentLabel:
+          type: string
+        pageCount:
+          type: integer
+        printColorMode:
+          type: string
+          enum: [bw, color]
+        deviceId:
+          type: string
+          format: uuid
+        deviceName:
+          type: string
+          nullable: true
+        paymentRequired:
+          type: boolean
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/OtpDocumentMeta'
+        quote:
+          $ref: '#/components/schemas/PrintQuote'
+        printLimits:
+          $ref: '#/components/schemas/DevicePrintLimits'
+        printJob:
+          nullable: true
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              type: string
+
+    QuickPrintSessionCreated:
+      allOf:
+        - $ref: '#/components/schemas/QuickPrintSessionResponse'
+        - type: object
+          required: [publicUrl]
+          properties:
+            publicUrl:
+              type: string
+              format: uri
+
+    DevicePrintLimits:
+      type: object
+      required: [maxPagesPerSession, freePagesPerSession, extraPageChargeRupees, freeColorPagesPerSession, extraColorPageChargeRupees]
+      properties:
+        maxPagesPerSession:
+          type: integer
+        freePagesPerSession:
+          type: integer
+        extraPageChargeRupees:
+          type: integer
+        freeColorPagesPerSession:
+          type: integer
+        extraColorPageChargeRupees:
+          type: integer
+
+    QuickPrintClaimResponse:
+      type: object
+      required: [sessionId, printJob, documents]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        printColorMode:
+          type: string
+          enum: [bw, color]
+        printJob:
+          $ref: '#/components/schemas/PrintJob'
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/OtpDocumentMeta'
+
+    QuickPrintRazorpayOrderResponse:
+      type: object
+      required: [alreadyPaid, payment, razorpay_key_id]
+      properties:
+        alreadyPaid:
+          type: boolean
+        sessionReady:
+          type: boolean
+        payment:
+          $ref: '#/components/schemas/Payment'
+        razorpay_order_id:
+          type: string
+        razorpay_key_id:
+          type: string
+
+    QuickPrintRazorpayVerifyResponse:
+      type: object
+      required: [alreadyPaid, payment]
+      properties:
+        alreadyPaid:
+          type: boolean
+        otpSent:
+          type: boolean
+        sessionReady:
+          type: boolean
+        payment:
+          $ref: '#/components/schemas/Payment'
 
     CreateRazorpayOrderRequest:
       type: object
@@ -1601,7 +1935,7 @@ components:
           enum: [created, ready, printing, completed, failed, expired]
         source:
           type: string
-          enum: [otp_print, digilocker_print]
+          enum: [otp_print, digilocker_print, quick_print]
         title:
           type: string
         pageCount:

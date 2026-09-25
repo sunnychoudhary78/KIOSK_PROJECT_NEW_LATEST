@@ -6,6 +6,7 @@ This document mirrors the approved software architecture for the monorepo.
 
 - `apps/api` — Node.js + Express + Prisma + PostgreSQL
 - `apps/admin` — React + Vite + TypeScript admin panel
+- `apps/print-web` — public Vite + React Quick Print site (QR guest upload)
 - `apps/kiosk` — Flutter Windows kiosk (Riverpod)
 - `apps/mobile` — Flutter Android/iOS citizen app (Riverpod)
 
@@ -21,6 +22,7 @@ Modules in `apps/api/src/modules`:
 | audit | Append-only audit trail |
 | printing | Shared print job lifecycle |
 | otp_print | OTP challenge create/redeem |
+| quick_print | Walk-up QR session, guest upload, Razorpay |
 | digilocker | DigiLocker session + print |
 
 ## Contracts

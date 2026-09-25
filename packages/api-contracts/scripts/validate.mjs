@@ -11,7 +11,7 @@ if (!existsSync(specPath)) {
 }
 
 const content = readFileSync(specPath, 'utf8');
-const required = ['openapi:', 'info:', 'paths:', '/health:', '/otp-challenges:', '/digilocker/sessions:'];
+const required = ['openapi:', 'info:', 'paths:', '/health:', '/otp-challenges:', '/quick-print/sessions:', '/digilocker/sessions:'];
 
 for (const token of required) {
   if (!content.includes(token)) {
