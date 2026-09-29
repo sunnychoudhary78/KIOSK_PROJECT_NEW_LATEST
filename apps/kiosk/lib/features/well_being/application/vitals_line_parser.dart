@@ -9,26 +9,31 @@ import 'dart:convert';
 /// Status lines:
 /// `{"status":"ready","max30102":true,"mlx90614":true}`
 /// `{"status":"place_finger"}` / `finger_detected` / `sensor_started`
-/// `{"status":"recording","sensor":"max30102","elapsed":3,"remaining":17}`
-/// `{"status":"aborted","reason":"finger_removed"}`
+/// `{"status":"place_forehead"}` / `object_detected` / `sensor_started`
+/// `{"status":"recording","sensor":"max30102","elapsed":3,"remaining":12}`
+/// `{"status":"recording","sensor":"mlx90614","elapsed":2,"remaining":3}`
+/// `{"status":"aborted","reason":"finger_removed"|"no_object_detected"|…}`
 ///
 /// Final result (`status` is `complete` on current firmware; omitted on older builds):
 /// `{"status":"complete","bpm":75.0,"spo2":98.0,"object_f":97.5,"ambient_f":75.2}`
 /// (any field may be null when that sensor was not in the session)
+///
+/// Relay replies (`{"ok":true,"relay":1,"state":"on"}`) are ignored.
 class VitalsLineParser {
   VitalsLineParser();
 
   String _buffer = '';
 
-  static const double minHeartRate = 30;
-  static const double maxHeartRate = 220;
+  /// Matches firmware BPM_HARD_MIN / BPM_HARD_MAX.
+  static const double minHeartRate = 60;
+  static const double maxHeartRate = 200;
   static const double minSpO2 = 70;
   static const double maxSpO2 = 100;
   static const double minCaptureTempC = 30;
   static const double maxCaptureTempC = 43;
 
-  static const int maxCollectionSeconds = 20;
-  static const int tempCollectionSeconds = 30;
+  static const int maxCollectionSeconds = 15;
+  static const int tempCollectionSeconds = 5;
 
   /// Feed a raw UTF-8 chunk; returns one result per complete line.
   List<VitalsParseResult> addChunk(String chunk) {
@@ -115,6 +120,16 @@ class VitalsLineParser {
       return null;
     }
 
+    // Ignore relay command replies from the same USB controller.
+    if (json.containsKey('relay') ||
+        (json.containsKey('ok') &&
+            !json.containsKey('bpm') &&
+            !json.containsKey('spo2') &&
+            !json.containsKey('object_f') &&
+            !json.containsKey('ambient_f'))) {
+      return null;
+    }
+
     // Legacy final result: bpm/spo2/object_f/ambient_f and no status.
     if (json.containsKey('bpm') ||
         json.containsKey('spo2') ||
@@ -163,12 +178,24 @@ class VitalsLineParser {
           fingerAbsent: false,
           rawLine: raw,
         );
+      case 'place_forehead':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.placeForehead,
+          status: status,
+          objectDetected: false,
+          rawLine: raw,
+        );
+      case 'object_detected':
+        return VitalsParseResult(
+          kind: VitalsMessageKind.objectDetected,
+          status: status,
+          objectDetected: true,
+          rawLine: raw,
+        );
       case 'sensor_started':
         return VitalsParseResult(
           kind: VitalsMessageKind.sensorStarted,
           status: status,
-          finger: true,
-          fingerAbsent: false,
           rawLine: raw,
         );
       case 'recording':
@@ -335,6 +362,8 @@ enum VitalsMessageKind {
   ready,
   placeFinger,
   fingerDetected,
+  placeForehead,
+  objectDetected,
   sensorStarted,
   recording,
   result,
@@ -363,6 +392,7 @@ class VitalsParseResult {
     this.canCaptureTemp = false,
     this.finger,
     this.fingerAbsent = false,
+    this.objectDetected,
     this.max30102Ok,
     this.mlx90614Ok,
     this.infoMessage,
@@ -388,6 +418,7 @@ class VitalsParseResult {
   final bool canCaptureTemp;
   final bool? finger;
   final bool fingerAbsent;
+  final bool? objectDetected;
   final bool? max30102Ok;
   final bool? mlx90614Ok;
   final String? infoMessage;
@@ -398,6 +429,8 @@ class VitalsParseResult {
   bool get isReady => kind == VitalsMessageKind.ready;
   bool get isPlaceFinger => kind == VitalsMessageKind.placeFinger;
   bool get isFingerDetected => kind == VitalsMessageKind.fingerDetected;
+  bool get isPlaceForehead => kind == VitalsMessageKind.placeForehead;
+  bool get isObjectDetected => kind == VitalsMessageKind.objectDetected;
   bool get isSensorStarted => kind == VitalsMessageKind.sensorStarted;
   bool get isRecording => kind == VitalsMessageKind.recording;
   bool get isResult => kind == VitalsMessageKind.result;
@@ -409,6 +442,16 @@ class VitalsParseResult {
   bool get isTempRecording => isRecording && sensor == 'mlx90614';
   bool get isFingerRemovedAbort =>
       isAborted && abortReason == 'finger_removed';
+  bool get isNoFingerDetectedAbort =>
+      isAborted && abortReason == 'no_finger_detected';
+  bool get isNoObjectDetectedAbort =>
+      isAborted && abortReason == 'no_object_detected';
+  bool get isMaxTimeoutAbort =>
+      isAborted &&
+      (abortReason == 'max30102_timeout' ||
+          abortReason == 'max30102_recovery_failed');
+  bool get isSessionTimeoutAbort =>
+      isAborted && abortReason == 'session_timeout';
 
   /// Convenience alias used by older callers / tests.
   double? get temperature => temperatureC;

@@ -9,6 +9,11 @@ void main() {
       parser = VitalsLineParser();
     });
 
+    test('uses firmware collection windows', () {
+      expect(VitalsLineParser.maxCollectionSeconds, 15);
+      expect(VitalsLineParser.tempCollectionSeconds, 5);
+    });
+
     test('parses ready with sensor flags', () {
       final result = parser.parseLine(
         '{"status":"ready","max30102":true,"mlx90614":false}',
@@ -31,18 +36,39 @@ void main() {
 
     test('parses recording countdowns for both sensors', () {
       final max = parser.parseLine(
-        '{"status":"recording","sensor":"max30102","elapsed":3,"remaining":17}',
+        '{"status":"recording","sensor":"max30102","elapsed":3,"remaining":12}',
       );
       expect(max!.kind, VitalsMessageKind.recording);
       expect(max.isMaxRecording, isTrue);
       expect(max.elapsedSeconds, 3);
-      expect(max.remSeconds, 17);
+      expect(max.remSeconds, 12);
 
       final temp = parser.parseLine(
-        '{"status":"recording","sensor":"mlx90614","elapsed":10,"remaining":50}',
+        '{"status":"recording","sensor":"mlx90614","elapsed":2,"remaining":3}',
       );
       expect(temp!.isTempRecording, isTrue);
-      expect(temp.remSeconds, 50);
+      expect(temp.remSeconds, 3);
+    });
+
+    test('parses place_forehead and object_detected', () {
+      final place = parser.parseLine('{"status":"place_forehead"}');
+      expect(place!.kind, VitalsMessageKind.placeForehead);
+      expect(place.objectDetected, isFalse);
+      expect(place.finger, isNull);
+
+      final detected = parser.parseLine('{"status":"object_detected"}');
+      expect(detected!.kind, VitalsMessageKind.objectDetected);
+      expect(detected.objectDetected, isTrue);
+      expect(detected.finger, isNull);
+    });
+
+    test('parses aborted no_object_detected', () {
+      final result = parser.parseLine(
+        '{"status":"aborted","reason":"no_object_detected"}',
+      );
+      expect(result!.kind, VitalsMessageKind.aborted);
+      expect(result.isNoObjectDetectedAbort, isTrue);
+      expect(result.abortReason, 'no_object_detected');
     });
 
     test('parses oxi result with null temps', () {
@@ -113,6 +139,43 @@ void main() {
       expect(result.abortReason, 'finger_removed');
     });
 
+    test('parses new firmware abort reasons', () {
+      final noFinger = parser.parseLine(
+        '{"status":"aborted","reason":"no_finger_detected"}',
+      );
+      expect(noFinger!.isNoFingerDetectedAbort, isTrue);
+
+      final timeout = parser.parseLine(
+        '{"status":"aborted","reason":"max30102_timeout"}',
+      );
+      expect(timeout!.isMaxTimeoutAbort, isTrue);
+
+      final recovery = parser.parseLine(
+        '{"status":"aborted","reason":"max30102_recovery_failed"}',
+      );
+      expect(recovery!.isMaxTimeoutAbort, isTrue);
+
+      final session = parser.parseLine(
+        '{"status":"aborted","reason":"session_timeout"}',
+      );
+      expect(session!.isSessionTimeoutAbort, isTrue);
+    });
+
+    test('ignores relay JSON replies', () {
+      expect(
+        parser.parseLine('{"ok":true,"relay":1,"state":"on"}'),
+        isNull,
+      );
+      expect(
+        parser.parseLine('{"ok":false,"relay":1,"error":"invalid_state"}'),
+        isNull,
+      );
+      expect(
+        parser.parseLine('{"ok":false,"error":"missing_relay"}'),
+        isNull,
+      );
+    });
+
     test('maps sensor-not-found statuses to errors', () {
       final max = parser.parseLine('{"status":"max30102_not_found"}');
       expect(max!.kind, VitalsMessageKind.error);
@@ -152,11 +215,19 @@ void main() {
       expect(result!.heartRate, isNull);
       expect(result.spo2, isNull);
       expect(result.ok, isFalse);
+
+      final lowBpm = parser.parseLine(
+        '{"bpm":45,"spo2":98,"object_f":null,"ambient_f":null}',
+      );
+      expect(lowBpm!.heartRate, isNull);
+      expect(lowBpm.spo2, 98);
     });
 
-    test('parses sensor_started', () {
+    test('parses sensor_started without implying a finger', () {
       final result = parser.parseLine('{"status":"sensor_started"}');
       expect(result!.kind, VitalsMessageKind.sensorStarted);
+      expect(result.finger, isNull);
+      expect(result.objectDetected, isNull);
     });
   });
 }

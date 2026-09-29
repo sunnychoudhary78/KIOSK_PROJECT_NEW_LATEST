@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_page.dart';
+import 'package:skp_kiosk/features/charging/presentation/charging_page.dart';
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_print_page.dart';
 import 'package:skp_kiosk/features/home/presentation/home_page.dart';
 import 'package:skp_kiosk/features/otp_print/presentation/otp_print_page.dart';
@@ -17,6 +18,7 @@ class AppRoutes {
   static const quickPrint = '/quick-print';
   static const digilockerPrint = '/digilocker-print';
   static const wellBeing = '/well-being';
+  static const charging = '/charging';
   static const astrology = '/astrology';
   static const serialDebug = '/serial-debug';
 }
@@ -34,6 +36,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const DigilockerPrintPage());
       case AppRoutes.wellBeing:
         return MaterialPageRoute(builder: (_) => const WellBeingPage());
+      case AppRoutes.charging:
+        return MaterialPageRoute(builder: (_) => const ChargingPage());
       case AppRoutes.astrology:
         return MaterialPageRoute(builder: (_) => const AstrologyPage());
       case AppRoutes.serialDebug:

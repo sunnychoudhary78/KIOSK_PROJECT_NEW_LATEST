@@ -12,8 +12,9 @@ class WellBeingUiState {
     this.lastError,
     this.sessionActive = false,
     this.fingerDetected = false,
-    this.collectionTotalSeconds = 20,
-    this.secondsRemaining = 20,
+    this.objectDetected = false,
+    this.collectionTotalSeconds = 15,
+    this.secondsRemaining = 15,
     this.measurePct = 0,
     this.liveHeartRate,
     this.liveSpO2,
@@ -33,6 +34,7 @@ class WellBeingUiState {
   final String? lastError;
   final bool sessionActive;
   final bool fingerDetected;
+  final bool objectDetected;
   final int collectionTotalSeconds;
   final int secondsRemaining;
   final double measurePct;
@@ -114,6 +116,7 @@ class WellBeingUiState {
     bool clearError = false,
     bool? sessionActive,
     bool? fingerDetected,
+    bool? objectDetected,
     int? collectionTotalSeconds,
     int? secondsRemaining,
     double? measurePct,
@@ -144,6 +147,7 @@ class WellBeingUiState {
       lastError: clearError ? null : (lastError ?? this.lastError),
       sessionActive: sessionActive ?? this.sessionActive,
       fingerDetected: fingerDetected ?? this.fingerDetected,
+      objectDetected: objectDetected ?? this.objectDetected,
       collectionTotalSeconds:
           collectionTotalSeconds ?? this.collectionTotalSeconds,
       secondsRemaining: secondsRemaining ?? this.secondsRemaining,

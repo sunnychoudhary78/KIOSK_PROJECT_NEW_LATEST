@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
+import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
 import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_kiosk/features/quick_print/application/quick_print_controller.dart';
@@ -37,6 +38,11 @@ Future<void> resetVisitorSession(
       await ref.read(quickPrintControllerProvider.notifier).reset();
     } catch (_) {}
   }
+  if (ref.exists(chargingControllerProvider)) {
+    try {
+      await ref.read(chargingControllerProvider.notifier).forceShutdown();
+    } catch (_) {}
+  }
 
   // Allow PopScope(canPop: false) to rebuild as canPop: true before we pop.
   WidgetsBinding.instance.scheduleFrame();
@@ -49,6 +55,7 @@ Future<void> resetVisitorSession(
   ref.invalidate(quickPrintControllerProvider);
   ref.invalidate(astrologyControllerProvider);
   ref.invalidate(wellBeingControllerProvider);
+  ref.invalidate(chargingControllerProvider);
 
   imageCache.clear();
   imageCache.clearLiveImages();

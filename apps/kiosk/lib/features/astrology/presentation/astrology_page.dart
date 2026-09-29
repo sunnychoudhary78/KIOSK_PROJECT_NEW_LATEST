@@ -16,7 +16,7 @@ import 'package:skp_kiosk/features/astrology/application/astrology_controller.da
 import 'package:skp_kiosk/features/astrology/application/palm_jpeg.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_phase.dart';
-import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_result_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/palm_overlay.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -451,7 +451,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 key: ValueKey('submitting'),
                 message: 'Preparing your reading…',
               ),
-            AstrologyPhase.result when state.reading != null => _ResultView(
+            AstrologyPhase.result when state.reading != null => AstrologyResultView(
                 key: const ValueKey('result'),
                 reading: state.reading!,
               ),
@@ -474,7 +474,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   }
 }
 
-class _CaptureView extends StatelessWidget {
+class _CaptureView extends StatefulWidget {
   const _CaptureView({
     super.key,
     required this.camera,
@@ -491,43 +491,124 @@ class _CaptureView extends StatelessWidget {
   final VoidCallback onRetryCamera;
 
   @override
+  State<_CaptureView> createState() => _CaptureViewState();
+}
+
+class _CaptureViewState extends State<_CaptureView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _syncPulse(widget.quality?.ok == true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CaptureView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncPulse(widget.quality?.ok == true);
+  }
+
+  void _syncPulse(bool ok) {
+    if (ok) {
+      if (!_pulse.isAnimating) {
+        _pulse.repeat(reverse: true);
+      }
+    } else {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final quality = widget.quality;
+    final ok = quality?.ok == true;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 12, 32, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
+            'Open your palm to the stars',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: SkpColors.gold,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
             'Place your open palm inside the outline',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: SkpColors.muted,
+                ),
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-              child: ColoredBox(
-                color: Colors.black,
-                child: cameraError != null
-                    ? _CameraError(message: cameraError!, onRetry: onRetryCamera)
-                    : !cameraReady || camera == null
-                        ? const Center(child: CircularProgressIndicator())
-                        : Center(
-                            child: AspectRatio(
-                              aspectRatio: camera!.value.aspectRatio == 0
-                                  ? 16 / 9
-                                  : camera!.value.aspectRatio,
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  CameraPreview(camera!),
-                                  const Positioned.fill(
-                                    child: CustomPaint(painter: PalmOverlayPainter()),
-                                  ),
-                                ],
+            child: AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, child) {
+                final glow = ok ? 0.35 + (_pulse.value * 0.45) : 0.0;
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+                    boxShadow: ok
+                        ? [
+                            BoxShadow(
+                              color: SkpColors.gold.withValues(alpha: glow * 0.45),
+                              blurRadius: 18 + (_pulse.value * 10),
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: child,
+                );
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+                child: ColoredBox(
+                  color: Colors.black,
+                  child: widget.cameraError != null
+                      ? _CameraError(
+                          message: widget.cameraError!,
+                          onRetry: widget.onRetryCamera,
+                        )
+                      : !widget.cameraReady || widget.camera == null
+                          ? const Center(child: CircularProgressIndicator())
+                          : Center(
+                              child: AspectRatio(
+                                aspectRatio: widget.camera!.value.aspectRatio == 0
+                                    ? 16 / 9
+                                    : widget.camera!.value.aspectRatio,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    CameraPreview(widget.camera!),
+                                    const Positioned.fill(
+                                      child: CustomPaint(
+                                        painter: PalmOverlayPainter(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
+                ),
               ),
             ),
           ),
@@ -573,8 +654,8 @@ class _QualityBanner extends StatelessWidget {
     final ok = quality?.ok == true;
     return KioskStatusBanner(
       message: quality?.message ?? 'Align your palm with the outline',
-      tone: ok ? KioskBannerTone.success : KioskBannerTone.info,
-      icon: ok ? Icons.check_circle_outline : Icons.back_hand_outlined,
+      tone: ok ? KioskBannerTone.warning : KioskBannerTone.info,
+      icon: ok ? Icons.auto_awesome : Icons.back_hand_outlined,
     );
   }
 }
@@ -633,14 +714,49 @@ class _FormView extends StatelessWidget {
                 if (palmPreview != null)
                   Padding(
                     padding: const EdgeInsets.only(right: 20),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.memory(palmPreview!, width: 140, height: 180, fit: BoxFit.cover),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: SkpColors.gold.withValues(alpha: 0.65),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: SkpColors.gold.withValues(alpha: 0.22),
+                            blurRadius: 16,
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Image.memory(
+                          palmPreview!,
+                          width: 140,
+                          height: 180,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
                   ),
                 Expanded(
                   child: ListView(
                     children: [
+                      Text(
+                        'Birth details',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: SkpColors.gold,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tell the stars a little about you',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: SkpColors.muted,
+                            ),
+                      ),
+                      const SizedBox(height: 14),
                       KioskTextTapField(
                         label: 'Name',
                         hint: 'Your name',
@@ -775,128 +891,6 @@ class _ChoiceTile extends StatelessWidget {
                 ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ResultView extends StatelessWidget {
-  const _ResultView({super.key, required this.reading});
-
-  final AstrologyReading reading;
-
-  @override
-  Widget build(BuildContext context) {
-    final chartBits = [
-      if (reading.chart.lagna != null) 'Lagna ${reading.chart.lagna}',
-      if (reading.chart.sunSign != null) 'Sun ${reading.chart.sunSign}',
-      if (reading.chart.moonSign != null) 'Moon ${reading.chart.moonSign}',
-      if (reading.chart.nakshatra != null) 'Nakshatra ${reading.chart.nakshatra}',
-      if (reading.chart.currentDasha != null) 'Dasha ${reading.chart.currentDasha}',
-    ];
-
-    final sections = <(String, String)>[
-      ('Overview', reading.sections.overview),
-      ('Palm', reading.palm.summary),
-      ('Life line', reading.palm.lifeLine),
-      ('Heart line', reading.palm.heartLine),
-      ('Head line', reading.palm.headLine),
-      ('Fate line', reading.palm.fateLine),
-      ('Personality', reading.sections.personality),
-      ('Career', reading.sections.career),
-      ('Health', reading.sections.health),
-      ('Relationships', reading.sections.relationships),
-      ('This period', reading.sections.period),
-    ].where((item) => item.$2.trim().isNotEmpty).toList();
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 860),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(32, 12, 32, 16),
-          children: [
-            Text(
-              reading.name.isEmpty ? 'Your reading' : '${reading.name}\'s reading',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              reading.disclaimer,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            if (chartBits.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final bit in chartBits)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: SkpColors.raised,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: SkpColors.line),
-                      ),
-                      child: Text(bit, style: Theme.of(context).textTheme.titleSmall),
-                    ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 16),
-            for (var i = 0; i < sections.length; i++)
-              _SectionCard(index: i + 1, title: sections[i].$1, body: sections[i].$2),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.index, required this.title, required this.body});
-
-  final int index;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: SkpColors.panel,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-        border: Border.all(color: SkpColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: SkpColors.accent.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$index',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: SkpColors.accentBright,
-                      ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(body, style: Theme.of(context).textTheme.bodyLarge),
-        ],
       ),
     );
   }

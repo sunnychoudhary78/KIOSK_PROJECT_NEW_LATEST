@@ -6,7 +6,7 @@ enum WellBeingPhase {
   /// Oximeter: waiting for finger after start max30102.
   oxiIdle,
 
-  /// Oximeter: finger detected / recording (~20s).
+  /// Oximeter: finger detected / recording (~15s).
   oxiMeasuring,
 
   /// Oximeter: finger removed before a valid result.
@@ -15,7 +15,10 @@ enum WellBeingPhase {
   /// Oximeter: finals available from result line.
   oxiComplete,
 
-  /// Temperature: firmware collecting (~30s).
+  /// Temperature: waiting for forehead after start mlx90614.
+  tempIdle,
+
+  /// Temperature: forehead detected / recording (~5s).
   tempMeasuring,
 
   /// Temperature: finals available from result line.

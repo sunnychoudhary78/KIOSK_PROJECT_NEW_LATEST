@@ -64,7 +64,9 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
           WellBeingPhase.oxiCancelled =>
             'Blood oxygen',
           WellBeingPhase.oxiComplete => 'Results',
-          WellBeingPhase.tempMeasuring => 'Temperature',
+          WellBeingPhase.tempIdle ||
+          WellBeingPhase.tempMeasuring =>
+            'Temperature',
           WellBeingPhase.tempComplete => 'Results',
         },
         footerLeading: showBack
@@ -91,6 +93,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                 status: state.connectionStatus,
                 activeMode: state.activeMode,
                 fingerDetected: state.fingerDetected,
+                objectDetected: state.objectDetected,
                 error: state.lastError,
                 onRetry: state.connectionStatus == SerialConnectionStatus.error ||
                         state.connectionStatus == SerialConnectionStatus.disconnected
@@ -123,6 +126,10 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                         key: const ValueKey('oxiComplete'),
                         state: state,
                       ),
+                    WellBeingPhase.tempIdle => _TempIdleView(
+                        key: const ValueKey('tempIdle'),
+                        connected: state.isConnected,
+                      ),
                     WellBeingPhase.tempMeasuring => _TempMeasuringView(
                         key: const ValueKey('tempMeasuring'),
                         state: state,
@@ -148,6 +155,7 @@ class _ConnectionBanner extends StatelessWidget {
     required this.status,
     required this.activeMode,
     required this.fingerDetected,
+    required this.objectDetected,
     this.portName,
     this.error,
     this.onRetry,
@@ -157,6 +165,7 @@ class _ConnectionBanner extends StatelessWidget {
   final SerialConnectionStatus status;
   final WellBeingMode activeMode;
   final bool fingerDetected;
+  final bool objectDetected;
   final String? portName;
   final String? error;
   final VoidCallback? onRetry;
@@ -165,7 +174,7 @@ class _ConnectionBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final tone = switch (status) {
       SerialConnectionStatus.connected =>
-        fingerDetected || activeMode == WellBeingMode.temp
+        fingerDetected || objectDetected
             ? KioskBannerTone.success
             : KioskBannerTone.info,
       SerialConnectionStatus.connecting ||
@@ -180,7 +189,8 @@ class _ConnectionBanner extends StatelessWidget {
         : switch (activeMode) {
             WellBeingMode.oxi =>
               fingerDetected ? 'Finger detected' : 'No finger detected',
-            WellBeingMode.temp => 'Temperature mode',
+            WellBeingMode.temp =>
+              objectDetected ? 'Forehead detected' : 'No forehead detected',
             WellBeingMode.none => 'Ready',
           };
 
@@ -190,7 +200,8 @@ class _ConnectionBanner extends StatelessWidget {
       tone: tone,
       icon: status.isConnected
           ? switch (activeMode) {
-              WellBeingMode.temp => Icons.thermostat,
+              WellBeingMode.temp =>
+                objectDetected ? Icons.thermostat : Icons.sensors,
               WellBeingMode.oxi => fingerDetected ? Icons.back_hand : Icons.sensors,
               WellBeingMode.none => Icons.favorite_outline,
             }
@@ -240,7 +251,7 @@ class _ChooseView extends StatelessWidget {
                 child: _ModeOptionCard(
                   icon: Icons.bloodtype_outlined,
                   title: 'Blood Oxygen',
-                  subtitle: 'Heart rate and SpO₂ with your fingertip (~20s)',
+                  subtitle: 'Heart rate and SpO₂ with your fingertip (~15s)',
                   enabled: connected,
                   onTap: onOxygen,
                 ),
@@ -250,7 +261,7 @@ class _ChooseView extends StatelessWidget {
                 child: _ModeOptionCard(
                   icon: Icons.thermostat_outlined,
                   title: 'Temperature',
-                  subtitle: 'Non-contact reading — hold near the sensor (~30s)',
+                  subtitle: 'Non-contact reading — hold forehead near the sensor (~5s)',
                   enabled: connected,
                   onTap: onTemperature,
                 ),
@@ -507,6 +518,75 @@ class _OxiCompleteView extends StatelessWidget {
   }
 }
 
+class _TempIdleView extends StatelessWidget {
+  const _TempIdleView({super.key, required this.connected});
+
+  final bool connected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          const Icon(Icons.thermostat_outlined, size: 88, color: SkpColors.accentBright),
+          const SizedBox(height: 16),
+          Text(
+            connected
+                ? 'Hold your forehead 1–2 cm from the sensor'
+                : 'Connect the sensor to begin',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Measurement starts automatically once your forehead is detected.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: SkpColors.panel,
+              borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+              border: Border.all(color: SkpColors.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How to take your temperature',
+                  style: theme.textTheme.titleMedium?.copyWith(color: SkpColors.accentBright),
+                ),
+                const SizedBox(height: 12),
+                ...const [
+                  'Hold your forehead 1–2 cm in front of the sensor lens.',
+                  'Keep hair, hats, and glasses out of the way.',
+                  'Stay still until the countdown begins.',
+                  'The reading takes about 5 seconds after detection.',
+                ].map(
+                  (tip) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('•  ', style: TextStyle(color: SkpColors.gold)),
+                        Expanded(child: Text(tip, style: theme.textTheme.bodyLarge)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TempMeasuringView extends StatelessWidget {
   const _TempMeasuringView({super.key, required this.state});
 
@@ -522,7 +602,7 @@ class _TempMeasuringView extends StatelessWidget {
           Text('Temperature', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
-            state.statusMessage ?? 'Hold steady near the temperature sensor',
+            state.statusMessage ?? 'Hold your forehead still',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
           ),

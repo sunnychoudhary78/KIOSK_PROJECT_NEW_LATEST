@@ -104,6 +104,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       activeMode: WellBeingMode.oxi,
       phase: WellBeingPhase.oxiIdle,
       fingerDetected: false,
+      objectDetected: false,
       collectionTotalSeconds: VitalsLineParser.maxCollectionSeconds,
       secondsRemaining: VitalsLineParser.maxCollectionSeconds,
       measurePct: 0,
@@ -127,8 +128,9 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     }
     state = state.copyWith(
       activeMode: WellBeingMode.temp,
-      phase: WellBeingPhase.tempMeasuring,
+      phase: WellBeingPhase.tempIdle,
       fingerDetected: false,
+      objectDetected: false,
       collectionTotalSeconds: VitalsLineParser.tempCollectionSeconds,
       secondsRemaining: VitalsLineParser.tempCollectionSeconds,
       measurePct: 0,
@@ -141,7 +143,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       clearFinalTempC: true,
       clearFinalTempF: true,
       clearError: true,
-      statusMessage: 'Hold steady near the temperature sensor',
+      statusMessage: 'Hold your forehead 1–2 cm from the sensor',
     );
     await _sendCommand(_cmdStartTemp);
   }
@@ -158,6 +160,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       phase: WellBeingPhase.choose,
       activeMode: WellBeingMode.none,
       fingerDetected: false,
+      objectDetected: false,
       collectionTotalSeconds: VitalsLineParser.maxCollectionSeconds,
       secondsRemaining: VitalsLineParser.maxCollectionSeconds,
       measurePct: 0,
@@ -392,7 +395,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       return;
     }
 
-    if (sample.isFingerRemovedAbort) {
+    if (sample.isFingerRemovedAbort || sample.isNoFingerDetectedAbort) {
       state = state.copyWith(
         phase: WellBeingPhase.oxiIdle,
         fingerDetected: false,
@@ -400,9 +403,26 @@ class WellBeingController extends Notifier<WellBeingUiState> {
         measurePct: 0,
         clearLiveHeartRate: true,
         clearLiveSpO2: true,
-        statusMessage: 'Finger lost — place your finger again',
+        statusMessage: sample.isNoFingerDetectedAbort
+            ? 'No finger detected — place your finger again'
+            : 'Finger lost — place your finger again',
       );
       // Firmware aborted; user can place finger again after we re-start.
+      unawaited(_sendCommand(_cmdStartMax, silent: true));
+      return;
+    }
+
+    if (sample.isMaxTimeoutAbort) {
+      state = state.copyWith(
+        phase: WellBeingPhase.oxiIdle,
+        fingerDetected: false,
+        secondsRemaining: VitalsLineParser.maxCollectionSeconds,
+        measurePct: 0,
+        clearLiveHeartRate: true,
+        clearLiveSpO2: true,
+        lastError: sample.abortReason,
+        statusMessage: _humanError(sample.abortReason),
+      );
       unawaited(_sendCommand(_cmdStartMax, silent: true));
       return;
     }
@@ -447,12 +467,37 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       return;
     }
 
+    if (sample.isPlaceForehead) {
+      state = state.copyWith(
+        phase: WellBeingPhase.tempIdle,
+        objectDetected: false,
+        secondsRemaining: VitalsLineParser.tempCollectionSeconds,
+        measurePct: 0,
+        clearLiveTempC: true,
+        clearLiveTempF: true,
+        statusMessage: 'Hold your forehead 1–2 cm from the sensor',
+      );
+      return;
+    }
+
+    if (sample.isObjectDetected) {
+      state = state.copyWith(
+        phase: WellBeingPhase.tempIdle,
+        objectDetected: true,
+        secondsRemaining: VitalsLineParser.tempCollectionSeconds,
+        measurePct: 0,
+        statusMessage: 'Forehead detected — starting measurement',
+      );
+      return;
+    }
+
     if (sample.isSensorStarted) {
       state = state.copyWith(
         phase: WellBeingPhase.tempMeasuring,
+        objectDetected: true,
         secondsRemaining: VitalsLineParser.tempCollectionSeconds,
         measurePct: 0,
-        statusMessage: 'Hold steady near the temperature sensor',
+        statusMessage: 'Hold your forehead still',
       );
       return;
     }
@@ -468,10 +513,25 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       final pct = ((total - remaining) / total * 100).clamp(0.0, 100.0);
       state = state.copyWith(
         phase: WellBeingPhase.tempMeasuring,
+        objectDetected: true,
         secondsRemaining: remaining,
         measurePct: pct,
-        statusMessage: 'Measuring temperature — hold steady',
+        statusMessage: 'Hold your forehead still',
       );
+      return;
+    }
+
+    if (sample.isNoObjectDetectedAbort) {
+      state = state.copyWith(
+        phase: WellBeingPhase.tempIdle,
+        objectDetected: false,
+        secondsRemaining: VitalsLineParser.tempCollectionSeconds,
+        measurePct: 0,
+        clearLiveTempC: true,
+        clearLiveTempF: true,
+        statusMessage: 'No forehead detected — hold closer and try again',
+      );
+      unawaited(_sendCommand(_cmdStartTemp, silent: true));
       return;
     }
 
@@ -481,6 +541,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
         statusMessage: _humanError(sample.abortReason),
         phase: WellBeingPhase.choose,
         activeMode: WellBeingMode.none,
+        objectDetected: false,
       );
       return;
     }
@@ -490,13 +551,19 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       final tempF = sample.temperatureF;
       if (tempC == null) {
         state = state.copyWith(
+          phase: WellBeingPhase.tempIdle,
+          objectDetected: false,
+          secondsRemaining: VitalsLineParser.tempCollectionSeconds,
+          measurePct: 0,
           statusMessage: 'No temperature reading — try again',
           lastError: 'Temperature result missing',
         );
+        unawaited(_sendCommand(_cmdStartTemp, silent: true));
         return;
       }
       state = state.copyWith(
         phase: WellBeingPhase.tempComplete,
+        objectDetected: false,
         secondsRemaining: 0,
         measurePct: 100,
         finalTempC: tempC,
@@ -512,6 +579,13 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   String _humanError(String? code) {
     return switch (code) {
       'finger_removed' => 'Finger removed during measurement',
+      'no_finger_detected' => 'No finger detected in time — try again',
+      'no_object_detected' =>
+        'No forehead detected — hold closer and try again',
+      'max30102_timeout' => 'Pulse sensor timed out — retrying',
+      'max30102_recovery_failed' =>
+        'Pulse sensor lost connection — retrying',
+      'session_timeout' => 'Measurement timed out — please try again',
       'user_stop' => 'Measurement stopped',
       'max30102_not_found' => 'Pulse oximeter sensor not found',
       'mlx90614_not_found' => 'Temperature sensor not found',

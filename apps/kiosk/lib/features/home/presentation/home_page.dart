@@ -234,6 +234,12 @@ class _ServiceCatalog extends StatelessWidget {
                       onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
                     ),
                     KioskServiceTile(
+                      icon: Icons.battery_charging_full,
+                      title: 'Phone Charging',
+                      subtitle: 'Watch a short message, then charge your phone',
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.charging),
+                    ),
+                    KioskServiceTile(
                       icon: Icons.back_hand_outlined,
                       title: 'Astrology',
                       subtitle: 'Palm reading and birth chart',
