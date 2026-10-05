@@ -90,8 +90,8 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
         body: Padding(
           padding: SkpTokens.pagePadding,
           child: switch (state.phase) {
-            ChargingPhase.connecting => const Center(
-                child: KioskLoading(message: 'Connecting to charger…'),
+            ChargingPhase.connecting => Center(
+                child: KioskLoading(message: state.statusMessage),
               ),
             ChargingPhase.watchingAd => ChargingAdGate(
                 onCompleted: () {
@@ -99,6 +99,7 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
                 },
               ),
             ChargingPhase.charging => _ChargingActiveView(
+                relayOn: state.relayOn,
                 remainingLabel: _formatRemaining(state.secondsRemaining),
                 statusMessage: state.statusMessage,
                 totalSeconds: ChargingUiState.sessionSeconds,
@@ -167,12 +168,14 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
 
 class _ChargingActiveView extends StatelessWidget {
   const _ChargingActiveView({
+    required this.relayOn,
     required this.remainingLabel,
     required this.statusMessage,
     required this.totalSeconds,
     required this.secondsRemaining,
   });
 
+  final bool relayOn;
   final String remainingLabel;
   final String statusMessage;
   final int totalSeconds;
@@ -197,15 +200,15 @@ class _ChargingActiveView extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: SkpColors.accent.withValues(alpha: 0.18),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.battery_charging_full,
                 size: 64,
-                color: SkpColors.accentBright,
+                color: relayOn ? SkpColors.accentBright : SkpColors.muted,
               ),
             ),
             const SizedBox(height: 24),
             Text(
-              'Power is ON',
+              relayOn ? 'Power is ON' : 'Power is off',
               style: theme.textTheme.headlineMedium,
             ),
             const SizedBox(height: 8),

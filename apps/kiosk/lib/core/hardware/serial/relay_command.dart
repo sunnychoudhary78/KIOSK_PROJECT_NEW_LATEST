@@ -39,6 +39,38 @@ class RelayResponse {
   bool get isOn => state == 'on';
   bool get isOff => state == 'off';
 
+  /// True when this reply confirms charging relay [on] (or off).
+  ///
+  /// Firmware reports the GPIO read-back, so `ok: true` with `state: "off"`
+  /// is not a successful turn-on.
+  bool confirmsCharging({required bool on}) {
+    if (!ok || relay != RelayCommands.chargingRelayNumber) {
+      return false;
+    }
+    return on ? isOn : isOff;
+  }
+
+  /// Boot line from the ESP32 (`{"status":"ready",...}`).
+  ///
+  /// Not a relay reply — [tryParse] ignores `status` lines.
+  static bool isControllerReadyLine(String line) {
+    final normalized = line.trim();
+    if (normalized.isEmpty ||
+        !normalized.startsWith('{') ||
+        !normalized.endsWith('}')) {
+      return false;
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return false;
+      }
+      return decoded['status']?.toString() == 'ready';
+    } catch (_) {
+      return false;
+    }
+  }
+
   static RelayResponse? tryParse(String line) {
     final normalized = line.trim();
     if (normalized.isEmpty ||

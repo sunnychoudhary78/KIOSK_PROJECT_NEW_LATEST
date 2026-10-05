@@ -15,11 +15,31 @@ final chargingControllerProvider =
 );
 
 class ChargingController extends Notifier<ChargingUiState> {
+  /// Firmware answers relay commands in the same loop; this covers USB delay.
+  static const Duration relayAckTimeout = Duration(seconds: 2);
+
+  /// Fresh opens reset the ESP32 (DTR/RTS). Wait for its boot `ready` line.
+  static const Duration controllerReadyTimeout = Duration(seconds: 6);
+
   ProviderSubscription<SerialUiState>? _serialWatch;
   StreamSubscription<String>? _incomingSub;
   Timer? _countdownTimer;
   bool _powerArmed = false;
   bool _tearingDown = false;
+  bool _acceptReplies = true;
+  bool _arming = false;
+  bool _stopInProgress = false;
+  bool _failing = false;
+
+  Completer<RelayResponse?>? _pendingReply;
+  Completer<void>? _readyWait;
+  Future<void> _relayChain = Future<void>.value();
+
+  /// In-flight relay commands, including ones not yet at the head of the queue.
+  int _relayBusy = 0;
+
+  /// Incoming-log length before a fresh open, so an old `ready` line is ignored.
+  int _readyBaseline = 0;
 
   SerialController get _serial => ref.read(serialControllerProvider.notifier);
 
@@ -37,10 +57,22 @@ class ChargingController extends Notifier<ChargingUiState> {
     }
     // Allow Retry after a failed session without recreating the provider.
     _tearingDown = false;
+    _acceptReplies = true;
+    _arming = false;
+    _stopInProgress = false;
+    _failing = false;
     _countdownTimer?.cancel();
     _countdownTimer = null;
     _powerArmed = false;
     _lineBuffer = '';
+    _completeWaits();
+
+    final wasConnected = ref.read(serialControllerProvider).isConnected;
+    if (!wasConnected) {
+      // Drop boot lines from an earlier session before this open.
+      _serial.clearIncoming();
+      _readyBaseline = 0;
+    }
 
     state = state.copyWith(
       phase: ChargingPhase.connecting,
@@ -63,74 +95,167 @@ class ChargingController extends Notifier<ChargingUiState> {
     _syncConnection(ref.read(serialControllerProvider));
 
     await _ensureConnected();
-    if (!ref.mounted || _tearingDown) {
+    if (!ref.mounted || _tearingDown || state.phase == ChargingPhase.error) {
       return;
     }
     await _bindIncoming();
-    if (!ref.mounted || _tearingDown) {
+    if (!ref.mounted || _tearingDown || !state.isConnected) {
       return;
     }
 
-    if (state.isConnected) {
-      // Ensure socket is cold before the ad gate.
-      await _sendRelay(on: false, silent: true);
-      if (!ref.mounted || _tearingDown) {
+    if (!wasConnected) {
+      state = state.copyWith(
+        statusMessage: 'Waiting for charging controller…',
+      );
+      final ready = await _waitForControllerReady();
+      if (!ref.mounted || _tearingDown || state.phase == ChargingPhase.error) {
         return;
       }
-      state = state.copyWith(
-        phase: ChargingPhase.watchingAd,
-        statusMessage: 'Watch this message to unlock charging',
-      );
+      if (!ready) {
+        _enterError(
+          statusMessage: 'Charging controller did not become ready',
+          lastError: 'No ready message from the controller',
+        );
+        return;
+      }
     }
+
+    // Socket must be confirmed off before the ad gate.
+    state = state.copyWith(
+      statusMessage: 'Turning the charging socket off…',
+    );
+    final off = await _requestRelay(on: false);
+    if (!ref.mounted || _tearingDown || state.phase == ChargingPhase.error) {
+      return;
+    }
+    if (off == null || !off.confirmsCharging(on: false)) {
+      _enterError(
+        statusMessage: 'Could not turn off the charging socket',
+        lastError: off?.error ??
+            state.lastError ??
+            'No off confirmation from the controller',
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      phase: ChargingPhase.watchingAd,
+      relayOn: false,
+      clearError: true,
+      statusMessage: 'Watch this message to unlock charging',
+    );
   }
 
   /// Called when one sponsored creative finished (or empty-playlist fallback).
   Future<void> onAdCompleted() async {
     if (!ref.mounted ||
         _tearingDown ||
+        _arming ||
+        _failing ||
         state.phase != ChargingPhase.watchingAd) {
       return;
     }
-    if (!state.isConnected) {
-      state = state.copyWith(
-        phase: ChargingPhase.error,
-        lastError: 'Lost connection to charging controller',
-        statusMessage: 'Unable to start charging',
-      );
-      return;
-    }
+    _arming = true;
+    try {
+      if (!state.isConnected) {
+        _enterError(
+          statusMessage: 'Unable to start charging',
+          lastError: 'Lost connection to charging controller',
+        );
+        return;
+      }
 
-    final ok = await _sendRelay(on: true);
-    if (!ref.mounted || _tearingDown) {
-      return;
-    }
-    if (!ok) {
       state = state.copyWith(
-        phase: ChargingPhase.error,
-        lastError: state.lastError ?? 'Relay did not turn on',
+        phase: ChargingPhase.connecting,
+        statusMessage: 'Turning on the charging socket…',
+      );
+      final reply = await _requestRelay(on: true);
+      if (!ref.mounted || _tearingDown) {
+        return;
+      }
+      if (reply != null &&
+          reply.confirmsCharging(on: true) &&
+          state.phase != ChargingPhase.error) {
+        _powerArmed = true;
+        state = state.copyWith(
+          phase: ChargingPhase.charging,
+          relayOn: true,
+          secondsRemaining: ChargingUiState.sessionSeconds,
+          statusMessage: 'Charging enabled — plug in your phone',
+          clearError: true,
+        );
+        _startCountdown();
+        return;
+      }
+
+      // Command may have landed without an ack. Force the socket back off.
+      final off = await _requestRelay(on: false);
+      if (!ref.mounted || _tearingDown) {
+        return;
+      }
+      final confirmedOff = off != null && off.confirmsCharging(on: false);
+      if (confirmedOff) {
+        state = state.copyWith(relayOn: false);
+      }
+      if (state.phase == ChargingPhase.error && !state.isConnected) {
+        return;
+      }
+      _enterError(
         statusMessage: 'Could not power the charging socket',
+        lastError: reply?.error ??
+            state.lastError ??
+            'Relay did not confirm on',
+        relayOn: confirmedOff ? false : state.relayOn,
       );
-      return;
+    } finally {
+      _arming = false;
     }
-
-    _powerArmed = true;
-    state = state.copyWith(
-      phase: ChargingPhase.charging,
-      relayOn: true,
-      secondsRemaining: ChargingUiState.sessionSeconds,
-      statusMessage: 'Charging enabled — plug in your phone',
-      clearError: true,
-    );
-    _startCountdown();
   }
 
   Future<void> finishCharging() async {
-    await _stopPower(reason: 'done');
-    if (ref.mounted) {
+    if (!ref.mounted ||
+        _tearingDown ||
+        _stopInProgress ||
+        state.phase != ChargingPhase.charging) {
+      return;
+    }
+    _stopInProgress = true;
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    try {
       state = state.copyWith(
-        phase: ChargingPhase.done,
-        statusMessage: 'Charging finished',
+        statusMessage: 'Turning off the charging socket…',
       );
+      final reply = await _requestRelay(on: false);
+      if (!ref.mounted || _tearingDown) {
+        return;
+      }
+      if (reply != null && reply.confirmsCharging(on: false)) {
+        _powerArmed = false;
+        state = state.copyWith(
+          phase: ChargingPhase.done,
+          relayOn: false,
+          statusMessage: 'Charging finished',
+          clearError: true,
+        );
+        return;
+      }
+      if (!state.isConnected) {
+        _powerArmed = false;
+        _enterError(
+          statusMessage: 'Charging controller disconnected',
+          lastError: 'Could not confirm the socket turned off',
+        );
+        return;
+      }
+      _enterError(
+        statusMessage: 'Could not turn off the charging socket',
+        lastError: reply?.error ??
+            state.lastError ??
+            'No off confirmation from the controller',
+      );
+    } finally {
+      _stopInProgress = false;
     }
   }
 
@@ -148,7 +273,7 @@ class ChargingController extends Notifier<ChargingUiState> {
   void _startCountdown() {
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!ref.mounted) {
+      if (!ref.mounted || _tearingDown) {
         return;
       }
       final next = state.secondsRemaining - 1;
@@ -160,42 +285,171 @@ class ChargingController extends Notifier<ChargingUiState> {
     });
   }
 
-  Future<bool> _sendRelay({required bool on, bool silent = false}) async {
-    if (!ref.mounted) {
-      return false;
+  /// Send a charging relay command and wait for the matching firmware reply.
+  ///
+  /// Returns null on write failure, timeout, or a dropped link. A non-null
+  /// reply is not success by itself — check [RelayResponse.confirmsCharging].
+  Future<RelayResponse?> _requestRelay({required bool on}) {
+    _relayBusy++;
+    final task = _relayChain.then((_) => _requestRelayUnlocked(on: on));
+    _relayChain = task.then((_) {}, onError: (_, _) {});
+    return task.whenComplete(() {
+      _relayBusy = (_relayBusy - 1).clamp(0, 1 << 30);
+    });
+  }
+
+  Future<RelayResponse?> _requestRelayUnlocked({required bool on}) async {
+    if (_pendingReply != null) {
+      return null;
     }
-    final serial = ref.read(serialControllerProvider);
-    if (!serial.isConnected) {
-      if (!silent) {
-        state = state.copyWith(lastError: 'Serial not connected');
-      }
-      return false;
+
+    final service = ref.read(serialServiceProvider);
+    if (!service.isConnected) {
+      return null;
     }
+
+    final completer = Completer<RelayResponse?>();
+    _pendingReply = completer;
     final command = on ? RelayCommands.chargingOn() : RelayCommands.chargingOff();
     try {
-      await _serial.sendLine(command);
+      await service.sendLine(command);
       AppLogger.info('Charging relay ${on ? 'ON' : 'OFF'} sent');
-      if (ref.mounted) {
-        state = state.copyWith(relayOn: on);
-      }
-      return true;
     } catch (error) {
       AppLogger.error('Charging relay command failed: $command', error);
-      if (!silent && ref.mounted) {
+      _finishPending(completer, null);
+      if (ref.mounted && !_tearingDown) {
         state = state.copyWith(lastError: error.toString());
       }
-      return false;
+      return null;
+    }
+
+    try {
+      return await completer.future.timeout(relayAckTimeout);
+    } on TimeoutException {
+      AppLogger.error(
+        'Charging relay ${on ? 'ON' : 'OFF'} confirmation timed out',
+      );
+      if (ref.mounted && !_tearingDown) {
+        state = state.copyWith(
+          lastError: 'No reply from charging controller',
+        );
+      }
+      return null;
+    } finally {
+      _finishPending(completer, null);
     }
   }
 
-  Future<void> _stopPower({required String reason}) async {
+  void _finishPending(Completer<RelayResponse?> completer, RelayResponse? reply) {
+    if (identical(_pendingReply, completer)) {
+      _pendingReply = null;
+    }
+    if (!completer.isCompleted) {
+      completer.complete(reply);
+    }
+  }
+
+  void _completeWaits() {
+    final pending = _pendingReply;
+    if (pending != null && !pending.isCompleted) {
+      _pendingReply = null;
+      pending.complete(null);
+    }
+    final ready = _readyWait;
+    if (ready != null && !ready.isCompleted) {
+      _readyWait = null;
+      ready.complete();
+    }
+  }
+
+  Future<bool> _waitForControllerReady() async {
+    if (_seenReady()) {
+      return true;
+    }
+    final completer = Completer<void>();
+    _readyWait = completer;
+    try {
+      if (_seenReady()) {
+        return true;
+      }
+      await completer.future.timeout(controllerReadyTimeout);
+    } on TimeoutException {
+      return false;
+    } finally {
+      if (identical(_readyWait, completer)) {
+        _readyWait = null;
+      }
+    }
+    if (!ref.mounted || _tearingDown) {
+      return false;
+    }
+    if (state.phase == ChargingPhase.error || !state.isConnected) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _seenReady() {
+    if (_lineBuffer
+        .split(RegExp(r'\r?\n'))
+        .any(RelayResponse.isControllerReadyLine)) {
+      return true;
+    }
+    final lines = ref.read(serialControllerProvider).incomingLines;
+    final start = _readyBaseline.clamp(0, lines.length);
+    return lines.skip(start).any(RelayResponse.isControllerReadyLine);
+  }
+
+  Future<void> _failSession({
+    required String statusMessage,
+    String? lastError,
+    bool sendOff = true,
+  }) async {
+    if (_tearingDown || _failing) {
+      return;
+    }
+    _failing = true;
     _countdownTimer?.cancel();
     _countdownTimer = null;
-    if (_powerArmed || state.relayOn) {
-      await _sendRelay(on: false, silent: true);
-      _powerArmed = false;
-      AppLogger.info('Charging power stopped ($reason)');
+    _powerArmed = false;
+    // Surface the failure in every phase before the off round-trip.
+    _enterError(
+      statusMessage: statusMessage,
+      lastError: lastError,
+    );
+    try {
+      if (!sendOff) {
+        if (ref.mounted && !_tearingDown) {
+          state = state.copyWith(relayOn: false);
+        }
+        return;
+      }
+      final reply = await _requestRelay(on: false);
+      if (!ref.mounted || _tearingDown) {
+        return;
+      }
+      if (reply != null && reply.confirmsCharging(on: false)) {
+        state = state.copyWith(relayOn: false, clearError: false);
+      }
+    } finally {
+      _failing = false;
     }
+  }
+
+  void _enterError({
+    required String statusMessage,
+    String? lastError,
+    bool? relayOn,
+  }) {
+    if (!ref.mounted || _tearingDown) {
+      return;
+    }
+    state = state.copyWith(
+      phase: ChargingPhase.error,
+      relayOn: relayOn ?? state.relayOn,
+      statusMessage: statusMessage,
+      lastError: lastError ?? state.lastError,
+    );
   }
 
   Future<void> _ensureConnected() async {
@@ -226,12 +480,11 @@ class ChargingController extends Notifier<ChargingUiState> {
 
     final ports = ref.read(serialControllerProvider).ports;
     if (ports.isEmpty) {
-      state = state.copyWith(
-        phase: ChargingPhase.error,
-        connectionStatus: SerialConnectionStatus.error,
-        lastError: 'No serial controller found. Check the USB cable.',
+      _enterError(
         statusMessage: 'No charging controller connected',
+        lastError: 'No serial controller found. Check the USB cable.',
       );
+      state = state.copyWith(connectionStatus: SerialConnectionStatus.error);
       return;
     }
 
@@ -244,13 +497,12 @@ class ChargingController extends Notifier<ChargingUiState> {
 
     final after = ref.read(serialControllerProvider);
     _syncConnection(after);
-    if (!after.isConnected) {
-      state = state.copyWith(
-        phase: ChargingPhase.error,
-        connectionStatus: SerialConnectionStatus.error,
-        lastError: after.lastError ?? 'Could not open serial port',
+    if (!after.isConnected && state.phase != ChargingPhase.error) {
+      _enterError(
         statusMessage: 'Unable to connect to charging controller',
+        lastError: after.lastError ?? 'Could not open serial port',
       );
+      state = state.copyWith(connectionStatus: SerialConnectionStatus.error);
     }
   }
 
@@ -279,23 +531,45 @@ class ChargingController extends Notifier<ChargingUiState> {
     state = state.copyWith(
       connectionStatus: serial.status,
       portName: serial.selectedPortName,
-      lastError: serial.lastError,
-      clearError: serial.lastError == null,
     );
 
-    if (serial.status == SerialConnectionStatus.disconnected ||
-        serial.status == SerialConnectionStatus.error) {
-      if (state.phase == ChargingPhase.charging ||
-          state.phase == ChargingPhase.watchingAd) {
-        _countdownTimer?.cancel();
-        _powerArmed = false;
-        state = state.copyWith(
-          phase: ChargingPhase.error,
-          relayOn: false,
-          statusMessage: 'Charging controller disconnected',
-          lastError: serial.lastError ?? 'Serial disconnected',
-        );
-      }
+    // Link-loss handling is one-shot. Later serial log updates must not
+    // cancel the off command or queue another one.
+    if (state.phase == ChargingPhase.error) {
+      return;
+    }
+
+    final lost = serial.status == SerialConnectionStatus.disconnected ||
+        serial.status == SerialConnectionStatus.error;
+    if (!lost) {
+      return;
+    }
+
+    final sessionActive = state.phase == ChargingPhase.charging ||
+        state.phase == ChargingPhase.watchingAd ||
+        _relayBusy > 0 ||
+        _pendingReply != null ||
+        _readyWait != null;
+    if (!sessionActive) {
+      return;
+    }
+
+    final mayStillBeOn = _powerArmed || state.relayOn;
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    _powerArmed = false;
+    _completeWaits();
+    // A dropped cable does not turn the relay off. Tear-down still sends
+    // off and then closes the port, which may reset the ESP32.
+    _enterError(
+      statusMessage: 'Charging controller disconnected',
+      lastError: mayStillBeOn
+          ? (serial.lastError ??
+              'The socket may still be on until the controller resets.')
+          : (serial.lastError ?? 'Serial disconnected'),
+    );
+    if (ref.read(serialServiceProvider).isConnected) {
+      unawaited(_requestRelay(on: false));
     }
   }
 
@@ -312,14 +586,16 @@ class ChargingController extends Notifier<ChargingUiState> {
       _onChunk,
       onError: (Object error) {
         AppLogger.error('Charging serial stream error', error);
-        if (!ref.mounted) {
+        if (!ref.mounted || _tearingDown) {
           return;
         }
-        state = state.copyWith(
-          phase: ChargingPhase.error,
-          connectionStatus: SerialConnectionStatus.error,
-          lastError: error.toString(),
+        _completeWaits();
+        _enterError(
           statusMessage: 'Controller read error',
+          lastError: error.toString(),
+        );
+        state = state.copyWith(
+          connectionStatus: SerialConnectionStatus.error,
         );
       },
     );
@@ -328,7 +604,7 @@ class ChargingController extends Notifier<ChargingUiState> {
   String _lineBuffer = '';
 
   void _onChunk(String chunk) {
-    if (!ref.mounted || _tearingDown) {
+    if (!_acceptReplies) {
       return;
     }
     _lineBuffer += chunk;
@@ -359,25 +635,98 @@ class ChargingController extends Notifier<ChargingUiState> {
       if (line.isEmpty) {
         continue;
       }
+      if (RelayResponse.isControllerReadyLine(line)) {
+        final ready = _readyWait;
+        if (ready != null && !ready.isCompleted) {
+          _readyWait = null;
+          ready.complete();
+        }
+        continue;
+      }
       final reply = RelayResponse.tryParse(line);
       if (reply == null) {
         continue;
+      }
+      _onRelayReply(reply);
+    }
+  }
+
+  void _onRelayReply(RelayResponse reply) {
+    final forCharging = reply.relay == null ||
+        reply.relay == RelayCommands.chargingRelayNumber;
+    if (!forCharging) {
+      return;
+    }
+
+    final pending = _pendingReply;
+    if (pending != null && !pending.isCompleted) {
+      if (ref.mounted &&
+          !_tearingDown &&
+          reply.ok &&
+          reply.relay == RelayCommands.chargingRelayNumber) {
+        final confirmedOff =
+            reply.isOff && state.phase == ChargingPhase.error;
+        state = state.copyWith(
+          relayOn: reply.isOn,
+          clearError: confirmedOff,
+        );
       }
       if (!reply.ok) {
         AppLogger.error(
           'Charging relay error: ${reply.error ?? 'unknown'}',
         );
-        if (ref.mounted && state.phase == ChargingPhase.charging) {
+        if (ref.mounted && !_tearingDown) {
           state = state.copyWith(
             lastError: reply.error ?? 'Relay error',
             statusMessage: 'Charging socket reported an error',
           );
         }
-      } else if (reply.relay == RelayCommands.chargingRelayNumber) {
-        if (ref.mounted) {
-          state = state.copyWith(relayOn: reply.isOn);
-        }
       }
+      _finishPending(pending, reply);
+      return;
+    }
+
+    if (!ref.mounted || _tearingDown) {
+      return;
+    }
+
+    if (!reply.ok) {
+      AppLogger.error(
+        'Charging relay error: ${reply.error ?? 'unknown'}',
+      );
+      final message = reply.error ?? 'Relay error';
+      if (state.phase == ChargingPhase.error) {
+        state = state.copyWith(lastError: message);
+        return;
+      }
+      // Includes `done`: a late controller error must leave the "socket off" screen.
+      unawaited(
+        _failSession(
+          statusMessage: 'Charging socket reported an error',
+          lastError: message,
+        ),
+      );
+      return;
+    }
+
+    if (reply.relay != RelayCommands.chargingRelayNumber) {
+      return;
+    }
+
+    state = state.copyWith(relayOn: reply.isOn);
+    if (state.phase == ChargingPhase.charging && reply.isOff) {
+      unawaited(
+        _failSession(
+          statusMessage: 'Charging socket turned off',
+          lastError: 'Controller reported the socket is off',
+          sendOff: false,
+        ),
+      );
+    } else if (reply.isOn &&
+        (state.phase == ChargingPhase.done ||
+            state.phase == ChargingPhase.error)) {
+      // A late "on" after we stopped must not leave the socket powered.
+      unawaited(_requestRelay(on: false));
     }
   }
 
@@ -388,11 +737,27 @@ class ChargingController extends Notifier<ChargingUiState> {
     _tearingDown = true;
     _countdownTimer?.cancel();
     _countdownTimer = null;
+    _completeWaits();
 
     try {
       _serialWatch?.close();
     } catch (_) {}
     _serialWatch = null;
+
+    try {
+      if (disconnect) {
+        // Best-effort off while the reader is still attached, then close.
+        // Closing the port may reset the ESP32, which also forces relays off.
+        try {
+          final service = ref.read(serialServiceProvider);
+          if (service.isConnected) {
+            await _requestRelay(on: false);
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    _acceptReplies = false;
 
     final sub = _incomingSub;
     _incomingSub = null;
@@ -403,25 +768,20 @@ class ChargingController extends Notifier<ChargingUiState> {
     try {
       if (disconnect) {
         final serialState = ref.read(serialControllerProvider);
+        final service = ref.read(serialServiceProvider);
+        var closed = false;
         if (serialState.isConnected) {
           try {
-            await ref
-                .read(serialControllerProvider.notifier)
-                .sendLine(RelayCommands.chargingOff());
-          } catch (_) {}
-          try {
             await ref.read(serialControllerProvider.notifier).disconnect();
+            closed = !service.isConnected;
           } catch (error) {
             AppLogger.error('Charging serial disconnect failed', error);
           }
-        } else {
-          // Best-effort via service if UI state is already torn down.
+        }
+        if (!closed && service.isConnected) {
           try {
-            final service = ref.read(serialServiceProvider);
-            if (service.isConnected) {
-              await service.sendLine(RelayCommands.chargingOff());
-              await service.disconnect(silent: true);
-            }
+            await service.sendLine(RelayCommands.chargingOff());
+            await service.disconnect(silent: true);
           } catch (_) {}
         }
       }

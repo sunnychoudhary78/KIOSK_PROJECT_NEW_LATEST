@@ -48,5 +48,49 @@ void main() {
         isNull,
       );
     });
+
+    test('confirms charging only when ok and gpio state match', () {
+      final on = RelayResponse.tryParse(
+        '{"ok":true,"relay":1,"state":"on"}',
+      )!;
+      expect(on.confirmsCharging(on: true), isTrue);
+      expect(on.confirmsCharging(on: false), isFalse);
+
+      final readbackOff = RelayResponse.tryParse(
+        '{"ok":true,"relay":1,"state":"off"}',
+      )!;
+      expect(readbackOff.confirmsCharging(on: true), isFalse);
+      expect(readbackOff.confirmsCharging(on: false), isTrue);
+
+      final nack = RelayResponse.tryParse(
+        '{"ok":false,"relay":1,"error":"invalid_state"}',
+      )!;
+      expect(nack.confirmsCharging(on: true), isFalse);
+      expect(nack.confirmsCharging(on: false), isFalse);
+
+      final otherRelay = RelayResponse.tryParse(
+        '{"ok":true,"relay":2,"state":"on"}',
+      )!;
+      expect(otherRelay.confirmsCharging(on: true), isFalse);
+    });
+  });
+
+  group('RelayResponse.isControllerReadyLine', () {
+    test('matches the ESP32 boot ready line only', () {
+      expect(
+        RelayResponse.isControllerReadyLine(
+          '{"status":"ready","device":"SPPC_CONTROLLER","relay1":false}',
+        ),
+        isTrue,
+      );
+      expect(
+        RelayResponse.isControllerReadyLine('{"status":"recording"}'),
+        isFalse,
+      );
+      expect(
+        RelayResponse.isControllerReadyLine('{"ok":true,"relay":1,"state":"on"}'),
+        isFalse,
+      );
+    });
   });
 }
