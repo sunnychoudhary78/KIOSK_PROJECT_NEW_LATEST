@@ -443,6 +443,46 @@ paths:
         '200':
           description: Enablement updated
 
+  /fuel-stations:
+    get:
+      tags: [FuelStations]
+      summary: List fuel and charging stations near the authenticated kiosk
+      operationId: listNearbyFuelStations
+      description: Reads the master station table. Does not call an external map provider.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, fuel, cng, ev]
+            default: all
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 30
+      responses:
+        '200':
+          description: Stations within about 5 km, nearest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FuelStation'
+        '409':
+          description: The kiosk has no registered coordinates
+
   /astrology/readings:
     post:
       tags: [Astrology]
@@ -1444,6 +1484,34 @@ components:
         expiresAt:
           type: string
           format: date-time
+
+    FuelStation:
+      type: object
+      required: [latitude, longitude, distanceKm, petrol, diesel, cng, ev, fuelUntyped]
+      properties:
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+        distanceKm:
+          type: number
+        petrol:
+          type: boolean
+        diesel:
+          type: boolean
+        cng:
+          type: boolean
+        ev:
+          type: boolean
+        fuelUntyped:
+          type: boolean
+          description: Fuel pump with no petrol, diesel, CNG, or EV tags
 
     NearbyDevice:
       type: object

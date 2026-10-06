@@ -8,6 +8,7 @@ import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
+import 'package:skp_kiosk/features/fuel_stations/application/fuel_stations_controller.dart';
 import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_kiosk/features/quick_print/application/quick_print_controller.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_controller.dart';
@@ -56,6 +57,7 @@ Future<void> resetVisitorSession(
   ref.invalidate(astrologyControllerProvider);
   ref.invalidate(wellBeingControllerProvider);
   ref.invalidate(chargingControllerProvider);
+  ref.invalidate(fuelStationsControllerProvider);
 
   imageCache.clear();
   imageCache.clearLiveImages();

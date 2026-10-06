@@ -74,6 +74,11 @@ async function main() {
       name: 'Quick Print',
       description: 'Scan a QR on the kiosk and upload documents from a phone browser',
     },
+    {
+      code: 'fuel_stations',
+      name: 'Fuel stations',
+      description: 'Nearby petrol, diesel, CNG, and EV stations',
+    },
   ]) {
     await prisma.platformService.upsert({
       where: { code: service.code },
@@ -87,7 +92,7 @@ async function main() {
   }
 
   const extraServices = await prisma.platformService.findMany({
-    where: { code: { in: ['astrology', 'quick_print'] } },
+    where: { code: { in: ['astrology', 'quick_print', 'fuel_stations'] } },
     select: { id: true, code: true },
   });
   if (extraServices.length) {

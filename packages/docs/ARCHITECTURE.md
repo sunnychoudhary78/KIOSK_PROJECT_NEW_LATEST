@@ -24,6 +24,7 @@ Modules in `apps/api/src/modules`:
 | otp_print | OTP challenge create/redeem |
 | quick_print | Walk-up QR session, guest upload, Razorpay |
 | digilocker | DigiLocker session + print |
+| fuel_stations | Nearby petrol, diesel, CNG, and EV stations from a synced Delhi NCR catalog |
 
 ## Contracts
 

@@ -1,0 +1,68 @@
+enum FuelKind {
+  all,
+  fuel,
+  cng,
+  ev;
+
+  String get label => switch (this) {
+        FuelKind.all => 'All',
+        FuelKind.fuel => 'Fuel',
+        FuelKind.cng => 'CNG',
+        FuelKind.ev => 'EV',
+      };
+}
+
+class FuelStation {
+  const FuelStation({
+    required this.name,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.distanceKm,
+    required this.petrol,
+    required this.diesel,
+    required this.cng,
+    required this.ev,
+    required this.fuelUntyped,
+  });
+
+  final String? name;
+  final String? address;
+  final double latitude;
+  final double longitude;
+  final double distanceKm;
+  final bool petrol;
+  final bool diesel;
+  final bool cng;
+  final bool ev;
+  final bool fuelUntyped;
+
+  String get directionsUrl =>
+      'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude';
+
+  List<String> get badges {
+    final labels = <String>[
+      if (petrol) 'Petrol',
+      if (diesel) 'Diesel',
+      if (cng) 'CNG',
+      if (ev) 'EV',
+      if (fuelUntyped) 'Fuel',
+    ];
+    return labels;
+  }
+
+  factory FuelStation.fromJson(Map<String, dynamic> json) {
+    return FuelStation(
+      name: json['name'] as String?,
+      address: json['address'] as String?,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      distanceKm: (json['distanceKm'] as num).toDouble(),
+      petrol: json['petrol'] == true,
+      diesel: json['diesel'] == true,
+      cng: json['cng'] == true,
+      ev: json['ev'] == true,
+      fuelUntyped: json['fuelUntyped'] == true,
+    );
+  }
+}

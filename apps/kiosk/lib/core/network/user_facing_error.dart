@@ -46,6 +46,7 @@ const _codeMessages = <String, String>{
   'sms_failed': 'Could not send the SMS. Please try again.',
   'unauthorized': 'Session expired. Please try again.',
   'validation_error': 'Please check the details and try again.',
+  'location_missing': 'This kiosk has no location set. Ask an operator to set it.',
   'vedastro_failed': 'Could not prepare the reading. Please try again.',
 };
 

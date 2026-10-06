@@ -245,6 +245,12 @@ class _ServiceCatalog extends StatelessWidget {
                       subtitle: 'Palm reading and birth chart',
                       onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
                     ),
+                    KioskServiceTile(
+                      icon: Icons.local_gas_station_outlined,
+                      title: 'Fuel stations',
+                      subtitle: 'Petrol, diesel, CNG, and EV stations nearby',
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.fuelStations),
+                    ),
                   ];
                   return SingleChildScrollView(
                     child: Wrap(

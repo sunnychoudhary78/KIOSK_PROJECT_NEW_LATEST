@@ -24,6 +24,7 @@ import { registerAdsModule } from './modules/ads/index.js';
 import { registerPlatformSettingsModule } from './modules/platform_settings/index.js';
 import { registerPaymentsModule, registerRazorpayWebhook } from './modules/payments/index.js';
 import { registerAstrologyModule } from './modules/astrology/index.js';
+import { registerFuelStationsModule } from './modules/fuel_stations/index.js';
 import { registerSurveillanceModule } from './modules/surveillance/index.js';
 import { registerQuickPrintModule } from './modules/quick_print/index.js';
 
@@ -95,6 +96,7 @@ export function createApp(deps: AppDeps): Express {
   registerAdsModule(v1, deps);
   registerPlatformSettingsModule(v1, deps);
   registerAstrologyModule(v1, deps);
+  registerFuelStationsModule(v1, deps);
   registerSurveillanceModule(v1, deps);
 
   // Device-authenticated PDF content for print jobs
