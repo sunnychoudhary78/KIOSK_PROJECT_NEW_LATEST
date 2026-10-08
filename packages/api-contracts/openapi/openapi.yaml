@@ -1516,6 +1516,13 @@ components:
           type: string
           nullable: true
           description: Google Places id used to open the exact pump pin
+        approachTraffic:
+          type: string
+          nullable: true
+          enum: [clear, moderate, heavy, unknown]
+          description: >
+            Live traffic on about 100 m of road outside the station for the nearest
+            CNG/EV rows. Null when not checked. Not pump-queue wait time.
 
     NearbyDevice:
       type: object

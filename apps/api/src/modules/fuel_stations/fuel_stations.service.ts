@@ -1,6 +1,8 @@
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { ServicesCatalogService } from '../services/services.service.js';
+import { pickApproachTargets } from './approach.js';
+import type { ApproachTrafficClient } from './approach_traffic.client.js';
 import { NEARBY_RADIUS_KM, rankNearbyStations, searchBox } from './nearby.js';
 import type { FuelStationsQuery } from './fuel_stations.schemas.js';
 
@@ -8,6 +10,7 @@ export class FuelStationsService {
   constructor(
     private readonly db: DbClient,
     private readonly services: ServicesCatalogService,
+    private readonly approachTraffic: ApproachTrafficClient,
   ) {}
 
   async nearby(deviceId: string, query: FuelStationsQuery) {
@@ -42,14 +45,33 @@ export class FuelStationsService {
       },
     });
 
-    return {
-      items: rankNearbyStations(
-        rows,
-        { lat: device.latitude, lng: device.longitude },
-        query.kind,
-        NEARBY_RADIUS_KM,
-        query.limit,
-      ),
-    };
+    const items = rankNearbyStations(
+      rows,
+      { lat: device.latitude, lng: device.longitude },
+      query.kind,
+      NEARBY_RADIUS_KM,
+      query.limit,
+    );
+
+    const targets = pickApproachTargets(items);
+    if (targets.length > 0) {
+      const statuses = await Promise.all(
+        targets.map(({ station }) =>
+          this.approachTraffic.getApproachTraffic({
+            lat: station.latitude,
+            lng: station.longitude,
+          }),
+        ),
+      );
+      for (let i = 0; i < targets.length; i += 1) {
+        const target = targets[i];
+        const status = statuses[i];
+        if (target && status) {
+          items[target.index] = { ...items[target.index]!, approachTraffic: status };
+        }
+      }
+    }
+
+    return { items };
   }
 }

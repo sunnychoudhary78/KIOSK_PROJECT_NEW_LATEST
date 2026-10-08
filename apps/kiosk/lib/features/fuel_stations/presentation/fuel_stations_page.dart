@@ -123,6 +123,12 @@ class _FuelStationsPageState extends ConsumerState<FuelStationsPage> {
               Expanded(child: _StationBody(state: state, onOpen: _showDirections)),
               const SizedBox(height: 8),
               Text(
+                'Road status is traffic outside the station, not queue length inside.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: SkpColors.muted),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 'Map data © OpenStreetMap contributors',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: SkpColors.muted),
@@ -251,7 +257,7 @@ class _StationTile extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
                       ),
                     ],
-                    if (station.badges.isNotEmpty) ...[
+                    if (station.badges.isNotEmpty || station.approachTraffic?.badgeLabel != null) ...[
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -265,6 +271,38 @@ class _StationTile extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
                               ),
                               child: Text(badge, style: Theme.of(context).textTheme.bodyMedium),
+                            ),
+                          if (station.approachTraffic?.badgeLabel case final roadLabel?)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: switch (station.approachTraffic!) {
+                                  ApproachTraffic.heavy => SkpColors.danger.withValues(alpha: 0.25),
+                                  ApproachTraffic.moderate => SkpColors.gold.withValues(alpha: 0.2),
+                                  ApproachTraffic.clear => SkpColors.raised,
+                                  ApproachTraffic.unknown => SkpColors.raised,
+                                },
+                                borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
+                                border: Border.all(
+                                  color: switch (station.approachTraffic!) {
+                                    ApproachTraffic.heavy => SkpColors.danger,
+                                    ApproachTraffic.moderate => SkpColors.gold,
+                                    ApproachTraffic.clear => SkpColors.line,
+                                    ApproachTraffic.unknown => SkpColors.line,
+                                  },
+                                ),
+                              ),
+                              child: Text(
+                                roadLabel,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: switch (station.approachTraffic!) {
+                                        ApproachTraffic.heavy => SkpColors.danger,
+                                        ApproachTraffic.moderate => SkpColors.gold,
+                                        ApproachTraffic.clear => SkpColors.muted,
+                                        ApproachTraffic.unknown => SkpColors.muted,
+                                      },
+                                    ),
+                              ),
                             ),
                         ],
                       ),

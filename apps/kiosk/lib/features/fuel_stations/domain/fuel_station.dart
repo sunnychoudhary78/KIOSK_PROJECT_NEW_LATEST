@@ -12,6 +12,30 @@ enum FuelKind {
       };
 }
 
+enum ApproachTraffic {
+  clear,
+  moderate,
+  heavy,
+  unknown;
+
+  static ApproachTraffic? tryParse(Object? raw) {
+    return switch (raw) {
+      'clear' => ApproachTraffic.clear,
+      'moderate' => ApproachTraffic.moderate,
+      'heavy' => ApproachTraffic.heavy,
+      'unknown' => ApproachTraffic.unknown,
+      _ => null,
+    };
+  }
+
+  String? get badgeLabel => switch (this) {
+        ApproachTraffic.clear => 'Road clear',
+        ApproachTraffic.moderate => 'Road busy',
+        ApproachTraffic.heavy => 'Road very busy',
+        ApproachTraffic.unknown => null,
+      };
+}
+
 class FuelStation {
   const FuelStation({
     required this.name,
@@ -25,6 +49,7 @@ class FuelStation {
     required this.ev,
     required this.fuelUntyped,
     this.googlePlaceId,
+    this.approachTraffic,
   });
 
   final String? name;
@@ -38,6 +63,7 @@ class FuelStation {
   final bool ev;
   final bool fuelUntyped;
   final String? googlePlaceId;
+  final ApproachTraffic? approachTraffic;
 
   String get directionsUrl {
     final pin = 'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
@@ -72,6 +98,7 @@ class FuelStation {
       ev: json['ev'] == true,
       fuelUntyped: json['fuelUntyped'] == true,
       googlePlaceId: json['googlePlaceId'] as String?,
+      approachTraffic: ApproachTraffic.tryParse(json['approachTraffic']),
     );
   }
 }

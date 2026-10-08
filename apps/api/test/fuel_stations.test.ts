@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  approachEndpointsFromSnaps,
+  classifySpeedIntervals,
+  offsetMeters,
+  pickApproachTargets,
+} from '../src/modules/fuel_stations/approach.js';
+import {
   googleIncludedType,
   parseNearbyPlaces,
   pickClosestGooglePlace,
 } from '../src/modules/fuel_stations/google.js';
 import { mapOsmElement, nextMissState, overpassQuery } from '../src/modules/fuel_stations/osm.js';
 import { rankNearbyStations } from '../src/modules/fuel_stations/nearby.js';
+import { haversineKm } from '../src/shared/geo.js';
 
 const origin = { lat: 28.6139, lng: 77.209 };
 
@@ -173,12 +180,56 @@ describe('rankNearbyStations', () => {
       'all',
     );
     expect(items[0]?.googlePlaceId).toBe('ChIJpump');
+    expect(items[0]?.approachTraffic).toBeNull();
   });
 
   it('respects the limit', () => {
     const items = rankNearbyStations([nearbyFuel, untyped, ev], origin, 'all', 5, 1);
     expect(items).toHaveLength(1);
     expect(items[0]?.name).toBe('EV');
+  });
+});
+
+describe('approach traffic helpers', () => {
+  it('classifies jam over slow over clear', () => {
+    expect(classifySpeedIntervals([{ speed: 'NORMAL' }, { speed: 'SLOW' }])).toBe('moderate');
+    expect(
+      classifySpeedIntervals([{ speed: 'SLOW' }, { speed: 'TRAFFIC_JAM' }, { speed: 'NORMAL' }]),
+    ).toBe('heavy');
+    expect(classifySpeedIntervals([{ speed: 'NORMAL' }])).toBe('clear');
+    expect(classifySpeedIntervals([])).toBe('unknown');
+  });
+
+  it('picks the nearest CNG/EV stations only', () => {
+    const items = rankNearbyStations(
+      [
+        station({ name: 'Fuel', latitude: 28.614, longitude: 77.209, petrol: true }),
+        station({ name: 'CNG-A', latitude: 28.615, longitude: 77.209, cng: true }),
+        station({ name: 'EV-A', latitude: 28.616, longitude: 77.209, ev: true }),
+        station({ name: 'CNG-B', latitude: 28.617, longitude: 77.209, cng: true }),
+      ],
+      origin,
+      'all',
+    );
+    const targets = pickApproachTargets(items, 2);
+    expect(targets.map((t) => t.station.name)).toEqual(['CNG-A', 'EV-A']);
+  });
+
+  it('builds endpoints about 100 m each way from snapped road points', () => {
+    const station = { lat: 28.6139, lng: 77.209 };
+    const west = offsetMeters(station, 270, 20);
+    const east = offsetMeters(station, 90, 20);
+    const endpoints = approachEndpointsFromSnaps(station, [west, east], 100);
+    expect(endpoints).not.toBeNull();
+    const spanM =
+      haversineKm(
+        endpoints!.origin.lat,
+        endpoints!.origin.lng,
+        endpoints!.destination.lat,
+        endpoints!.destination.lng,
+      ) * 1000;
+    expect(spanM).toBeGreaterThan(180);
+    expect(spanM).toBeLessThan(220);
   });
 });
 
