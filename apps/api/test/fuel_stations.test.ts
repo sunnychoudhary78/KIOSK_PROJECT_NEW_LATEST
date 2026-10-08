@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import {
+  googleIncludedType,
+  parseNearbyPlaces,
+  pickClosestGooglePlace,
+} from '../src/modules/fuel_stations/google.js';
 import { mapOsmElement, nextMissState, overpassQuery } from '../src/modules/fuel_stations/osm.js';
 import { rankNearbyStations } from '../src/modules/fuel_stations/nearby.js';
 
@@ -161,9 +166,52 @@ describe('rankNearbyStations', () => {
     expect(cngOnly.map((item) => item.name)).toEqual(['CNG']);
   });
 
+  it('passes a Google place id through to the response', () => {
+    const items = rankNearbyStations(
+      [station({ name: 'Near', latitude: 28.62, longitude: 77.209, petrol: true, googlePlaceId: 'ChIJpump' })],
+      origin,
+      'all',
+    );
+    expect(items[0]?.googlePlaceId).toBe('ChIJpump');
+  });
+
   it('respects the limit', () => {
     const items = rankNearbyStations([nearbyFuel, untyped, ev], origin, 'all', 5, 1);
     expect(items).toHaveLength(1);
     expect(items[0]?.name).toBe('EV');
+  });
+});
+
+describe('pickClosestGooglePlace', () => {
+  const origin = { lat: 28.6139, lng: 77.209 };
+
+  it('keeps the closest pump and strips the places prefix', () => {
+    const id = pickClosestGooglePlace(origin, [
+      { id: 'places/ChIJfar', latitude: 28.6145, longitude: 77.209 },
+      { id: 'places/ChIJnear', latitude: 28.614, longitude: 77.209 },
+    ]);
+    expect(id).toBe('ChIJnear');
+  });
+
+  it('returns null when every candidate is outside the radius', () => {
+    expect(
+      pickClosestGooglePlace(origin, [{ id: 'ChIJfar', latitude: 28.62, longitude: 77.209 }]),
+    ).toBeNull();
+  });
+
+  it('parses a Places nearby payload', () => {
+    const candidates = parseNearbyPlaces({
+      places: [{ id: 'ChIJpump', location: { latitude: 28.61, longitude: 77.2 } }, { id: 1 }],
+    });
+    expect(candidates).toEqual([{ id: 'ChIJpump', latitude: 28.61, longitude: 77.2 }]);
+  });
+
+  it('searches charging stations only for EV-only rows', () => {
+    expect(
+      googleIncludedType({ petrol: false, diesel: false, cng: false, ev: true, fuelUntyped: false }),
+    ).toBe('electric_vehicle_charging_station');
+    expect(
+      googleIncludedType({ petrol: true, diesel: false, cng: false, ev: true, fuelUntyped: false }),
+    ).toBe('gas_station');
   });
 });

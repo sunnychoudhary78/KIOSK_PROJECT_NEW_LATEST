@@ -70,7 +70,7 @@ class _FuelStationsPageState extends ConsumerState<FuelStationsPage> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Scan with your phone for directions',
+                    'Scan to open this station in Google Maps, then tap Directions',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
                   ),
@@ -279,7 +279,7 @@ class _StationTile extends StatelessWidget {
                   Text(distance, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                    'Directions',
+                    'Map',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: SkpColors.accentBright),
                   ),
                 ],

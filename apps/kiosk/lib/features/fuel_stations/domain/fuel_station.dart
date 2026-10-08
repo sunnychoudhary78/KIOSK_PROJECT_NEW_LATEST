@@ -24,6 +24,7 @@ class FuelStation {
     required this.cng,
     required this.ev,
     required this.fuelUntyped,
+    this.googlePlaceId,
   });
 
   final String? name;
@@ -36,9 +37,16 @@ class FuelStation {
   final bool cng;
   final bool ev;
   final bool fuelUntyped;
+  final String? googlePlaceId;
 
-  String get directionsUrl =>
-      'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude';
+  String get directionsUrl {
+    final pin = 'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
+    final placeId = googlePlaceId;
+    if (placeId == null || placeId.isEmpty) {
+      return pin;
+    }
+    return '$pin&query_place_id=${Uri.encodeQueryComponent(placeId)}';
+  }
 
   List<String> get badges {
     final labels = <String>[
@@ -63,6 +71,7 @@ class FuelStation {
       cng: json['cng'] == true,
       ev: json['ev'] == true,
       fuelUntyped: json['fuelUntyped'] == true,
+      googlePlaceId: json['googlePlaceId'] as String?,
     );
   }
 }

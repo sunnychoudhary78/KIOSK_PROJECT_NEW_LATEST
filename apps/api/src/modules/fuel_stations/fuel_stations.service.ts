@@ -38,6 +38,7 @@ export class FuelStationsService {
         cng: true,
         ev: true,
         fuelUntyped: true,
+        googlePlaceId: true,
       },
     });
 

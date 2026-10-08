@@ -11,6 +11,7 @@ export type NearbyStationInput = FuelFlags & {
   address: string | null;
   latitude: number;
   longitude: number;
+  googlePlaceId?: string | null;
 };
 
 export type NearbyStation = NearbyStationInput & {
@@ -77,6 +78,7 @@ export function rankNearbyStations(
       cng: entry.station.cng,
       ev: entry.station.ev,
       fuelUntyped: entry.station.fuelUntyped,
+      googlePlaceId: entry.station.googlePlaceId ?? null,
       distanceKm: roundDistanceKm(entry.distanceKm),
     }));
 }

@@ -1512,6 +1512,10 @@ components:
         fuelUntyped:
           type: boolean
           description: Fuel pump with no petrol, diesel, CNG, or EV tags
+        googlePlaceId:
+          type: string
+          nullable: true
+          description: Google Places id used to open the exact pump pin
 
     NearbyDevice:
       type: object

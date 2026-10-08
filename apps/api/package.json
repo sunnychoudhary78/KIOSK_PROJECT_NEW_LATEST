@@ -15,7 +15,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
-    "fuel-stations:sync": "tsx src/scripts/sync-fuel-stations.ts"
+    "fuel-stations:sync": "tsx src/scripts/sync-fuel-stations.ts",
+    "fuel-stations:match-google": "tsx src/scripts/match-fuel-stations-google.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
