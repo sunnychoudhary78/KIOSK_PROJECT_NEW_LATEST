@@ -48,9 +48,9 @@ class KioskShell extends StatelessWidget {
                   Text(
                     'Smart Kiosk',
                     style: theme.textTheme.titleLarge?.copyWith(
-                      letterSpacing: 1.4,
-                      fontWeight: FontWeight.w700,
-                      color: SkpColors.text,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w800,
+                      color: SkpColors.accent,
                     ),
                   ),
                   if (title != null) ...[

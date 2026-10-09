@@ -1,5 +1,6 @@
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { Logger } from '../../infrastructure/logging/logger.js';
+import { roundDistanceKm } from '../../shared/geo.js';
 import { AppError } from '../../shared/errors.js';
 import type { ServicesCatalogService } from '../services/services.service.js';
 import { pickApproachTargets, waitMinutesForApproach } from './approach.js';
@@ -101,26 +102,44 @@ export class FuelStationsService {
       query.limit,
     );
 
+    const origin = { lat: device.latitude, lng: device.longitude };
     const targets = pickApproachTargets(items);
     if (targets.length > 0) {
-      const statuses = await Promise.all(
+      const results = await Promise.all(
         targets.map(({ station }) =>
-          this.approachTraffic.getApproachTraffic({
+          this.approachTraffic.getRouteTraffic(origin, {
             lat: station.latitude,
             lng: station.longitude,
           }),
         ),
       );
+      const statuses: string[] = [];
+      const driveDistancesKm: Array<number | null> = [];
       for (let i = 0; i < targets.length; i += 1) {
         const target = targets[i];
-        const status = statuses[i];
-        if (target && status) {
-          items[target.index] = {
-            ...items[target.index]!,
-            approachTraffic: status,
-            approachWaitMin: waitMinutesForApproach(status),
-          };
+        const result = results[i];
+        if (!target || !result) {
+          continue;
         }
+        const status = result.approachTraffic;
+        statuses.push(status);
+        const driveDistanceKm =
+          result.driveDistanceM != null
+            ? roundDistanceKm(result.driveDistanceM / 1000)
+            : null;
+        driveDistancesKm.push(driveDistanceKm);
+        const driveDurationMin =
+          result.driveDurationSec != null
+            ? Math.max(1, Math.ceil(result.driveDurationSec / 60))
+            : null;
+        items[target.index] = {
+          ...items[target.index]!,
+          approachTraffic: status,
+          approachWaitMin: waitMinutesForApproach(status),
+          driveDistanceKm,
+          driveDurationMin,
+          routeTrafficSegments: result.routeTrafficSegments,
+        };
       }
       this.logger.info(
         {
@@ -128,8 +147,9 @@ export class FuelStationsService {
           deviceId,
           kind: query.kind,
           statuses,
+          driveDistancesKm,
         },
-        'Approach traffic statuses for nearby stations',
+        'Route traffic for nearby stations',
       );
     }
 

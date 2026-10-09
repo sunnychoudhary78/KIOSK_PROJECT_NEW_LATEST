@@ -4,13 +4,13 @@ import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 class AppTheme {
   static ThemeData kiosk() {
     const colorScheme = ColorScheme(
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       primary: SkpColors.accent,
       onPrimary: Colors.white,
       secondary: SkpColors.accentBright,
-      onSecondary: SkpColors.canvas,
+      onSecondary: Colors.white,
       tertiary: SkpColors.gold,
-      onTertiary: SkpColors.canvas,
+      onTertiary: SkpColors.text,
       error: SkpColors.danger,
       onError: Colors.white,
       surface: SkpColors.panel,
@@ -138,7 +138,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       fontFamily: SkpFonts.family,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: SkpColors.canvas,
@@ -175,7 +175,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: SkpColors.accentBright,
+          foregroundColor: SkpColors.accent,
           minimumSize: const Size(SkpTokens.tapMin, 48),
           textStyle: textTheme.labelLarge,
         ),
@@ -207,15 +207,15 @@ class AppTheme {
         ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: SkpColors.accentBright,
+        color: SkpColors.accent,
       ),
       dividerTheme: const DividerThemeData(
         color: SkpColors.line,
         thickness: SkpTokens.hairline,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: SkpColors.raised,
-        contentTextStyle: textTheme.bodyMedium,
+        backgroundColor: SkpColors.text,
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
         behavior: SnackBarBehavior.floating,
       ),
       dialogTheme: DialogThemeData(
@@ -227,6 +227,6 @@ class AppTheme {
     );
   }
 
-  /// Kept for older call sites; the public kiosk is dark ATM chrome.
+  /// Alias for call sites that expect a light theme name.
   static ThemeData light() => kiosk();
 }

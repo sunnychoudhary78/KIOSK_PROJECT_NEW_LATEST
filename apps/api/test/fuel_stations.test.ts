@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   approachEndpointsFromSnaps,
+  buildRouteTrafficSegments,
+  classifyApproachFromRoute,
   classifySpeedIntervals,
   offsetMeters,
+  parseDurationSec,
   pickApproachTargets,
   waitMinutesForApproach,
 } from '../src/modules/fuel_stations/approach.js';
@@ -216,6 +219,53 @@ describe('approach traffic helpers', () => {
     expect(waitMinutesForApproach('unknown')).toBeNull();
     expect(waitMinutesForApproach('moderate')).toBe(6);
     expect(waitMinutesForApproach('heavy')).toBe(15);
+  });
+
+  it('parses Google Routes duration strings', () => {
+    expect(parseDurationSec('45s')).toBe(45);
+    expect(parseDurationSec('90s')).toBe(90);
+    expect(parseDurationSec('12m34s')).toBe(12 * 60 + 34);
+    expect(parseDurationSec('1h2m3s')).toBe(3723);
+    expect(parseDurationSec('')).toBeNull();
+    expect(parseDurationSec(null)).toBeNull();
+  });
+
+  it('builds normalized route traffic segments', () => {
+    const segments = buildRouteTrafficSegments([
+      { speed: 'NORMAL', startPolylinePointIndex: 0, endPolylinePointIndex: 50 },
+      { speed: 'SLOW', startPolylinePointIndex: 50, endPolylinePointIndex: 70 },
+      { speed: 'SLOW', startPolylinePointIndex: 70, endPolylinePointIndex: 80 },
+      { speed: 'TRAFFIC_JAM', startPolylinePointIndex: 80, endPolylinePointIndex: 100 },
+    ]);
+    expect(segments).toEqual([
+      { speed: 'NORMAL', fraction: 0.5 },
+      { speed: 'SLOW', fraction: 0.3 },
+      { speed: 'TRAFFIC_JAM', fraction: 0.2 },
+    ]);
+  });
+
+  it('classifies approach from the last 200 m of the route', () => {
+    const intervals = [
+      { speed: 'NORMAL', startPolylinePointIndex: 0, endPolylinePointIndex: 80 },
+      { speed: 'TRAFFIC_JAM', startPolylinePointIndex: 80, endPolylinePointIndex: 100 },
+    ];
+    // 1000 m route → last 200 m ≈ last 20% of polyline indices → jam only
+    expect(classifyApproachFromRoute(intervals, 1000)).toBe('heavy');
+    expect(
+      classifyApproachFromRoute(
+        [
+          { speed: 'NORMAL', startPolylinePointIndex: 0, endPolylinePointIndex: 90 },
+          { speed: 'SLOW', startPolylinePointIndex: 90, endPolylinePointIndex: 100 },
+        ],
+        1000,
+      ),
+    ).toBe('moderate');
+    expect(
+      classifyApproachFromRoute(
+        [{ speed: 'NORMAL', startPolylinePointIndex: 0, endPolylinePointIndex: 100 }],
+        1000,
+      ),
+    ).toBe('clear');
   });
 
   it('picks the nearest CNG/EV stations only', () => {

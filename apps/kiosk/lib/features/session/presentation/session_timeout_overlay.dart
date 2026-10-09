@@ -19,12 +19,18 @@ class SessionTimeoutOverlay extends ConsumerWidget {
 
     return Positioned.fill(
       child: Material(
-        color: const Color(0xE60B1419),
+        color: SkpColors.scrim,
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 640),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.fromLTRB(36, 36, 36, 32),
+              decoration: BoxDecoration(
+                color: SkpColors.panel,
+                borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+                border: Border.all(color: SkpColors.line),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -45,9 +51,9 @@ class SessionTimeoutOverlay extends ConsumerWidget {
                   Text(
                     '$seconds',
                     style: theme.textTheme.displayLarge?.copyWith(
-                      fontSize: 160,
+                      fontSize: 140,
                       height: 1,
-                      color: SkpColors.gold,
+                      color: SkpColors.accent,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -56,7 +62,6 @@ class SessionTimeoutOverlay extends ConsumerWidget {
                     width: 420,
                     child: KioskPrimaryButton(
                       label: "I'm still here",
-                      gold: true,
                       onPressed: () => ref
                           .read(kioskSessionControllerProvider.notifier)
                           .noteActivity(),

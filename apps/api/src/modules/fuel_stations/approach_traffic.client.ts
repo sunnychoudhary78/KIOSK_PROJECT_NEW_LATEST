@@ -1,23 +1,37 @@
 import type { Logger } from '../../infrastructure/logging/logger.js';
 import {
   APPROACH_CACHE_TTL_MS,
-  approachCacheKey,
-  approachEndpointsFromSnaps,
-  classifySpeedIntervals,
-  samplePointsAround,
+  buildRouteTrafficSegments,
+  classifyApproachFromRoute,
+  parseDurationSec,
+  routeTrafficCacheKey,
   type ApproachTraffic,
   type LatLng,
+  type RouteTrafficSegment,
   type SpeedReadingInterval,
 } from './approach.js';
 
-const ROADS_URL = 'https://roads.googleapis.com/v1/nearestRoads';
 const ROUTES_URL = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 const BODY_SNIPPET = 240;
 
-type CacheEntry = { value: ApproachTraffic; expiresAt: number };
+export type RouteTrafficResult = {
+  approachTraffic: ApproachTraffic;
+  driveDistanceM: number | null;
+  driveDurationSec: number | null;
+  routeTrafficSegments: RouteTrafficSegment[];
+};
+
+const UNKNOWN_RESULT: RouteTrafficResult = {
+  approachTraffic: 'unknown',
+  driveDistanceM: null,
+  driveDurationSec: null,
+  routeTrafficSegments: [],
+};
+
+type CacheEntry = { value: RouteTrafficResult; expiresAt: number };
 
 export type ApproachTrafficClient = {
-  getApproachTraffic(station: LatLng): Promise<ApproachTraffic>;
+  getRouteTraffic(origin: LatLng, station: LatLng): Promise<RouteTrafficResult>;
 };
 
 type FetchLike = typeof fetch;
@@ -37,31 +51,35 @@ export function createApproachTrafficClient(options: {
   const logger = options.logger;
 
   return {
-    async getApproachTraffic(station: LatLng): Promise<ApproachTraffic> {
-      const key = approachCacheKey(station.lat, station.lng);
+    async getRouteTraffic(origin: LatLng, station: LatLng): Promise<RouteTrafficResult> {
+      const key = routeTrafficCacheKey(origin, station);
       const hit = cache.get(key);
       if (hit && hit.expiresAt > now()) {
         return hit.value;
       }
 
-      const coords = { lat: roundCoord(station.lat), lng: roundCoord(station.lng) };
-      let value: ApproachTraffic = 'unknown';
+      const coords = {
+        originLat: roundCoord(origin.lat),
+        originLng: roundCoord(origin.lng),
+        lat: roundCoord(station.lat),
+        lng: roundCoord(station.lng),
+      };
+      let value: RouteTrafficResult = UNKNOWN_RESULT;
 
       if (!apiKey) {
-        logger.warn({ event: 'approach_traffic_no_api_key', ...coords }, 'Approach traffic skipped');
+        logger.warn({ event: 'approach_traffic_no_api_key', ...coords }, 'Route traffic skipped');
       } else {
         try {
-          value = await probeApproach(apiKey, station, fetchImpl, logger, coords);
+          value = await probeRoute(apiKey, origin, station, fetchImpl, logger, coords);
         } catch (error) {
           const err = error instanceof Error ? error.message : String(error);
-          // Roads/Routes HTTP failures are already logged with response body.
-          if (!err.startsWith('Roads HTTP') && !err.startsWith('Routes HTTP')) {
+          if (!err.startsWith('Routes HTTP')) {
             logger.warn(
               { event: 'approach_traffic_failed', ...coords, err },
-              'Approach traffic probe failed',
+              'Route traffic probe failed',
             );
           }
-          value = 'unknown';
+          value = UNKNOWN_RESULT;
         }
       }
 
@@ -71,82 +89,61 @@ export function createApproachTrafficClient(options: {
   };
 }
 
-async function probeApproach(
+async function probeRoute(
   apiKey: string,
+  origin: LatLng,
   station: LatLng,
   fetchImpl: FetchLike,
   logger: Logger,
-  coords: { lat: number; lng: number },
-): Promise<ApproachTraffic> {
-  const snaps = await nearestRoads(apiKey, samplePointsAround(station), fetchImpl, logger, coords);
-  const endpoints = approachEndpointsFromSnaps(station, snaps);
-  if (!endpoints) {
-    logger.warn(
-      { event: 'approach_traffic_no_road', ...coords, snapCount: snaps.length },
-      'Approach traffic: no road snap/endpoints',
-    );
-    return 'unknown';
-  }
-  const intervals = await routeSpeedIntervals(
-    apiKey,
-    endpoints.origin,
-    endpoints.destination,
-    fetchImpl,
-    logger,
-    coords,
-  );
+  coords: { originLat: number; originLng: number; lat: number; lng: number },
+): Promise<RouteTrafficResult> {
+  const route = await computeRoute(apiKey, origin, station, fetchImpl, logger, coords);
+  const intervals = route.intervals;
   if (intervals.length === 0) {
     logger.warn(
       { event: 'approach_traffic_no_intervals', ...coords },
-      'Approach traffic: empty speedReadingIntervals',
+      'Route traffic: empty speedReadingIntervals',
     );
-    return 'unknown';
+    return {
+      approachTraffic: 'unknown',
+      driveDistanceM: route.distanceMeters,
+      driveDurationSec: route.durationSec,
+      routeTrafficSegments: [],
+    };
   }
-  const status = classifySpeedIntervals(intervals);
-  logger.debug({ event: 'approach_traffic_ok', ...coords, status }, 'Approach traffic ok');
-  return status;
-}
 
-async function nearestRoads(
-  apiKey: string,
-  points: LatLng[],
-  fetchImpl: FetchLike,
-  logger: Logger,
-  coords: { lat: number; lng: number },
-): Promise<LatLng[]> {
-  const pointsParam = points.map((p) => `${p.lat},${p.lng}`).join('|');
-  const url = `${ROADS_URL}?points=${encodeURIComponent(pointsParam)}&key=${encodeURIComponent(apiKey)}`;
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
-  if (!response.ok) {
-    const body = await readBodySnippet(response);
-    logger.warn(
-      { event: 'approach_traffic_roads_http', ...coords, status: response.status, body },
-      'Approach traffic: Roads API error',
-    );
-    throw new Error(`Roads HTTP ${response.status}`);
-  }
-  const payload = (await response.json()) as {
-    snappedPoints?: Array<{ location?: { latitude?: number; longitude?: number } }>;
+  const approachTraffic = classifyApproachFromRoute(intervals, route.distanceMeters ?? 0);
+  const routeTrafficSegments = buildRouteTrafficSegments(intervals);
+  logger.debug(
+    {
+      event: 'approach_traffic_ok',
+      ...coords,
+      status: approachTraffic,
+      distanceM: route.distanceMeters,
+      durationSec: route.durationSec,
+    },
+    'Route traffic ok',
+  );
+  return {
+    approachTraffic,
+    driveDistanceM: route.distanceMeters,
+    driveDurationSec: route.durationSec,
+    routeTrafficSegments,
   };
-  const snaps: LatLng[] = [];
-  for (const point of payload.snappedPoints ?? []) {
-    const lat = point.location?.latitude;
-    const lng = point.location?.longitude;
-    if (typeof lat === 'number' && typeof lng === 'number') {
-      snaps.push({ lat, lng });
-    }
-  }
-  return snaps;
 }
 
-async function routeSpeedIntervals(
+async function computeRoute(
   apiKey: string,
   origin: LatLng,
   destination: LatLng,
   fetchImpl: FetchLike,
   logger: Logger,
-  coords: { lat: number; lng: number },
-): Promise<SpeedReadingInterval[]> {
+  coords: { originLat: number; originLng: number; lat: number; lng: number },
+): Promise<{
+  distanceMeters: number | null;
+  durationSec: number | null;
+  intervals: SpeedReadingInterval[];
+}> {
   const response = await fetchImpl(ROUTES_URL, {
     method: 'POST',
     headers: {
@@ -158,7 +155,7 @@ async function routeSpeedIntervals(
     body: JSON.stringify({
       origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
       destination: {
-        location: { latLng: { latitude: destination.lat, longitude: destination.lng } },
+        location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
       },
       travelMode: 'DRIVE',
       routingPreference: 'TRAFFIC_AWARE',
@@ -170,16 +167,27 @@ async function routeSpeedIntervals(
     const body = await readBodySnippet(response);
     logger.warn(
       { event: 'approach_traffic_routes_http', ...coords, status: response.status, body },
-      'Approach traffic: Routes API error',
+      'Route traffic: Routes API error',
     );
     throw new Error(`Routes HTTP ${response.status}`);
   }
   const payload = (await response.json()) as {
     routes?: Array<{
+      distanceMeters?: number;
+      duration?: string;
       travelAdvisory?: { speedReadingIntervals?: SpeedReadingInterval[] };
     }>;
   };
-  return payload.routes?.[0]?.travelAdvisory?.speedReadingIntervals ?? [];
+  const route = payload.routes?.[0];
+  const distanceMeters =
+    typeof route?.distanceMeters === 'number' && Number.isFinite(route.distanceMeters)
+      ? route.distanceMeters
+      : null;
+  return {
+    distanceMeters,
+    durationSec: parseDurationSec(route?.duration),
+    intervals: route?.travelAdvisory?.speedReadingIntervals ?? [],
+  };
 }
 
 async function readBodySnippet(response: Response): Promise<string> {

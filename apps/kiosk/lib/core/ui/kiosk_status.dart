@@ -164,7 +164,7 @@ class KioskDocCard extends StatelessWidget {
               color: SkpColors.accent.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(leadingIcon, color: SkpColors.accentBright),
+            child: Icon(leadingIcon, color: SkpColors.accent),
           ),
           const SizedBox(width: 16),
           Expanded(

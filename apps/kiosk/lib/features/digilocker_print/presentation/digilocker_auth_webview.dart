@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:skp_kiosk/core/config/app_config.dart';
+import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:webview_windows/webview_windows.dart';
 
 /// In-app WebView2 pane for MeriPehchaan DigiLocker authorization.
@@ -146,9 +147,9 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFF132029),
+        color: SkpColors.panel,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2A3A42)),
+        border: Border.all(color: SkpColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -156,11 +157,11 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF2A3A42))),
+              border: Border(bottom: BorderSide(color: SkpColors.line)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.lock_outline, color: Color(0xFF2EC4A0)),
+                const Icon(Icons.lock_outline, color: SkpColors.accent),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(

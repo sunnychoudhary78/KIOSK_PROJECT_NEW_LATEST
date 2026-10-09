@@ -49,7 +49,7 @@ class KioskPrimaryButton extends StatelessWidget {
       onPressed: enabled ? onPressed : null,
       style: FilledButton.styleFrom(
         backgroundColor: gold ? SkpColors.gold : SkpColors.accent,
-        foregroundColor: gold ? SkpColors.canvas : Colors.white,
+        foregroundColor: gold ? SkpColors.text : Colors.white,
         disabledBackgroundColor: SkpColors.raised,
         disabledForegroundColor: SkpColors.muted,
         minimumSize: Size(

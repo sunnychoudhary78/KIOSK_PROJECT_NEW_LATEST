@@ -192,28 +192,32 @@ class _ServiceCatalog extends StatelessWidget {
       showHome: false,
       subtitle: auth.deviceName,
       body: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 8, 32, 24),
+        padding: const EdgeInsets.fromLTRB(28, 8, 28, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const HomeBannerStrip(),
-            const SizedBox(height: 8),
             Text(
               'Select a service',
-              style: Theme.of(context).textTheme.headlineSmall,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
-              'Touch a tile to begin. Your session ends automatically when you leave.',
+              'Touch a tile to begin',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const gap = 16.0;
-                  final tileW = (constraints.maxWidth - gap) / 2;
-                  const tileH = 210.0;
+                  const gap = 12.0;
+                  const rows = 3;
+                  final gridMin =
+                      SkpTokens.tileMinHeight * rows + gap * (rows - 1);
+                  final showBanner =
+                      constraints.maxHeight >= gridMin + SkpTokens.bannerHeight + 12;
+
                   final tiles = [
                     KioskServiceTile(
                       icon: Icons.print_outlined,
@@ -252,15 +256,33 @@ class _ServiceCatalog extends StatelessWidget {
                       onTap: () => Navigator.of(context).pushNamed(AppRoutes.fuelStations),
                     ),
                   ];
-                  return SingleChildScrollView(
-                    child: Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
-                      children: [
-                        for (final tile in tiles)
-                          SizedBox(width: tileW, height: tileH, child: tile),
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (showBanner) ...[
+                        const HomeBannerStrip(),
+                        const SizedBox(height: 10),
                       ],
-                    ),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            for (var row = 0; row < rows; row++) ...[
+                              if (row > 0) const SizedBox(height: gap),
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Expanded(child: tiles[row * 2]),
+                                    const SizedBox(width: gap),
+                                    Expanded(child: tiles[row * 2 + 1]),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),

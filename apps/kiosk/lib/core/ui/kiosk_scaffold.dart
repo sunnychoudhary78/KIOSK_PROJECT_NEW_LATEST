@@ -40,8 +40,8 @@ class KioskAtmosphere extends StatelessWidget {
               center: Alignment(-0.7, -0.85),
               radius: 1.15,
               colors: [
-                Color(0x330F6A5A),
-                Color(0x000B1419),
+                Color(0x280F6A5A),
+                Color(0x00F4F7F8),
               ],
             ),
           ),
@@ -52,8 +52,8 @@ class KioskAtmosphere extends StatelessWidget {
               center: Alignment(0.85, 1.05),
               radius: 0.9,
               colors: [
-                Color(0x220F6A5A),
-                Color(0x000B1419),
+                Color(0x1A2EC4A0),
+                Color(0x00F4F7F8),
               ],
             ),
           ),

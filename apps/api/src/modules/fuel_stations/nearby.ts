@@ -1,4 +1,4 @@
-import type { ApproachTraffic } from './approach.js';
+import type { ApproachTraffic, RouteTrafficSegment } from './approach.js';
 import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
 import type { FuelFlags } from './osm.js';
 
@@ -19,6 +19,9 @@ export type NearbyStation = NearbyStationInput & {
   distanceKm: number;
   approachTraffic: ApproachTraffic | null;
   approachWaitMin: number | null;
+  driveDistanceKm: number | null;
+  driveDurationMin: number | null;
+  routeTrafficSegments: RouteTrafficSegment[];
 };
 
 export type SearchBox = {
@@ -85,5 +88,8 @@ export function rankNearbyStations(
       distanceKm: roundDistanceKm(entry.distanceKm),
       approachTraffic: null,
       approachWaitMin: null,
+      driveDistanceKm: null,
+      driveDurationMin: null,
+      routeTrafficSegments: [],
     }));
 }

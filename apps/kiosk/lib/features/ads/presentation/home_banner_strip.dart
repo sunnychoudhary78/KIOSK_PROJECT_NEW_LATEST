@@ -4,11 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/ads/data/ads_repository.dart';
 
 class HomeBannerStrip extends ConsumerStatefulWidget {
-  const HomeBannerStrip({super.key});
+  const HomeBannerStrip({super.key, this.height = SkpTokens.bannerHeight});
+
+  final double height;
 
   @override
   ConsumerState<HomeBannerStrip> createState() => _HomeBannerStripState();
@@ -26,7 +29,7 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
     }
 
     return SizedBox(
-      height: 120,
+      height: widget.height,
       child: PageView.builder(
         itemCount: banners.length,
         itemBuilder: (context, index) {
@@ -35,12 +38,12 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
           _reportImpression(ad);
           final data = _bytes[ad.id];
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
               child: data == null
                   ? const ColoredBox(
-                      color: Color(0xFF1A2A32),
+                      color: SkpColors.raised,
                       child: Center(child: CircularProgressIndicator()),
                     )
                   : Image.memory(data, fit: BoxFit.cover, width: double.infinity),

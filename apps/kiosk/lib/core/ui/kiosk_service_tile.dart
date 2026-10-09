@@ -20,6 +20,8 @@ class KioskServiceTile extends StatelessWidget {
     final theme = Theme.of(context);
     return Material(
       color: SkpColors.panel,
+      elevation: 0,
+      shadowColor: Colors.transparent,
       borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
       child: InkWell(
         onTap: onTap,
@@ -32,8 +34,15 @@ class KioskServiceTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
             border: Border.all(color: SkpColors.line, width: SkpTokens.hairline),
+            boxShadow: [
+              BoxShadow(
+                color: SkpColors.text.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Center(
             child: FittedBox(
               fit: BoxFit.scaleDown,
@@ -45,29 +54,36 @@ class KioskServiceTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Container(
-                      width: 80,
-                      height: 80,
+                      width: 64,
+                      height: 64,
                       decoration: BoxDecoration(
-                        color: SkpColors.accent.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(20),
+                        color: SkpColors.accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(18),
                       ),
-                      child: Icon(icon, size: 44, color: SkpColors.accentBright),
+                      child: Icon(icon, size: 36, color: SkpColors.accent),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     Text(
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineSmall?.copyWith(fontSize: 28),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        color: SkpColors.text,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       subtitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: SkpColors.muted,
+                        height: 1.3,
+                      ),
                     ),
                   ],
                 ),

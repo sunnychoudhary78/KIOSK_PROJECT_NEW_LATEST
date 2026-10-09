@@ -36,6 +36,34 @@ enum ApproachTraffic {
       };
 }
 
+enum RouteTrafficSpeed {
+  normal,
+  slow,
+  trafficJam;
+
+  static RouteTrafficSpeed tryParse(Object? raw) {
+    return switch (raw) {
+      'SLOW' => RouteTrafficSpeed.slow,
+      'TRAFFIC_JAM' => RouteTrafficSpeed.trafficJam,
+      _ => RouteTrafficSpeed.normal,
+    };
+  }
+}
+
+class RouteTrafficSegment {
+  const RouteTrafficSegment({required this.speed, required this.fraction});
+
+  final RouteTrafficSpeed speed;
+  final double fraction;
+
+  factory RouteTrafficSegment.fromJson(Map<String, dynamic> json) {
+    return RouteTrafficSegment(
+      speed: RouteTrafficSpeed.tryParse(json['speed']),
+      fraction: (json['fraction'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
 class FuelStation {
   const FuelStation({
     required this.name,
@@ -51,6 +79,9 @@ class FuelStation {
     this.googlePlaceId,
     this.approachTraffic,
     this.approachWaitMin,
+    this.driveDistanceKm,
+    this.driveDurationMin,
+    this.routeTrafficSegments = const [],
   });
 
   final String? name;
@@ -66,6 +97,9 @@ class FuelStation {
   final String? googlePlaceId;
   final ApproachTraffic? approachTraffic;
   final int? approachWaitMin;
+  final double? driveDistanceKm;
+  final int? driveDurationMin;
+  final List<RouteTrafficSegment> routeTrafficSegments;
 
   String get directionsUrl {
     final pin = 'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
@@ -89,6 +123,9 @@ class FuelStation {
 
   factory FuelStation.fromJson(Map<String, dynamic> json) {
     final waitRaw = json['approachWaitMin'];
+    final driveKmRaw = json['driveDistanceKm'];
+    final driveMinRaw = json['driveDurationMin'];
+    final segmentsRaw = json['routeTrafficSegments'];
     return FuelStation(
       name: json['name'] as String?,
       address: json['address'] as String?,
@@ -103,6 +140,15 @@ class FuelStation {
       googlePlaceId: json['googlePlaceId'] as String?,
       approachTraffic: ApproachTraffic.tryParse(json['approachTraffic']),
       approachWaitMin: waitRaw is num ? waitRaw.toInt() : null,
+      driveDistanceKm: driveKmRaw is num ? driveKmRaw.toDouble() : null,
+      driveDurationMin: driveMinRaw is num ? driveMinRaw.toInt() : null,
+      routeTrafficSegments: segmentsRaw is List
+          ? segmentsRaw
+              .whereType<Map>()
+              .map((row) => RouteTrafficSegment.fromJson(Map<String, dynamic>.from(row)))
+              .where((row) => row.fraction > 0)
+              .toList()
+          : const [],
     );
   }
 }

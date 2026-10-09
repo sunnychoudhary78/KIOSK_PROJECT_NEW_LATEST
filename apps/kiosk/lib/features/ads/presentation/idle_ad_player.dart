@@ -656,7 +656,7 @@ class _TouchToBeginPillState extends State<_TouchToBeginPill>
           child: const Text(
             'Touch to begin',
             style: TextStyle(
-              color: Color(0xFF0B1419),
+              color: Color(0xFF1A2430),
               fontSize: 22,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.4,
