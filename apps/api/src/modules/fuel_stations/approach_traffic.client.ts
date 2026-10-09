@@ -155,7 +155,7 @@ async function computeRoute(
     body: JSON.stringify({
       origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
       destination: {
-        location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
+        location: { latLng: { latitude: destination.lat, longitude: destination.lng } },
       },
       travelMode: 'DRIVE',
       routingPreference: 'TRAFFIC_AWARE',
