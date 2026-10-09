@@ -123,7 +123,7 @@ class _FuelStationsPageState extends ConsumerState<FuelStationsPage> {
               Expanded(child: _StationBody(state: state, onOpen: _showDirections)),
               const SizedBox(height: 8),
               Text(
-                'Road status is traffic outside the station, not queue length inside.',
+                'Wait estimate is from road congestion outside the station, not live pump sensors.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: SkpColors.muted),
               ),
@@ -292,16 +292,25 @@ class _StationTile extends StatelessWidget {
                                   },
                                 ),
                               ),
-                              child: Text(
-                                roadLabel,
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: switch (station.approachTraffic!) {
-                                        ApproachTraffic.heavy => SkpColors.danger,
-                                        ApproachTraffic.moderate => SkpColors.gold,
-                                        ApproachTraffic.clear => SkpColors.muted,
-                                        ApproachTraffic.unknown => SkpColors.muted,
-                                      },
-                                    ),
+                              child: Text.rich(
+                                TextSpan(
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: switch (station.approachTraffic!) {
+                                          ApproachTraffic.heavy => SkpColors.danger,
+                                          ApproachTraffic.moderate => SkpColors.gold,
+                                          ApproachTraffic.clear => SkpColors.muted,
+                                          ApproachTraffic.unknown => SkpColors.muted,
+                                        },
+                                      ),
+                                  children: [
+                                    TextSpan(text: roadLabel),
+                                    if (station.approachWaitMin case final waitMin?)
+                                      TextSpan(
+                                        text: ' · +$waitMin min',
+                                        style: const TextStyle(color: SkpColors.danger),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                         ],

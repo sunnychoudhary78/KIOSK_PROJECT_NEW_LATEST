@@ -18,6 +18,7 @@ export type NearbyStationInput = FuelFlags & {
 export type NearbyStation = NearbyStationInput & {
   distanceKm: number;
   approachTraffic: ApproachTraffic | null;
+  approachWaitMin: number | null;
 };
 
 export type SearchBox = {
@@ -83,5 +84,6 @@ export function rankNearbyStations(
       googlePlaceId: entry.station.googlePlaceId ?? null,
       distanceKm: roundDistanceKm(entry.distanceKm),
       approachTraffic: null,
+      approachWaitMin: null,
     }));
 }

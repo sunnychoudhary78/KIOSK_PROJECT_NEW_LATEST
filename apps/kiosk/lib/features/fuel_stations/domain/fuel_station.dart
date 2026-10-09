@@ -29,9 +29,9 @@ enum ApproachTraffic {
   }
 
   String? get badgeLabel => switch (this) {
-        ApproachTraffic.clear => 'Road clear',
-        ApproachTraffic.moderate => 'Road busy',
-        ApproachTraffic.heavy => 'Road very busy',
+        ApproachTraffic.clear => 'Clear',
+        ApproachTraffic.moderate => 'Busy',
+        ApproachTraffic.heavy => 'Very busy',
         ApproachTraffic.unknown => null,
       };
 }
@@ -50,6 +50,7 @@ class FuelStation {
     required this.fuelUntyped,
     this.googlePlaceId,
     this.approachTraffic,
+    this.approachWaitMin,
   });
 
   final String? name;
@@ -64,6 +65,7 @@ class FuelStation {
   final bool fuelUntyped;
   final String? googlePlaceId;
   final ApproachTraffic? approachTraffic;
+  final int? approachWaitMin;
 
   String get directionsUrl {
     final pin = 'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
@@ -86,6 +88,7 @@ class FuelStation {
   }
 
   factory FuelStation.fromJson(Map<String, dynamic> json) {
+    final waitRaw = json['approachWaitMin'];
     return FuelStation(
       name: json['name'] as String?,
       address: json['address'] as String?,
@@ -99,6 +102,7 @@ class FuelStation {
       fuelUntyped: json['fuelUntyped'] == true,
       googlePlaceId: json['googlePlaceId'] as String?,
       approachTraffic: ApproachTraffic.tryParse(json['approachTraffic']),
+      approachWaitMin: waitRaw is num ? waitRaw.toInt() : null,
     );
   }
 }

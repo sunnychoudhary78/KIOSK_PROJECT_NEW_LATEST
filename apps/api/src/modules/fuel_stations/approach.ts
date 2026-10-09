@@ -5,6 +5,11 @@ export const APPROACH_HALF_LENGTH_M = 100;
 export const APPROACH_TRAFFIC_LIMIT = 5;
 export const APPROACH_CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Heuristic queue wait: spillover on approach road ≈ cars × fill time. */
+export const FILL_MIN_PER_CAR = 3;
+export const MODERATE_QUEUE_CARS = 2;
+export const HEAVY_QUEUE_CARS = 5;
+
 export type ApproachTraffic = 'clear' | 'moderate' | 'heavy' | 'unknown';
 
 export type LatLng = { lat: number; lng: number };
@@ -53,6 +58,17 @@ export function classifySpeedIntervals(intervals: SpeedReadingInterval[]): Appro
     }
   }
   return sawSlow ? 'moderate' : 'clear';
+}
+
+/** Estimated queue wait minutes from approach status; null when none shown. */
+export function waitMinutesForApproach(status: ApproachTraffic): number | null {
+  if (status === 'moderate') {
+    return MODERATE_QUEUE_CARS * FILL_MIN_PER_CAR;
+  }
+  if (status === 'heavy') {
+    return HEAVY_QUEUE_CARS * FILL_MIN_PER_CAR;
+  }
+  return null;
 }
 
 export function approachCacheKey(lat: number, lng: number): string {

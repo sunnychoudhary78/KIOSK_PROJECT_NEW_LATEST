@@ -4,6 +4,7 @@ import {
   classifySpeedIntervals,
   offsetMeters,
   pickApproachTargets,
+  waitMinutesForApproach,
 } from '../src/modules/fuel_stations/approach.js';
 import { countCatalogKinds, filterCatalogStations } from '../src/modules/fuel_stations/catalog.js';
 import {
@@ -208,6 +209,13 @@ describe('approach traffic helpers', () => {
     ).toBe('heavy');
     expect(classifySpeedIntervals([{ speed: 'NORMAL' }])).toBe('clear');
     expect(classifySpeedIntervals([])).toBe('unknown');
+  });
+
+  it('maps approach status to heuristic queue wait minutes', () => {
+    expect(waitMinutesForApproach('clear')).toBeNull();
+    expect(waitMinutesForApproach('unknown')).toBeNull();
+    expect(waitMinutesForApproach('moderate')).toBe(6);
+    expect(waitMinutesForApproach('heavy')).toBe(15);
   });
 
   it('picks the nearest CNG/EV stations only', () => {

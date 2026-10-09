@@ -2,7 +2,7 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { Logger } from '../../infrastructure/logging/logger.js';
 import { AppError } from '../../shared/errors.js';
 import type { ServicesCatalogService } from '../services/services.service.js';
-import { pickApproachTargets } from './approach.js';
+import { pickApproachTargets, waitMinutesForApproach } from './approach.js';
 import type { ApproachTrafficClient } from './approach_traffic.client.js';
 import { countCatalogKinds, filterCatalogStations } from './catalog.js';
 import { NEARBY_RADIUS_KM, rankNearbyStations, searchBox } from './nearby.js';
@@ -115,7 +115,11 @@ export class FuelStationsService {
         const target = targets[i];
         const status = statuses[i];
         if (target && status) {
-          items[target.index] = { ...items[target.index]!, approachTraffic: status };
+          items[target.index] = {
+            ...items[target.index]!,
+            approachTraffic: status,
+            approachWaitMin: waitMinutesForApproach(status),
+          };
         }
       }
       this.logger.info(
