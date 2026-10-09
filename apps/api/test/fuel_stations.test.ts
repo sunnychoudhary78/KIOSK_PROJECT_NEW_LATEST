@@ -7,6 +7,15 @@ import {
 } from '../src/modules/fuel_stations/approach.js';
 import { countCatalogKinds, filterCatalogStations } from '../src/modules/fuel_stations/catalog.js';
 import {
+  acceptCngPlace,
+  buildNcrGrid,
+  decideCngMerge,
+  googleOsmId,
+  isCngStationName,
+  isGoogleSourcedOsmId,
+  parseTextSearchPlaces,
+} from '../src/modules/fuel_stations/cng_seed.js';
+import {
   googleIncludedType,
   parseNearbyPlaces,
   pickClosestGooglePlace,
@@ -316,5 +325,101 @@ describe('catalog helpers', () => {
     expect(filterCatalogStations(rows, 'cng', undefined).map((r) => r.name)).toEqual(['IGL CNG']);
     expect(filterCatalogStations(rows, 'fuel', 'ring').map((r) => r.name)).toEqual(['IOC']);
     expect(filterCatalogStations(rows, 'all', 'noida').map((r) => r.name)).toEqual(['Tata EV']);
+  });
+});
+
+describe('cng google seed helpers', () => {
+  it('builds an NCR grid and recognizes google osm ids', () => {
+    const cells = buildNcrGrid();
+    expect(cells.length).toBeGreaterThan(100);
+    expect(cells[0]).toEqual({ lat: 28.4, lng: 76.8 });
+    expect(isGoogleSourcedOsmId('google/ChIJabc')).toBe(true);
+    expect(isGoogleSourcedOsmId('node/123')).toBe(false);
+    expect(googleOsmId('places/ChIJabc')).toBe('google/ChIJabc');
+  });
+
+  it('keeps CNG-named places inside the box', () => {
+    expect(isCngStationName('IGL CNG Station')).toBe(true);
+    expect(isCngStationName('CNG kit fitting')).toBe(true);
+    expect(isCngStationName('Petrol pump')).toBe(false);
+    expect(
+      acceptCngPlace({
+        placeId: 'ChIJabc',
+        name: 'IGL CNG',
+        latitude: 28.61,
+        longitude: 77.2,
+      }),
+    ).toBe(true);
+    expect(
+      acceptCngPlace({
+        placeId: 'ChIJabc',
+        name: 'IGL CNG',
+        latitude: 27.0,
+        longitude: 77.2,
+      }),
+    ).toBe(false);
+  });
+
+  it('updates by place id, merges nearby OSM rows, or inserts', () => {
+    const place = {
+      placeId: 'ChIJnew',
+      name: 'HP CNG',
+      address: 'Dwarka',
+      latitude: 28.61,
+      longitude: 77.21,
+    };
+    expect(
+      decideCngMerge(place, [
+        {
+          id: '1',
+          googlePlaceId: 'ChIJnew',
+          latitude: 28.61,
+          longitude: 77.21,
+          name: 'Old',
+          address: null,
+        },
+      ]),
+    ).toMatchObject({ type: 'update', id: '1', name: 'Old', address: 'Dwarka' });
+
+    expect(
+      decideCngMerge(place, [
+        {
+          id: '2',
+          googlePlaceId: null,
+          latitude: 28.6101,
+          longitude: 77.21,
+          name: 'OSM pump',
+          address: 'A',
+        },
+      ]),
+    ).toMatchObject({ type: 'update', id: '2', googlePlaceId: 'ChIJnew', name: 'OSM pump' });
+
+    expect(decideCngMerge(place, [])).toEqual({
+      type: 'insert',
+      place: { ...place, placeId: 'ChIJnew' },
+      osmId: 'google/ChIJnew',
+    });
+  });
+
+  it('parses Text Search payloads', () => {
+    const places = parseTextSearchPlaces({
+      places: [
+        {
+          id: 'places/ChIJx',
+          displayName: { text: 'IGL CNG' },
+          formattedAddress: 'Delhi',
+          location: { latitude: 28.6, longitude: 77.2 },
+        },
+      ],
+    });
+    expect(places).toEqual([
+      {
+        placeId: 'ChIJx',
+        name: 'IGL CNG',
+        address: 'Delhi',
+        latitude: 28.6,
+        longitude: 77.2,
+      },
+    ]);
   });
 });

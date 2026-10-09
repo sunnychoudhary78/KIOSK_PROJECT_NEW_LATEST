@@ -550,7 +550,7 @@ model AstrologyReading {
 
 model FuelStation {
   id          String   @id @default(uuid()) @db.Uuid
-  osmId       String   @unique @map("osm_id") @db.VarChar(40)
+  osmId       String   @unique @map("osm_id") @db.VarChar(80)
   name        String?  @db.VarChar(200)
   address     String?  @db.VarChar(400)
   latitude    Float

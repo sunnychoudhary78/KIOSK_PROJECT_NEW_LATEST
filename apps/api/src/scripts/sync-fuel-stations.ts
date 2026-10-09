@@ -5,6 +5,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { loadEnvFile } from '../config/load-env.js';
+import { isGoogleSourcedOsmId } from '../modules/fuel_stations/cng_seed.js';
 import {
   DELHI_NCR_BBOX,
   mapOsmElement,
@@ -33,7 +34,9 @@ async function main() {
       },
       select: { id: true, osmId: true, missCount: true },
     });
-    const missing = existing.filter((row) => !seen.has(row.osmId));
+    const missing = existing.filter(
+      (row) => !seen.has(row.osmId) && !isGoogleSourcedOsmId(row.osmId),
+    );
     await markMissing(prisma, missing);
 
     console.info('Fuel station sync complete', {
