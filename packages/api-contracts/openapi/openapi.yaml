@@ -483,6 +483,60 @@ paths:
         '409':
           description: The kiosk has no registered coordinates
 
+  /fuel-stations/catalog:
+    get:
+      tags: [FuelStations]
+      summary: Admin catalog of all synced fuel stations
+      operationId: listFuelStationsCatalog
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, fuel, cng, ev]
+            default: all
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 80
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, true, false]
+            default: true
+      responses:
+        '200':
+          description: Catalog rows plus category counts for chip badges
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, counts]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FuelStationCatalogItem'
+                  counts:
+                    type: object
+                    required: [all, fuel, cng, ev]
+                    properties:
+                      all:
+                        type: integer
+                      fuel:
+                        type: integer
+                      cng:
+                        type: integer
+                      ev:
+                        type: integer
+
   /astrology/readings:
     post:
       tags: [Astrology]
@@ -1523,6 +1577,44 @@ components:
           description: >
             Live traffic on about 100 m of road outside the station for the nearest
             CNG/EV rows. Null when not checked. Not pump-queue wait time.
+
+    FuelStationCatalogItem:
+      type: object
+      required: [id, osmId, latitude, longitude, petrol, diesel, cng, ev, fuelUntyped, isActive, lastSeenAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        osmId:
+          type: string
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+        petrol:
+          type: boolean
+        diesel:
+          type: boolean
+        cng:
+          type: boolean
+        ev:
+          type: boolean
+        fuelUntyped:
+          type: boolean
+        googlePlaceId:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        lastSeenAt:
+          type: string
+          format: date-time
 
     NearbyDevice:
       type: object

@@ -1,11 +1,18 @@
 import type { NextFunction, Request, Response, Router } from 'express';
+import { UserRole } from '@prisma/client';
 import type { AppDeps } from '../../types/deps.js';
+import { authRequired, requireAdminRole } from '../../shared/auth.js';
 import { requireDevice } from '../../shared/device-guard.js';
 import { validateQuery } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { createApproachTrafficClient } from './approach_traffic.client.js';
-import { fuelStationsQuerySchema, type FuelStationsQuery } from './fuel_stations.schemas.js';
+import {
+  fuelStationsCatalogQuerySchema,
+  fuelStationsQuerySchema,
+  type FuelStationsCatalogQuery,
+  type FuelStationsQuery,
+} from './fuel_stations.schemas.js';
 import { FuelStationsService } from './fuel_stations.service.js';
 
 export function registerFuelStationsModule(router: Router, deps: AppDeps): void {
@@ -14,6 +21,21 @@ export function registerFuelStationsModule(router: Router, deps: AppDeps): void 
     apiKey: process.env.SKP_GOOGLE_PLACES_API_KEY,
   });
   const service = new FuelStationsService(deps.db, services, approachTraffic);
+
+  router.get(
+    '/fuel-stations/catalog',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
+    validateQuery(fuelStationsCatalogQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const query = req.query as unknown as FuelStationsCatalogQuery;
+        res.json(await service.catalog(query));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.get(
     '/fuel-stations',

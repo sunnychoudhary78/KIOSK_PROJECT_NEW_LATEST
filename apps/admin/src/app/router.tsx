@@ -4,6 +4,7 @@ import { LoginPage } from '../features/auth/LoginPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { KiosksPage } from '../features/kiosks/KiosksPage';
 import { ServicesPage } from '../features/services/ServicesPage';
+import { FuelStationsPage } from '../features/fuel_stations/FuelStationsPage';
 import { PrintJobsPage } from '../features/print-jobs/PrintJobsPage';
 import { DigiLockerPage } from '../features/digilocker/DigiLockerPage';
 import { AuditLogsPage } from '../features/audit-logs/AuditLogsPage';
@@ -32,6 +33,7 @@ export function AppRouter() {
             <Route path="campaigns/new" element={<CampaignWizardPage />} />
             <Route path="campaigns/:id" element={<CampaignDetailPage />} />
             <Route path="services" element={<ServicesPage />} />
+            <Route path="fuel-stations" element={<FuelStationsPage />} />
             <Route path="print-jobs" element={<PrintJobsPage />} />
             <Route path="digilocker" element={<DigiLockerPage />} />
             <Route path="recordings" element={<RecordingsPage />} />

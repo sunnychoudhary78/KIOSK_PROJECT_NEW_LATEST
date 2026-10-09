@@ -3,8 +3,9 @@ import { AppError } from '../../shared/errors.js';
 import type { ServicesCatalogService } from '../services/services.service.js';
 import { pickApproachTargets } from './approach.js';
 import type { ApproachTrafficClient } from './approach_traffic.client.js';
+import { countCatalogKinds, filterCatalogStations } from './catalog.js';
 import { NEARBY_RADIUS_KM, rankNearbyStations, searchBox } from './nearby.js';
-import type { FuelStationsQuery } from './fuel_stations.schemas.js';
+import type { FuelStationsCatalogQuery, FuelStationsQuery } from './fuel_stations.schemas.js';
 
 export class FuelStationsService {
   constructor(
@@ -12,6 +13,51 @@ export class FuelStationsService {
     private readonly services: ServicesCatalogService,
     private readonly approachTraffic: ApproachTrafficClient,
   ) {}
+
+  async catalog(query: FuelStationsCatalogQuery) {
+    const rows = await this.db.fuelStation.findMany({
+      where: query.active === 'all' ? undefined : { isActive: query.active === 'true' },
+      select: {
+        id: true,
+        osmId: true,
+        name: true,
+        address: true,
+        latitude: true,
+        longitude: true,
+        petrol: true,
+        diesel: true,
+        cng: true,
+        ev: true,
+        fuelUntyped: true,
+        googlePlaceId: true,
+        isActive: true,
+        lastSeenAt: true,
+      },
+      orderBy: [{ name: 'asc' }, { osmId: 'asc' }],
+    });
+
+    const counts = countCatalogKinds(rows);
+    const filtered = filterCatalogStations(rows, query.kind, query.q);
+    return {
+      items: filtered.map((row) => ({
+        id: row.id,
+        osmId: row.osmId,
+        name: row.name,
+        address: row.address,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        petrol: row.petrol,
+        diesel: row.diesel,
+        cng: row.cng,
+        ev: row.ev,
+        fuelUntyped: row.fuelUntyped,
+        googlePlaceId: row.googlePlaceId,
+        isActive: row.isActive,
+        lastSeenAt: row.lastSeenAt.toISOString(),
+      })),
+      counts,
+    };
+  }
 
   async nearby(deviceId: string, query: FuelStationsQuery) {
     await this.services.assertEnabled(deviceId, 'fuel_stations');

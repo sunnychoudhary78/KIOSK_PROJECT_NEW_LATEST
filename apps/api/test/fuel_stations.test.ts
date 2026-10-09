@@ -5,6 +5,7 @@ import {
   offsetMeters,
   pickApproachTargets,
 } from '../src/modules/fuel_stations/approach.js';
+import { countCatalogKinds, filterCatalogStations } from '../src/modules/fuel_stations/catalog.js';
 import {
   googleIncludedType,
   parseNearbyPlaces,
@@ -264,5 +265,56 @@ describe('pickClosestGooglePlace', () => {
     expect(
       googleIncludedType({ petrol: true, diesel: false, cng: false, ev: true, fuelUntyped: false }),
     ).toBe('gas_station');
+  });
+});
+
+describe('catalog helpers', () => {
+  const rows = [
+    {
+      name: 'IOC',
+      address: 'Ring Road',
+      petrol: true,
+      diesel: true,
+      cng: false,
+      ev: false,
+      fuelUntyped: false,
+    },
+    {
+      name: 'IGL CNG',
+      address: 'Dwarka',
+      petrol: false,
+      diesel: false,
+      cng: true,
+      ev: false,
+      fuelUntyped: false,
+    },
+    {
+      name: 'Tata EV',
+      address: 'Noida',
+      petrol: false,
+      diesel: false,
+      cng: false,
+      ev: true,
+      fuelUntyped: false,
+    },
+    {
+      name: 'Untyped pump',
+      address: null,
+      petrol: false,
+      diesel: false,
+      cng: false,
+      ev: false,
+      fuelUntyped: true,
+    },
+  ];
+
+  it('counts overlapping categories', () => {
+    expect(countCatalogKinds(rows)).toEqual({ all: 4, fuel: 2, cng: 1, ev: 1 });
+  });
+
+  it('filters by kind and search text', () => {
+    expect(filterCatalogStations(rows, 'cng', undefined).map((r) => r.name)).toEqual(['IGL CNG']);
+    expect(filterCatalogStations(rows, 'fuel', 'ring').map((r) => r.name)).toEqual(['IOC']);
+    expect(filterCatalogStations(rows, 'all', 'noida').map((r) => r.name)).toEqual(['Tata EV']);
   });
 });

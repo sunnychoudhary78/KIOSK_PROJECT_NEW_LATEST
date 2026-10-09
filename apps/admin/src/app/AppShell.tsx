@@ -6,6 +6,7 @@ import {
   Megaphone,
   Clapperboard,
   AppWindow,
+  Fuel,
   Printer,
   Fingerprint,
   Video,
@@ -51,6 +52,7 @@ const NAV = [
     label: 'Operations',
     items: [
       { to: '/services', label: 'Services', icon: AppWindow },
+      { to: '/fuel-stations', label: 'Fuel stations', icon: Fuel },
       { to: '/print-jobs', label: 'Print jobs', icon: Printer },
       { to: '/digilocker', label: 'DigiLocker', icon: Fingerprint },
       { to: '/recordings', label: 'Recordings', icon: Video },
@@ -66,6 +68,7 @@ const PAGE_TITLES: Array<{ prefix: string; title: string }> = [
   { prefix: '/campaigns', title: 'Campaigns' },
   { prefix: '/kiosks', title: 'Kiosks' },
   { prefix: '/services', title: 'Services' },
+  { prefix: '/fuel-stations', title: 'Fuel stations' },
   { prefix: '/print-jobs', title: 'Print jobs' },
   { prefix: '/digilocker', title: 'DigiLocker' },
   { prefix: '/recordings', title: 'Recordings' },
