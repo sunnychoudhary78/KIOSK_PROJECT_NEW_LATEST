@@ -1,4 +1,5 @@
 import type { DbClient } from '../../infrastructure/database/prisma.js';
+import type { Logger } from '../../infrastructure/logging/logger.js';
 import { AppError } from '../../shared/errors.js';
 import type { ServicesCatalogService } from '../services/services.service.js';
 import { pickApproachTargets } from './approach.js';
@@ -12,6 +13,7 @@ export class FuelStationsService {
     private readonly db: DbClient,
     private readonly services: ServicesCatalogService,
     private readonly approachTraffic: ApproachTrafficClient,
+    private readonly logger: Logger,
   ) {}
 
   async catalog(query: FuelStationsCatalogQuery) {
@@ -116,6 +118,15 @@ export class FuelStationsService {
           items[target.index] = { ...items[target.index]!, approachTraffic: status };
         }
       }
+      this.logger.info(
+        {
+          event: 'approach_traffic_nearby',
+          deviceId,
+          kind: query.kind,
+          statuses,
+        },
+        'Approach traffic statuses for nearby stations',
+      );
     }
 
     return { items };

@@ -19,8 +19,9 @@ export function registerFuelStationsModule(router: Router, deps: AppDeps): void 
   const services = new ServicesCatalogService(deps.db, deps.auditService);
   const approachTraffic = createApproachTrafficClient({
     apiKey: process.env.SKP_GOOGLE_PLACES_API_KEY,
+    logger: deps.logger,
   });
-  const service = new FuelStationsService(deps.db, services, approachTraffic);
+  const service = new FuelStationsService(deps.db, services, approachTraffic, deps.logger);
 
   router.get(
     '/fuel-stations/catalog',
