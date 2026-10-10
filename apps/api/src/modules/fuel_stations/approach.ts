@@ -54,6 +54,66 @@ export function pickApproachTargets(
   return targets;
 }
 
+const MISSING_DRIVE_MIN = 9999;
+
+/** Drive + heuristic queue wait; missing drive time scores last. */
+export function totalMinutes(station: {
+  driveDurationMin: number | null;
+  approachWaitMin: number | null;
+}): number {
+  return (station.driveDurationMin ?? MISSING_DRIVE_MIN) + (station.approachWaitMin ?? 0);
+}
+
+/**
+ * Index of the best enriched CNG/EV (lowest total minutes).
+ * Only considers rows with a real driveDurationMin.
+ */
+export function pickBestNowIndex(items: NearbyStation[]): number | null {
+  let bestIndex: number | null = null;
+  let bestTotal = Number.POSITIVE_INFINITY;
+  let bestDriveKm = Number.POSITIVE_INFINITY;
+  let bestDistanceKm = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < items.length; index += 1) {
+    const station = items[index];
+    if (!station || !isApproachCandidate(station) || station.driveDurationMin == null) {
+      continue;
+    }
+    const total = totalMinutes(station);
+    const driveKm = station.driveDistanceKm ?? Number.POSITIVE_INFINITY;
+    const distanceKm = station.distanceKm;
+    const better =
+      total < bestTotal ||
+      (total === bestTotal && driveKm < bestDriveKm) ||
+      (total === bestTotal && driveKm === bestDriveKm && distanceKm < bestDistanceKm);
+    if (better) {
+      bestIndex = index;
+      bestTotal = total;
+      bestDriveKm = driveKm;
+      bestDistanceKm = distanceKm;
+    }
+  }
+  return bestIndex;
+}
+
+/** Flag winner as bestNow and move it to index 0; preserve relative order of others. */
+export function pinBestNow(items: NearbyStation[]): NearbyStation[] {
+  const winnerIndex = pickBestNowIndex(items);
+  if (winnerIndex == null) {
+    return items.map((station) => ({ ...station, bestNow: false }));
+  }
+
+  const flagged = items.map((station, index) => ({
+    ...station,
+    bestNow: index === winnerIndex,
+  }));
+  if (winnerIndex === 0) {
+    return flagged;
+  }
+  const winner = flagged[winnerIndex]!;
+  return [winner, ...flagged.slice(0, winnerIndex), ...flagged.slice(winnerIndex + 1)];
+}
+
 export function classifySpeedIntervals(intervals: SpeedReadingInterval[]): ApproachTraffic {
   if (intervals.length === 0) {
     return 'unknown';
@@ -143,8 +203,8 @@ export function buildRouteTrafficSegments(
   }
 
   const total = raw.reduce((sum, row) => sum + row.span, 0);
-  if (total <= 0) {
-    return [];
+  if (total <= 0 || raw.length === 0) {
+    return [{ speed: 'NORMAL', fraction: 1 }];
   }
 
   const segments = raw.map((row) => ({
@@ -155,7 +215,7 @@ export function buildRouteTrafficSegments(
   if (segments.length > 0 && sum > 0 && Math.abs(sum - 1) > 1e-9) {
     segments[segments.length - 1]!.fraction += 1 - sum;
   }
-  return segments;
+  return segments.length > 0 ? segments : [{ speed: 'NORMAL', fraction: 1 }];
 }
 
 /** Classify station approach from intervals covering the last ~200 m of the route. */

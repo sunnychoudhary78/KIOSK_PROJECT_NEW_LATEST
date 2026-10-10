@@ -22,6 +22,7 @@ export type NearbyStation = NearbyStationInput & {
   driveDistanceKm: number | null;
   driveDurationMin: number | null;
   routeTrafficSegments: RouteTrafficSegment[];
+  bestNow: boolean;
 };
 
 export type SearchBox = {
@@ -91,5 +92,6 @@ export function rankNearbyStations(
       driveDistanceKm: null,
       driveDurationMin: null,
       routeTrafficSegments: [],
+      bestNow: false,
     }));
 }

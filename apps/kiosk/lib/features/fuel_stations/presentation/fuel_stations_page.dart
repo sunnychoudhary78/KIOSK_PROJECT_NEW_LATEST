@@ -309,7 +309,10 @@ class _StationTile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-            border: Border.all(color: SkpColors.line),
+            border: Border.all(
+              color: station.bestNow ? SkpColors.accent : SkpColors.line,
+              width: station.bestNow ? 2 : 1,
+            ),
             boxShadow: [
               BoxShadow(
                 color: SkpColors.text.withValues(alpha: 0.04),
@@ -347,16 +350,19 @@ class _StationTile extends StatelessWidget {
                         style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
                       ),
                     ],
-                    if (station.routeTrafficSegments.isNotEmpty) ...[
+                    if (station.displayTrafficSegments.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      _RouteTrafficBar(segments: station.routeTrafficSegments),
+                      _RouteTrafficBar(segments: station.displayTrafficSegments),
                     ],
-                    if (station.badges.isNotEmpty || station.approachTraffic?.badgeLabel != null) ...[
+                    if (station.bestNow ||
+                        station.badges.isNotEmpty ||
+                        station.approachTraffic?.badgeLabel != null) ...[
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                          if (station.bestNow) const _BestNowBadge(),
                           for (final badge in station.badges)
                             _FuelBadge(label: badge),
                           if (station.approachTraffic?.badgeLabel case final roadLabel?)
@@ -428,7 +434,7 @@ class _RouteTrafficBar extends StatelessWidget {
 
   Color _colorFor(RouteTrafficSpeed speed) {
     return switch (speed) {
-      RouteTrafficSpeed.normal => SkpColors.accentBright,
+      RouteTrafficSpeed.normal => SkpColors.accent,
       RouteTrafficSpeed.slow => SkpColors.gold,
       RouteTrafficSpeed.trafficJam => SkpColors.danger,
     };
@@ -436,19 +442,46 @@ class _RouteTrafficBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: SizedBox(
-        height: 8,
-        child: Row(
-          children: [
-            for (final segment in segments)
-              Expanded(
-                flex: (segment.fraction * 1000).round().clamp(1, 100000),
-                child: ColoredBox(color: _colorFor(segment.speed)),
-              ),
-          ],
+    return SizedBox(
+      height: 12,
+      width: double.infinity,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(999),
+        child: ColoredBox(
+          color: SkpColors.line,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final segment in segments)
+                Expanded(
+                  flex: (segment.fraction * 1000).round().clamp(1, 100000),
+                  child: ColoredBox(color: _colorFor(segment.speed)),
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _BestNowBadge extends StatelessWidget {
+  const _BestNowBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: SkpColors.accent,
+        borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
+      ),
+      child: Text(
+        'Best now',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
       ),
     );
   }

@@ -3,7 +3,7 @@ import type { Logger } from '../../infrastructure/logging/logger.js';
 import { roundDistanceKm } from '../../shared/geo.js';
 import { AppError } from '../../shared/errors.js';
 import type { ServicesCatalogService } from '../services/services.service.js';
-import { pickApproachTargets, waitMinutesForApproach } from './approach.js';
+import { pickApproachTargets, pinBestNow, waitMinutesForApproach } from './approach.js';
 import type { ApproachTrafficClient } from './approach_traffic.client.js';
 import { countCatalogKinds, filterCatalogStations } from './catalog.js';
 import { NEARBY_RADIUS_KM, rankNearbyStations, searchBox } from './nearby.js';
@@ -94,7 +94,7 @@ export class FuelStationsService {
       },
     });
 
-    const items = rankNearbyStations(
+    let items = rankNearbyStations(
       rows,
       { lat: device.latitude, lng: device.longitude },
       query.kind,
@@ -115,6 +115,7 @@ export class FuelStationsService {
       );
       const statuses: string[] = [];
       const driveDistancesKm: Array<number | null> = [];
+      const segmentCounts: number[] = [];
       for (let i = 0; i < targets.length; i += 1) {
         const target = targets[i];
         const result = results[i];
@@ -128,6 +129,7 @@ export class FuelStationsService {
             ? roundDistanceKm(result.driveDistanceM / 1000)
             : null;
         driveDistancesKm.push(driveDistanceKm);
+        segmentCounts.push(result.routeTrafficSegments.length);
         const driveDurationMin =
           result.driveDurationSec != null
             ? Math.max(1, Math.ceil(result.driveDurationSec / 60))
@@ -141,6 +143,8 @@ export class FuelStationsService {
           routeTrafficSegments: result.routeTrafficSegments,
         };
       }
+      items = pinBestNow(items);
+      const bestNowIndex = items.findIndex((row) => row.bestNow);
       this.logger.info(
         {
           event: 'approach_traffic_nearby',
@@ -148,6 +152,9 @@ export class FuelStationsService {
           kind: query.kind,
           statuses,
           driveDistancesKm,
+          segmentCounts,
+          bestNowIndex: bestNowIndex >= 0 ? bestNowIndex : null,
+          bestNowName: bestNowIndex >= 0 ? items[bestNowIndex]?.name ?? null : null,
         },
         'Route traffic for nearby stations',
       );

@@ -59,8 +59,18 @@ class RouteTrafficSegment {
   factory RouteTrafficSegment.fromJson(Map<String, dynamic> json) {
     return RouteTrafficSegment(
       speed: RouteTrafficSpeed.tryParse(json['speed']),
-      fraction: (json['fraction'] as num?)?.toDouble() ?? 0,
+      fraction: _parseFraction(json['fraction']),
     );
+  }
+
+  static double _parseFraction(Object? raw) {
+    if (raw is num) {
+      return raw.toDouble();
+    }
+    if (raw is String) {
+      return double.tryParse(raw) ?? 0;
+    }
+    return 0;
   }
 }
 
@@ -82,6 +92,7 @@ class FuelStation {
     this.driveDistanceKm,
     this.driveDurationMin,
     this.routeTrafficSegments = const [],
+    this.bestNow = false,
   });
 
   final String? name;
@@ -100,6 +111,28 @@ class FuelStation {
   final double? driveDistanceKm;
   final int? driveDurationMin;
   final List<RouteTrafficSegment> routeTrafficSegments;
+  final bool bestNow;
+
+  /// Segments for the traffic bar: prefer API route data, else status fallback.
+  List<RouteTrafficSegment> get displayTrafficSegments {
+    if (routeTrafficSegments.isNotEmpty) {
+      return routeTrafficSegments;
+    }
+    return switch (approachTraffic) {
+      ApproachTraffic.clear => const [
+          RouteTrafficSegment(speed: RouteTrafficSpeed.normal, fraction: 1),
+        ],
+      ApproachTraffic.moderate => const [
+          RouteTrafficSegment(speed: RouteTrafficSpeed.normal, fraction: 0.7),
+          RouteTrafficSegment(speed: RouteTrafficSpeed.slow, fraction: 0.3),
+        ],
+      ApproachTraffic.heavy => const [
+          RouteTrafficSegment(speed: RouteTrafficSpeed.normal, fraction: 0.5),
+          RouteTrafficSegment(speed: RouteTrafficSpeed.trafficJam, fraction: 0.5),
+        ],
+      ApproachTraffic.unknown || null => const [],
+    };
+  }
 
   String get directionsUrl {
     final pin = 'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
@@ -121,11 +154,27 @@ class FuelStation {
     return labels;
   }
 
+  static List<RouteTrafficSegment> _parseSegments(Object? raw) {
+    if (raw is! List) {
+      return const [];
+    }
+    final out = <RouteTrafficSegment>[];
+    for (final row in raw) {
+      if (row is! Map) {
+        continue;
+      }
+      final segment = RouteTrafficSegment.fromJson(Map<String, dynamic>.from(row));
+      if (segment.fraction > 0) {
+        out.add(segment);
+      }
+    }
+    return out;
+  }
+
   factory FuelStation.fromJson(Map<String, dynamic> json) {
     final waitRaw = json['approachWaitMin'];
     final driveKmRaw = json['driveDistanceKm'];
     final driveMinRaw = json['driveDurationMin'];
-    final segmentsRaw = json['routeTrafficSegments'];
     return FuelStation(
       name: json['name'] as String?,
       address: json['address'] as String?,
@@ -142,13 +191,8 @@ class FuelStation {
       approachWaitMin: waitRaw is num ? waitRaw.toInt() : null,
       driveDistanceKm: driveKmRaw is num ? driveKmRaw.toDouble() : null,
       driveDurationMin: driveMinRaw is num ? driveMinRaw.toInt() : null,
-      routeTrafficSegments: segmentsRaw is List
-          ? segmentsRaw
-              .whereType<Map>()
-              .map((row) => RouteTrafficSegment.fromJson(Map<String, dynamic>.from(row)))
-              .where((row) => row.fraction > 0)
-              .toList()
-          : const [],
+      routeTrafficSegments: _parseSegments(json['routeTrafficSegments']),
+      bestNow: json['bestNow'] == true,
     );
   }
 }

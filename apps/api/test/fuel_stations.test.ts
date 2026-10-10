@@ -7,8 +7,11 @@ import {
   offsetMeters,
   parseDurationSec,
   pickApproachTargets,
+  pickBestNowIndex,
+  pinBestNow,
   waitMinutesForApproach,
 } from '../src/modules/fuel_stations/approach.js';
+import type { NearbyStation } from '../src/modules/fuel_stations/nearby.js';
 import { countCatalogKinds, filterCatalogStations } from '../src/modules/fuel_stations/catalog.js';
 import {
   acceptCngPlace,
@@ -219,6 +222,76 @@ describe('approach traffic helpers', () => {
     expect(waitMinutesForApproach('unknown')).toBeNull();
     expect(waitMinutesForApproach('moderate')).toBe(6);
     expect(waitMinutesForApproach('heavy')).toBe(15);
+  });
+
+  it('picks and pins the best now station by drive + wait', () => {
+    const base = (overrides: Partial<NearbyStation>): NearbyStation => ({
+      name: 'X',
+      address: null,
+      latitude: 28.61,
+      longitude: 77.2,
+      petrol: false,
+      diesel: false,
+      cng: true,
+      ev: false,
+      fuelUntyped: false,
+      googlePlaceId: null,
+      distanceKm: 1,
+      approachTraffic: 'clear',
+      approachWaitMin: null,
+      driveDistanceKm: 1,
+      driveDurationMin: 12,
+      routeTrafficSegments: [],
+      bestNow: false,
+      ...overrides,
+    });
+
+    const nearerSlower = base({
+      name: 'Nearer',
+      distanceKm: 1,
+      driveDistanceKm: 1.2,
+      driveDurationMin: 12,
+      approachWaitMin: null,
+    });
+    const fartherFaster = base({
+      name: 'Farther',
+      distanceKm: 2,
+      driveDistanceKm: 2.1,
+      driveDurationMin: 10,
+      approachWaitMin: null,
+    });
+    expect(pickBestNowIndex([nearerSlower, fartherFaster])).toBe(1);
+
+    const clearTen = base({
+      name: 'Clear',
+      driveDurationMin: 10,
+      approachWaitMin: null,
+      approachTraffic: 'clear',
+    });
+    const busyEight = base({
+      name: 'Busy',
+      driveDurationMin: 8,
+      approachWaitMin: 6,
+      approachTraffic: 'moderate',
+    });
+    expect(pickBestNowIndex([busyEight, clearTen])).toBe(1);
+
+    const noDrive = [
+      base({ name: 'A', driveDurationMin: null }),
+      base({ name: 'B', driveDurationMin: null }),
+    ];
+    expect(pickBestNowIndex(noDrive)).toBeNull();
+
+    const fuel = base({
+      name: 'Fuel',
+      cng: false,
+      petrol: true,
+      driveDurationMin: null,
+    });
+    const pinned = pinBestNow([nearerSlower, fartherFaster, fuel]);
+    expect(pinned.map((row) => row.name)).toEqual(['Farther', 'Nearer', 'Fuel']);
+    expect(pinned[0]?.bestNow).toBe(true);
+    expect(pinned.filter((row) => row.bestNow)).toHaveLength(1);
   });
 
   it('parses Google Routes duration strings', () => {
