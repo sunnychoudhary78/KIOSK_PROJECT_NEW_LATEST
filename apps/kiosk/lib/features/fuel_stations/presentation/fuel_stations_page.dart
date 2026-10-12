@@ -102,125 +102,143 @@ class _StationDirectionsDialog extends StatelessWidget {
     final segments = station.displayTrafficSegments;
     final routePoints = decodePolyline(station.routePolyline ?? '');
     final hasRoute = routePoints.length >= 2;
-
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.9;
+    const mapRowHeight = 230.0;
 
     return Dialog(
       backgroundColor: SkpColors.panel,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 720, maxHeight: maxHeight),
-        child: SizedBox(
-          width: 720,
-          height: maxHeight.clamp(0, 860),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          station.name ?? 'Fuel station',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (station.address != null) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            station.address!,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
-                          ),
-                        ],
-                        if (driveMin != null || traffic?.badgeLabel != null) ...[
-                          const SizedBox(height: 16),
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              if (driveMin != null)
-                                _DetailStatChip(
-                                  icon: Icons.directions_car_outlined,
-                                  label: '~$driveMin min · $distanceLabel',
-                                ),
-                              if (traffic?.badgeLabel case final roadLabel?)
-                                _TrafficBadge(
-                                  label: roadLabel,
-                                  traffic: traffic!,
-                                  waitMin: waitMin,
-                                ),
-                              if (totalEta != null && waitMin != null)
-                                _DetailStatChip(
-                                  icon: Icons.schedule_outlined,
-                                  label: 'Total ~$totalEta min',
-                                  emphasize: true,
-                                ),
-                            ],
-                          ),
-                        ],
-                        if (segments.isNotEmpty) ...[
-                          const SizedBox(height: 14),
-                          Text(
-                            'Traffic on the drive',
-                            style: theme.textTheme.labelLarge?.copyWith(color: SkpColors.muted),
-                          ),
-                          const SizedBox(height: 6),
-                          _RouteTrafficBar(segments: segments, height: 14),
-                        ],
-                        if (hasRoute) ...[
-                          const SizedBox(height: 14),
-                          _RouteMiniMap(
-                            points: routePoints,
-                            segments: segments,
-                            stationLat: station.latitude,
-                            stationLng: station.longitude,
-                          ),
-                        ] else ...[
-                          const SizedBox(height: 14),
-                          _StationPinMap(
-                            latitude: station.latitude,
-                            longitude: station.longitude,
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        Center(
-                          child: Container(
-                            width: 220,
-                            height: 220,
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: SkpColors.qrSurface,
-                              borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-                              border: Border.all(color: SkpColors.line),
-                            ),
-                            child: QrImageView(
-                              data: station.directionsUrl,
-                              backgroundColor: SkpColors.qrSurface,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Scan with your phone to open Google Maps, then tap Directions',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
-                        ),
-                      ],
-                    ),
-                  ),
+        constraints: const BoxConstraints(maxWidth: 780),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                station.name ?? 'Fuel station',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 12),
-                KioskPrimaryButton(
-                  label: 'Close',
-                  onPressed: () => Navigator.of(context).pop(),
+              ),
+              if (station.address != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  station.address!,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: SkpColors.muted),
                 ),
               ],
-            ),
+              if (driveMin != null || traffic?.badgeLabel != null) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (driveMin != null)
+                      _DetailStatChip(
+                        icon: Icons.directions_car_outlined,
+                        label: '~$driveMin min · $distanceLabel',
+                      ),
+                    if (traffic?.badgeLabel case final roadLabel?)
+                      _TrafficBadge(
+                        label: roadLabel,
+                        traffic: traffic!,
+                        waitMin: waitMin,
+                      ),
+                    if (totalEta != null && waitMin != null)
+                      _DetailStatChip(
+                        icon: Icons.schedule_outlined,
+                        label: 'Total ~$totalEta min',
+                        emphasize: true,
+                      ),
+                  ],
+                ),
+              ],
+              if (segments.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _RouteTrafficBar(segments: segments, height: 12),
+              ],
+              const SizedBox(height: 14),
+              SizedBox(
+                height: mapRowHeight,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: hasRoute
+                          ? _RouteMiniMap(
+                              points: routePoints,
+                              segments: segments,
+                              stationLat: station.latitude,
+                              stationLng: station.longitude,
+                              height: mapRowHeight,
+                            )
+                          : _StationPinMap(
+                              latitude: station.latitude,
+                              longitude: station.longitude,
+                              height: mapRowHeight,
+                            ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 2,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: SkpColors.raised,
+                          borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+                          border: Border.all(color: SkpColors.line),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 170,
+                                height: 170,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: SkpColors.qrSurface,
+                                  borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
+                                  border: Border.all(color: SkpColors.line),
+                                ),
+                                child: QrImageView(
+                                  data: station.directionsUrl,
+                                  backgroundColor: SkpColors.qrSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Scan for directions',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: SkpColors.muted,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              KioskPrimaryButton(
+                label: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
           ),
         ),
       ),
@@ -327,12 +345,14 @@ class _RouteMiniMap extends StatelessWidget {
     required this.segments,
     required this.stationLat,
     required this.stationLng,
+    required this.height,
   });
 
   final List<({double lat, double lng})> points;
   final List<RouteTrafficSegment> segments;
   final double stationLat;
   final double stationLng;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +364,7 @@ class _RouteMiniMap extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
       child: SizedBox(
-        height: 240,
+        height: height,
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border.all(color: SkpColors.line),
@@ -396,10 +416,15 @@ class _RouteMiniMap extends StatelessWidget {
 }
 
 class _StationPinMap extends StatelessWidget {
-  const _StationPinMap({required this.latitude, required this.longitude});
+  const _StationPinMap({
+    required this.latitude,
+    required this.longitude,
+    required this.height,
+  });
 
   final double latitude;
   final double longitude;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -407,7 +432,7 @@ class _StationPinMap extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
       child: SizedBox(
-        height: 200,
+        height: height,
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border.all(color: SkpColors.line),

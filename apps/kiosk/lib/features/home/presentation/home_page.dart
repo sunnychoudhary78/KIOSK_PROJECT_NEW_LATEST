@@ -7,6 +7,8 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/ads/presentation/home_banner_strip.dart';
 import 'package:skp_kiosk/features/ads/presentation/idle_ad_player.dart';
+import 'package:skp_kiosk/features/weather/application/weather_controller.dart';
+import 'package:skp_kiosk/features/weather/presentation/weather_header_strip.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -31,9 +33,11 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (authenticated && !_adsStarted) {
       _adsStarted = true;
       ref.read(adsControllerProvider.notifier).startWatching();
+      ref.read(weatherControllerProvider.notifier).startWatching();
     } else if (!authenticated && _adsStarted) {
       _adsStarted = false;
       ref.read(adsControllerProvider.notifier).stopWatching();
+      ref.read(weatherControllerProvider.notifier).stopWatching();
     }
   }
 
@@ -181,16 +185,17 @@ class _ActivationForm extends StatelessWidget {
   }
 }
 
-class _ServiceCatalog extends StatelessWidget {
+class _ServiceCatalog extends ConsumerWidget {
   const _ServiceCatalog({required this.auth});
 
   final DeviceAuthState auth;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return KioskShell(
       showHome: false,
       subtitle: auth.deviceName,
+      headerExtra: const WeatherHeaderStrip(),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(28, 8, 28, 16),
         child: Column(
