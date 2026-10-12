@@ -343,61 +343,27 @@ class _OxiIdleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return SingleChildScrollView(
       child: Column(
         children: [
-          const Icon(Icons.back_hand_outlined, size: 88, color: SkpColors.accentBright),
-          const SizedBox(height: 16),
-          Text(
-            connected
-                ? 'Place your finger gently on the sensor'
+          _InstructionHero(
+            assetPath: 'assets/well_being/place_finger_on_sensor.jpg',
+            headline: connected
+                ? 'Place your finger on the sensor'
                 : 'Connect the sensor to begin',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall,
+            subtitle: connected
+                ? 'Measurement starts automatically once your finger is detected.'
+                : 'Plug in the USB sensor, then place your fingertip on the window.',
+            pulse: connected,
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Measurement starts automatically once your finger is detected.',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: SkpColors.panel,
-              borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-              border: Border.all(color: SkpColors.line),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'How to place your finger',
-                  style: theme.textTheme.titleMedium?.copyWith(color: SkpColors.accentBright),
-                ),
-                const SizedBox(height: 12),
-                ...const [
-                  'Rest your fingertip flat over the sensor window.',
-                  'Apply light, steady pressure — do not press hard.',
-                  'Keep your hand relaxed and still.',
-                  'Stay still for the full measurement once it begins.',
-                ].map(
-                  (tip) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('•  ', style: TextStyle(color: SkpColors.gold)),
-                        Expanded(child: Text(tip, style: theme.textTheme.bodyLarge)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 20),
+          const _TipPanel(
+            title: 'How to place your finger',
+            tips: [
+              'Rest your fingertip flat over the sensor window.',
+              'Apply light, steady pressure — do not press hard.',
+              'Keep your hand relaxed and still.',
+            ],
           ),
         ],
       ),
@@ -525,62 +491,172 @@ class _TempIdleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return SingleChildScrollView(
       child: Column(
         children: [
-          const Icon(Icons.thermostat_outlined, size: 88, color: SkpColors.accentBright),
-          const SizedBox(height: 16),
-          Text(
-            connected
-                ? 'Hold your forehead 1–2 cm from the sensor'
+          _InstructionHero(
+            assetPath: 'assets/well_being/hold_forehead_near_sensor.jpg',
+            headline: connected
+                ? 'Hold your forehead near the sensor'
                 : 'Connect the sensor to begin',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall,
+            subtitle: connected
+                ? 'Measurement starts automatically once your forehead is detected.'
+                : 'Plug in the USB sensor, then hold your forehead near the lens.',
+            pulse: connected,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
+          const _TipPanel(
+            title: 'How to take your temperature',
+            tips: [
+              'Hold your forehead 1–2 cm in front of the sensor lens.',
+              'Keep hair, hats, and glasses out of the way.',
+              'Stay still until the countdown begins.',
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InstructionHero extends StatefulWidget {
+  const _InstructionHero({
+    required this.assetPath,
+    required this.headline,
+    required this.subtitle,
+    required this.pulse,
+  });
+
+  final String assetPath;
+  final String headline;
+  final String subtitle;
+  final bool pulse;
+
+  @override
+  State<_InstructionHero> createState() => _InstructionHeroState();
+}
+
+class _InstructionHeroState extends State<_InstructionHero>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _syncPulse(widget.pulse);
+  }
+
+  @override
+  void didUpdateWidget(covariant _InstructionHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pulse != widget.pulse) {
+      _syncPulse(widget.pulse);
+    }
+  }
+
+  void _syncPulse(bool enabled) {
+    if (enabled) {
+      if (!_pulse.isAnimating) {
+        _pulse.repeat(reverse: true);
+      }
+    } else {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        AnimatedBuilder(
+          animation: _pulse,
+          builder: (context, child) {
+            final t = widget.pulse ? _pulse.value : 0.0;
+            final scale = 1.0 + (t * 0.03);
+            final opacity = 0.92 + (t * 0.08);
+            return Transform.scale(
+              scale: scale,
+              child: Opacity(
+                opacity: opacity,
+                child: child,
+              ),
+            );
+          },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+            child: Image.asset(
+              widget.assetPath,
+              height: 300,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          widget.headline,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.subtitle,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+        ),
+      ],
+    );
+  }
+}
+
+class _TipPanel extends StatelessWidget {
+  const _TipPanel({required this.title, required this.tips});
+
+  final String title;
+  final List<String> tips;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: SkpColors.panel,
+        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+        border: Border.all(color: SkpColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            'Measurement starts automatically once your forehead is detected.',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(color: SkpColors.accentBright),
           ),
-          const SizedBox(height: 24),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: SkpColors.panel,
-              borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-              border: Border.all(color: SkpColors.line),
+          const SizedBox(height: 12),
+          for (final tip in tips)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('•  ', style: TextStyle(color: SkpColors.gold)),
+                  Expanded(child: Text(tip, style: theme.textTheme.bodyLarge)),
+                ],
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'How to take your temperature',
-                  style: theme.textTheme.titleMedium?.copyWith(color: SkpColors.accentBright),
-                ),
-                const SizedBox(height: 12),
-                ...const [
-                  'Hold your forehead 1–2 cm in front of the sensor lens.',
-                  'Keep hair, hats, and glasses out of the way.',
-                  'Stay still until the countdown begins.',
-                  'The reading takes about 5 seconds after detection.',
-                ].map(
-                  (tip) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('•  ', style: TextStyle(color: SkpColors.gold)),
-                        Expanded(child: Text(tip, style: theme.textTheme.bodyLarge)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

@@ -22,6 +22,8 @@ export type NearbyStation = NearbyStationInput & {
   driveDistanceKm: number | null;
   driveDurationMin: number | null;
   routeTrafficSegments: RouteTrafficSegment[];
+  /** Google encoded polyline from the same Routes probe (top CNG/EV only). */
+  routePolyline: string | null;
   bestNow: boolean;
 };
 
@@ -92,6 +94,7 @@ export function rankNearbyStations(
       driveDistanceKm: null,
       driveDurationMin: null,
       routeTrafficSegments: [],
+      routePolyline: null,
       bestNow: false,
     }));
 }

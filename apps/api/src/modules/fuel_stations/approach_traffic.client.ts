@@ -19,6 +19,7 @@ export type RouteTrafficResult = {
   driveDistanceM: number | null;
   driveDurationSec: number | null;
   routeTrafficSegments: RouteTrafficSegment[];
+  encodedPolyline: string | null;
 };
 
 const UNKNOWN_RESULT: RouteTrafficResult = {
@@ -26,6 +27,7 @@ const UNKNOWN_RESULT: RouteTrafficResult = {
   driveDistanceM: null,
   driveDurationSec: null,
   routeTrafficSegments: [],
+  encodedPolyline: null,
 };
 
 type CacheEntry = { value: RouteTrafficResult; expiresAt: number };
@@ -109,6 +111,7 @@ async function probeRoute(
       driveDistanceM: route.distanceMeters,
       driveDurationSec: route.durationSec,
       routeTrafficSegments: [],
+      encodedPolyline: route.encodedPolyline,
     };
   }
 
@@ -121,6 +124,7 @@ async function probeRoute(
       status: approachTraffic,
       distanceM: route.distanceMeters,
       durationSec: route.durationSec,
+      hasPolyline: Boolean(route.encodedPolyline),
     },
     'Route traffic ok',
   );
@@ -129,6 +133,7 @@ async function probeRoute(
     driveDistanceM: route.distanceMeters,
     driveDurationSec: route.durationSec,
     routeTrafficSegments,
+    encodedPolyline: route.encodedPolyline,
   };
 }
 
@@ -143,6 +148,7 @@ async function computeRoute(
   distanceMeters: number | null;
   durationSec: number | null;
   intervals: SpeedReadingInterval[];
+  encodedPolyline: string | null;
 }> {
   const response = await fetchImpl(ROUTES_URL, {
     method: 'POST',
@@ -175,6 +181,7 @@ async function computeRoute(
     routes?: Array<{
       distanceMeters?: number;
       duration?: string;
+      polyline?: { encodedPolyline?: string };
       travelAdvisory?: { speedReadingIntervals?: SpeedReadingInterval[] };
     }>;
   };
@@ -183,10 +190,15 @@ async function computeRoute(
     typeof route?.distanceMeters === 'number' && Number.isFinite(route.distanceMeters)
       ? route.distanceMeters
       : null;
+  const encoded =
+    typeof route?.polyline?.encodedPolyline === 'string' && route.polyline.encodedPolyline.length > 0
+      ? route.polyline.encodedPolyline
+      : null;
   return {
     distanceMeters,
     durationSec: parseDurationSec(route?.duration),
     intervals: route?.travelAdvisory?.speedReadingIntervals ?? [],
+    encodedPolyline: encoded,
   };
 }
 

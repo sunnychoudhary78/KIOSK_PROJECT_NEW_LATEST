@@ -92,6 +92,7 @@ class FuelStation {
     this.driveDistanceKm,
     this.driveDurationMin,
     this.routeTrafficSegments = const [],
+    this.routePolyline,
     this.bestNow = false,
   });
 
@@ -111,7 +112,17 @@ class FuelStation {
   final double? driveDistanceKm;
   final int? driveDurationMin;
   final List<RouteTrafficSegment> routeTrafficSegments;
+  final String? routePolyline;
   final bool bestNow;
+
+  /// Drive minutes plus heuristic near-station wait, when drive time is known.
+  int? get totalEtaMin {
+    final drive = driveDurationMin;
+    if (drive == null) {
+      return null;
+    }
+    return drive + (approachWaitMin ?? 0);
+  }
 
   /// Segments for the traffic bar: prefer API route data, else status fallback.
   List<RouteTrafficSegment> get displayTrafficSegments {
@@ -192,6 +203,7 @@ class FuelStation {
       driveDistanceKm: driveKmRaw is num ? driveKmRaw.toDouble() : null,
       driveDurationMin: driveMinRaw is num ? driveMinRaw.toInt() : null,
       routeTrafficSegments: _parseSegments(json['routeTrafficSegments']),
+      routePolyline: json['routePolyline'] as String?,
       bestNow: json['bestNow'] == true,
     );
   }

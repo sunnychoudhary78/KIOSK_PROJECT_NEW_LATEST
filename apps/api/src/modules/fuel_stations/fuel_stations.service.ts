@@ -141,6 +141,7 @@ export class FuelStationsService {
           driveDistanceKm,
           driveDurationMin,
           routeTrafficSegments: result.routeTrafficSegments,
+          routePolyline: result.encodedPolyline,
         };
       }
       items = pinBestNow(items);

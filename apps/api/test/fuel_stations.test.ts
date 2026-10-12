@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APPROACH_TRAFFIC_LIMIT,
   approachEndpointsFromSnaps,
   buildRouteTrafficSegments,
   classifyApproachFromRoute,
@@ -11,6 +12,7 @@ import {
   pinBestNow,
   waitMinutesForApproach,
 } from '../src/modules/fuel_stations/approach.js';
+import { createApproachTrafficClient } from '../src/modules/fuel_stations/approach_traffic.client.js';
 import type { NearbyStation } from '../src/modules/fuel_stations/nearby.js';
 import { countCatalogKinds, filterCatalogStations } from '../src/modules/fuel_stations/catalog.js';
 import {
@@ -242,6 +244,7 @@ describe('approach traffic helpers', () => {
       driveDistanceKm: 1,
       driveDurationMin: 12,
       routeTrafficSegments: [],
+      routePolyline: null,
       bestNow: false,
       ...overrides,
     });
@@ -354,6 +357,74 @@ describe('approach traffic helpers', () => {
     );
     const targets = pickApproachTargets(items, 2);
     expect(targets.map((t) => t.station.name)).toEqual(['CNG-A', 'EV-A']);
+  });
+
+  it('limits approach targets to five by default', () => {
+    expect(APPROACH_TRAFFIC_LIMIT).toBe(5);
+    const many = Array.from({ length: 8 }, (_, i) =>
+      station({
+        name: `CNG-${i}`,
+        latitude: 28.614 + i * 0.001,
+        longitude: 77.209,
+        cng: true,
+      }),
+    );
+    const items = rankNearbyStations(many, origin, 'cng');
+    expect(pickApproachTargets(items)).toHaveLength(5);
+  });
+
+  it('passes encoded polyline through the Routes client without extra calls', async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      return new Response(
+        JSON.stringify({
+          routes: [
+            {
+              distanceMeters: 1200,
+              duration: '180s',
+              polyline: { encodedPolyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' },
+              travelAdvisory: {
+                speedReadingIntervals: [
+                  { speed: 'NORMAL', startPolylinePointIndex: 0, endPolylinePointIndex: 8 },
+                  { speed: 'SLOW', startPolylinePointIndex: 8, endPolylinePointIndex: 10 },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+
+    const client = createApproachTrafficClient({
+      apiKey: 'test-key',
+      logger: {
+        debug: () => undefined,
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        child: () => undefined as never,
+      } as never,
+      fetchImpl,
+      now: () => 1_000,
+      cacheTtlMs: 60_000,
+    });
+
+    const first = await client.getRouteTraffic(
+      { lat: 28.6139, lng: 77.209 },
+      { lat: 28.62, lng: 77.21 },
+    );
+    const second = await client.getRouteTraffic(
+      { lat: 28.6139, lng: 77.209 },
+      { lat: 28.62, lng: 77.21 },
+    );
+
+    expect(calls).toBe(1);
+    expect(first.encodedPolyline).toBe('_p~iF~ps|U_ulLnnqC_mqNvxq`@');
+    expect(second.encodedPolyline).toBe(first.encodedPolyline);
+    expect(first.driveDurationSec).toBe(180);
+    expect(first.approachTraffic).toBe('moderate');
   });
 
   it('builds endpoints about 100 m each way from snapped road points', () => {
