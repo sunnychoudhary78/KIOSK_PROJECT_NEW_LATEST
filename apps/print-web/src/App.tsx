@@ -26,19 +26,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function IconPrint() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M7 13h10v7H7v-7Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function IconPhone() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -106,43 +93,65 @@ function IconArrow() {
   );
 }
 
+function StepRail({ active }: { active: 'upload' | 'pay' }) {
+  return (
+    <div className="step-rail" aria-label="Progress">
+      <span className={active === 'upload' ? 'active' : undefined}>Upload</span>
+      <span className="dot" aria-hidden="true" />
+      <span className={active === 'pay' ? 'active' : undefined}>Pay</span>
+    </div>
+  );
+}
+
 function AppShell({
-  brand = 'Quick Print',
   step,
   title,
   subtitle,
   status,
   statusTone,
   footer,
+  hero,
+  brandAsHero,
   children,
 }: {
-  brand?: string;
-  step?: string;
+  step?: ReactNode;
   title: string;
   subtitle?: string;
   status?: ReactNode;
   statusTone?: 'ok' | 'danger' | 'spin';
   footer?: ReactNode;
+  hero?: boolean;
+  /** Put Smart Kiosk in the body as the hero signal (home). */
+  brandAsHero?: boolean;
   children?: ReactNode;
 }) {
+  const bodyClass = [
+    'body',
+    status ? 'body-status' : '',
+    hero || brandAsHero ? 'body-hero' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <div className="shell">
-      <div className="glow" aria-hidden="true" />
+      <div className="atmosphere" aria-hidden="true" />
       <header className="topbar">
         <div className="brand-lockup">
-          <span className="mark">
-            <IconPrint />
-          </span>
-          <div>
-            <p className="brand">{brand}</p>
-            <p className="brand-sub">Smart Kiosk</p>
-          </div>
+          <p className="brand-eyebrow">Quick Print</p>
+          {brandAsHero ? null : <p className="brand-wordmark">Smart Kiosk</p>}
         </div>
-        {step ? <span className="step-pill">{step}</span> : null}
+        {step ?? null}
       </header>
-      <main className={status ? 'body body-status' : 'body'}>
+      <main className={bodyClass}>
         {status ? <div className={`status-icon ${statusTone ?? ''}`}>{status}</div> : null}
-        <h1>{title}</h1>
+        {brandAsHero ? (
+          <h1 className="display">Smart Kiosk</h1>
+        ) : hero ? (
+          <h1 className="display">{title}</h1>
+        ) : (
+          <h1>{title}</h1>
+        )}
         {subtitle ? <p className="lede">{subtitle}</p> : null}
         {children}
       </main>
@@ -282,7 +291,6 @@ function SessionPage() {
   if (step === 'error') {
     return (
       <AppShell
-        brand="Smart Kiosk"
         title="Link unavailable"
         subtitle={error ?? 'This print link is invalid or expired.'}
         status={<IconAlert />}
@@ -294,8 +302,7 @@ function SessionPage() {
   if (!session) {
     return (
       <AppShell
-        brand="Smart Kiosk"
-        title="Opening print session"
+        title="Opening session"
         subtitle="Connecting to this kiosk…"
         status={<IconSpinner />}
         statusTone="spin"
@@ -306,10 +313,11 @@ function SessionPage() {
   if (step === 'chooser') {
     return (
       <AppShell
+        hero
         title="Print from this kiosk"
         subtitle="Continue here on your phone, or get the app if you print often."
       >
-        <span className="chip">{session.deviceName || 'This kiosk'}</span>
+        <span className="kiosk-line">{session.deviceName || 'This kiosk'}</span>
         <div className="choices">
           <button className="choice choice-primary" type="button" onClick={() => setStep('upload')}>
             <span className="choice-icon">
@@ -348,7 +356,7 @@ function SessionPage() {
         status={<IconCheck />}
         statusTone="ok"
       >
-        {session.documentLabel ? <div className="card doc-label">{session.documentLabel}</div> : null}
+        {session.documentLabel ? <div className="doc-label">{session.documentLabel}</div> : null}
       </AppShell>
     );
   }
@@ -357,7 +365,7 @@ function SessionPage() {
     const quote = session.quote;
     return (
       <AppShell
-        step="2 / 2"
+        step={<StepRail active="pay" />}
         title="Pay extra pages"
         subtitle="Free pages are already included. Pay only for the extra sheets."
         footer={
@@ -369,16 +377,16 @@ function SessionPage() {
           </>
         }
       >
-        <div className="card receipt">
-          <div className="receipt-row">
+        <div className="ticket">
+          <div className="ticket-row">
             <span>Pages</span>
             <strong>{quote ? quote.pageCount : session.pageCount}</strong>
           </div>
-          <div className="receipt-row">
+          <div className="ticket-row">
             <span>Extra pages</span>
             <strong>{quote ? quote.extraPages : '—'}</strong>
           </div>
-          <div className="receipt-row receipt-total">
+          <div className="ticket-row ticket-total">
             <span>Amount due</span>
             <strong>{quote ? formatMoney(quote.amountPaise) : 'Payment required'}</strong>
           </div>
@@ -389,7 +397,7 @@ function SessionPage() {
 
   return (
     <AppShell
-      step="1 / 2"
+      step={<StepRail active="upload" />}
       title="Upload PDFs"
       subtitle="Choose black & white or color, then send the files to this kiosk."
       footer={
@@ -401,20 +409,20 @@ function SessionPage() {
         </>
       }
     >
-      <div className="card limits">
-        <div className="limit-row">
-          <span>Free pages</span>
-          <strong>
+      <div className="meter" aria-label="Print limits">
+        <div className="meter-cell">
+          <span className="meter-label">Free</span>
+          <span className="meter-value">
             {freePages} {colorMode === 'color' ? 'color' : 'B/W'}
-          </strong>
+          </span>
         </div>
-        <div className="limit-row">
-          <span>Extra pages</span>
-          <strong>₹{extraCharge} each</strong>
+        <div className="meter-cell">
+          <span className="meter-label">Extra</span>
+          <span className="meter-value">₹{extraCharge}/pg</span>
         </div>
-        <div className="limit-row">
-          <span>Session max</span>
-          <strong>{session.printLimits.maxPagesPerSession} pages</strong>
+        <div className="meter-cell">
+          <span className="meter-label">Max</span>
+          <span className="meter-value">{session.printLimits.maxPagesPerSession} pg</span>
         </div>
       </div>
       <div className="segment" role="group" aria-label="Print color">
@@ -459,10 +467,14 @@ function SessionPage() {
 function HomePage() {
   return (
     <AppShell
-      title="Scan the QR on the kiosk"
-      subtitle="This page only works from a kiosk Quick Print code."
-      status={<IconQr />}
-    />
+      brandAsHero
+      title="Smart Kiosk"
+      subtitle="Scan the QR on the kiosk to start Quick Print from your phone."
+    >
+      <div className="hero-mark" aria-hidden="true">
+        <IconQr />
+      </div>
+    </AppShell>
   );
 }
 
