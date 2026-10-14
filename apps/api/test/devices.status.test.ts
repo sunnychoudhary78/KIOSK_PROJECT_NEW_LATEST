@@ -192,6 +192,41 @@ describe('DevicesService.heartbeat', () => {
       surveillanceEnabled: true,
     });
   });
+
+  it('persists surveillance health from the heartbeat body', async () => {
+    const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...deviceRow(DeviceStatus.active),
+      ...data,
+    }));
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceRow(DeviceStatus.active),
+          surveillanceEnabled: true,
+        })),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    const health = {
+      state: 'camera_error' as const,
+      recording: false,
+      queuePending: 2,
+      lastErrorCode: 'CAMERA_ERROR',
+    };
+    await service.heartbeat(deviceId, deviceId, { surveillance: health });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: deviceId },
+      data: {
+        lastHeartbeatAt: expect.any(Date),
+        surveillanceHealth: health,
+        surveillanceHealthAt: expect.any(Date),
+      },
+    });
+  });
 });
 
 describe('assertActiveDevice', () => {

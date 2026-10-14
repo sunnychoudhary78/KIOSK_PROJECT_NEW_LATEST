@@ -8,8 +8,26 @@ const surveillanceQueueFileName = 'upload-queue.json';
 const surveillanceInProgressName = '.inprogress.mp4';
 const surveillancePendingStatus = 'pending';
 const surveillancePendingDeleteStatus = 'uploaded_pending_delete';
+const surveillanceFailedStatus = 'failed';
+
+/// Local segments below this size are never uploaded (corrupt/stub).
+const surveillanceMinSegmentBytes = 1024;
 
 final _dateFolder = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+class SurveillanceQueueStats {
+  const SurveillanceQueueStats({
+    required this.pendingCount,
+    required this.failedCount,
+    this.oldestQueuedAt,
+    this.lastError,
+  });
+
+  final int pendingCount;
+  final int failedCount;
+  final DateTime? oldestQueuedAt;
+  final String? lastError;
+}
 
 class SurveillanceQueueItem {
   SurveillanceQueueItem({
@@ -22,6 +40,7 @@ class SurveillanceQueueItem {
     DateTime? nextAttemptAt,
     this.segmentId,
     this.status = surveillancePendingStatus,
+    this.lastError,
   }) : nextAttemptAt = nextAttemptAt ?? enqueuedAt;
 
   final String path;
@@ -33,8 +52,10 @@ class SurveillanceQueueItem {
   DateTime nextAttemptAt;
   String? segmentId;
   String status;
+  String? lastError;
 
   bool get isPendingDelete => status == surveillancePendingDeleteStatus;
+  bool get isFailed => status == surveillanceFailedStatus;
 
   Map<String, dynamic> toJson() => {
         'path': path,
@@ -46,6 +67,7 @@ class SurveillanceQueueItem {
         'nextAttemptAt': nextAttemptAt.toUtc().toIso8601String(),
         'segmentId': segmentId,
         'status': status,
+        'lastError': lastError,
       };
 
   factory SurveillanceQueueItem.fromJson(Map<String, dynamic> json) {
@@ -61,6 +83,7 @@ class SurveillanceQueueItem {
           DateTime.tryParse(json['nextAttemptAt'] as String? ?? '')?.toUtc(),
       segmentId: json['segmentId'] as String?,
       status: json['status'] as String? ?? surveillancePendingStatus,
+      lastError: json['lastError'] as String?,
     );
   }
 }
@@ -197,16 +220,56 @@ class SurveillanceUploadQueue {
 
   List<SurveillanceQueueItem> due({DateTime? now}) {
     final utc = (now ?? DateTime.now()).toUtc();
-    return items.where((item) => !item.nextAttemptAt.isAfter(utc)).toList();
+    return items
+        .where((item) => !item.isFailed && !item.nextAttemptAt.isAfter(utc))
+        .toList();
   }
 
-  Future<void> markAttempt(String path, {DateTime? now}) async {
+  SurveillanceQueueStats stats() {
+    final pending = items.where((item) => !item.isFailed && !item.isPendingDelete);
+    final failed = items.where((item) => item.isFailed);
+    DateTime? oldest;
+    String? lastError;
+    for (final item in items) {
+      if (item.isFailed || item.isPendingDelete) {
+        if (item.isFailed && item.lastError != null) {
+          lastError = item.lastError;
+        }
+        continue;
+      }
+      if (oldest == null || item.enqueuedAt.isBefore(oldest)) {
+        oldest = item.enqueuedAt;
+      }
+      if (item.lastError != null) {
+        lastError = item.lastError;
+      }
+    }
+    return SurveillanceQueueStats(
+      pendingCount: pending.length,
+      failedCount: failed.length,
+      oldestQueuedAt: oldest,
+      lastError: lastError ?? (failed.isEmpty ? null : failed.last.lastError),
+    );
+  }
+
+  Future<void> markAttempt(String path, {DateTime? now, String? error}) async {
     final item = _items[_key(path)];
     if (item == null) {
       return;
     }
     item.attempts += 1;
+    item.lastError = error ?? item.lastError;
     item.nextAttemptAt = (now ?? DateTime.now()).toUtc().add(surveillanceBackoffFor(item.attempts));
+    await save();
+  }
+
+  Future<void> markFailed(String path, {required String error}) async {
+    final item = _items[_key(path)];
+    if (item == null) {
+      return;
+    }
+    item.status = surveillanceFailedStatus;
+    item.lastError = error;
     await save();
   }
 
@@ -217,6 +280,7 @@ class SurveillanceUploadQueue {
     }
     item.segmentId = segmentId;
     item.status = surveillancePendingDeleteStatus;
+    item.lastError = null;
     await save();
   }
 

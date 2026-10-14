@@ -2,11 +2,19 @@ import { useEffect, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import { Button, EmptyState, Input, PageHeader, Panel, Select } from '../../core/ui/primitives';
+import {
+  resolveRecordingDisplay,
+  type SurveillanceHealth,
+} from './surveillanceStatus';
 
 type Device = {
   id: string;
   name: string;
   siteName: string;
+  lastHeartbeatAt: string | null;
+  surveillanceEnabled: boolean;
+  surveillanceHealth?: SurveillanceHealth | null;
+  surveillanceHealthAt?: string | null;
 };
 
 type Segment = {
@@ -15,7 +23,9 @@ type Segment = {
   recordedOn: string;
   startedAt: string;
   byteSize: number;
+  status: 'uploaded' | 'pending_upload' | 'failed';
   uploadedAt: string | null;
+  lastUploadError: string | null;
 };
 
 function todayUtc(): string {
@@ -26,6 +36,29 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function statusBadge(status: Segment['status']) {
+  switch (status) {
+    case 'uploaded':
+      return (
+        <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+          Uploaded
+        </span>
+      );
+    case 'failed':
+      return (
+        <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+          Failed
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+          Pending
+        </span>
+      );
+  }
 }
 
 export function RecordingsPage() {
@@ -39,6 +72,10 @@ export function RecordingsPage() {
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [playingLabel, setPlayingLabel] = useState<string | null>(null);
+
+  const selected = devices.find((device) => device.id === deviceId) ?? null;
+  const healthDisplay = selected ? resolveRecordingDisplay(selected) : null;
+  const pendingOnKiosk = selected?.surveillanceHealth?.queuePending ?? 0;
 
   useEffect(() => {
     void (async () => {
@@ -65,7 +102,7 @@ export function RecordingsPage() {
       setPlayingLabel(null);
       try {
         const result = await apiRequest<{ items: Segment[] }>(
-          `/devices/${deviceId}/surveillance/segments?recordedOn=${encodeURIComponent(recordedOn)}`,
+          `/devices/${deviceId}/surveillance/segments?recordedOn=${encodeURIComponent(recordedOn)}&status=all`,
           { token },
         );
         setItems(result.items);
@@ -80,6 +117,10 @@ export function RecordingsPage() {
   }, [token, deviceId, recordedOn]);
 
   async function onPlay(segment: Segment) {
+    if (segment.status !== 'uploaded') {
+      setError('This clip is not uploaded yet');
+      return;
+    }
     setError(null);
     try {
       const result = await apiRequest<{ url: string; expiresAt: string }>(
@@ -94,11 +135,15 @@ export function RecordingsPage() {
     }
   }
 
+  const uploadedCount = items.filter((item) => item.status === 'uploaded').length;
+  const pendingCount = items.filter((item) => item.status === 'pending_upload').length;
+  const failedCount = items.filter((item) => item.status === 'failed').length;
+
   return (
     <div>
       <PageHeader
         title="Recordings"
-        subtitle="Browse uploaded kiosk surveillance clips by device and UTC calendar day"
+        subtitle="Browse kiosk surveillance clips by device and UTC calendar day"
       />
 
       <Panel>
@@ -128,39 +173,72 @@ export function RecordingsPage() {
           </label>
         </div>
 
+        {healthDisplay ? (
+          <p className={`mb-3 text-sm font-medium ${healthDisplay.className}`} title={healthDisplay.title}>
+            Live status: {healthDisplay.label}
+            {pendingOnKiosk > 0 ? ` · ${pendingOnKiosk} clip(s) waiting on kiosk` : ''}
+          </p>
+        ) : null}
+
         {error ? <p className="error mb-3">{error}</p> : null}
         {loading ? <p className="muted mb-3">Loading…</p> : null}
 
         {!loading && items.length === 0 ? (
           <EmptyState
-            title="No uploaded clips"
-            description="No recordings for this kiosk and UTC day."
+            title={pendingOnKiosk > 0 ? 'Clips pending upload' : 'No clips for this day'}
+            description={
+              pendingOnKiosk > 0
+                ? `${pendingOnKiosk} recording(s) are still on the kiosk waiting to upload.`
+                : 'No recordings for this kiosk and UTC day.'
+            }
           />
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Started</th>
-                <th>Filename</th>
-                <th>Size</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((segment) => (
-                <tr key={segment.id}>
-                  <td>{new Date(segment.startedAt).toLocaleString()}</td>
-                  <td>{segment.filename}</td>
-                  <td>{formatBytes(segment.byteSize)}</td>
-                  <td>
-                    <Button type="button" onClick={() => void onPlay(segment)}>
-                      {playingId === segment.id ? 'Playing' : 'Play'}
-                    </Button>
-                  </td>
+          <>
+            {!loading && items.length > 0 ? (
+              <p className="muted mb-3 text-sm">
+                {uploadedCount} uploaded · {pendingCount} pending · {failedCount} failed
+              </p>
+            ) : null}
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Started</th>
+                  <th>Filename</th>
+                  <th>Size</th>
+                  <th>Status</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((segment) => (
+                  <tr key={segment.id}>
+                    <td>{new Date(segment.startedAt).toLocaleString()}</td>
+                    <td>{segment.filename}</td>
+                    <td>{formatBytes(segment.byteSize)}</td>
+                    <td>
+                      <div className="flex flex-col gap-1">
+                        {statusBadge(segment.status)}
+                        {segment.lastUploadError ? (
+                          <span className="text-xs text-muted-foreground">
+                            {segment.lastUploadError}
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>
+                      {segment.status === 'uploaded' ? (
+                        <Button type="button" onClick={() => void onPlay(segment)}>
+                          {playingId === segment.id ? 'Playing' : 'Play'}
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
 
         {playbackUrl ? (

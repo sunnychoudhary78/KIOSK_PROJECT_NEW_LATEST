@@ -3,6 +3,7 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { ObjectStorageClient } from '../../infrastructure/storage/s3.client.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { AppError } from '../../shared/errors.js';
+import { MIN_SURVEILLANCE_SEGMENT_BYTES, PENDING_UPLOAD_STALE_MS } from './surveillance.constants.js';
 import type { ListSegmentsQuery, UploadUrlBody } from './surveillance.schemas.js';
 import { formatRecordedOn, parseSegmentStart, recordedOnDate } from './surveillance.time.js';
 
@@ -21,13 +22,31 @@ export function objectKeyFor(input: {
   return `surveillance/${input.tenantId}/${input.deviceId}/${input.recordedOn}/${input.filename}`;
 }
 
+function mapSegmentStatus(
+  status: SurveillanceSegmentStatus,
+  updatedAt: Date,
+  lastUploadError: string | null,
+): 'uploaded' | 'pending_upload' | 'failed' {
+  if (status === SurveillanceSegmentStatus.uploaded) {
+    return 'uploaded';
+  }
+  const stale = Date.now() - updatedAt.getTime() >= PENDING_UPLOAD_STALE_MS;
+  if (lastUploadError && stale) {
+    return 'failed';
+  }
+  return 'pending_upload';
+}
+
 function mapSegment(row: {
   id: string;
   filename: string;
   recordedOn: Date;
   startedAt: Date;
   byteSize: bigint;
+  status: SurveillanceSegmentStatus;
   uploadedAt: Date | null;
+  updatedAt: Date;
+  lastUploadError: string | null;
 }) {
   return {
     id: row.id,
@@ -35,7 +54,9 @@ function mapSegment(row: {
     recordedOn: formatRecordedOn(row.recordedOn),
     startedAt: row.startedAt.toISOString(),
     byteSize: Number(row.byteSize),
+    status: mapSegmentStatus(row.status, row.updatedAt, row.lastUploadError),
     uploadedAt: row.uploadedAt?.toISOString() ?? null,
+    lastUploadError: row.lastUploadError,
   };
 }
 
@@ -55,6 +76,13 @@ export class SurveillanceService {
     assertSameDevice(deviceId, principalDeviceId);
     if (!this.storage.isConfigured()) {
       throw new AppError('storage_not_configured', 'Object storage is not configured', 503);
+    }
+    if (body.bytes < MIN_SURVEILLANCE_SEGMENT_BYTES) {
+      throw new AppError(
+        'invalid_segment',
+        `Segment is too small (min ${MIN_SURVEILLANCE_SEGMENT_BYTES} bytes)`,
+        400,
+      );
     }
 
     const device = await this.db.device.findUnique({
@@ -99,6 +127,7 @@ export class SurveillanceService {
           byteSize: BigInt(body.bytes),
           contentType: body.contentType,
           status: SurveillanceSegmentStatus.pending_upload,
+          lastUploadError: null,
         },
       }));
 
@@ -110,6 +139,7 @@ export class SurveillanceService {
           contentType: body.contentType,
           recordedOn,
           startedAt,
+          lastUploadError: null,
         },
       });
     }
@@ -158,11 +188,37 @@ export class SurveillanceService {
       return { ok: true, status: segment.status };
     }
 
+    if (segment.byteSize < BigInt(MIN_SURVEILLANCE_SEGMENT_BYTES)) {
+      await this.db.surveillanceSegment.update({
+        where: { id: segment.id },
+        data: { lastUploadError: 'invalid_segment' },
+      });
+      throw new AppError(
+        'invalid_segment',
+        `Segment is too small (min ${MIN_SURVEILLANCE_SEGMENT_BYTES} bytes)`,
+        400,
+      );
+    }
+
     const head = await this.storage.headObject(segment.objectKey);
     if (!head) {
+      await this.db.surveillanceSegment.update({
+        where: { id: segment.id },
+        data: { lastUploadError: 'upload_incomplete' },
+      });
       throw new AppError('upload_incomplete', 'Object was not found in storage', 409);
     }
     if (BigInt(head.contentLength) !== segment.byteSize) {
+      await this.db.surveillanceSegment.update({
+        where: { id: segment.id },
+        data: { lastUploadError: 'size_mismatch' },
+      });
+      // Drop the bad object so the next PUT starts clean.
+      try {
+        await this.storage.deleteObject(segment.objectKey);
+      } catch {
+        // Best-effort; kiosk will re-PUT either way.
+      }
       throw new AppError('size_mismatch', 'Uploaded object size does not match', 400);
     }
 
@@ -171,6 +227,7 @@ export class SurveillanceService {
       data: {
         status: SurveillanceSegmentStatus.uploaded,
         uploadedAt: new Date(),
+        lastUploadError: null,
       },
     });
 
@@ -197,11 +254,18 @@ export class SurveillanceService {
     }
 
     const day = recordedOnDate(query.recordedOn);
+    const statusFilter =
+      query.status === 'all'
+        ? undefined
+        : query.status === 'uploaded'
+          ? SurveillanceSegmentStatus.uploaded
+          : SurveillanceSegmentStatus.pending_upload;
+
     const rows = await this.db.surveillanceSegment.findMany({
       where: {
         deviceId,
         recordedOn: day,
-        status: SurveillanceSegmentStatus.uploaded,
+        ...(statusFilter ? { status: statusFilter } : {}),
       },
       orderBy: { startedAt: 'asc' },
       select: {
@@ -210,7 +274,10 @@ export class SurveillanceService {
         recordedOn: true,
         startedAt: true,
         byteSize: true,
+        status: true,
         uploadedAt: true,
+        updatedAt: true,
+        lastUploadError: true,
       },
     });
 
@@ -233,6 +300,11 @@ export class SurveillanceService {
     }
     if (segment.status !== SurveillanceSegmentStatus.uploaded) {
       throw new AppError('not_ready', 'Segment is not uploaded yet', 409);
+    }
+
+    const head = await this.storage.headObject(segment.objectKey);
+    if (!head) {
+      throw new AppError('object_missing', 'Recording object is missing from storage', 404);
     }
 
     const signed = await this.storage.presignGet({ key: segment.objectKey });

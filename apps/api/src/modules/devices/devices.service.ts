@@ -6,11 +6,20 @@ import { AppError } from '../../shared/errors.js';
 import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type {
+  DeviceHeartbeatBody,
   NearbyDevicesQuery,
   RegisterDeviceInput,
   SetDevicePrintLimitsInput,
+  SurveillanceHealthInput,
 } from './devices.schemas.js';
 import { printLimitsFromDevice } from './device_print_limits.js';
+
+function mapSurveillanceHealth(value: unknown): SurveillanceHealthInput | null {
+  if (value == null || typeof value !== 'object') {
+    return null;
+  }
+  return value as SurveillanceHealthInput;
+}
 
 function mapDevice(device: {
   id: string;
@@ -22,6 +31,8 @@ function mapDevice(device: {
   address: string | null;
   lastHeartbeatAt: Date | null;
   surveillanceEnabled: boolean;
+  surveillanceHealth?: unknown;
+  surveillanceHealthAt?: Date | null;
   maxPagesPerSession?: number;
   freePagesPerSession?: number;
   extraPageChargeRupees?: number;
@@ -40,6 +51,8 @@ function mapDevice(device: {
     address: device.address,
     lastHeartbeatAt: device.lastHeartbeatAt?.toISOString() ?? null,
     surveillanceEnabled: device.surveillanceEnabled,
+    surveillanceHealth: mapSurveillanceHealth(device.surveillanceHealth),
+    surveillanceHealthAt: device.surveillanceHealthAt?.toISOString() ?? null,
     ...printLimitsFromDevice(device),
   };
 }
@@ -271,7 +284,11 @@ export class DevicesService {
     return mapDevice(updated);
   }
 
-  async heartbeat(deviceId: string, principalDeviceId: string) {
+  async heartbeat(
+    deviceId: string,
+    principalDeviceId: string,
+    body: DeviceHeartbeatBody = {},
+  ) {
     if (deviceId !== principalDeviceId) {
       throw new AppError('forbidden', 'Device can only heartbeat itself', 403);
     }
@@ -284,10 +301,17 @@ export class DevicesService {
       throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
     }
 
+    const now = new Date();
     await this.db.device.update({
       where: { id: deviceId },
       data: {
-        lastHeartbeatAt: new Date(),
+        lastHeartbeatAt: now,
+        ...(body.surveillance
+          ? {
+              surveillanceHealth: body.surveillance,
+              surveillanceHealthAt: now,
+            }
+          : {}),
         ...(device.status === DeviceStatus.provisioning
           ? { status: DeviceStatus.active }
           : {}),

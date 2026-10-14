@@ -39,7 +39,7 @@ void main() {
     dir = Directory.systemTemp.createTempSync('skp_surv_up');
     segment = File(p.join(dir.path, '2026-09-03', '143052_abc.mp4'));
     segment.parent.createSync(recursive: true);
-    segment.writeAsBytesSync(List<int>.filled(16, 7));
+    segment.writeAsBytesSync(List<int>.filled(2048, 7));
   });
 
   tearDown(() {
@@ -110,6 +110,38 @@ void main() {
     expect(queue.items, isEmpty);
     expect(methods.where((m) => m.startsWith('PUT')), isNotEmpty);
     expect(methods.where((m) => m.endsWith('complete')), isNotEmpty);
+    await uploader.detach();
+  });
+
+  test('marks tiny segments failed without calling upload-url', () async {
+    final tiny = File(p.join(dir.path, '2026-09-03', '143152_tiny.mp4'));
+    tiny.writeAsBytesSync(List<int>.filled(16, 1));
+    segment.deleteSync();
+
+    var uploadUrlCalls = 0;
+    final api = ApiClient(
+      config: const AppConfig(apiBaseUrl: 'http://example.test/v1', environment: 'test'),
+      httpClient: MockClient((request) async {
+        uploadUrlCalls += 1;
+        return http.Response('nope', 500);
+      }),
+    );
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final uploader = SurveillanceUploader(
+      api: api,
+      recorder: _StubRecorder(),
+      tickInterval: const Duration(days: 1),
+      rootOverride: dir,
+      queue: queue,
+    );
+    await uploader.attach(deviceId: 'device-1');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(uploadUrlCalls, 0);
+    expect(queue.items.single.isFailed, isTrue);
+    expect(queue.items.single.lastError, 'invalid_segment');
+    expect(uploader.queueStats().failedCount, 1);
     await uploader.detach();
   });
 

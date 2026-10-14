@@ -7,6 +7,7 @@ import 'package:skp_kiosk/core/config/app_config.dart';
 import 'package:skp_kiosk/core/hardware/camera/camera_lease.dart';
 import 'package:skp_kiosk/features/surveillance/application/surveillance_controller.dart';
 import 'package:skp_kiosk/features/surveillance/data/surveillance_recorder.dart';
+import 'package:skp_kiosk/features/surveillance/data/surveillance_upload_queue.dart';
 import 'package:skp_kiosk/features/surveillance/data/surveillance_uploader.dart';
 
 class FakeRecorder implements SurveillanceRecorder {
@@ -63,6 +64,10 @@ class FakeUploadSink implements SurveillanceUploadSink {
   Future<void> detach() async {
     attachedDeviceId = null;
   }
+
+  @override
+  SurveillanceQueueStats queueStats() =>
+      const SurveillanceQueueStats(pendingCount: 0, failedCount: 0);
 }
 
 class _DeviceAuth extends DeviceAuthNotifier {
@@ -187,5 +192,23 @@ void main() {
     expect(uploads.enqueued, hasLength(1));
     expect(uploads.enqueued.single.path, contains('143052_abc.mp4'));
     expect(uploads.enqueued.single.bytes, 42);
+  });
+
+  test('camera error schedules retry and recovers', () async {
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.starts, 1);
+
+    final controller = container.read(surveillanceControllerProvider.notifier);
+    controller.retryDelayFor = (_, __) => const Duration(milliseconds: 20);
+
+    recorder.emit(const SurveillanceNativeEvent('CAMERA_ERROR'));
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(surveillanceControllerProvider).error, 'CAMERA_ERROR');
+    expect(container.read(surveillanceControllerProvider).recording, isFalse);
+
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(recorder.starts, greaterThanOrEqualTo(2));
+    expect(container.read(surveillanceControllerProvider).recording, isTrue);
+    expect(container.read(surveillanceControllerProvider).error, isNull);
   });
 }

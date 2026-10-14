@@ -249,9 +249,9 @@ class _ServiceCatalog extends ConsumerWidget {
                       onTap: () => Navigator.of(context).pushNamed(AppRoutes.charging),
                     ),
                     KioskServiceTile(
-                      icon: Icons.back_hand_outlined,
+                      icon: Icons.auto_awesome,
                       title: 'Astrology',
-                      subtitle: 'Palm reading and birth chart',
+                      subtitle: 'Palm · Chart · Guidance',
                       onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
                     ),
                     KioskServiceTile(

@@ -1,5 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Settings, Video, VideoOff } from 'lucide-react';
+import {
+  CloudUpload,
+  PauseCircle,
+  Settings,
+  Video,
+  VideoOff,
+  AlertTriangle,
+} from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import {
@@ -11,6 +18,10 @@ import {
   Panel,
   StatusBadge,
 } from '../../core/ui/primitives';
+import {
+  resolveRecordingDisplay,
+  type SurveillanceHealth,
+} from '../surveillance/surveillanceStatus';
 
 type Device = {
   id: string;
@@ -23,12 +34,38 @@ type Device = {
   address: string | null;
   lastHeartbeatAt: string | null;
   surveillanceEnabled: boolean;
+  surveillanceHealth?: SurveillanceHealth | null;
+  surveillanceHealthAt?: string | null;
   maxPagesPerSession: number;
   freePagesPerSession: number;
   extraPageChargeRupees: number;
   freeColorPagesPerSession: number;
   extraColorPageChargeRupees: number;
 };
+
+function RecordingStatusCell({ device }: { device: Device }) {
+  const display = resolveRecordingDisplay(device);
+  const Icon =
+    display.key === 'off'
+      ? VideoOff
+      : display.key === 'uploading'
+        ? CloudUpload
+        : display.key === 'paused_palm'
+          ? PauseCircle
+          : display.key === 'camera_error' || display.key === 'storage_low'
+            ? AlertTriangle
+            : Video;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-sm font-medium ${display.className}`}
+      title={display.title}
+    >
+      <Icon className="h-4 w-4" />
+      {display.label}
+    </span>
+  );
+}
 
 type PrintLimitsForm = {
   maxPagesPerSession: number;
@@ -364,17 +401,7 @@ export function KiosksPage() {
                       : '—'}
                   </td>
                   <td>
-                    {device.surveillanceEnabled ? (
-                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
-                        <Video className="h-4 w-4" />
-                        Recording
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-                        <VideoOff className="h-4 w-4" />
-                        Off
-                      </span>
-                    )}
+                    <RecordingStatusCell device={device} />
                   </td>
                   <td>
                     <div className="row-actions">

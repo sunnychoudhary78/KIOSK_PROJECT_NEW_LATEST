@@ -11,6 +11,7 @@ abstract class SurveillanceUploadSink {
   Future<void> attach({required String deviceId});
   Future<void> enqueue({required String path, int? bytes});
   Future<void> detach();
+  SurveillanceQueueStats queueStats();
 }
 
 class SurveillanceUploader implements SurveillanceUploadSink {
@@ -38,8 +39,28 @@ class SurveillanceUploader implements SurveillanceUploadSink {
   String? _deviceId;
   Timer? _timer;
   bool _tickInFlight = false;
+  String? _lastError;
 
   String? get deviceId => _deviceId;
+
+  @override
+  SurveillanceQueueStats queueStats() {
+    final queue = _queue;
+    if (queue == null) {
+      return SurveillanceQueueStats(
+        pendingCount: 0,
+        failedCount: 0,
+        lastError: _lastError,
+      );
+    }
+    final stats = queue.stats();
+    return SurveillanceQueueStats(
+      pendingCount: stats.pendingCount,
+      failedCount: stats.failedCount,
+      oldestQueuedAt: stats.oldestQueuedAt,
+      lastError: stats.lastError ?? _lastError,
+    );
+  }
 
   @override
   Future<void> attach({required String deviceId}) async {
@@ -116,8 +137,10 @@ class SurveillanceUploader implements SurveillanceUploadSink {
         try {
           await _process(queue, deviceId, item);
         } catch (error) {
+          final code = error is ApiException ? error.code : 'upload_failed';
+          _lastError = code;
           AppLogger.error('SURVEILLANCE_UPLOAD_RETRY ${item.filename}', error);
-          await queue.markAttempt(item.path, now: _clock().toUtc());
+          await queue.markAttempt(item.path, now: _clock().toUtc(), error: code);
         }
       }
     } finally {
@@ -143,6 +166,15 @@ class SurveillanceUploader implements SurveillanceUploadSink {
 
     if (item.bytes <= 0) {
       item.bytes = file.lengthSync();
+    }
+
+    if (item.bytes < surveillanceMinSegmentBytes) {
+      AppLogger.error(
+        'SURVEILLANCE_UPLOAD_REJECT ${item.filename} bytes=${item.bytes}',
+      );
+      _lastError = 'invalid_segment';
+      await queue.markFailed(item.path, error: 'invalid_segment');
+      return;
     }
 
     final granted = await _api.post(
@@ -171,9 +203,23 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     }
 
     await _api.putFileToUrl(url: uploadUrl, file: file);
-    await _api.post('/devices/$deviceId/surveillance/segments/$segmentId/complete');
+
+    try {
+      await _api.post('/devices/$deviceId/surveillance/segments/$segmentId/complete');
+    } on ApiException catch (error) {
+      // size_mismatch deletes the bad object server-side; re-PUT on next tick.
+      // upload_incomplete means PUT may not have landed — also retry.
+      if (error.code == 'size_mismatch' ||
+          error.code == 'upload_incomplete' ||
+          error.code == 'invalid_segment') {
+        rethrow;
+      }
+      rethrow;
+    }
+
     await queue.markUploadedPendingDelete(item.path, segmentId: segmentId);
     await _deleteLocal(queue, item);
+    _lastError = null;
     AppLogger.info('SURVEILLANCE_UPLOAD_OK ${item.filename}');
   }
 

@@ -15,7 +15,7 @@ const adminId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 
 const body = {
   filename: '143052_abc.mp4',
-  bytes: 16,
+  bytes: 2048,
   contentType: 'video/mp4' as const,
   recordedOn: '2026-09-03',
 };
@@ -31,7 +31,8 @@ function storageMock(overrides: Partial<ObjectStorageClient> = {}): ObjectStorag
       url: 'https://r2.example/get',
       expiresAt: new Date('2026-09-03T15:15:00.000Z'),
     })),
-    headObject: vi.fn(async () => ({ contentLength: 16 })),
+    headObject: vi.fn(async () => ({ contentLength: 2048 })),
+    deleteObject: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -68,7 +69,7 @@ describe('SurveillanceService.createUploadUrl', () => {
       deviceId,
       objectKey,
       filename: body.filename,
-      byteSize: BigInt(16),
+      byteSize: BigInt(2048),
       status: SurveillanceSegmentStatus.pending_upload,
     }));
     const db = {
@@ -138,7 +139,7 @@ describe('SurveillanceService.complete', () => {
     id: segmentId,
     deviceId,
     objectKey,
-    byteSize: BigInt(16),
+    byteSize: BigInt(2048),
     status: SurveillanceSegmentStatus.pending_upload,
   };
 
@@ -162,18 +163,32 @@ describe('SurveillanceService.complete', () => {
     );
   });
 
-  it('rejects a size mismatch', async () => {
+  it('rejects a size mismatch and deletes the bad object', async () => {
+    const deleteObject = vi.fn(async () => undefined);
+    const update = vi.fn(async () => pending);
     const service = new SurveillanceService(
       {
-        surveillanceSegment: { findUnique: vi.fn(async () => pending) },
+        surveillanceSegment: {
+          findUnique: vi.fn(async () => pending),
+          update,
+        },
       } as unknown as DbClient,
-      storageMock({ headObject: vi.fn(async () => ({ contentLength: 99 })) }),
+      storageMock({
+        headObject: vi.fn(async () => ({ contentLength: 99 })),
+        deleteObject,
+      }),
       { record: vi.fn() } as unknown as AuditService,
     );
     await expect(service.complete(deviceId, deviceId, segmentId)).rejects.toMatchObject({
       code: 'size_mismatch',
       statusCode: 400,
     });
+    expect(deleteObject).toHaveBeenCalledWith(objectKey);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { lastUploadError: 'size_mismatch' },
+      }),
+    );
   });
 
   it('is idempotent when already uploaded', async () => {
@@ -209,7 +224,7 @@ describe('SurveillanceService.complete', () => {
 });
 
 describe('SurveillanceService.listSegments', () => {
-  it('returns uploaded segments for the day ordered by startedAt', async () => {
+  it('returns uploaded and pending segments for the day ordered by startedAt', async () => {
     const findMany = vi.fn(async () => [
       {
         id: segmentId,
@@ -217,7 +232,21 @@ describe('SurveillanceService.listSegments', () => {
         recordedOn: new Date('2026-09-03T00:00:00.000Z'),
         startedAt: new Date('2026-09-03T14:30:52.000Z'),
         byteSize: BigInt(1600),
+        status: SurveillanceSegmentStatus.uploaded,
         uploadedAt: new Date('2026-09-03T14:41:00.000Z'),
+        updatedAt: new Date('2026-09-03T14:41:00.000Z'),
+        lastUploadError: null,
+      },
+      {
+        id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+        filename: '144052_def.mp4',
+        recordedOn: new Date('2026-09-03T00:00:00.000Z'),
+        startedAt: new Date('2026-09-03T14:40:52.000Z'),
+        byteSize: BigInt(2048),
+        status: SurveillanceSegmentStatus.pending_upload,
+        uploadedAt: null,
+        updatedAt: new Date(),
+        lastUploadError: 'size_mismatch',
       },
     ]);
     const db = {
@@ -229,28 +258,29 @@ describe('SurveillanceService.listSegments', () => {
       storageMock(),
       { record: vi.fn() } as unknown as AuditService,
     );
-    const result = await service.listSegments(deviceId, { recordedOn: '2026-09-03' });
+    const result = await service.listSegments(deviceId, {
+      recordedOn: '2026-09-03',
+      status: 'all',
+    });
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           deviceId,
           recordedOn: new Date('2026-09-03T00:00:00.000Z'),
-          status: SurveillanceSegmentStatus.uploaded,
         },
         orderBy: { startedAt: 'asc' },
       }),
     );
-    expect(result).toEqual({
-      items: [
-        {
-          id: segmentId,
-          filename: '143052_abc.mp4',
-          recordedOn: '2026-09-03',
-          startedAt: '2026-09-03T14:30:52.000Z',
-          byteSize: 1600,
-          uploadedAt: '2026-09-03T14:41:00.000Z',
-        },
-      ],
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({
+      id: segmentId,
+      status: 'uploaded',
+      lastUploadError: null,
+    });
+    expect(result.items[1]).toMatchObject({
+      id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+      status: 'pending_upload',
+      lastUploadError: 'size_mismatch',
     });
   });
 
@@ -263,7 +293,7 @@ describe('SurveillanceService.listSegments', () => {
       { record: vi.fn() } as unknown as AuditService,
     );
     await expect(
-      service.listSegments(deviceId, { recordedOn: '2026-09-03' }),
+      service.listSegments(deviceId, { recordedOn: '2026-09-03', status: 'all' }),
     ).rejects.toMatchObject({ code: 'not_found', statusCode: 404 });
   });
 });
@@ -291,10 +321,32 @@ describe('SurveillanceService.createPlaybackUrl', () => {
       url: 'https://r2.example/get',
       expiresAt: '2026-09-03T15:15:00.000Z',
     });
+    expect(storage.headObject).toHaveBeenCalledWith(objectKey);
     expect(storage.presignGet).toHaveBeenCalledWith({ key: objectKey });
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'surveillance.playback', principalId: adminId }),
     );
+  });
+
+  it('rejects when the object is missing from storage', async () => {
+    const service = new SurveillanceService(
+      {
+        surveillanceSegment: {
+          findUnique: vi.fn(async () => ({
+            id: segmentId,
+            deviceId,
+            objectKey,
+            status: SurveillanceSegmentStatus.uploaded,
+          })),
+        },
+      } as unknown as DbClient,
+      storageMock({ headObject: vi.fn(async () => null) }),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+    await expect(service.createPlaybackUrl(deviceId, segmentId, adminId)).rejects.toMatchObject({
+      code: 'object_missing',
+      statusCode: 404,
+    });
   });
 
   it('rejects pending segments', async () => {

@@ -8,6 +8,10 @@ import 'package:skp_kiosk/features/device/data/device_credential_store.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
+/// Set by [SurveillanceController] so heartbeats can report health without a
+/// circular import between auth and surveillance modules.
+Map<String, dynamic> Function()? surveillanceHeartbeatBodyBuilder;
+
 final deviceCredentialStoreProvider = Provider<DeviceCredentialStore>((ref) {
   return DeviceCredentialStore();
 });
@@ -134,7 +138,10 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
 
       if (deviceId != null && deviceId.isNotEmpty) {
         try {
-          final beat = await _api.post('/devices/$deviceId/heartbeat');
+          final beat = await _api.post(
+            '/devices/$deviceId/heartbeat',
+            body: _surveillanceHeartbeatBody(),
+          );
           if (beat.containsKey('surveillanceEnabled')) {
             surveillanceEnabled = beat['surveillanceEnabled'] == true;
           }
@@ -214,7 +221,10 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
         return;
       }
       try {
-        final beat = await _api.post('/devices/$deviceId/heartbeat');
+        final beat = await _api.post(
+          '/devices/$deviceId/heartbeat',
+          body: _surveillanceHeartbeatBody(),
+        );
         final enabled = beat['surveillanceEnabled'] == true;
         if (enabled != state.surveillanceEnabled) {
           state = DeviceAuthState(
@@ -266,6 +276,23 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
   }
 
   String _messageFor(Object error) => userFacingError(error);
+
+  Map<String, dynamic> _surveillanceHeartbeatBody() {
+    final builder = surveillanceHeartbeatBodyBuilder;
+    if (builder != null) {
+      try {
+        return {'surveillance': builder()};
+      } catch (_) {
+        // fall through
+      }
+    }
+    return {
+      'surveillance': {
+        'state': state.surveillanceEnabled ? 'stale' : 'off',
+        'recording': false,
+      },
+    };
+  }
 }
 
 final deviceAuthProvider =

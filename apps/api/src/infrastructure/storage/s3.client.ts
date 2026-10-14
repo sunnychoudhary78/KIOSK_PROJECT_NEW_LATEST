@@ -1,4 +1,10 @@
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { AppConfig } from '../../config/index.js';
 import { AppError } from '../../shared/errors.js';
@@ -22,6 +28,7 @@ export interface ObjectStorageClient {
   presignPut(input: { key: string; contentType: string }): Promise<PresignPutResult>;
   presignGet(input: { key: string }): Promise<PresignGetResult>;
   headObject(key: string): Promise<HeadObjectResult | null>;
+  deleteObject(key: string): Promise<void>;
 }
 
 export function isObjectStorageConfigured(config: AppConfig): boolean {
@@ -50,6 +57,10 @@ class UnconfiguredObjectStorageClient implements ObjectStorageClient {
   }
 
   async headObject(): Promise<HeadObjectResult | null> {
+    throw new AppError('storage_not_configured', 'Object storage is not configured', 503);
+  }
+
+  async deleteObject(): Promise<void> {
     throw new AppError('storage_not_configured', 'Object storage is not configured', 503);
   }
 }
@@ -126,5 +137,14 @@ class S3ObjectStorageClient implements ObjectStorageClient {
       }
       throw error;
     }
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
   }
 }

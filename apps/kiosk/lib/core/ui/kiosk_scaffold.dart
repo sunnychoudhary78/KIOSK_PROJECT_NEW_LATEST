@@ -6,19 +6,22 @@ class KioskScaffold extends StatelessWidget {
     super.key,
     required this.body,
     this.useAtmosphere = true,
+    this.cosmic = false,
   });
 
   final Widget body;
   final bool useAtmosphere;
+  final bool cosmic;
 
   @override
   Widget build(BuildContext context) {
+    final canvas = cosmic ? const Color(0xFF0B1220) : SkpColors.canvas;
     return ColoredBox(
-      color: SkpColors.canvas,
+      color: canvas,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (useAtmosphere) const IgnorePointer(child: KioskAtmosphere()),
+          if (useAtmosphere && !cosmic) const IgnorePointer(child: KioskAtmosphere()),
           body,
         ],
       ),

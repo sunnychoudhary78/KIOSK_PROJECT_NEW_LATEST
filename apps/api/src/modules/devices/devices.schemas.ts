@@ -31,6 +31,40 @@ export const setDeviceSurveillanceSchema = z.object({
 
 export type SetDeviceSurveillanceInput = z.infer<typeof setDeviceSurveillanceSchema>;
 
+export const surveillanceHealthStates = [
+  'off',
+  'recording',
+  'paused_palm',
+  'uploading',
+  'camera_error',
+  'storage_low',
+  'stale',
+  'offline',
+] as const;
+
+export const surveillanceHealthSchema = z.object({
+  state: z.enum(surveillanceHealthStates),
+  recording: z.boolean(),
+  lastSegmentAt: z.string().min(1).nullable().optional(),
+  lastSegmentBytes: z.number().int().nonnegative().nullable().optional(),
+  queuePending: z.number().int().nonnegative().optional(),
+  queueFailed: z.number().int().nonnegative().optional(),
+  oldestQueuedAt: z.string().min(1).nullable().optional(),
+  lastErrorCode: z.string().max(64).nullable().optional(),
+  lastErrorAt: z.string().min(1).nullable().optional(),
+  cameraName: z.string().max(160).nullable().optional(),
+});
+
+export type SurveillanceHealthInput = z.infer<typeof surveillanceHealthSchema>;
+
+export const deviceHeartbeatBodySchema = z
+  .object({
+    surveillance: surveillanceHealthSchema.optional(),
+  })
+  .default({});
+
+export type DeviceHeartbeatBody = z.infer<typeof deviceHeartbeatBodySchema>;
+
 export const setDevicePrintLimitsSchema = z
   .object({
     maxPagesPerSession: z.number().int().min(1).max(100),

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -11,13 +10,18 @@ import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/hardware/camera/kiosk_camera.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
-import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_jpeg.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_phase.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_result_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/palm_overlay.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/palm_seal_ring.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -384,11 +388,13 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     Widget? leading;
     Widget? trailing;
     String step = 'Palm';
+    final palmReady = state.quality?.ok == true;
     switch (state.phase) {
       case AstrologyPhase.capture:
         leading = KioskGhostButton(label: 'Cancel', onPressed: _endSession);
         trailing = KioskPrimaryButton(
-          label: 'Capture palm',
+          label: palmReady ? 'Seal palm reading' : 'Capture palm',
+          gold: true,
           onPressed: _cameraReady ? _captureNow : null,
         );
         step = 'Palm';
@@ -397,25 +403,34 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
           label: 'Retake palm',
           onPressed: () => ref.read(astrologyControllerProvider.notifier).retake(),
         );
-        trailing = KioskPrimaryButton(label: 'Get reading', onPressed: _submit);
+        trailing = KioskPrimaryButton(
+          label: 'Get reading',
+          gold: true,
+          onPressed: _submit,
+        );
         step = 'Details';
       case AstrologyPhase.submitting:
-        step = 'Reading';
+        step = 'Casting';
       case AstrologyPhase.result:
         leading = KioskGhostButton(label: 'New reading', onPressed: _resetForm);
-        trailing = KioskPrimaryButton(label: 'Done', onPressed: _endSession);
+        trailing = KioskPrimaryButton(
+          label: 'Done',
+          gold: true,
+          onPressed: _endSession,
+        );
         step = 'Result';
     }
 
     Widget page = VisitorSessionPopScope(
       child: KioskShell(
         title: 'Astrology',
+        cosmic: true,
         onHome: _endSession,
         stepLabel: step,
         footerLeading: leading,
         footerTrailing: trailing,
         body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
+          duration: const Duration(milliseconds: 280),
           child: switch (state.phase) {
             AstrologyPhase.capture => _CaptureView(
                 key: const ValueKey('capture'),
@@ -447,17 +462,15 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 onKey: _type,
                 onBackspace: _backspace,
               ),
-            AstrologyPhase.submitting => const KioskWaitAds(
+            AstrologyPhase.submitting => const AstrologyCastingView(
                 key: ValueKey('submitting'),
-                message: 'Preparing your reading…',
               ),
             AstrologyPhase.result when state.reading != null => AstrologyResultView(
                 key: const ValueKey('result'),
                 reading: state.reading!,
               ),
-            AstrologyPhase.result => const KioskWaitAds(
+            AstrologyPhase.result => const AstrologyCastingView(
                 key: ValueKey('result-empty'),
-                message: 'Preparing your reading…',
               ),
           },
         ),
@@ -495,8 +508,9 @@ class _CaptureView extends StatefulWidget {
 }
 
 class _CaptureViewState extends State<_CaptureView>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _pulse;
+  late final AnimationController _seal;
 
   @override
   void initState() {
@@ -505,115 +519,271 @@ class _CaptureViewState extends State<_CaptureView>
       vsync: this,
       duration: const Duration(milliseconds: 1100),
     );
-    _syncPulse(widget.quality?.ok == true);
+    _seal = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _syncReady(widget.quality?.ok == true);
   }
 
   @override
   void didUpdateWidget(covariant _CaptureView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _syncPulse(widget.quality?.ok == true);
+    _syncReady(widget.quality?.ok == true);
   }
 
-  void _syncPulse(bool ok) {
+  void _syncReady(bool ok) {
     if (ok) {
       if (!_pulse.isAnimating) {
         _pulse.repeat(reverse: true);
       }
+      if (_seal.status != AnimationStatus.completed) {
+        _seal.forward();
+      }
     } else {
       _pulse.stop();
       _pulse.value = 0;
+      _seal.reverse();
     }
   }
 
   @override
   void dispose() {
     _pulse.dispose();
+    _seal.dispose();
     super.dispose();
+  }
+
+  int get _stepIndex {
+    final quality = widget.quality;
+    if (quality?.ok == true) {
+      return 2;
+    }
+    if (quality != null) {
+      return 1;
+    }
+    return 0;
   }
 
   @override
   Widget build(BuildContext context) {
     final quality = widget.quality;
     final ok = quality?.ok == true;
+    final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 12, 32, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const CosmicBackdrop(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 12, 32, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Open your palm to the stars',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: AstrologyColors.gold,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Place your open palm inside the outline',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: AstrologyColors.muted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _RitualSteps(activeIndex: _stepIndex),
+              const SizedBox(height: 12),
+              Expanded(
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_pulse, _seal]),
+                  builder: (context, child) {
+                    final glow = ok ? 0.35 + (_pulse.value * 0.45) : 0.0;
+                    return Stack(
+                      children: [
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius:
+                                  BorderRadius.circular(SkpTokens.radiusLg),
+                              border: Border.all(
+                                color: AstrologyColors.gold.withValues(
+                                  alpha: ok ? 0.55 : 0.28,
+                                ),
+                              ),
+                              boxShadow: ok
+                                  ? [
+                                      BoxShadow(
+                                        color: AstrologyColors.gold
+                                            .withValues(alpha: glow * 0.45),
+                                        blurRadius: 18 + (_pulse.value * 10),
+                                        spreadRadius: 1,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: child,
+                          ),
+                        ),
+                        if (ok)
+                          const Positioned(
+                            right: 16,
+                            top: 16,
+                            child: AstrologyAssetImage(
+                              asset: AstrologyAssets.sealMedallion,
+                              width: 64,
+                              height: 64,
+                              opacity: 0.92,
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+                    child: ColoredBox(
+                      color: Colors.black,
+                      child: widget.cameraError != null
+                          ? _CameraError(
+                              message: widget.cameraError!,
+                              onRetry: widget.onRetryCamera,
+                            )
+                          : !widget.cameraReady || widget.camera == null
+                              ? const Center(
+                                  child: CircularProgressIndicator(
+                                    color: AstrologyColors.gold,
+                                  ),
+                                )
+                              : Center(
+                                  child: AspectRatio(
+                                    aspectRatio:
+                                        widget.camera!.value.aspectRatio == 0
+                                            ? 16 / 9
+                                            : widget.camera!.value.aspectRatio,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        CameraPreview(widget.camera!),
+                                        const Positioned.fill(
+                                          child: CustomPaint(
+                                            painter: PalmOverlayPainter(),
+                                          ),
+                                        ),
+                                        Positioned.fill(
+                                          child: AnimatedBuilder(
+                                            animation: _seal,
+                                            builder: (context, _) {
+                                              return PalmSealRing(
+                                                progress: _seal.value,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _QualityBanner(quality: quality),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RitualSteps extends StatelessWidget {
+  const _RitualSteps({required this.activeIndex});
+
+  final int activeIndex;
+
+  static const _labels = ['Align', 'Hold', 'Capture'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < _labels.length; i++) ...[
+          if (i > 0)
+            Expanded(
+              child: Container(
+                height: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                color: i <= activeIndex
+                    ? AstrologyColors.gold.withValues(alpha: 0.55)
+                    : AstrologyColors.line,
+              ),
+            ),
+          _RitualChip(
+            label: _labels[i],
+            asset: AstrologyAssets.ritualAssetForIndex(i),
+            active: i <= activeIndex,
+            current: i == activeIndex,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RitualChip extends StatelessWidget {
+  const _RitualChip({
+    required this.label,
+    required this.asset,
+    required this.active,
+    required this.current,
+  });
+
+  final String label;
+  final String asset;
+  final bool active;
+  final bool current;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
+      decoration: BoxDecoration(
+        color: active
+            ? AstrologyColors.gold.withValues(alpha: current ? 0.22 : 0.12)
+            : AstrologyColors.raised,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active
+              ? AstrologyColors.gold.withValues(alpha: 0.65)
+              : AstrologyColors.line,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          ClipOval(
+            child: AstrologyAssetImage(
+              asset: asset,
+              width: 36,
+              height: 36,
+              opacity: active ? 1 : 0.55,
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(
-            'Open your palm to the stars',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: SkpColors.gold,
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: active ? AstrologyColors.gold : AstrologyColors.muted,
+                  letterSpacing: 1.1,
                   fontWeight: FontWeight.w700,
                 ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Place your open palm inside the outline',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: SkpColors.muted,
-                ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _pulse,
-              builder: (context, child) {
-                final glow = ok ? 0.35 + (_pulse.value * 0.45) : 0.0;
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-                    boxShadow: ok
-                        ? [
-                            BoxShadow(
-                              color: SkpColors.gold.withValues(alpha: glow * 0.45),
-                              blurRadius: 18 + (_pulse.value * 10),
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: child,
-                );
-              },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-                child: ColoredBox(
-                  color: Colors.black,
-                  child: widget.cameraError != null
-                      ? _CameraError(
-                          message: widget.cameraError!,
-                          onRetry: widget.onRetryCamera,
-                        )
-                      : !widget.cameraReady || widget.camera == null
-                          ? const Center(child: CircularProgressIndicator())
-                          : Center(
-                              child: AspectRatio(
-                                aspectRatio: widget.camera!.value.aspectRatio == 0
-                                    ? 16 / 9
-                                    : widget.camera!.value.aspectRatio,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    CameraPreview(widget.camera!),
-                                    const Positioned.fill(
-                                      child: CustomPaint(
-                                        painter: PalmOverlayPainter(),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _QualityBanner(quality: quality),
         ],
       ),
     );
@@ -652,10 +822,29 @@ class _QualityBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ok = quality?.ok == true;
-    return KioskStatusBanner(
-      message: quality?.message ?? 'Align your palm with the outline',
-      tone: ok ? KioskBannerTone.warning : KioskBannerTone.info,
-      icon: ok ? Icons.auto_awesome : Icons.back_hand_outlined,
+    return GlassPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      borderColor: ok
+          ? AstrologyColors.gold.withValues(alpha: 0.65)
+          : AstrologyColors.line,
+      child: Row(
+        children: [
+          Icon(
+            ok ? Icons.auto_awesome : Icons.back_hand_outlined,
+            color: AstrologyColors.gold,
+            size: 26,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              quality?.message ?? 'Align your palm with the outline',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AstrologyColors.text,
+                  ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -703,156 +892,357 @@ class _FormView extends StatelessWidget {
     final showKeyboard = focus == 0 || focus == 1;
     final showDate = focus == 2;
     final showTime = focus == 3 && !timeUnknown;
+    final theme = Theme.of(context);
 
-    return Column(
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(32, 8, 32, 8),
-            child: Row(
-              children: [
-                if (palmPreview != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 20),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: SkpColors.gold.withValues(alpha: 0.65),
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: SkpColors.gold.withValues(alpha: 0.22),
-                            blurRadius: 16,
+        const CosmicBackdrop(),
+        Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(32, 8, 32, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (palmPreview != null) ...[
+                      SizedBox(
+                        width: 220,
+                        child: GlassPanel(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  const ClipOval(
+                                    child: AstrologyAssetImage(
+                                      asset: AstrologyAssets.sealMedallion,
+                                      width: 36,
+                                      height: 36,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AstrologyColors.gold
+                                            .withValues(alpha: 0.16),
+                                        borderRadius: BorderRadius.circular(999),
+                                        border: Border.all(
+                                          color: AstrologyColors.gold
+                                              .withValues(alpha: 0.55),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'PALM LOCKED',
+                                        textAlign: TextAlign.center,
+                                        style:
+                                            theme.textTheme.labelMedium?.copyWith(
+                                          color: AstrologyColors.gold,
+                                          letterSpacing: 1.2,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Expanded(
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Image.memory(
+                                        palmPreview!,
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                      ),
+                                    ),
+                                    const Positioned(
+                                      right: 8,
+                                      bottom: 8,
+                                      child: AstrologyAssetImage(
+                                        asset: AstrologyAssets.sealMedallion,
+                                        width: 48,
+                                        height: 48,
+                                        opacity: 0.9,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: Image.memory(
-                          palmPreview!,
-                          width: 140,
-                          height: 180,
-                          fit: BoxFit.cover,
+                      const SizedBox(width: 20),
+                    ],
+                    Expanded(
+                      child: GlassPanel(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                        child: ListView(
+                          children: [
+                            Text(
+                              'Birth details',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                color: AstrologyColors.gold,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tell the stars a little about you',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: AstrologyColors.muted,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            _CosmicTextField(
+                              label: 'Name',
+                              hint: 'Your name',
+                              value: nameController.text,
+                              focused: focus == 0,
+                              onTap: () => onFocus(0),
+                            ),
+                            const SizedBox(height: 10),
+                            _CosmicTextField(
+                              label: 'Place of birth',
+                              hint: 'City, State',
+                              value: placeController.text,
+                              focused: focus == 1,
+                              onTap: () => onFocus(1),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              'Gender',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: AstrologyColors.text,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _GenderSegment(
+                              gender: gender,
+                              onGender: onGender,
+                            ),
+                            const SizedBox(height: 12),
+                            _CosmicTextField(
+                              label: 'Date of birth',
+                              value: dob.toIso8601String().split('T').first,
+                              focused: focus == 2,
+                              onTap: () => onFocus(2),
+                            ),
+                            const SizedBox(height: 10),
+                            _ChoiceTile(
+                              label: 'I do not know the birth time',
+                              selected: timeUnknown,
+                              onTap: () => onTimeUnknown(!timeUnknown),
+                            ),
+                            if (!timeUnknown) ...[
+                              const SizedBox(height: 10),
+                              _CosmicTextField(
+                                label: 'Birth time',
+                                value:
+                                    '${birthTime.hour.toString().padLeft(2, '0')}:${birthTime.minute.toString().padLeft(2, '0')}',
+                                focused: focus == 3,
+                                onTap: () => onFocus(3),
+                              ),
+                            ],
+                            if (error != null) ...[
+                              const SizedBox(height: 12),
+                              GlassPanel(
+                                padding: const EdgeInsets.all(14),
+                                borderColor: AstrologyColors.danger.withValues(alpha: 0.55),
+                                color: AstrologyColors.danger.withValues(alpha: 0.18),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.error_outline,
+                                      color: AstrologyColors.danger,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        error!,
+                                        style: theme.textTheme.bodyLarge?.copyWith(
+                                          color: AstrologyColors.text,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
+            if (showKeyboard)
+              SizedBox(
+                height: 220,
+                child: Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: Theme.of(context).colorScheme.copyWith(
+                          surface: AstrologyColors.panelSolid,
+                          onSurface: AstrologyColors.text,
+                        ),
                   ),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      Text(
-                        'Birth details',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: SkpColors.gold,
-                              fontWeight: FontWeight.w700,
-                            ),
+                  child: KioskKeyboard(onKey: onKey, onBackspace: onBackspace),
+                ),
+              )
+            else if (showDate)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
+                child: SizedBox(
+                  height: 200,
+                  child: KioskDateStepper(value: dob, onChanged: onDob),
+                ),
+              )
+            else if (showTime)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
+                child: SizedBox(
+                  height: 200,
+                  child: KioskTimeStepper(value: birthTime, onChanged: onTime),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CosmicTextField extends StatelessWidget {
+  const _CosmicTextField({
+    required this.label,
+    required this.value,
+    required this.focused,
+    required this.onTap,
+    this.hint,
+  });
+
+  final String label;
+  final String value;
+  final bool focused;
+  final VoidCallback onTap;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: SkpTokens.tapMin),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: AstrologyColors.raised,
+          borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+          border: Border.all(
+            color: focused
+                ? AstrologyColors.gold
+                : AstrologyColors.line,
+            width: focused ? 2 : SkpTokens.hairline,
+          ),
+          boxShadow: focused
+              ? [
+                  BoxShadow(
+                    color: AstrologyColors.gold.withValues(alpha: 0.22),
+                    blurRadius: 12,
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: focused ? AstrologyColors.gold : AstrologyColors.muted,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value.isEmpty ? (hint ?? '') : value,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: value.isEmpty ? AstrologyColors.muted : AstrologyColors.text,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GenderSegment extends StatelessWidget {
+  const _GenderSegment({required this.gender, required this.onGender});
+
+  final String gender;
+  final ValueChanged<String> onGender;
+
+  @override
+  Widget build(BuildContext context) {
+    const options = [
+      ('female', 'Female'),
+      ('male', 'Male'),
+      ('other', 'Other'),
+    ];
+    return Container(
+      height: 64,
+      decoration: BoxDecoration(
+        color: AstrologyColors.raised,
+        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        border: Border.all(color: AstrologyColors.line),
+      ),
+      child: Row(
+        children: [
+          for (final option in options)
+            Expanded(
+              child: InkWell(
+                onTap: () => onGender(option.$1),
+                borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: gender == option.$1
+                            ? AstrologyColors.gold
+                            : Colors.transparent,
+                        width: 3,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tell the stars a little about you',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: SkpColors.muted,
-                            ),
-                      ),
-                      const SizedBox(height: 14),
-                      KioskTextTapField(
-                        label: 'Name',
-                        hint: 'Your name',
-                        value: nameController.text,
-                        focused: focus == 0,
-                        onTap: () => onFocus(0),
-                      ),
-                      const SizedBox(height: 10),
-                      KioskTextTapField(
-                        label: 'Place of birth',
-                        hint: 'City, State',
-                        value: placeController.text,
-                        focused: focus == 1,
-                        onTap: () => onFocus(1),
-                      ),
-                      const SizedBox(height: 14),
-                      Text('Gender', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          for (final option in const [
-                            ('female', 'Female'),
-                            ('male', 'Male'),
-                            ('other', 'Other'),
-                          ]) ...[
-                            Expanded(
-                              child: _ChoiceTile(
-                                label: option.$2,
-                                selected: gender == option.$1,
-                                onTap: () => onGender(option.$1),
-                              ),
-                            ),
-                            if (option.$1 != 'other') const SizedBox(width: 8),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      KioskTextTapField(
-                        label: 'Date of birth',
-                        value: dob.toIso8601String().split('T').first,
-                        focused: focus == 2,
-                        onTap: () => onFocus(2),
-                      ),
-                      const SizedBox(height: 10),
-                      _ChoiceTile(
-                        label: 'I do not know the birth time',
-                        selected: timeUnknown,
-                        onTap: () => onTimeUnknown(!timeUnknown),
-                      ),
-                      if (!timeUnknown) ...[
-                        const SizedBox(height: 10),
-                        KioskTextTapField(
-                          label: 'Birth time',
-                          value:
-                              '${birthTime.hour.toString().padLeft(2, '0')}:${birthTime.minute.toString().padLeft(2, '0')}',
-                          focused: focus == 3,
-                          onTap: () => onFocus(3),
+                    ),
+                  ),
+                  child: Text(
+                    option.$2,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: gender == option.$1
+                              ? AstrologyColors.gold
+                              : AstrologyColors.muted,
+                          fontWeight:
+                              gender == option.$1 ? FontWeight.w700 : FontWeight.w500,
                         ),
-                      ],
-                      if (error != null) ...[
-                        const SizedBox(height: 12),
-                        KioskStatusBanner(
-                          message: error!,
-                          tone: KioskBannerTone.danger,
-                          icon: Icons.error_outline,
-                        ),
-                      ],
-                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-        if (showKeyboard)
-          SizedBox(
-            height: 220,
-            child: KioskKeyboard(onKey: onKey, onBackspace: onBackspace),
-          )
-        else if (showDate)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
-            child: SizedBox(
-              height: 200,
-              child: KioskDateStepper(value: dob, onChanged: onDob),
-            ),
-          )
-        else if (showTime)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
-            child: SizedBox(
-              height: 200,
-              child: KioskTimeStepper(value: birthTime, onChanged: onTime),
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -871,7 +1261,9 @@ class _ChoiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? SkpColors.accent.withValues(alpha: 0.28) : SkpColors.raised,
+      color: selected
+          ? AstrologyColors.gold.withValues(alpha: 0.18)
+          : AstrologyColors.raised,
       borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
       child: InkWell(
         onTap: onTap,
@@ -881,13 +1273,15 @@ class _ChoiceTile extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-            border: Border.all(color: selected ? SkpColors.accentBright : SkpColors.line),
+            border: Border.all(
+              color: selected ? AstrologyColors.gold : AstrologyColors.line,
+            ),
           ),
           child: Text(
             label,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: selected ? SkpColors.accentBright : SkpColors.text,
+                  color: selected ? AstrologyColors.gold : AstrologyColors.text,
                 ),
           ),
         ),

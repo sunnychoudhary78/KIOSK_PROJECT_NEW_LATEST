@@ -3,6 +3,7 @@ import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/kiosk_buttons.dart';
 import 'package:skp_kiosk/core/ui/kiosk_clock.dart';
 import 'package:skp_kiosk/core/ui/kiosk_scaffold.dart';
+import 'package:skp_kiosk/features/surveillance/presentation/surveillance_status_chip.dart';
 
 /// Persistent ATM chrome: wordmark + clock + Home, optional footer CTAs.
 class KioskShell extends StatelessWidget {
@@ -17,6 +18,7 @@ class KioskShell extends StatelessWidget {
     this.stepLabel,
     this.footerTrailing,
     this.headerExtra,
+    this.cosmic = false,
   });
 
   final Widget body;
@@ -28,6 +30,7 @@ class KioskShell extends StatelessWidget {
   final String? stepLabel;
   final Widget? footerTrailing;
   final Widget? headerExtra;
+  final bool cosmic;
 
   bool get _hasFooter =>
       footerLeading != null || stepLabel != null || footerTrailing != null;
@@ -35,7 +38,14 @@ class KioskShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return KioskScaffold(
+    final brand = cosmic ? SkpColors.gold : SkpColors.accent;
+    final muted = cosmic ? const Color(0xFFA8B0BC) : SkpColors.muted;
+    final divider = cosmic ? const Color(0x33E8C872) : SkpColors.line;
+    final titleColor = cosmic ? const Color(0xFFF4F0E6) : SkpColors.muted;
+
+    Widget chrome = KioskScaffold(
+      cosmic: cosmic,
+      useAtmosphere: !cosmic,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -50,7 +60,7 @@ class KioskShell extends StatelessWidget {
                     style: theme.textTheme.titleLarge?.copyWith(
                       letterSpacing: 1.2,
                       fontWeight: FontWeight.w800,
-                      color: SkpColors.accent,
+                      color: brand,
                     ),
                   ),
                   if (title != null) ...[
@@ -58,7 +68,7 @@ class KioskShell extends StatelessWidget {
                     Container(
                       width: SkpTokens.hairline,
                       height: 28,
-                      color: SkpColors.line,
+                      color: divider,
                     ),
                     const SizedBox(width: 16),
                     Flexible(
@@ -66,7 +76,7 @@ class KioskShell extends StatelessWidget {
                         title!,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: SkpColors.muted,
+                          color: titleColor,
                         ),
                       ),
                     ),
@@ -79,12 +89,21 @@ class KioskShell extends StatelessWidget {
                       child: Text(
                         subtitle!,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: SkpColors.muted,
+                          color: muted,
                         ),
                       ),
                     ),
                   ?headerExtra,
-                  const KioskClock(),
+                  if (!cosmic) const SurveillanceStatusChip(),
+                  DefaultTextStyle.merge(
+                    style: TextStyle(color: cosmic ? const Color(0xFFF4F0E6) : null),
+                    child: IconTheme.merge(
+                      data: IconThemeData(
+                        color: cosmic ? const Color(0xFFF4F0E6) : null,
+                      ),
+                      child: const KioskClock(),
+                    ),
+                  ),
                   if (showHome && onHome != null) ...[
                     const SizedBox(width: 16),
                     SizedBox(
@@ -94,6 +113,11 @@ class KioskShell extends StatelessWidget {
                         icon: const Icon(Icons.home_outlined, size: 22),
                         label: const Text('Home'),
                         style: OutlinedButton.styleFrom(
+                          foregroundColor:
+                              cosmic ? const Color(0xFFF4F0E6) : null,
+                          side: cosmic
+                              ? const BorderSide(color: Color(0x55E8C872))
+                              : null,
                           minimumSize: const Size(112, 56),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                         ),
@@ -104,10 +128,10 @@ class KioskShell extends StatelessWidget {
               ),
             ),
           ),
-          const Divider(height: 1),
+          Divider(height: 1, color: divider),
           Expanded(child: body),
           if (_hasFooter) ...[
-            const Divider(height: 1),
+            Divider(height: 1, color: divider),
             SizedBox(
               height: SkpTokens.footerHeight,
               child: Padding(
@@ -128,7 +152,9 @@ class KioskShell extends StatelessWidget {
                               stepLabel!,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.titleMedium?.copyWith(
-                                color: SkpColors.muted,
+                                color: cosmic ? SkpColors.gold : SkpColors.muted,
+                                letterSpacing: cosmic ? 1.1 : null,
+                                fontWeight: cosmic ? FontWeight.w600 : null,
                               ),
                             ),
                     ),
@@ -154,6 +180,27 @@ class KioskShell extends StatelessWidget {
           ],
         ],
       ),
+    );
+
+    if (!cosmic) {
+      return chrome;
+    }
+
+    return Theme(
+      data: theme.copyWith(
+        colorScheme: theme.colorScheme.copyWith(
+          outline: const Color(0x55E8C872),
+          onSurface: const Color(0xFFF4F0E6),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFF4F0E6),
+            side: const BorderSide(color: Color(0x55E8C872)),
+          ),
+        ),
+        dividerColor: divider,
+      ),
+      child: chrome,
     );
   }
 }

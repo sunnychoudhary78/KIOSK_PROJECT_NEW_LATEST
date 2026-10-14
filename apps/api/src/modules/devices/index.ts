@@ -8,6 +8,7 @@ import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { DevicesService } from './devices.service.js';
 import {
+  deviceHeartbeatBodySchema,
   nearbyDevicesQuerySchema,
   registerDeviceSchema,
   setDevicePrintLimitsSchema,
@@ -136,6 +137,7 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
   router.post(
     '/devices/:deviceId/heartbeat',
     ...requireDevice(deps),
+    validateBody(deviceHeartbeatBodySchema),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         if (!req.principal?.deviceId) {
@@ -144,6 +146,7 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
         const result = await service.heartbeat(
           requireParam(req.params.deviceId, 'deviceId'),
           req.principal.deviceId,
+          req.body,
         );
         res.json(result);
       } catch (error) {
