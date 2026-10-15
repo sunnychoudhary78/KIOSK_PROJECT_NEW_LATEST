@@ -101,19 +101,19 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'Smart Kiosk Mobile'**
+  /// **'IMT-Print'**
   String get appTitle;
 
   /// No description provided for @brandName.
   ///
   /// In en, this message translates to:
-  /// **'Smart Kiosk'**
+  /// **'IMT-Print'**
   String get brandName;
 
   /// No description provided for @guestSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Upload documents, get a print OTP by SMS, and collect prints at any Smart Kiosk.'**
+  /// **'Upload documents, get a print OTP by SMS, and collect prints at any IMT-Print kiosk.'**
   String get guestSubtitle;
 
   /// No description provided for @signInCta.
@@ -401,7 +401,7 @@ abstract class AppLocalizations {
   /// No description provided for @about.
   ///
   /// In en, this message translates to:
-  /// **'About Smart Kiosk'**
+  /// **'About IMT-Print'**
   String get about;
 
   /// No description provided for @signOut.
@@ -500,10 +500,16 @@ abstract class AppLocalizations {
   /// **'Choose the kiosk where you will print'**
   String get chooseKioskToContinue;
 
+  /// No description provided for @kioskFreeDisabledNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Free pages are not available at this kiosk right now. Extra pages are charged as usual.'**
+  String get kioskFreeDisabledNow;
+
   /// No description provided for @kioskPrintPricing.
   ///
   /// In en, this message translates to:
-  /// **'First {free} page(s) free, then ₹{charge} each. Max {max} pages.'**
+  /// **'Up to {free} free page(s) per visit (within your phone quota), then ₹{charge} each. Max {max} pages.'**
   String kioskPrintPricing(int free, int charge, int max);
 
   /// No description provided for @printOnlyAtKiosk.
@@ -677,7 +683,7 @@ abstract class AppLocalizations {
   /// No description provided for @noKiosksHelper.
   ///
   /// In en, this message translates to:
-  /// **'Pull to refresh, or try again when you are closer to a Smart Kiosk.'**
+  /// **'Pull to refresh, or try again when you are closer to an IMT-Print kiosk.'**
   String get noKiosksHelper;
 
   /// No description provided for @locationRequired.
@@ -767,13 +773,13 @@ abstract class AppLocalizations {
   /// No description provided for @aboutTitle.
   ///
   /// In en, this message translates to:
-  /// **'About Smart Kiosk'**
+  /// **'About IMT-Print'**
   String get aboutTitle;
 
   /// No description provided for @aboutBody.
   ///
   /// In en, this message translates to:
-  /// **'Smart Kiosk Platform lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.'**
+  /// **'IMT-Print lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.'**
   String get aboutBody;
 
   /// No description provided for @howItWorksIntro.
@@ -815,7 +821,7 @@ abstract class AppLocalizations {
   /// No description provided for @howItWorksStep3Body.
   ///
   /// In en, this message translates to:
-  /// **'Find a nearby Smart Kiosk, enter the OTP on the screen, preview, and collect your prints.'**
+  /// **'Find a nearby IMT-Print kiosk, enter the OTP on the screen, preview, and collect your prints.'**
   String get howItWorksStep3Body;
 
   /// No description provided for @sessionExpired.

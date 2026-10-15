@@ -23,11 +23,17 @@ export function quoteOtpPrintPages(
     | 'extraColorPageChargeRupees'
   >,
   printColorMode: PrintColorMode = 'bw',
+  /** When set, overrides the kiosk free-per-session cap for this quote. */
+  effectiveFreePages?: number,
 ): PrintQuote {
   const color = printColorMode === 'color';
   const freePages = Math.max(
     0,
-    color ? config.freeColorPagesPerSession : config.freePagesPerSession,
+    effectiveFreePages !== undefined
+      ? effectiveFreePages
+      : color
+        ? config.freeColorPagesPerSession
+        : config.freePagesPerSession,
   );
   const extraPages = Math.max(0, pageCount - freePages);
   const chargePerPageRupees = Math.max(

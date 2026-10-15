@@ -2,6 +2,7 @@ import { PrintColorMode, PrintJobSource, PrintJobStatus } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
+import { PrintQuotaService } from '../print_quota/print_quota.service.js';
 import type { UpdatePrintJobStatusInput } from './printing.schemas.js';
 
 function mapJob(job: {
@@ -35,6 +36,7 @@ export type CreatePrintJobInput = {
   source: PrintJobSource;
   title: string;
   pageCount?: number;
+  freePagesGranted?: number;
   printColorMode?: PrintColorMode;
   deviceId?: string;
   payloadUrl?: string;
@@ -44,10 +46,14 @@ export type CreatePrintJobInput = {
 };
 
 export class PrintingService {
+  private readonly quota: PrintQuotaService;
+
   constructor(
     private readonly db: DbClient,
     private readonly audit: AuditService,
-  ) {}
+  ) {
+    this.quota = new PrintQuotaService(db, audit);
+  }
 
   async createJob(input: CreatePrintJobInput, principalType: 'citizen' | 'device' | 'system', principalId?: string, correlationId?: string) {
     if (input.idempotencyKey) {
@@ -64,6 +70,7 @@ export class PrintingService {
         source: input.source,
         title: input.title,
         pageCount: input.pageCount ?? 1,
+        freePagesGranted: input.freePagesGranted ?? 0,
         printColorMode: input.printColorMode ?? PrintColorMode.bw,
         deviceId: input.deviceId,
         payloadUrl: input.payloadUrl,
@@ -151,6 +158,12 @@ export class PrintingService {
         errorMessage: input.errorMessage,
       },
     });
+
+    if (status === PrintJobStatus.completed) {
+      await this.quota.consumeForPrintJob(jobId).catch(() => undefined);
+    } else if (status === PrintJobStatus.failed) {
+      await this.quota.releaseForPrintJob(jobId).catch(() => undefined);
+    }
 
     await this.audit.record({
       action: `print_job.${status}`,

@@ -2,6 +2,7 @@ export const SMS_CONFIG_KEY = 'sms_config';
 export const OTP_PRINT_CONFIG_KEY = 'otp_print_config';
 export const QUICK_PRINT_CONFIG_KEY = 'quick_print_config';
 export const CITIZEN_AUTH_CONFIG_KEY = 'citizen_auth_config';
+export const PRINT_FREE_QUOTA_CONFIG_KEY = 'print_free_quota_config';
 
 export type OtpPrintConfig = {
   ttlSeconds: number;
@@ -22,6 +23,14 @@ export type CitizenAuthConfig = {
   requestCooldownSeconds: number;
 };
 
+export type PrintFreeQuotaPeriod = 'daily' | 'weekly' | 'monthly';
+
+export type PrintFreeQuotaConfig = {
+  period: PrintFreeQuotaPeriod;
+  freeBwPages: number;
+  freeColorPages: number;
+};
+
 export const DEFAULT_OTP_PRINT_CONFIG: OtpPrintConfig = {
   ttlSeconds: 1800,
   otpLength: 6,
@@ -39,4 +48,10 @@ export const DEFAULT_CITIZEN_AUTH_CONFIG: CitizenAuthConfig = {
   otpLength: 6,
   maxVerifyAttempts: 5,
   requestCooldownSeconds: 60,
+};
+
+export const DEFAULT_PRINT_FREE_QUOTA_CONFIG: PrintFreeQuotaConfig = {
+  period: 'daily',
+  freeBwPages: 5,
+  freeColorPages: 0,
 };

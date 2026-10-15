@@ -90,6 +90,8 @@ class OtpChallenge {
     this.printJob,
     this.deviceId,
     this.deviceName,
+    this.freePagesGranted = 0,
+    this.freeDisabledNow = false,
   });
 
   final String id;
@@ -106,6 +108,8 @@ class OtpChallenge {
   final PrintJobSummary? printJob;
   final String? deviceId;
   final String? deviceName;
+  final int freePagesGranted;
+  final bool freeDisabledNow;
 
   String get printColorLabel => printColorMode == 'color' ? 'Color' : 'Black & white';
 
@@ -142,6 +146,8 @@ class OtpChallenge {
       printJob: jobRaw is Map<String, dynamic> ? PrintJobSummary.fromJson(jobRaw) : null,
       deviceId: json['deviceId'] as String?,
       deviceName: json['deviceName'] as String?,
+      freePagesGranted: _asInt(json['freePagesGranted']),
+      freeDisabledNow: json['freeDisabledNow'] as bool? ?? false,
     );
   }
 }

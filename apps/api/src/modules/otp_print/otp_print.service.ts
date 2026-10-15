@@ -14,6 +14,8 @@ import { PlatformSettingsService } from '../platform_settings/platform_settings.
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { printLimitsFromDevice } from '../devices/device_print_limits.js';
+import { PrintQuotaService } from '../print_quota/print_quota.service.js';
+import { isWithinLocalTimeWindow } from '../print_quota/print_quota.time.js';
 import { quoteOtpPrintPages, type PrintColorMode as QuoteColorMode, type PrintQuote } from './otp_print.quote.js';
 import type { RedeemOtpInput, UploadedPdf } from './otp_print.schemas.js';
 
@@ -31,6 +33,8 @@ type ChallengeWithDocs = OtpChallenge & {
     extraPageChargeRupees?: number;
     freeColorPagesPerSession?: number;
     extraColorPageChargeRupees?: number;
+    freeDisabledFromLocal?: string | null;
+    freeDisabledToLocal?: string | null;
   } | null;
 };
 
@@ -42,6 +46,8 @@ const deviceQuoteSelect = {
   extraPageChargeRupees: true,
   freeColorPagesPerSession: true,
   extraColorPageChargeRupees: true,
+  freeDisabledFromLocal: true,
+  freeDisabledToLocal: true,
 } as const;
 
 async function countPdfPages(buffer: Buffer): Promise<number> {
@@ -64,6 +70,7 @@ function quoteFromPayment(payment: Payment): PrintQuote {
 
 export class OtpPrintService {
   private readonly settings: PlatformSettingsService;
+  private readonly quota: PrintQuotaService;
 
   constructor(
     private readonly db: DbClient,
@@ -74,6 +81,7 @@ export class OtpPrintService {
     private readonly sms: SmsClient,
   ) {
     this.settings = new PlatformSettingsService(db, audit);
+    this.quota = new PrintQuotaService(db, audit);
   }
 
   async createChallenge(
@@ -99,6 +107,8 @@ export class OtpPrintService {
         extraPageChargeRupees: true,
         freeColorPagesPerSession: true,
         extraColorPageChargeRupees: true,
+        freeDisabledFromLocal: true,
+        freeDisabledToLocal: true,
       },
     });
     if (!device) {
@@ -174,10 +184,16 @@ export class OtpPrintService {
       throw new AppError('phone_required', 'Citizen account must have a phone number', 400);
     }
 
-    const quote = quoteOtpPrintPages(totalPages, printLimits, printColorMode);
+    const { quote, effective } = await this.quota.buildQuote({
+      phone: user.phone,
+      device,
+      mode: printColorMode,
+      pageCount: totalPages,
+    });
     const persistedColorMode =
       printColorMode === 'color' ? PrintColorMode.color : PrintColorMode.bw;
     const paymentRequired = quote.paymentRequired;
+    const freePagesGranted = quote.freePages;
     if (paymentRequired && (!this.config.razorpay.keyId || !this.config.razorpay.keySecret)) {
       throw new AppError(
         'payments_not_configured',
@@ -220,36 +236,48 @@ export class OtpPrintService {
       }
 
       if (paymentRequired) {
-        const challenge = await this.db.otpChallenge.create({
-          data: {
-            id: challengeId,
-            userId,
-            deviceId: device.id,
-            documentLabel: label,
-            pageCount: totalPages,
-            printColorMode: persistedColorMode,
-            expiresAt,
-            status: OtpChallengeStatus.awaiting_payment,
-            documents: { create: documentRows },
-            payment: {
-              create: {
-                userId,
-                status: PaymentStatus.PENDING,
-                pageCount: quote.pageCount,
-                freePages: quote.freePages,
-                extraPages: quote.extraPages,
-                printColorMode: persistedColorMode,
-                amountPaise: quote.amountPaise,
-                currency: quote.currency,
-                expiresAt,
+        const challenge = await this.db.$transaction(async (tx) => {
+          const created = await tx.otpChallenge.create({
+            data: {
+              id: challengeId,
+              userId,
+              deviceId: device.id,
+              documentLabel: label,
+              pageCount: totalPages,
+              freePagesGranted,
+              printColorMode: persistedColorMode,
+              expiresAt,
+              status: OtpChallengeStatus.awaiting_payment,
+              documents: { create: documentRows },
+              payment: {
+                create: {
+                  userId,
+                  status: PaymentStatus.PENDING,
+                  pageCount: quote.pageCount,
+                  freePages: quote.freePages,
+                  extraPages: quote.extraPages,
+                  printColorMode: persistedColorMode,
+                  amountPaise: quote.amountPaise,
+                  currency: quote.currency,
+                  expiresAt,
+                },
               },
             },
-          },
-          include: {
-            documents: { orderBy: { sortOrder: 'asc' } },
-            payment: true,
-            device: { select: deviceQuoteSelect },
-          },
+            include: {
+              documents: { orderBy: { sortOrder: 'asc' } },
+              payment: true,
+              device: { select: deviceQuoteSelect },
+            },
+          });
+          await this.quota.reserveFreePages({
+            phone: user.phone!,
+            mode: printColorMode,
+            pages: freePagesGranted,
+            periodKey: effective.periodKey,
+            otpChallengeId: created.id,
+            tx,
+          });
+          return created;
         });
 
         await this.audit.record({
@@ -268,14 +296,17 @@ export class OtpPrintService {
             paymentRequired: true,
             extraPages: quote.extraPages,
             amountPaise: quote.amountPaise,
+            freePagesGranted,
+            freeDisabledNow: effective.freeDisabledNow,
           },
         });
 
-        return this.toPublicChallenge(challenge, quote);
+        return this.toPublicChallenge(challenge, quote, effective);
       }
 
       const code = generateNumericOtp(otpLength);
-      const challenge = await this.db.otpChallenge.create({
+      const challenge = await this.db.$transaction(async (tx) => {
+        const created = await tx.otpChallenge.create({
           data: {
             id: challengeId,
             userId,
@@ -284,6 +315,7 @@ export class OtpPrintService {
             codeHint: code.slice(-2),
             documentLabel: label,
             pageCount: totalPages,
+            freePagesGranted,
             printColorMode: persistedColorMode,
             expiresAt,
             status: OtpChallengeStatus.pending,
@@ -295,10 +327,21 @@ export class OtpPrintService {
             device: { select: deviceQuoteSelect },
           },
         });
+        await this.quota.reserveFreePages({
+          phone: user.phone!,
+          mode: printColorMode,
+          pages: freePagesGranted,
+          periodKey: effective.periodKey,
+          otpChallengeId: created.id,
+          tx,
+        });
+        return created;
+      });
 
       try {
         await this.sms.sendOtp(user.phone, code, ttlSeconds);
       } catch (error) {
+        await this.quota.releaseForChallenge(challenge.id).catch(() => undefined);
         await this.db.otpChallenge.delete({ where: { id: challenge.id } }).catch(() => undefined);
         await rm(challengeDir, { recursive: true, force: true }).catch(() => undefined);
         throw new AppError('sms_failed', sanitizeOtpDeliveryError(error), 502);
@@ -318,10 +361,12 @@ export class OtpPrintService {
           deviceId: device.id,
           printColorMode: quote.printColorMode,
           paymentRequired: false,
+          freePagesGranted,
+          freeDisabledNow: effective.freeDisabledNow,
         },
       });
 
-      return this.toPublicChallenge(challenge, quote);
+      return this.toPublicChallenge(challenge, quote, effective);
     } catch (error) {
       await rm(challengeDir, { recursive: true, force: true }).catch(() => undefined);
       throw error;
@@ -505,6 +550,7 @@ export class OtpPrintService {
         where: { id: challenge.id },
         data: { status: OtpChallengeStatus.cancelled },
       });
+      await this.quota.releaseForChallenge(challenge.id).catch(() => undefined);
       throw new AppError('otp_locked', 'Too many invalid attempts for this OTP', 400);
     }
 
@@ -513,6 +559,7 @@ export class OtpPrintService {
         where: { id: challenge.id },
         data: { status: OtpChallengeStatus.expired },
       });
+      await this.quota.releaseForChallenge(challenge.id).catch(() => undefined);
       throw new AppError('otp_expired', 'OTP has expired', 400);
     }
 
@@ -525,6 +572,7 @@ export class OtpPrintService {
         source: PrintJobSource.otp_print,
         title: challenge.documentLabel,
         pageCount: challenge.pageCount,
+        freePagesGranted: challenge.freePagesGranted,
         printColorMode: challenge.printColorMode,
         deviceId,
         payloadUrl: `/v1/otp-challenges/${challenge.id}/documents`,
@@ -543,6 +591,10 @@ export class OtpPrintService {
         deviceId,
         printJobId: printJob.id,
       },
+    });
+    await this.quota.attachPrintJob({
+      printJobId: printJob.id,
+      otpChallengeId: challenge.id,
     });
 
     await this.audit.record({
@@ -594,15 +646,28 @@ export class OtpPrintService {
       challenge.pageCount,
       printLimitsFromDevice(challenge.device),
       challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
+      challenge.freePagesGranted,
     );
   }
 
-  toPublicChallenge(challenge: ChallengeWithDocs, quote: PrintQuote) {
+  toPublicChallenge(
+    challenge: ChallengeWithDocs,
+    quote: PrintQuote,
+    quotaMeta?: { freeDisabledNow?: boolean; remainingBefore?: number; periodKey?: string },
+  ) {
     const paymentRequired =
       challenge.status === OtpChallengeStatus.awaiting_payment || quote.paymentRequired;
     const otpSent =
       challenge.status === OtpChallengeStatus.pending ||
       challenge.status === OtpChallengeStatus.redeemed;
+    const limits = printLimitsFromDevice(challenge.device);
+    const freeDisabledNow =
+      quotaMeta?.freeDisabledNow ??
+      isWithinLocalTimeWindow(
+        new Date(),
+        limits.freeDisabledFromLocal,
+        limits.freeDisabledToLocal,
+      );
     return {
       id: challenge.id,
       status: challenge.status,
@@ -611,9 +676,11 @@ export class OtpPrintService {
       expiresAt: challenge.expiresAt.toISOString(),
       documentLabel: challenge.documentLabel,
       pageCount: challenge.pageCount,
+      freePagesGranted: challenge.freePagesGranted,
       printColorMode: challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
       deviceId: challenge.deviceId,
       deviceName: challenge.device?.name ?? null,
+      freeDisabledNow,
       documents: challenge.documents.map((d) => ({
         id: d.id,
         fileName: d.fileName,

@@ -6,17 +6,21 @@ import {
   CITIZEN_AUTH_CONFIG_KEY,
   DEFAULT_CITIZEN_AUTH_CONFIG,
   DEFAULT_OTP_PRINT_CONFIG,
+  DEFAULT_PRINT_FREE_QUOTA_CONFIG,
   DEFAULT_QUICK_PRINT_CONFIG,
   OTP_PRINT_CONFIG_KEY,
+  PRINT_FREE_QUOTA_CONFIG_KEY,
   QUICK_PRINT_CONFIG_KEY,
   SMS_CONFIG_KEY,
   type CitizenAuthConfig,
   type OtpPrintConfig,
+  type PrintFreeQuotaConfig,
   type QuickPrintConfig,
 } from './platform_settings.defaults.js';
 import {
   citizenAuthConfigSchema,
   otpPrintConfigSchema,
+  printFreeQuotaConfigSchema,
   quickPrintConfigSchema,
   type UpdatePlatformSettingInput,
 } from './platform_settings.schemas.js';
@@ -83,6 +87,18 @@ export class PlatformSettingsService {
       ...asObject(row.settingValue),
     });
     return parsed.success ? parsed.data : { ...DEFAULT_CITIZEN_AUTH_CONFIG };
+  }
+
+  async getPrintFreeQuotaConfig(): Promise<PrintFreeQuotaConfig> {
+    const row = await this.getRaw(PRINT_FREE_QUOTA_CONFIG_KEY);
+    if (!row) {
+      return { ...DEFAULT_PRINT_FREE_QUOTA_CONFIG };
+    }
+    const parsed = printFreeQuotaConfigSchema.safeParse({
+      ...DEFAULT_PRINT_FREE_QUOTA_CONFIG,
+      ...asObject(row.settingValue),
+    });
+    return parsed.success ? parsed.data : { ...DEFAULT_PRINT_FREE_QUOTA_CONFIG };
   }
 
   async update(
@@ -168,6 +184,20 @@ export class PlatformSettingsService {
         throw new AppError(
           'validation_error',
           parsed.error.issues[0]?.message ?? 'Invalid citizen_auth_config',
+          400,
+        );
+      }
+      return parsed.data;
+    }
+    if (settingKey === PRINT_FREE_QUOTA_CONFIG_KEY) {
+      const parsed = printFreeQuotaConfigSchema.safeParse({
+        ...DEFAULT_PRINT_FREE_QUOTA_CONFIG,
+        ...asObject(raw),
+      });
+      if (!parsed.success) {
+        throw new AppError(
+          'validation_error',
+          parsed.error.issues[0]?.message ?? 'Invalid print_free_quota_config',
           400,
         );
       }

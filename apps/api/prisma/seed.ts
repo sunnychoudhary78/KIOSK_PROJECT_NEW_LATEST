@@ -161,6 +161,20 @@ async function main() {
     },
   });
 
+  await prisma.platformSetting.upsert({
+    where: { settingKey: 'print_free_quota_config' },
+    update: {},
+    create: {
+      settingKey: 'print_free_quota_config',
+      description: 'Global per-phone free print page quota',
+      settingValue: {
+        period: 'daily',
+        freeBwPages: 5,
+        freeColorPages: 0,
+      },
+    },
+  });
+
   const existingAdvertiser = await prisma.advertiser.findFirst({
     where: { tenantId: tenant.id, name: 'Demo Advertiser' },
   });

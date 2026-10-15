@@ -14,7 +14,11 @@ import { PaymentsService } from '../payments/payments.service.js';
 import { RazorpayClient } from '../payments/razorpay.client.js';
 import { parsePrintColorMode, type UploadedPdf } from '../otp_print/otp_print.schemas.js';
 import { QuickPrintService } from './quick_print.service.js';
-import { verifyQuickPrintPaymentSchema } from './quick_print.schemas.js';
+import {
+  quickPrintPhoneOtpRequestSchema,
+  quickPrintPhoneOtpVerifySchema,
+  verifyQuickPrintPaymentSchema,
+} from './quick_print.schemas.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -42,6 +46,7 @@ function createService(deps: AppDeps): QuickPrintService {
     services,
     razorpay,
     payments,
+    deps.sms,
   );
 }
 
@@ -155,6 +160,36 @@ export function registerQuickPrintModule(router: Router, deps: AppDeps): void {
       try {
         const token = requireParam(req.params.token, 'token');
         res.json(await service.getByToken(token));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/quick-print/public/sessions/:token/otp-request',
+    publicLimiter,
+    validateBody(quickPrintPhoneOtpRequestSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const token = requireParam(req.params.token, 'token');
+        res.json(await service.requestPhoneOtp(token, req.body.phone, req.correlationId));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/quick-print/public/sessions/:token/otp-verify',
+    publicLimiter,
+    validateBody(quickPrintPhoneOtpVerifySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const token = requireParam(req.params.token, 'token');
+        res.json(
+          await service.verifyPhoneOtp(token, req.body.phone, req.body.otp, req.correlationId),
+        );
       } catch (error) {
         next(error);
       }

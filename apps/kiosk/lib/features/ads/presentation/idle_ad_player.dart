@@ -541,6 +541,7 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
         key: ValueKey('idle-ad-slot-$slot'),
         controller: _slots[slot].controller,
         fit: BoxFit.contain,
+        controls: NoVideoControls,
       );
     }
 

@@ -426,6 +426,7 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
               Video(
                 controller: controller,
                 fit: BoxFit.contain,
+                controls: NoVideoControls,
               )
             else if (_mode == _WaitRenderMode.image && _imageFile != null)
               Image.file(

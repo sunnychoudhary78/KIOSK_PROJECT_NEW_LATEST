@@ -5,8 +5,10 @@ import {
   createOrder,
   getSession,
   loadRazorpay,
+  requestPhoneOtp,
   uploadDocuments,
   verifyPayment,
+  verifyPhoneOtp,
   type QuickPrintSession,
 } from './api';
 
@@ -14,7 +16,7 @@ const PLAY_STORE_URL =
   import.meta.env.VITE_PLAY_STORE_URL ||
   'https://play.google.com/store/apps/details?id=com.smartkiosk.skp_mobile';
 
-type Step = 'chooser' | 'upload' | 'pay' | 'done' | 'error';
+type Step = 'chooser' | 'identity' | 'upload' | 'pay' | 'done' | 'error';
 
 function formatMoney(paise: number): string {
   return `₹${(paise / 100).toFixed(0)}`;
@@ -169,6 +171,10 @@ function SessionPage() {
   const [colorMode, setColorMode] = useState<'bw' | 'color'>('bw');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +187,8 @@ function SessionPage() {
           setStep('done');
         } else if (next.status === 'awaiting_payment') {
           setStep('pay');
+        } else if (next.phoneVerified) {
+          setStep('upload');
         }
       } catch (err) {
         if (cancelled) return;
@@ -194,10 +202,15 @@ function SessionPage() {
   }, [token]);
 
   const freePages = useMemo(() => {
-    if (!session) return 0;
-    return colorMode === 'color'
-      ? session.printLimits.freeColorPagesPerSession
-      : session.printLimits.freePagesPerSession;
+    if (!session || !session.phoneVerified || session.freeDisabledNow) return 0;
+    const remaining =
+      colorMode === 'color' ? session.quota?.remainingColor : session.quota?.remainingBw;
+    const kioskCap =
+      colorMode === 'color'
+        ? session.printLimits.freeColorPagesPerSession
+        : session.printLimits.freePagesPerSession;
+    if (remaining == null) return kioskCap;
+    return Math.min(remaining, kioskCap);
   }, [colorMode, session]);
 
   const extraCharge = useMemo(() => {
@@ -225,6 +238,39 @@ function SessionPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  }
+
+  async function onRequestOtp() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await requestPhoneOtp(token, phone);
+      setOtpSent(true);
+      setDevOtp(result.devOtp ?? null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not send OTP.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onVerifyOtp() {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await verifyPhoneOtp(token, phone, otp);
+      setSession(next);
+      setStep('upload');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Invalid OTP.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onSkipPhone() {
+    setError(null);
+    setStep('upload');
   }
 
   async function onUpload() {
@@ -319,7 +365,7 @@ function SessionPage() {
       >
         <span className="kiosk-line">{session.deviceName || 'This kiosk'}</span>
         <div className="choices">
-          <button className="choice choice-primary" type="button" onClick={() => setStep('upload')}>
+          <button className="choice choice-primary" type="button" onClick={() => setStep('identity')}>
             <span className="choice-icon">
               <IconPhone />
             </span>
@@ -344,6 +390,72 @@ function SessionPage() {
             </span>
           </a>
         </div>
+      </AppShell>
+    );
+  }
+
+  if (step === 'identity') {
+    return (
+      <AppShell
+        title="Use free pages?"
+        subtitle={
+          session.freeDisabledNow
+            ? 'Free pages are not available at this kiosk right now. You can still print — all pages are paid.'
+            : 'Verify your mobile number to use your free page quota, or skip and pay for every page.'
+        }
+        footer={
+          <>
+            {error ? <p className="banner error">{error}</p> : null}
+            {!otpSent ? (
+              <button
+                className="primary"
+                type="button"
+                disabled={busy || phone.replace(/\D/g, '').length < 10}
+                onClick={() => void onRequestOtp()}
+              >
+                {busy ? 'Sending OTP…' : 'Send OTP'}
+              </button>
+            ) : (
+              <button
+                className="primary"
+                type="button"
+                disabled={busy || otp.trim().length < 4}
+                onClick={() => void onVerifyOtp()}
+              >
+                {busy ? 'Verifying…' : 'Verify & continue'}
+              </button>
+            )}
+            <button className="ghost" type="button" disabled={busy} onClick={onSkipPhone}>
+              Skip — pay for all pages
+            </button>
+          </>
+        }
+      >
+        <label className="field">
+          Mobile number
+          <input
+            type="tel"
+            inputMode="numeric"
+            placeholder="10-digit mobile"
+            value={phone}
+            disabled={otpSent || busy}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </label>
+        {otpSent ? (
+          <label className="field">
+            OTP
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="Enter OTP"
+              value={otp}
+              disabled={busy}
+              onChange={(e) => setOtp(e.target.value)}
+            />
+          </label>
+        ) : null}
+        {devOtp ? <p className="muted">Dev OTP: {devOtp}</p> : null}
       </AppShell>
     );
   }
@@ -399,7 +511,13 @@ function SessionPage() {
     <AppShell
       step={<StepRail active="upload" />}
       title="Upload PDFs"
-      subtitle="Choose black & white or color, then send the files to this kiosk."
+      subtitle={
+        session.phoneVerified
+          ? session.freeDisabledNow
+            ? 'Free pages are off at this kiosk right now. All pages will be charged.'
+            : `Verified ${session.verifiedPhoneHint ?? 'phone'}. Free quota applies within kiosk caps.`
+          : 'Printing without phone verification — all pages are paid.'
+      }
       footer={
         <>
           {error ? <p className="banner error">{error}</p> : null}

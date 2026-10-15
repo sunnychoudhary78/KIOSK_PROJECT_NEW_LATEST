@@ -1,5 +1,5 @@
 name: skp_mobile
-description: Smart Kiosk Platform — citizen mobile client
+description: IMT-Print — citizen mobile client
 publish_to: "none"
 version: 0.1.0+1
 
@@ -30,6 +30,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/logo/logo.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/logo/logo.png
+
+dependency_overrides:
+  archive: ^4.5.2
 
 flutter:
   generate: true

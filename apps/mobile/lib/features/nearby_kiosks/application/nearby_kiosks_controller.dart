@@ -17,6 +17,7 @@ class NearbyKiosk {
     this.extraPageChargeRupees = 10,
     this.freeColorPagesPerSession = 0,
     this.extraColorPageChargeRupees = 20,
+    this.freeDisabledNow = false,
   });
 
   final String id;
@@ -32,6 +33,7 @@ class NearbyKiosk {
   final int extraPageChargeRupees;
   final int freeColorPagesPerSession;
   final int extraColorPageChargeRupees;
+  final bool freeDisabledNow;
 
   factory NearbyKiosk.fromJson(Map<String, dynamic> json) {
     return NearbyKiosk(
@@ -48,6 +50,7 @@ class NearbyKiosk {
       extraPageChargeRupees: _asInt(json['extraPageChargeRupees'], 10),
       freeColorPagesPerSession: _asInt(json['freeColorPagesPerSession'], 0),
       extraColorPageChargeRupees: _asInt(json['extraColorPageChargeRupees'], 20),
+      freeDisabledNow: json['freeDisabledNow'] as bool? ?? false,
     );
   }
 

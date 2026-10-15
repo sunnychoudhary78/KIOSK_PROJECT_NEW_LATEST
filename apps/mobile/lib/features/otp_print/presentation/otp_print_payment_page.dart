@@ -132,7 +132,9 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
         children: [
           SkpPageHeader(
             title: l10n.payExtraPages,
-            subtitle: l10n.payHelper(quote.freePages),
+            subtitle: challenge.freeDisabledNow
+                ? l10n.kioskFreeDisabledNow
+                : l10n.payHelper(quote.freePages),
             showBack: true,
             backEnabled: !_busy,
           ),

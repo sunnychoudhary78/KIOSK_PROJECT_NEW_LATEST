@@ -11,12 +11,20 @@ import {
 import type { Payment, QuickPrintDocument, QuickPrintSession } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
+import type { SmsClient } from '../../infrastructure/external/sms.client.js';
 import { AppError } from '../../shared/errors.js';
-import { hashSecret } from '../../shared/otp.js';
+import {
+  generateNumericOtp,
+  hashOtp,
+  hashSecret,
+  normalizePhone,
+  sanitizeOtpDeliveryError,
+} from '../../shared/otp.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { printLimitsFromDevice } from '../devices/device_print_limits.js';
 import { quoteOtpPrintPages, type PrintColorMode as QuoteColorMode, type PrintQuote } from '../otp_print/otp_print.quote.js';
 import type { UploadedPdf } from '../otp_print/otp_print.schemas.js';
+import { PrintQuotaService } from '../print_quota/print_quota.service.js';
 import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
@@ -38,6 +46,8 @@ const deviceQuoteSelect = {
   extraPageChargeRupees: true,
   freeColorPagesPerSession: true,
   extraColorPageChargeRupees: true,
+  freeDisabledFromLocal: true,
+  freeDisabledToLocal: true,
 } as const;
 
 type SessionWithRelations = QuickPrintSession & {
@@ -51,9 +61,13 @@ type SessionWithRelations = QuickPrintSession & {
     extraPageChargeRupees?: number;
     freeColorPagesPerSession?: number;
     extraColorPageChargeRupees?: number;
+    freeDisabledFromLocal?: string | null;
+    freeDisabledToLocal?: string | null;
   } | null;
   printJob?: { id: string; status: string } | null;
 };
+
+const phoneOtpCooldownUntil = new Map<string, number>();
 
 async function countPdfPages(buffer: Buffer): Promise<number> {
   const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
@@ -75,6 +89,7 @@ function quoteFromPayment(payment: Payment): PrintQuote {
 
 export class QuickPrintService {
   private readonly settings: PlatformSettingsService;
+  private readonly quota: PrintQuotaService;
 
   constructor(
     private readonly db: DbClient,
@@ -84,8 +99,10 @@ export class QuickPrintService {
     private readonly services: ServicesCatalogService,
     private readonly razorpay: RazorpayClient,
     private readonly payments: PaymentsService,
+    private readonly sms: SmsClient,
   ) {
     this.settings = new PlatformSettingsService(db, audit);
+    this.quota = new PrintQuotaService(db, audit);
   }
 
   async createSession(deviceId: string, correlationId?: string) {
@@ -133,7 +150,7 @@ export class QuickPrintService {
     });
 
     return {
-      ...this.toPublicSession(session),
+      ...(await this.toPublicSession(session)),
       publicUrl: `${this.config.printWeb.publicUrl}/s/${token}`,
     };
   }
@@ -150,6 +167,114 @@ export class QuickPrintService {
   async getByToken(token: string) {
     const session = await this.loadByToken(token);
     await this.ensureFresh(session);
+    return this.toPublicSession(await this.loadById(session.id));
+  }
+
+  async requestPhoneOtp(token: string, phoneRaw: string, correlationId?: string) {
+    const session = await this.loadByToken(token);
+    await this.ensureFresh(session);
+    if (session.status !== QuickPrintSessionStatus.waiting_upload) {
+      throw new AppError('session_not_accepting', 'Phone can only be verified before upload', 400);
+    }
+    let phone: string;
+    try {
+      phone = normalizePhone(phoneRaw);
+    } catch {
+      throw new AppError('invalid_phone', 'Enter a valid 10-digit mobile number', 400);
+    }
+
+    const authConfig = await this.settings.getCitizenAuthConfig();
+    const cooldownMs = authConfig.requestCooldownSeconds * 1000;
+    const until = phoneOtpCooldownUntil.get(phone) ?? 0;
+    if (Date.now() < until) {
+      throw new AppError('otp_cooldown', 'Please wait before requesting another OTP', 429);
+    }
+
+    const code = generateNumericOtp(authConfig.otpLength);
+    const expiresAt = new Date(Date.now() + authConfig.ttlSeconds * 1000);
+    await this.db.phoneOtpSession.upsert({
+      where: { phone },
+      create: { phone, codeHash: hashOtp(code), expiresAt, attemptCount: 0 },
+      update: { codeHash: hashOtp(code), expiresAt, attemptCount: 0 },
+    });
+
+    try {
+      await this.sms.sendOtp(phone, code, authConfig.ttlSeconds);
+    } catch (error) {
+      await this.db.phoneOtpSession.delete({ where: { phone } }).catch(() => undefined);
+      throw new AppError('sms_failed', sanitizeOtpDeliveryError(error), 502);
+    }
+
+    phoneOtpCooldownUntil.set(phone, Date.now() + cooldownMs);
+    await this.audit.record({
+      action: 'quick_print.phone_otp_requested',
+      principalType: 'system',
+      principalId: session.deviceId,
+      resourceType: 'quick_print_session',
+      resourceId: session.id,
+      correlationId,
+      metadata: { phoneSuffix: phone.slice(-4) },
+    });
+
+    const includeDevOtp =
+      this.config.env === 'local' || this.config.env === 'test' || this.config.env === 'dev';
+    return {
+      message: 'OTP sent successfully',
+      expiresAt: expiresAt.toISOString(),
+      ...(includeDevOtp ? { devOtp: code } : {}),
+    };
+  }
+
+  async verifyPhoneOtp(token: string, phoneRaw: string, otp: string, correlationId?: string) {
+    const session = await this.loadByToken(token);
+    await this.ensureFresh(session);
+    if (session.status !== QuickPrintSessionStatus.waiting_upload) {
+      throw new AppError('session_not_accepting', 'Phone can only be verified before upload', 400);
+    }
+    let phone: string;
+    try {
+      phone = normalizePhone(phoneRaw);
+    } catch {
+      throw new AppError('invalid_phone', 'Enter a valid 10-digit mobile number', 400);
+    }
+
+    const authConfig = await this.settings.getCitizenAuthConfig();
+    const otpSession = await this.db.phoneOtpSession.findUnique({ where: { phone } });
+    if (!otpSession) {
+      throw new AppError('otp_invalid', 'Invalid or expired OTP', 400);
+    }
+    if (otpSession.attemptCount >= authConfig.maxVerifyAttempts) {
+      await this.db.phoneOtpSession.delete({ where: { phone } }).catch(() => undefined);
+      throw new AppError('otp_locked', 'Too many invalid attempts. Request a new OTP.', 400);
+    }
+    if (otpSession.expiresAt.getTime() < Date.now()) {
+      await this.db.phoneOtpSession.delete({ where: { phone } }).catch(() => undefined);
+      throw new AppError('otp_expired', 'OTP has expired', 400);
+    }
+    if (otpSession.codeHash !== hashOtp(otp)) {
+      await this.db.phoneOtpSession.update({
+        where: { phone },
+        data: { attemptCount: { increment: 1 } },
+      });
+      throw new AppError('otp_invalid', 'Invalid or expired OTP', 400);
+    }
+
+    await this.db.phoneOtpSession.delete({ where: { phone } });
+    await this.db.quickPrintSession.update({
+      where: { id: session.id },
+      data: { verifiedPhone: phone, phoneVerifiedAt: new Date() },
+    });
+
+    await this.audit.record({
+      action: 'quick_print.phone_verified',
+      principalType: 'system',
+      principalId: session.deviceId,
+      resourceType: 'quick_print_session',
+      resourceId: session.id,
+      correlationId,
+      metadata: { phoneSuffix: phone.slice(-4) },
+    });
+
     return this.toPublicSession(await this.loadById(session.id));
   }
 
@@ -221,7 +346,12 @@ export class QuickPrintService {
       );
     }
 
-    const quote = quoteOtpPrintPages(totalPages, printLimits, printColorMode);
+    const { quote, effective } = await this.quota.buildQuote({
+      phone: session.verifiedPhone,
+      device: session.device ?? printLimits,
+      mode: printColorMode,
+      pageCount: totalPages,
+    });
     if (quote.paymentRequired && (!this.config.razorpay.keyId || !this.config.razorpay.keySecret)) {
       throw new AppError(
         'payments_not_configured',
@@ -232,6 +362,7 @@ export class QuickPrintService {
 
     const persistedColorMode =
       printColorMode === 'color' ? PrintColorMode.color : PrintColorMode.bw;
+    const freePagesGranted = quote.freePages;
     const label =
       prepared.length === 1 ? prepared[0]!.safeName : `${prepared.length} documents`;
     const sessionDir = join(QUICK_PRINT_UPLOAD_DIR, session.id);
@@ -267,32 +398,45 @@ export class QuickPrintService {
         ? new Date(Date.now() + this.config.payments.windowMinutes * 60 * 1000)
         : session.expiresAt;
 
-      await this.db.quickPrintSession.update({
-        where: { id: session.id },
-        data: {
-          status: nextStatus,
-          documentLabel: label,
-          pageCount: totalPages,
-          printColorMode: persistedColorMode,
-          expiresAt,
-          documents: { create: documentRows },
-          ...(quote.paymentRequired
-            ? {
-                payment: {
-                  create: {
-                    status: PaymentStatus.PENDING,
-                    pageCount: quote.pageCount,
-                    freePages: quote.freePages,
-                    extraPages: quote.extraPages,
-                    printColorMode: persistedColorMode,
-                    amountPaise: quote.amountPaise,
-                    currency: quote.currency,
-                    expiresAt,
+      await this.db.$transaction(async (tx) => {
+        await tx.quickPrintSession.update({
+          where: { id: session.id },
+          data: {
+            status: nextStatus,
+            documentLabel: label,
+            pageCount: totalPages,
+            freePagesGranted,
+            printColorMode: persistedColorMode,
+            expiresAt,
+            documents: { create: documentRows },
+            ...(quote.paymentRequired
+              ? {
+                  payment: {
+                    create: {
+                      status: PaymentStatus.PENDING,
+                      pageCount: quote.pageCount,
+                      freePages: quote.freePages,
+                      extraPages: quote.extraPages,
+                      printColorMode: persistedColorMode,
+                      amountPaise: quote.amountPaise,
+                      currency: quote.currency,
+                      expiresAt,
+                    },
                   },
-                },
-              }
-            : {}),
-        },
+                }
+              : {}),
+          },
+        });
+        if (session.verifiedPhone && freePagesGranted > 0) {
+          await this.quota.reserveFreePages({
+            phone: session.verifiedPhone,
+            mode: printColorMode,
+            pages: freePagesGranted,
+            periodKey: effective.periodKey,
+            quickPrintSessionId: session.id,
+            tx,
+          });
+        }
       });
     } catch (error) {
       await rm(sessionDir, { recursive: true, force: true }).catch(() => undefined);
@@ -311,6 +455,9 @@ export class QuickPrintService {
         documentCount: prepared.length,
         paymentRequired: quote.paymentRequired,
         printColorMode: quote.printColorMode,
+        freePagesGranted,
+        phoneVerified: Boolean(session.verifiedPhone),
+        freeDisabledNow: effective.freeDisabledNow,
       },
     });
 
@@ -450,6 +597,7 @@ export class QuickPrintService {
         source: PrintJobSource.quick_print,
         title: session.documentLabel || 'Quick Print',
         pageCount: session.pageCount,
+        freePagesGranted: session.freePagesGranted,
         printColorMode: session.printColorMode,
         deviceId,
         payloadUrl: `/v1/quick-print/sessions/${session.id}/documents`,
@@ -467,6 +615,10 @@ export class QuickPrintService {
           status: QuickPrintSessionStatus.consumed,
           printJobId: printJob.id,
         },
+      });
+      await this.quota.attachPrintJob({
+        printJobId: printJob.id,
+        quickPrintSessionId: session.id,
       });
       await this.audit.record({
         action: 'quick_print.claimed',
@@ -530,6 +682,7 @@ export class QuickPrintService {
         data: { status: PaymentStatus.CANCELLED },
       });
     }
+    await this.quota.releaseForSession(sessionId).catch(() => undefined);
     await this.audit.record({
       action: 'quick_print.cancelled',
       principalType: 'device',
@@ -604,6 +757,7 @@ export class QuickPrintService {
         data: { status: PaymentStatus.EXPIRED },
       });
     }
+    await this.quota.releaseForSession(session.id).catch(() => undefined);
     throw new AppError('session_expired', 'This print session has expired', 400);
   }
 
@@ -622,29 +776,44 @@ export class QuickPrintService {
     };
   }
 
-  toPublicSession(session: SessionWithRelations) {
+  async toPublicSession(session: SessionWithRelations) {
     const limits = printLimitsFromDevice(session.device);
+    const mode = session.printColorMode === PrintColorMode.color ? 'color' : 'bw';
     const quote = session.payment
       ? quoteFromPayment(session.payment)
       : session.pageCount > 0
-        ? quoteOtpPrintPages(
-            session.pageCount,
-            limits,
-            session.printColorMode === PrintColorMode.color ? 'color' : 'bw',
-          )
+        ? quoteOtpPrintPages(session.pageCount, limits, mode, session.freePagesGranted)
         : null;
+    const quota = await this.quota.getPublicQuotaSnapshot({
+      phone: session.verifiedPhone,
+      device: session.device ?? limits,
+      mode,
+    });
     return {
       id: session.id,
       status: session.status,
       expiresAt: session.expiresAt.toISOString(),
       documentLabel: session.documentLabel,
       pageCount: session.pageCount,
-      printColorMode: session.printColorMode === PrintColorMode.color ? 'color' : 'bw',
+      freePagesGranted: session.freePagesGranted,
+      printColorMode: mode,
       deviceId: session.deviceId,
       deviceName: session.device?.name ?? null,
+      phoneVerified: Boolean(session.verifiedPhone),
+      verifiedPhoneHint: session.verifiedPhone ? `****${session.verifiedPhone.slice(-4)}` : null,
+      freeDisabledNow: quota.freeDisabledNow,
+      quota: {
+        period: quota.period,
+        remainingBw: quota.remainingBw,
+        remainingColor: quota.remainingColor,
+      },
       paymentRequired:
         session.status === QuickPrintSessionStatus.awaiting_payment ||
-        Boolean(quote?.paymentRequired && session.status !== QuickPrintSessionStatus.ready && session.status !== QuickPrintSessionStatus.consumed),
+        Boolean(
+          quote?.paymentRequired &&
+            session.status !== QuickPrintSessionStatus.ready &&
+            session.status !== QuickPrintSessionStatus.consumed,
+        ),
       documents: session.documents.map((doc) => ({
         id: doc.id,
         fileName: doc.fileName,

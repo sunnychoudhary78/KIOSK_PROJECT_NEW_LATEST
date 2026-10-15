@@ -65,6 +65,11 @@ export const deviceHeartbeatBodySchema = z
 
 export type DeviceHeartbeatBody = z.infer<typeof deviceHeartbeatBodySchema>;
 
+const localTimeHmm = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:mm in 24-hour format')
+  .nullable();
+
 export const setDevicePrintLimitsSchema = z
   .object({
     maxPagesPerSession: z.number().int().min(1).max(100),
@@ -72,6 +77,8 @@ export const setDevicePrintLimitsSchema = z
     extraPageChargeRupees: z.number().int().min(0).max(1000),
     freeColorPagesPerSession: z.number().int().min(0).max(100),
     extraColorPageChargeRupees: z.number().int().min(0).max(1000),
+    freeDisabledFromLocal: localTimeHmm.optional(),
+    freeDisabledToLocal: localTimeHmm.optional(),
   })
   .refine((value) => value.freePagesPerSession <= value.maxPagesPerSession, {
     message: 'freePagesPerSession cannot exceed maxPagesPerSession',
@@ -80,6 +87,19 @@ export const setDevicePrintLimitsSchema = z
   .refine((value) => value.freeColorPagesPerSession <= value.maxPagesPerSession, {
     message: 'freeColorPagesPerSession cannot exceed maxPagesPerSession',
     path: ['freeColorPagesPerSession'],
-  });
+  })
+  .refine(
+    (value) => {
+      const from = value.freeDisabledFromLocal;
+      const to = value.freeDisabledToLocal;
+      const fromSet = from !== undefined && from !== null;
+      const toSet = to !== undefined && to !== null;
+      return fromSet === toSet;
+    },
+    {
+      message: 'freeDisabledFromLocal and freeDisabledToLocal must both be set or both cleared',
+      path: ['freeDisabledFromLocal'],
+    },
+  );
 
 export type SetDevicePrintLimitsInput = z.infer<typeof setDevicePrintLimitsSchema>;

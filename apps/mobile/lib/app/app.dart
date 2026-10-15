@@ -12,7 +12,7 @@ class SkpMobileApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(appLocaleProvider);
     return MaterialApp(
-      title: 'Smart Kiosk Mobile',
+      title: 'IMT-Print',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       locale: locale,

@@ -13,7 +13,7 @@ const userId = '22222222-2222-2222-2222-222222222222';
 const deviceId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const otherDeviceId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
-function deviceRow() {
+function deviceProps() {
   return {
     id: deviceId,
     name: 'Lobby Kiosk',
@@ -23,6 +23,8 @@ function deviceRow() {
     extraPageChargeRupees: 12,
     freeColorPagesPerSession: 0,
     extraColorPageChargeRupees: 20,
+    freeDisabledFromLocal: null,
+    freeDisabledToLocal: null,
   };
 }
 
@@ -78,6 +80,7 @@ describe('OtpPrintService kiosk binding', () => {
       codeHint: null,
       documentLabel: 'Docs',
       pageCount: 2,
+      freePagesGranted: 1,
       printColorMode: PrintColorMode.bw,
       attemptCount: 0,
       status: OtpChallengeStatus.awaiting_payment,
@@ -94,15 +97,22 @@ describe('OtpPrintService kiosk binding', () => {
         extraPages: 1,
         amountPaise: 1200,
       },
-      device: { id: deviceId, name: 'Lobby Kiosk' },
+      device: { ...deviceProps() },
     };
 
-    const db = {
-      device: { findUnique: vi.fn(async () => deviceRow()) },
+    const db: Record<string, unknown> = {
+      device: { findUnique: vi.fn(async () => deviceProps()) },
       user: { findUnique: vi.fn(async () => ({ id: userId, phone: '+919999999999' })) },
       platformSetting: { findUnique: vi.fn(async () => null) },
       otpChallenge: { create: vi.fn(async () => created) },
+      phoneFreePageLedger: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async () => ({ id: 'ledger-1' })),
+      },
     };
+    db.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db));
+
     const services = { assertEnabled: vi.fn(async () => undefined) };
     const service = new OtpPrintService(
       db as unknown as DbClient,
@@ -130,9 +140,9 @@ describe('OtpPrintService kiosk binding', () => {
     expect(result.quote.chargePerPageRupees).toBe(12);
     expect(result.quote.amountPaise).toBe(1200);
     expect(result.paymentRequired).toBe(true);
-    expect(db.otpChallenge.create).toHaveBeenCalledWith(
+    expect((db.otpChallenge as { create: ReturnType<typeof vi.fn> }).create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ deviceId }),
+        data: expect.objectContaining({ deviceId, freePagesGranted: 1 }),
       }),
     );
   });

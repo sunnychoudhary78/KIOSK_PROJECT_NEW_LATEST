@@ -41,6 +41,8 @@ type Device = {
   extraPageChargeRupees: number;
   freeColorPagesPerSession: number;
   extraColorPageChargeRupees: number;
+  freeDisabledFromLocal?: string | null;
+  freeDisabledToLocal?: string | null;
 };
 
 function RecordingStatusCell({ device }: { device: Device }) {
@@ -73,6 +75,8 @@ type PrintLimitsForm = {
   extraPageChargeRupees: number;
   freeColorPagesPerSession: number;
   extraColorPageChargeRupees: number;
+  freeDisabledFromLocal: string;
+  freeDisabledToLocal: string;
 };
 
 const DEFAULT_PRINT_LIMITS: PrintLimitsForm = {
@@ -81,6 +85,8 @@ const DEFAULT_PRINT_LIMITS: PrintLimitsForm = {
   extraPageChargeRupees: 10,
   freeColorPagesPerSession: 0,
   extraColorPageChargeRupees: 20,
+  freeDisabledFromLocal: '',
+  freeDisabledToLocal: '',
 };
 
 function printLimitsFromDevice(device: Device): PrintLimitsForm {
@@ -92,6 +98,8 @@ function printLimitsFromDevice(device: Device): PrintLimitsForm {
       device.freeColorPagesPerSession ?? DEFAULT_PRINT_LIMITS.freeColorPagesPerSession,
     extraColorPageChargeRupees:
       device.extraColorPageChargeRupees ?? DEFAULT_PRINT_LIMITS.extraColorPageChargeRupees,
+    freeDisabledFromLocal: device.freeDisabledFromLocal ?? '',
+    freeDisabledToLocal: device.freeDisabledToLocal ?? '',
   };
 }
 
@@ -277,6 +285,13 @@ export function KiosksPage() {
     setSettingsSaving(true);
     setSettingsError(null);
     try {
+      const from = printLimits.freeDisabledFromLocal.trim();
+      const to = printLimits.freeDisabledToLocal.trim();
+      if ((from && !to) || (!from && to)) {
+        setSettingsError('Set both free-disabled from and to times, or clear both');
+        setSettingsSaving(false);
+        return;
+      }
       await apiRequest(`/devices/${settingsDevice.id}/print-limits`, {
         method: 'PATCH',
         token,
@@ -286,6 +301,8 @@ export function KiosksPage() {
           extraPageChargeRupees: Number(printLimits.extraPageChargeRupees),
           freeColorPagesPerSession: Number(printLimits.freeColorPagesPerSession),
           extraColorPageChargeRupees: Number(printLimits.extraColorPageChargeRupees),
+          freeDisabledFromLocal: from || null,
+          freeDisabledToLocal: to || null,
         },
       });
       setSettingsDevice(null);
@@ -633,11 +650,32 @@ export function KiosksPage() {
               }
             />
           </label>
+          <label>
+            Free disabled from (Asia/Kolkata)
+            <Input
+              type="time"
+              value={printLimits.freeDisabledFromLocal}
+              onChange={(e) =>
+                setPrintLimits((s) => ({ ...s, freeDisabledFromLocal: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Free disabled to (Asia/Kolkata)
+            <Input
+              type="time"
+              value={printLimits.freeDisabledToLocal}
+              onChange={(e) =>
+                setPrintLimits((s) => ({ ...s, freeDisabledToLocal: e.target.value }))
+              }
+            />
+          </label>
           <p className="muted md:col-span-2" style={{ margin: 0 }}>
-            Black & white: first {printLimits.freePagesPerSession} page(s) free, then ₹
-            {printLimits.extraPageChargeRupees} each. Color: first {printLimits.freeColorPagesPerSession}{' '}
-            page(s) free, then ₹{printLimits.extraColorPageChargeRupees} each. Max pages is a hard
-            cap.
+            Session free caps: B/W first {printLimits.freePagesPerSession} page(s), color first{' '}
+            {printLimits.freeColorPagesPerSession} page(s), then paid rates apply. Global per-phone
+            quota is set under Platform settings. Optional free-disabled window (e.g. 22:00–10:00)
+            blocks all free pages at this kiosk during those Asia/Kolkata hours. Clear both times to
+            disable the window.
           </p>
           {settingsError ? <p className="error md:col-span-2">{settingsError}</p> : null}
         </form>

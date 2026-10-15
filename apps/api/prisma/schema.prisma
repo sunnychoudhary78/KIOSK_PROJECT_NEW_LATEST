@@ -79,6 +79,12 @@ enum QuickPrintSessionStatus {
   cancelled
 }
 
+enum FreePageLedgerStatus {
+  reserved
+  consumed
+  released
+}
+
 enum AdCreativeType {
   video
   image
@@ -202,6 +208,9 @@ model Device {
   extraPageChargeRupees      Int @default(10) @map("extra_page_charge_rupees")
   freeColorPagesPerSession   Int @default(0) @map("free_color_pages_per_session")
   extraColorPageChargeRupees Int @default(20) @map("extra_color_page_charge_rupees")
+  /// Local Asia/Kolkata wall time HH:mm; both null = no free-disabled window.
+  freeDisabledFromLocal      String? @map("free_disabled_from_local") @db.VarChar(5)
+  freeDisabledToLocal        String? @map("free_disabled_to_local") @db.VarChar(5)
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
@@ -381,6 +390,7 @@ model OtpChallenge {
   codeHint      String?            @map("code_hint")
   documentLabel String             @map("document_label")
   pageCount     Int                @default(1) @map("page_count")
+  freePagesGranted Int             @default(0) @map("free_pages_granted")
   printColorMode PrintColorMode    @default(bw) @map("print_color_mode")
   attemptCount  Int                @default(0) @map("attempt_count")
   status        OtpChallengeStatus @default(pending)
@@ -396,6 +406,7 @@ model OtpChallenge {
   printJob  PrintJob?     @relation(fields: [printJobId], references: [id])
   documents OtpDocument[]
   payment   Payment?
+  freePageLedgerEntries PhoneFreePageLedger[]
 
   @@index([status, expiresAt])
   @@index([userId, createdAt])
@@ -455,7 +466,10 @@ model QuickPrintSession {
   status         QuickPrintSessionStatus @default(waiting_upload)
   documentLabel  String                  @default("") @map("document_label")
   pageCount      Int                     @default(0) @map("page_count")
+  freePagesGranted Int                   @default(0) @map("free_pages_granted")
   printColorMode PrintColorMode          @default(bw) @map("print_color_mode")
+  verifiedPhone  String?                 @map("verified_phone")
+  phoneVerifiedAt DateTime?              @map("phone_verified_at")
   expiresAt      DateTime                @map("expires_at")
   printJobId     String?                 @unique @map("print_job_id") @db.Uuid
   createdAt      DateTime                @default(now()) @map("created_at")
@@ -465,6 +479,7 @@ model QuickPrintSession {
   printJob  PrintJob?            @relation(fields: [printJobId], references: [id])
   documents QuickPrintDocument[]
   payment   Payment?
+  freePageLedgerEntries PhoneFreePageLedger[]
 
   @@index([deviceId, status])
   @@index([status, expiresAt])
@@ -518,6 +533,7 @@ model PrintJob {
   status           PrintJobStatus @default(created)
   title            String
   pageCount        Int            @default(1) @map("page_count")
+  freePagesGranted Int            @default(0) @map("free_pages_granted")
   printColorMode   PrintColorMode @default(bw) @map("print_color_mode")
   payloadUrl       String?        @map("payload_url")
   payloadPath      String?        @map("payload_path")
@@ -531,9 +547,32 @@ model PrintJob {
   digiLockerSession DigiLockerSession? @relation(fields: [digiLockerSessionId], references: [id])
   otpChallenge      OtpChallenge?
   quickPrintSession QuickPrintSession?
+  freePageLedgerEntries PhoneFreePageLedger[]
 
   @@index([status, createdAt])
   @@map("print_jobs")
+}
+
+model PhoneFreePageLedger {
+  id                  String               @id @default(uuid()) @db.Uuid
+  phone               String               @db.VarChar(20)
+  printColorMode      PrintColorMode       @map("print_color_mode")
+  pages               Int
+  status              FreePageLedgerStatus @default(reserved)
+  periodKey           String               @map("period_key") @db.VarChar(16)
+  otpChallengeId      String?              @unique @map("otp_challenge_id") @db.Uuid
+  quickPrintSessionId String?              @unique @map("quick_print_session_id") @db.Uuid
+  printJobId          String?              @unique @map("print_job_id") @db.Uuid
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  otpChallenge      OtpChallenge?      @relation(fields: [otpChallengeId], references: [id], onDelete: Cascade)
+  quickPrintSession QuickPrintSession? @relation(fields: [quickPrintSessionId], references: [id], onDelete: Cascade)
+  printJob          PrintJob?          @relation(fields: [printJobId], references: [id], onDelete: SetNull)
+
+  @@index([phone, status, printColorMode])
+  @@index([phone, periodKey, printColorMode])
+  @@map("phone_free_page_ledger")
 }
 
 model AstrologyReading {

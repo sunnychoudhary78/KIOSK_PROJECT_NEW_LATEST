@@ -9,14 +9,14 @@ class AppLocalizationsHi extends AppLocalizations {
   AppLocalizationsHi([String locale = 'hi']) : super(locale);
 
   @override
-  String get appTitle => 'स्मार्ट कियोस्क मोबाइल';
+  String get appTitle => 'IMT-Print';
 
   @override
-  String get brandName => 'स्मार्ट कियोस्क';
+  String get brandName => 'IMT-Print';
 
   @override
   String get guestSubtitle =>
-      'दस्तावेज़ अपलोड करें, एसएमएस पर प्रिंट ओटीपी पाएँ, और किसी भी स्मार्ट कियोस्क से प्रिंट लें।';
+      'दस्तावेज़ अपलोड करें, एसएमएस पर प्रिंट ओटीपी पाएँ, और किसी भी IMT-Print कियोस्क से प्रिंट लें।';
 
   @override
   String get signInCta => 'मोबाइल ओटीपी से साइन इन करें';
@@ -173,7 +173,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get howItWorks => 'यह कैसे काम करता है';
 
   @override
-  String get about => 'स्मार्ट कियोस्क के बारे में';
+  String get about => 'IMT-Print के बारे में';
 
   @override
   String get signOut => 'साइन आउट';
@@ -227,8 +227,12 @@ class AppLocalizationsHi extends AppLocalizations {
   String get chooseKioskToContinue => 'जिस कियोस्क पर प्रिंट लेंगे, उसे चुनें';
 
   @override
+  String get kioskFreeDisabledNow =>
+      'इस कियोस्क पर अभी मुफ़्त पन्ने उपलब्ध नहीं हैं। अतिरिक्त पन्नों का शुल्क सामान्य रहेगा।';
+
+  @override
   String kioskPrintPricing(int free, int charge, int max) {
-    return 'पहले $free पन्ने मुफ़्त, फिर प्रत्येक ₹$charge। अधिकतम $max पन्ने।';
+    return 'प्रति विज़िट अधिकतम $free मुफ़्त पन्ने (फ़ोन कोटा के भीतर), फिर प्रत्येक ₹$charge। अधिकतम $max पन्ने।';
   }
 
   @override
@@ -327,7 +331,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get noKiosksHelper =>
-      'रीफ़्रेश करें, या किसी स्मार्ट कियोस्क के पास आने पर फिर कोशिश करें।';
+      'रीफ़्रेश करें, या किसी IMT-Print कियोस्क के पास आने पर फिर कोशिश करें।';
 
   @override
   String get locationRequired =>
@@ -376,11 +380,11 @@ class AppLocalizationsHi extends AppLocalizations {
   String get pastSection => 'पहले के';
 
   @override
-  String get aboutTitle => 'स्मार्ट कियोस्क के बारे में';
+  String get aboutTitle => 'IMT-Print के बारे में';
 
   @override
   String get aboutBody =>
-      'स्मार्ट कियोस्क प्लेटफ़ॉर्म से आप फ़ोन पर दस्तावेज़ अपलोड कर सकते हैं, केवल अतिरिक्त पन्नों का भुगतान कर सकते हैं, और नज़दीकी कियोस्क पर एसएमएस कोड से प्रिंट ले सकते हैं।\n\nआपका ओटीपी आपके मोबाइल नंबर पर जाता है और इस ऐप में नहीं दिखता।';
+      'IMT-Print से आप फ़ोन पर दस्तावेज़ अपलोड कर सकते हैं, केवल अतिरिक्त पन्नों का भुगतान कर सकते हैं, और नज़दीकी कियोस्क पर एसएमएस कोड से प्रिंट ले सकते हैं।\n\nआपका ओटीपी आपके मोबाइल नंबर पर जाता है और इस ऐप में नहीं दिखता।';
 
   @override
   String get howItWorksIntro => 'फ़ोन से प्रिंट तक तीन चरण।';
@@ -404,7 +408,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get howItWorksStep3Body =>
-      'नज़दीकी स्मार्ट कियोस्क खोजें, स्क्रीन पर ओटीपी दर्ज करें, पूर्वावलोकन करें और प्रिंट लें।';
+      'नज़दीकी IMT-Print कियोस्क खोजें, स्क्रीन पर ओटीपी दर्ज करें, पूर्वावलोकन करें और प्रिंट लें।';
 
   @override
   String get sessionExpired => 'सत्र समाप्त हो गया। कृपया फिर साइन इन करें।';

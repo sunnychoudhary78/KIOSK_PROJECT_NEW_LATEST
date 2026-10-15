@@ -149,7 +149,7 @@ class _NearbyKiosksMapPageState extends State<NearbyKiosksMapPage> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.smartkiosk.skp_mobile',
+                userAgentPackageName: 'com.imt.skp_mobile',
               ),
               MarkerLayer(
                 markers: [

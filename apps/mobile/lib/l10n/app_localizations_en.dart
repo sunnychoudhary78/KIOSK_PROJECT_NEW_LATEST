@@ -9,14 +9,14 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Smart Kiosk Mobile';
+  String get appTitle => 'IMT-Print';
 
   @override
-  String get brandName => 'Smart Kiosk';
+  String get brandName => 'IMT-Print';
 
   @override
   String get guestSubtitle =>
-      'Upload documents, get a print OTP by SMS, and collect prints at any Smart Kiosk.';
+      'Upload documents, get a print OTP by SMS, and collect prints at any IMT-Print kiosk.';
 
   @override
   String get signInCta => 'Sign in with mobile OTP';
@@ -174,7 +174,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get howItWorks => 'How it works';
 
   @override
-  String get about => 'About Smart Kiosk';
+  String get about => 'About IMT-Print';
 
   @override
   String get signOut => 'Sign out';
@@ -230,8 +230,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chooseKioskToContinue => 'Choose the kiosk where you will print';
 
   @override
+  String get kioskFreeDisabledNow =>
+      'Free pages are not available at this kiosk right now. Extra pages are charged as usual.';
+
+  @override
   String kioskPrintPricing(int free, int charge, int max) {
-    return 'First $free page(s) free, then ₹$charge each. Max $max pages.';
+    return 'Up to $free free page(s) per visit (within your phone quota), then ₹$charge each. Max $max pages.';
   }
 
   @override
@@ -330,7 +334,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noKiosksHelper =>
-      'Pull to refresh, or try again when you are closer to a Smart Kiosk.';
+      'Pull to refresh, or try again when you are closer to an IMT-Print kiosk.';
 
   @override
   String get locationRequired =>
@@ -379,11 +383,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pastSection => 'Earlier';
 
   @override
-  String get aboutTitle => 'About Smart Kiosk';
+  String get aboutTitle => 'About IMT-Print';
 
   @override
   String get aboutBody =>
-      'Smart Kiosk Platform lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.';
+      'IMT-Print lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.';
 
   @override
   String get howItWorksIntro =>
@@ -408,7 +412,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get howItWorksStep3Body =>
-      'Find a nearby Smart Kiosk, enter the OTP on the screen, preview, and collect your prints.';
+      'Find a nearby IMT-Print kiosk, enter the OTP on the screen, preview, and collect your prints.';
 
   @override
   String get sessionExpired => 'Session expired. Please sign in again.';

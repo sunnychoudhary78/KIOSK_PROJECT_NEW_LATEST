@@ -19,6 +19,12 @@ export const citizenAuthConfigSchema = z.object({
   requestCooldownSeconds: z.number().int().min(10).max(600),
 });
 
+export const printFreeQuotaConfigSchema = z.object({
+  period: z.enum(['daily', 'weekly', 'monthly']),
+  freeBwPages: z.number().int().min(0).max(500),
+  freeColorPages: z.number().int().min(0).max(500),
+});
+
 export const updatePlatformSettingSchema = z.object({
   settingValue: z.unknown(),
   description: z.string().max(500).optional(),

@@ -32,7 +32,7 @@ class RazorpayCheckout {
     required int amountPaise,
     required String currency,
     String? contact,
-    String name = 'Smart Kiosk Print',
+    String name = 'IMT-Print',
   }) {
     final completer = Completer<RazorpayCheckoutResult>();
 

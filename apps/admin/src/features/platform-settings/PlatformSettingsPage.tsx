@@ -27,6 +27,12 @@ type CitizenAuthForm = {
   requestCooldownSeconds: number;
 };
 
+type FreeQuotaForm = {
+  period: 'daily' | 'weekly' | 'monthly';
+  freeBwPages: number;
+  freeColorPages: number;
+};
+
 type SmsStatus = {
   provider: string;
   configured: boolean;
@@ -47,6 +53,12 @@ const DEFAULT_CITIZEN_AUTH: CitizenAuthForm = {
   otpLength: 6,
   maxVerifyAttempts: 5,
   requestCooldownSeconds: 60,
+};
+
+const DEFAULT_FREE_QUOTA: FreeQuotaForm = {
+  period: 'daily',
+  freeBwPages: 5,
+  freeColorPages: 0,
 };
 
 const MIN_PRINT_TTL_SECONDS = 60;
@@ -109,6 +121,7 @@ export function PlatformSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [otpPrint, setOtpPrint] = useState<OtpPrintForm>(DEFAULT_OTP_PRINT);
   const [citizenAuth, setCitizenAuth] = useState<CitizenAuthForm>(DEFAULT_CITIZEN_AUTH);
+  const [freeQuota, setFreeQuota] = useState<FreeQuotaForm>(DEFAULT_FREE_QUOTA);
   const [smsStatus, setSmsStatus] = useState<SmsStatus | null>(null);
 
   const printDuration = ttlToParts(otpPrint.ttlSeconds);
@@ -140,6 +153,9 @@ export function PlatformSettingsPage() {
             ...loaded,
             ttlSeconds: clampLoginTtlSeconds(loaded.ttlSeconds),
           });
+        }
+        if (item.settingKey === 'print_free_quota_config') {
+          setFreeQuota({ ...DEFAULT_FREE_QUOTA, ...(item.settingValue as FreeQuotaForm) });
         }
       }
     } catch (err) {
@@ -179,6 +195,7 @@ export function PlatformSettingsPage() {
     const errors: string[] = [];
     let printSaved = false;
     let loginSaved = false;
+    let quotaSaved = false;
 
     try {
       await putSetting('otp_print_config', {
@@ -216,13 +233,30 @@ export function PlatformSettingsPage() {
       }
     }
 
+    try {
+      await putSetting('print_free_quota_config', {
+        period: freeQuota.period,
+        freeBwPages: Number(freeQuota.freeBwPages),
+        freeColorPages: Number(freeQuota.freeColorPages),
+      });
+      quotaSaved = true;
+    } catch (err) {
+      errors.push(
+        `Free quota: ${err instanceof Error ? err.message : 'Failed to save'}`,
+      );
+    }
+
     await load();
 
     if (errors.length === 0) {
       setSuccess('Settings saved');
-    } else if (printSaved || loginSaved) {
+    } else if (printSaved || loginSaved || quotaSaved) {
       setSuccess(
-        [printSaved ? 'Print settings saved' : null, loginSaved ? 'Login settings saved' : null]
+        [
+          printSaved ? 'Print settings saved' : null,
+          loginSaved ? 'Login settings saved' : null,
+          quotaSaved ? 'Free quota saved' : null,
+        ]
           .filter(Boolean)
           .join('; '),
       );
@@ -418,6 +452,55 @@ export function PlatformSettingsPage() {
               />
             </label>
           </div>
+        </Panel>
+
+        <Panel title="Global free print quota (per phone)">
+          <div className="settings-row">
+            <label>
+              Period
+              <select
+                value={freeQuota.period}
+                onChange={(e) =>
+                  setFreeQuota((s) => ({
+                    ...s,
+                    period: e.target.value as FreeQuotaForm['period'],
+                  }))
+                }
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+            <label>
+              Free B/W pages
+              <Input
+                type="number"
+                min={0}
+                max={500}
+                value={freeQuota.freeBwPages}
+                onChange={(e) =>
+                  setFreeQuota((s) => ({ ...s, freeBwPages: Number(e.target.value) }))
+                }
+              />
+            </label>
+            <label>
+              Free color pages
+              <Input
+                type="number"
+                min={0}
+                max={500}
+                value={freeQuota.freeColorPages}
+                onChange={(e) =>
+                  setFreeQuota((s) => ({ ...s, freeColorPages: Number(e.target.value) }))
+                }
+              />
+            </label>
+          </div>
+          <p className="muted" style={{ margin: '0.75rem 0 0' }}>
+            Shared across mobile OTP print and Quick Print web for the same phone. Each kiosk still
+            has its own per-session free cap and optional night free-disabled window.
+          </p>
         </Panel>
 
         <div className="settings-actions">

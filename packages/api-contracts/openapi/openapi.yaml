@@ -886,6 +886,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/QuickPrintSessionResponse'
 
+  /quick-print/public/sessions/{token}/otp-request:
+    post:
+      tags: [QuickPrint]
+      summary: Request phone OTP to unlock free pages for a Quick Print session
+      operationId: requestQuickPrintPhoneOtp
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+      responses:
+        '200':
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, expiresAt]
+                properties:
+                  message:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  devOtp:
+                    type: string
+
+  /quick-print/public/sessions/{token}/otp-verify:
+    post:
+      tags: [QuickPrint]
+      summary: Verify phone OTP and bind free-page quota to the session
+      operationId: verifyQuickPrintPhoneOtp
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otp]
+              properties:
+                phone:
+                  type: string
+                otp:
+                  type: string
+      responses:
+        '200':
+          description: Phone verified; updated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickPrintSessionResponse'
+
   /quick-print/public/sessions/{token}/documents:
     post:
       tags: [QuickPrint]
@@ -1062,7 +1133,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [sms_config, otp_print_config, quick_print_config, citizen_auth_config]
+            enum: [sms_config, otp_print_config, quick_print_config, citizen_auth_config, print_free_quota_config]
       requestBody:
         required: true
         content:
@@ -1853,6 +1924,8 @@ components:
           type: string
         pageCount:
           type: integer
+        freePagesGranted:
+          type: integer
         printColorMode:
           type: string
           enum: [bw, color]
@@ -1862,6 +1935,25 @@ components:
         deviceName:
           type: string
           nullable: true
+        phoneVerified:
+          type: boolean
+        verifiedPhoneHint:
+          type: string
+          nullable: true
+        freeDisabledNow:
+          type: boolean
+        quota:
+          type: object
+          properties:
+            period:
+              type: string
+              enum: [daily, weekly, monthly]
+            remainingBw:
+              type: integer
+              nullable: true
+            remainingColor:
+              type: integer
+              nullable: true
         paymentRequired:
           type: boolean
         documents:
@@ -1905,6 +1997,26 @@ components:
         freeColorPagesPerSession:
           type: integer
         extraColorPageChargeRupees:
+          type: integer
+        freeDisabledFromLocal:
+          type: string
+          nullable: true
+          description: Asia/Kolkata HH:mm; pair with freeDisabledToLocal
+        freeDisabledToLocal:
+          type: string
+          nullable: true
+          description: Asia/Kolkata HH:mm; pair with freeDisabledFromLocal
+
+    PrintFreeQuotaConfig:
+      type: object
+      required: [period, freeBwPages, freeColorPages]
+      properties:
+        period:
+          type: string
+          enum: [daily, weekly, monthly]
+        freeBwPages:
+          type: integer
+        freeColorPages:
           type: integer
 
     QuickPrintClaimResponse:

@@ -1,4 +1,4 @@
-package com.smartkiosk.skp_mobile
+package com.imt.skp_mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

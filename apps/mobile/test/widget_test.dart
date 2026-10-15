@@ -17,7 +17,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 800));
 
-    expect(find.textContaining('Smart Kiosk'), findsWidgets);
+    expect(find.textContaining('IMT-Print'), findsWidgets);
     expect(find.byType(FilledButton), findsOneWidget);
     expect(find.textContaining('Sign in'), findsOneWidget);
   });

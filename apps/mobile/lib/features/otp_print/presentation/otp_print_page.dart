@@ -233,15 +233,17 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           Text(
             selected == null
                 ? (_printColorMode == 'color' ? l10n.colorHelp : l10n.bwHelp)
-                : l10n.kioskPrintPricing(
-                    _printColorMode == 'color'
-                        ? selected.freeColorPagesPerSession
-                        : selected.freePagesPerSession,
-                    _printColorMode == 'color'
-                        ? selected.extraColorPageChargeRupees
-                        : selected.extraPageChargeRupees,
-                    selected.maxPagesPerSession,
-                  ),
+                : selected.freeDisabledNow
+                    ? l10n.kioskFreeDisabledNow
+                    : l10n.kioskPrintPricing(
+                        _printColorMode == 'color'
+                            ? selected.freeColorPagesPerSession
+                            : selected.freePagesPerSession,
+                        _printColorMode == 'color'
+                            ? selected.extraColorPageChargeRupees
+                            : selected.extraPageChargeRupees,
+                        selected.maxPagesPerSession,
+                      ),
             style: theme.textTheme.bodySmall?.copyWith(color: SkpColors.muted),
           ),
           const SizedBox(height: 16),

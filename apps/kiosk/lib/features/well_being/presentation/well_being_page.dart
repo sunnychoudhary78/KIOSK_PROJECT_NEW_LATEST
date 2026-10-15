@@ -243,7 +243,7 @@ class _ChooseView extends StatelessWidget {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Expanded(
           child: Row(
             children: [
@@ -269,6 +269,8 @@ class _ChooseView extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        const _MedicalDisclaimer(),
       ],
     );
   }
@@ -847,12 +849,40 @@ class _ReferenceCard extends StatelessWidget {
 class _MedicalDisclaimer extends StatelessWidget {
   const _MedicalDisclaimer();
 
+  static const _copy =
+      'For general wellness and informational use only. This kiosk is not a medical device '
+      'and does not provide medical diagnosis, treatment, or clinical monitoring. Readings may be '
+      'inaccurate and are not a substitute for professional medical advice, diagnosis, or treatment. '
+      'If you have health concerns, consult a qualified clinician. In an emergency, contact local '
+      'emergency services immediately.';
+
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'Not a medical diagnosis. These readings are for general wellness only and are not a substitute for professional medical advice.',
-      textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.bodySmall,
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        border: Border.all(color: SkpColors.line),
+        color: SkpColors.raised,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, size: 20, color: SkpColors.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _copy,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: SkpColors.muted,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -12,6 +12,7 @@ import type {
   SetDevicePrintLimitsInput,
   SurveillanceHealthInput,
 } from './devices.schemas.js';
+import { isWithinLocalTimeWindow } from '../print_quota/print_quota.time.js';
 import { printLimitsFromDevice } from './device_print_limits.js';
 
 function mapSurveillanceHealth(value: unknown): SurveillanceHealthInput | null {
@@ -38,6 +39,8 @@ function mapDevice(device: {
   extraPageChargeRupees?: number;
   freeColorPagesPerSession?: number;
   extraColorPageChargeRupees?: number;
+  freeDisabledFromLocal?: string | null;
+  freeDisabledToLocal?: string | null;
   site: { name: string };
 }) {
   return {
@@ -90,6 +93,7 @@ export class DevicesService {
         const distanceKm = roundDistanceKm(
           haversineKm(query.lat, query.lng, device.latitude, device.longitude),
         );
+        const limits = printLimitsFromDevice(device);
         return {
           id: device.id,
           name: device.name,
@@ -99,7 +103,12 @@ export class DevicesService {
           longitude: device.longitude,
           distanceKm,
           lastHeartbeatAt: device.lastHeartbeatAt?.toISOString() ?? null,
-          ...printLimitsFromDevice(device),
+          ...limits,
+          freeDisabledNow: isWithinLocalTimeWindow(
+            new Date(),
+            limits.freeDisabledFromLocal,
+            limits.freeDisabledToLocal,
+          ),
         };
       })
       .sort((a, b) => a.distanceKm - b.distanceKm)
@@ -267,6 +276,12 @@ export class DevicesService {
         extraPageChargeRupees: input.extraPageChargeRupees,
         freeColorPagesPerSession: input.freeColorPagesPerSession,
         extraColorPageChargeRupees: input.extraColorPageChargeRupees,
+        ...(input.freeDisabledFromLocal !== undefined
+          ? { freeDisabledFromLocal: input.freeDisabledFromLocal }
+          : {}),
+        ...(input.freeDisabledToLocal !== undefined
+          ? { freeDisabledToLocal: input.freeDisabledToLocal }
+          : {}),
       },
       include: { site: true },
     });

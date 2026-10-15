@@ -20,6 +20,8 @@ export type PrintLimits = {
   extraPageChargeRupees: number;
   freeColorPagesPerSession: number;
   extraColorPageChargeRupees: number;
+  freeDisabledFromLocal?: string | null;
+  freeDisabledToLocal?: string | null;
 };
 
 export type QuickPrintSession = {
@@ -28,9 +30,18 @@ export type QuickPrintSession = {
   expiresAt: string;
   documentLabel: string;
   pageCount: number;
+  freePagesGranted?: number;
   printColorMode: 'bw' | 'color';
   deviceName: string | null;
   paymentRequired: boolean;
+  phoneVerified?: boolean;
+  verifiedPhoneHint?: string | null;
+  freeDisabledNow?: boolean;
+  quota?: {
+    period: string;
+    remainingBw: number | null;
+    remainingColor: number | null;
+  };
   documents: Array<{ id: string; fileName: string; pageCount: number; byteSize: number }>;
   quote: PrintQuote | null;
   printLimits: PrintLimits;
@@ -72,6 +83,43 @@ async function parseError(response: Response): Promise<never> {
 
 export async function getSession(token: string): Promise<QuickPrintSession> {
   const response = await fetch(`${API_BASE}/quick-print/public/sessions/${encodeURIComponent(token)}`);
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as QuickPrintSession;
+}
+
+export async function requestPhoneOtp(
+  token: string,
+  phone: string,
+): Promise<{ message: string; expiresAt: string; devOtp?: string }> {
+  const response = await fetch(
+    `${API_BASE}/quick-print/public/sessions/${encodeURIComponent(token)}/otp-request`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    },
+  );
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as { message: string; expiresAt: string; devOtp?: string };
+}
+
+export async function verifyPhoneOtp(
+  token: string,
+  phone: string,
+  otp: string,
+): Promise<QuickPrintSession> {
+  const response = await fetch(
+    `${API_BASE}/quick-print/public/sessions/${encodeURIComponent(token)}/otp-verify`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, otp }),
+    },
+  );
   if (!response.ok) {
     await parseError(response);
   }

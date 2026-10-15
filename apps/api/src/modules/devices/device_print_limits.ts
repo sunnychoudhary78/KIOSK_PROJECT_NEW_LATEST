@@ -4,6 +4,8 @@ export type DevicePrintLimits = {
   extraPageChargeRupees: number;
   freeColorPagesPerSession: number;
   extraColorPageChargeRupees: number;
+  freeDisabledFromLocal: string | null;
+  freeDisabledToLocal: string | null;
 };
 
 export const DEFAULT_DEVICE_PRINT_LIMITS: DevicePrintLimits = {
@@ -12,6 +14,8 @@ export const DEFAULT_DEVICE_PRINT_LIMITS: DevicePrintLimits = {
   extraPageChargeRupees: 10,
   freeColorPagesPerSession: 0,
   extraColorPageChargeRupees: 20,
+  freeDisabledFromLocal: null,
+  freeDisabledToLocal: null,
 };
 
 export function printLimitsFromDevice(
@@ -27,5 +31,13 @@ export function printLimitsFromDevice(
       device?.freeColorPagesPerSession ?? DEFAULT_DEVICE_PRINT_LIMITS.freeColorPagesPerSession,
     extraColorPageChargeRupees:
       device?.extraColorPageChargeRupees ?? DEFAULT_DEVICE_PRINT_LIMITS.extraColorPageChargeRupees,
+    freeDisabledFromLocal:
+      device?.freeDisabledFromLocal !== undefined
+        ? device.freeDisabledFromLocal
+        : DEFAULT_DEVICE_PRINT_LIMITS.freeDisabledFromLocal,
+    freeDisabledToLocal:
+      device?.freeDisabledToLocal !== undefined
+        ? device.freeDisabledToLocal
+        : DEFAULT_DEVICE_PRINT_LIMITS.freeDisabledToLocal,
   };
 }
