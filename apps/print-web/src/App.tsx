@@ -37,6 +37,39 @@ function IconPhone() {
   );
 }
 
+function IconLock() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M8 11V8a4 4 0 0 1 8 0v3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconPhoneLarge() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="7" y="3" width="10" height="18" rx="2.2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M11 18h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function digitsOnly(value: string, max = 10): string {
+  return value.replace(/\D/g, '').slice(0, max);
+}
+
+function phoneHint(phoneDigits: string): string {
+  const d = digitsOnly(phoneDigits, 10);
+  if (d.length < 4) return '****';
+  return `****${d.slice(-4)}`;
+}
+
 function IconApp() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -241,10 +274,12 @@ function SessionPage() {
   }
 
   async function onRequestOtp() {
+    const phoneDigits = digitsOnly(phone, 10);
     setBusy(true);
     setError(null);
     try {
-      const result = await requestPhoneOtp(token, phone);
+      const result = await requestPhoneOtp(token, phoneDigits);
+      setPhone(phoneDigits);
       setOtpSent(true);
       setDevOtp(result.devOtp ?? null);
     } catch (err) {
@@ -255,10 +290,12 @@ function SessionPage() {
   }
 
   async function onVerifyOtp() {
+    const phoneDigits = digitsOnly(phone, 10);
+    const code = digitsOnly(otp, 8);
     setBusy(true);
     setError(null);
     try {
-      const next = await verifyPhoneOtp(token, phone, otp);
+      const next = await verifyPhoneOtp(token, phoneDigits, code);
       setSession(next);
       setStep('upload');
     } catch (err) {
@@ -268,10 +305,20 @@ function SessionPage() {
     }
   }
 
+  function onChangeNumber() {
+    setOtpSent(false);
+    setOtp('');
+    setDevOtp(null);
+    setError(null);
+  }
+
   function onSkipPhone() {
     setError(null);
     setStep('upload');
   }
+
+  const phoneDigits = digitsOnly(phone, 10);
+  const otpDigits = digitsOnly(otp, 8);
 
   async function onUpload() {
     if (!files.length) return;
@@ -397,12 +444,16 @@ function SessionPage() {
   if (step === 'identity') {
     return (
       <AppShell
-        title="Use free pages?"
+        title={otpSent ? 'Enter verification code' : 'Use free pages?'}
         subtitle={
           session.freeDisabledNow
             ? 'Free pages are not available at this kiosk right now. You can still print — all pages are paid.'
-            : 'Verify your mobile number to use your free page quota, or skip and pay for every page.'
+            : otpSent
+              ? `We sent a one-time code to +91 ${phoneHint(phoneDigits)}.`
+              : 'Verify your mobile number to unlock free pages, or continue and pay for every page.'
         }
+        status={otpSent ? <IconLock /> : <IconPhoneLarge />}
+        statusTone="ok"
         footer={
           <>
             {error ? <p className="banner error">{error}</p> : null}
@@ -410,7 +461,7 @@ function SessionPage() {
               <button
                 className="primary"
                 type="button"
-                disabled={busy || phone.replace(/\D/g, '').length < 10}
+                disabled={busy || phoneDigits.length < 10}
                 onClick={() => void onRequestOtp()}
               >
                 {busy ? 'Sending OTP…' : 'Send OTP'}
@@ -419,43 +470,78 @@ function SessionPage() {
               <button
                 className="primary"
                 type="button"
-                disabled={busy || otp.trim().length < 4}
+                disabled={busy || otpDigits.length < 4}
                 onClick={() => void onVerifyOtp()}
               >
                 {busy ? 'Verifying…' : 'Verify & continue'}
               </button>
             )}
             <button className="ghost" type="button" disabled={busy} onClick={onSkipPhone}>
-              Skip — pay for all pages
+              Continue without free pages
             </button>
           </>
         }
       >
-        <label className="field">
-          Mobile number
-          <input
-            type="tel"
-            inputMode="numeric"
-            placeholder="10-digit mobile"
-            value={phone}
-            disabled={otpSent || busy}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </label>
-        {otpSent ? (
-          <label className="field">
-            OTP
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="Enter OTP"
-              value={otp}
-              disabled={busy}
-              onChange={(e) => setOtp(e.target.value)}
-            />
-          </label>
-        ) : null}
-        {devOtp ? <p className="muted">Dev OTP: {devOtp}</p> : null}
+        <div className="auth-panel">
+          {!otpSent ? (
+            <label className="field">
+              <span className="field-label">Mobile number</span>
+              <div className="phone-row">
+                <span className="phone-prefix" aria-hidden="true">
+                  +91
+                </span>
+                <input
+                  className="phone-input"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  autoFocus
+                  placeholder="98765 43210"
+                  maxLength={10}
+                  value={phoneDigits}
+                  disabled={busy}
+                  onChange={(e) => setPhone(digitsOnly(e.target.value, 10))}
+                  aria-label="10-digit mobile number"
+                />
+              </div>
+            </label>
+          ) : (
+            <>
+              <div className="otp-meta">
+                <span className="otp-sent-to">+91 {phoneHint(phoneDigits)}</span>
+                <button
+                  className="link-action"
+                  type="button"
+                  disabled={busy}
+                  onClick={onChangeNumber}
+                >
+                  Change number
+                </button>
+              </div>
+              <label className="field">
+                <span className="field-label">One-time password</span>
+                <input
+                  className="otp-input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  placeholder="••••••"
+                  maxLength={6}
+                  value={otpDigits}
+                  disabled={busy}
+                  onChange={(e) => setOtp(digitsOnly(e.target.value, 6))}
+                  aria-label="OTP code"
+                />
+              </label>
+              {devOtp ? (
+                <p className="dev-otp-note">
+                  Dev code <strong>{devOtp}</strong>
+                </p>
+              ) : null}
+            </>
+          )}
+        </div>
       </AppShell>
     );
   }

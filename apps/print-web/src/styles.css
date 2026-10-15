@@ -571,6 +571,175 @@ h1,
   border: 1px solid rgba(180, 35, 24, 0.22);
 }
 
+/* —— Identity / phone OTP —— */
+
+.auth-panel {
+  width: 100%;
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem 1.1rem 1.2rem;
+  border-radius: 1.15rem;
+  background: linear-gradient(165deg, rgba(15, 106, 90, 0.06), var(--panel) 48%);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
+  animation: rise-in 0.45s ease both;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  width: 100%;
+}
+
+.field-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.phone-row {
+  display: flex;
+  align-items: stretch;
+  min-height: 3.4rem;
+  border-radius: 1rem;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.phone-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.phone-prefix {
+  display: grid;
+  place-items: center;
+  min-width: 3.5rem;
+  padding: 0 0.65rem;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-right: 1px solid var(--line);
+}
+
+.phone-input,
+.otp-input {
+  appearance: none;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  outline: none;
+}
+
+.phone-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.phone-input::placeholder,
+.otp-input::placeholder {
+  color: rgba(92, 103, 95, 0.55);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.otp-input {
+  min-height: 3.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  text-align: center;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: 0.42em;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.otp-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.otp-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.otp-sent-to {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.link-action,
+.ghost {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0.35rem 0.15rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+}
+
+.link-action:hover:not(:disabled),
+.ghost:hover:not(:disabled) {
+  color: var(--accent-bright);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.ghost {
+  width: 100%;
+  min-height: 2.5rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.ghost:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.dev-otp-note {
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.75rem;
+  background: rgba(154, 123, 47, 0.1);
+  border: 1px solid rgba(154, 123, 47, 0.22);
+  color: var(--gold);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.dev-otp-note strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+}
+
 .dock {
   position: sticky;
   bottom: 0;
@@ -659,7 +828,8 @@ h1,
   .status-icon.spin svg,
   .primary,
   .secondary,
-  .choice {
+  .choice,
+  .auth-panel {
     animation: none !important;
     transition: none !important;
   }
