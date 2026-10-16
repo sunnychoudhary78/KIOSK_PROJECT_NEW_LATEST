@@ -183,10 +183,16 @@ export class AdsService {
     principalId: string;
     correlationId?: string;
   }) {
+    const purpose =
+      input.type === AdCreativeType.banner_vertical
+        ? 'banner_vertical'
+        : input.type === AdCreativeType.banner
+          ? 'banner'
+          : 'idle';
     return this.createCreativeFromFiles({
       advertiserId: input.advertiserId,
       title: input.title,
-      purpose: input.type === AdCreativeType.banner ? 'banner' : 'idle',
+      purpose,
       files: [input.file],
       durationSec: input.durationSec,
       principalId: input.principalId,
@@ -198,7 +204,7 @@ export class AdsService {
   async createCreativeFromFiles(input: {
     advertiserId: string;
     title: string;
-    purpose: 'idle' | 'banner';
+    purpose: 'idle' | 'banner' | 'banner_horizontal' | 'banner_vertical';
     files: Express.Multer.File[];
     durationSec?: number;
     principalId: string;
@@ -218,19 +224,24 @@ export class AdsService {
 
     const isVideo = (f: Express.Multer.File) => f.mimetype.startsWith('video/');
     const isImage = (f: Express.Multer.File) => f.mimetype.startsWith('image/');
+    const isHorizontalBanner =
+      input.purpose === 'banner' || input.purpose === 'banner_horizontal';
+    const isVerticalBanner = input.purpose === 'banner_vertical';
 
     let type: AdCreativeType;
     if (input.forcedType && input.purpose === 'idle' && files.length === 1) {
       type = input.forcedType;
-    } else if (input.purpose === 'banner') {
+    } else if (isHorizontalBanner || isVerticalBanner) {
       if (files.length !== 1 || !isImage(files[0]!)) {
         throw new AppError(
           'validation_error',
-          'Home banner requires exactly one image file',
+          isVerticalBanner
+            ? 'Vertical home banner requires exactly one image file'
+            : 'Home banner requires exactly one image file',
           400,
         );
       }
-      type = AdCreativeType.banner;
+      type = isVerticalBanner ? AdCreativeType.banner_vertical : AdCreativeType.banner;
     } else {
       const videos = files.filter(isVideo);
       const images = files.filter(isImage);
@@ -478,6 +489,49 @@ export class AdsService {
 
   async setCampaignCreatives(id: string, input: SetCampaignCreativesInput) {
     await this.requireCampaign(id);
+    const creativeIds = [...new Set(input.items.map((item) => item.creativeId))];
+    const creatives = await this.db.adCreative.findMany({
+      where: { id: { in: creativeIds } },
+      select: { id: true, type: true },
+    });
+    const typeById = new Map(creatives.map((c) => [c.id, c.type]));
+
+    for (const item of input.items) {
+      const creativeType = typeById.get(item.creativeId);
+      if (!creativeType) {
+        throw new AppError('not_found', `Creative ${item.creativeId} not found`, 404);
+      }
+      if (item.slot === 'home_banner' && creativeType !== AdCreativeType.banner) {
+        throw new AppError(
+          'validation_error',
+          'home_banner slot requires a horizontal banner creative',
+          400,
+        );
+      }
+      if (
+        item.slot === 'home_banner_vertical' &&
+        creativeType !== AdCreativeType.banner_vertical
+      ) {
+        throw new AppError(
+          'validation_error',
+          'home_banner_vertical slot requires a vertical banner creative',
+          400,
+        );
+      }
+      if (
+        item.slot === 'idle_video' &&
+        creativeType !== AdCreativeType.video &&
+        creativeType !== AdCreativeType.image &&
+        creativeType !== AdCreativeType.carousel
+      ) {
+        throw new AppError(
+          'validation_error',
+          'idle_video slot requires idle video/image/carousel creative',
+          400,
+        );
+      }
+    }
+
     await this.db.$transaction([
       this.db.adCampaignCreative.deleteMany({ where: { campaignId: id } }),
       this.db.adCampaignCreative.createMany({
@@ -624,7 +678,10 @@ export class AdsService {
 
     const idle: ReturnType<typeof mapCreative>[] = [];
     const banners: ReturnType<typeof mapCreative>[] = [];
+    const sideBanners: ReturnType<typeof mapCreative>[] = [];
     const carousels: ReturnType<typeof mapCreative>[] = [];
+    const horizontalEnabled = device.bannerHorizontalEnabled !== false;
+    const verticalEnabled = device.bannerVerticalEnabled !== false;
 
     for (const campaign of matched) {
       for (const link of campaign.creatives) {
@@ -638,7 +695,13 @@ export class AdsService {
         if (link.slot === AdSlot.idle_video) {
           idle.push(item);
         } else if (link.slot === AdSlot.home_banner) {
-          banners.push(item);
+          if (horizontalEnabled) {
+            banners.push(item);
+          }
+        } else if (link.slot === AdSlot.home_banner_vertical) {
+          if (verticalEnabled) {
+            sideBanners.push(item);
+          }
         } else if (link.slot === AdSlot.home_carousel) {
           carousels.push(item);
         }
@@ -648,6 +711,7 @@ export class AdsService {
     return {
       idle,
       homeBanners: banners,
+      homeSideBanners: sideBanners,
       homeCarousels: carousels,
       fetchedAt: now.toISOString(),
     };

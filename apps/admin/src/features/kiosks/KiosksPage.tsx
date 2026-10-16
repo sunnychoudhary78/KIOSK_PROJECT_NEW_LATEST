@@ -43,6 +43,8 @@ type Device = {
   extraColorPageChargeRupees: number;
   freeDisabledFromLocal?: string | null;
   freeDisabledToLocal?: string | null;
+  bannerHorizontalEnabled?: boolean;
+  bannerVerticalEnabled?: boolean;
 };
 
 function RecordingStatusCell({ device }: { device: Device }) {
@@ -77,6 +79,8 @@ type PrintLimitsForm = {
   extraColorPageChargeRupees: number;
   freeDisabledFromLocal: string;
   freeDisabledToLocal: string;
+  bannerHorizontalEnabled: boolean;
+  bannerVerticalEnabled: boolean;
 };
 
 const DEFAULT_PRINT_LIMITS: PrintLimitsForm = {
@@ -87,6 +91,8 @@ const DEFAULT_PRINT_LIMITS: PrintLimitsForm = {
   extraColorPageChargeRupees: 20,
   freeDisabledFromLocal: '',
   freeDisabledToLocal: '',
+  bannerHorizontalEnabled: true,
+  bannerVerticalEnabled: true,
 };
 
 function printLimitsFromDevice(device: Device): PrintLimitsForm {
@@ -100,6 +106,8 @@ function printLimitsFromDevice(device: Device): PrintLimitsForm {
       device.extraColorPageChargeRupees ?? DEFAULT_PRINT_LIMITS.extraColorPageChargeRupees,
     freeDisabledFromLocal: device.freeDisabledFromLocal ?? '',
     freeDisabledToLocal: device.freeDisabledToLocal ?? '',
+    bannerHorizontalEnabled: device.bannerHorizontalEnabled !== false,
+    bannerVerticalEnabled: device.bannerVerticalEnabled !== false,
   };
 }
 
@@ -303,6 +311,8 @@ export function KiosksPage() {
           extraColorPageChargeRupees: Number(printLimits.extraColorPageChargeRupees),
           freeDisabledFromLocal: from || null,
           freeDisabledToLocal: to || null,
+          bannerHorizontalEnabled: printLimits.bannerHorizontalEnabled,
+          bannerVerticalEnabled: printLimits.bannerVerticalEnabled,
         },
       });
       setSettingsDevice(null);
@@ -677,6 +687,29 @@ export function KiosksPage() {
             blocks all free pages at this kiosk during those Asia/Kolkata hours. Clear both times to
             disable the window.
           </p>
+          <fieldset className="md:col-span-2 stack border-0 p-0 m-0">
+            <legend className="muted">Home banners</legend>
+            <label>
+              <input
+                type="checkbox"
+                checked={printLimits.bannerHorizontalEnabled}
+                onChange={(e) =>
+                  setPrintLimits((s) => ({ ...s, bannerHorizontalEnabled: e.target.checked }))
+                }
+              />{' '}
+              Show top / bottom banners
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={printLimits.bannerVerticalEnabled}
+                onChange={(e) =>
+                  setPrintLimits((s) => ({ ...s, bannerVerticalEnabled: e.target.checked }))
+                }
+              />{' '}
+              Show left / right banners
+            </label>
+          </fieldset>
           {settingsError ? <p className="error md:col-span-2">{settingsError}</p> : null}
         </form>
       </Modal>

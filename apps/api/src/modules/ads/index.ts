@@ -136,7 +136,12 @@ export function registerAdsModule(router: Router, deps: AppDeps): void {
           : undefined;
         const duration = Number.isFinite(durationSec) ? durationSec : undefined;
 
-        if (purposeRaw === 'idle' || purposeRaw === 'banner') {
+        if (
+          purposeRaw === 'idle' ||
+          purposeRaw === 'banner' ||
+          purposeRaw === 'banner_horizontal' ||
+          purposeRaw === 'banner_vertical'
+        ) {
           const result = await service.createCreativeFromFiles({
             advertiserId,
             title,
@@ -155,7 +160,7 @@ export function registerAdsModule(router: Router, deps: AppDeps): void {
         if (!Object.values(AdCreativeType).includes(typeRaw as AdCreativeType)) {
           throw new AppError(
             'validation_error',
-            'purpose (idle|banner) or a valid type is required',
+            'purpose (idle|banner|banner_horizontal|banner_vertical) or a valid type is required',
             400,
           );
         }

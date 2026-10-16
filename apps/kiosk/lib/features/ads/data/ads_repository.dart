@@ -72,11 +72,13 @@ class AdPlaylist {
   const AdPlaylist({
     required this.idle,
     required this.homeBanners,
+    this.homeSideBanners = const [],
     required this.homeCarousels,
   });
 
   final List<AdPlaylistItem> idle;
   final List<AdPlaylistItem> homeBanners;
+  final List<AdPlaylistItem> homeSideBanners;
   final List<AdPlaylistItem> homeCarousels;
 
   factory AdPlaylist.fromJson(Map<String, dynamic> json) {
@@ -91,6 +93,7 @@ class AdPlaylist {
     return AdPlaylist(
       idle: mapList('idle'),
       homeBanners: mapList('homeBanners'),
+      homeSideBanners: mapList('homeSideBanners'),
       homeCarousels: mapList('homeCarousels'),
     );
   }

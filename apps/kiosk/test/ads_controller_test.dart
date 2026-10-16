@@ -27,6 +27,7 @@ AdPlaylist _idlePlaylist() {
       ),
     ],
     homeBanners: [],
+    homeSideBanners: [],
     homeCarousels: [],
   );
 }

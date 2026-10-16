@@ -89,6 +89,7 @@ enum AdCreativeType {
   video
   image
   banner
+  banner_vertical
   carousel
 }
 
@@ -103,6 +104,7 @@ enum AdCampaignStatus {
 enum AdSlot {
   idle_video
   home_banner
+  home_banner_vertical
   home_carousel
 }
 
@@ -211,6 +213,10 @@ model Device {
   /// Local Asia/Kolkata wall time HH:mm; both null = no free-disabled window.
   freeDisabledFromLocal      String? @map("free_disabled_from_local") @db.VarChar(5)
   freeDisabledToLocal        String? @map("free_disabled_to_local") @db.VarChar(5)
+  /// When false, playlist omits horizontal (top/bottom) home banners for this device.
+  bannerHorizontalEnabled    Boolean @default(true) @map("banner_horizontal_enabled")
+  /// When false, playlist omits vertical (left/right) home banners for this device.
+  bannerVerticalEnabled      Boolean @default(true) @map("banner_vertical_enabled")
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 

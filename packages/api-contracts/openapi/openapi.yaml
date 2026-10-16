@@ -26,6 +26,7 @@ tags:
   - name: Audit
   - name: PlatformSettings
   - name: Astrology
+  - name: Ads
 paths:
   /health:
     get:
@@ -1361,6 +1362,21 @@ paths:
                 type: string
                 format: binary
 
+  /ads/playlist:
+    get:
+      tags: [Ads]
+      summary: Active ad playlist for the authenticated kiosk device
+      operationId: getAdsPlaylist
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Playlist buckets for idle, home banners, and carousels
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdPlaylistResponse'
+
   /print-quota/usage:
     get:
       tags: [Printing]
@@ -1590,6 +1606,14 @@ components:
           type: string
           format: date-time
           nullable: true
+        bannerHorizontalEnabled:
+          type: boolean
+          description: When false, playlist omits top/bottom home banners for this kiosk
+          default: true
+        bannerVerticalEnabled:
+          type: boolean
+          description: When false, playlist omits left/right home banners for this kiosk
+          default: true
 
     SurveillanceHealth:
       type: object
@@ -2061,6 +2085,66 @@ components:
           type: string
           nullable: true
           description: Asia/Kolkata HH:mm; pair with freeDisabledFromLocal
+        bannerHorizontalEnabled:
+          type: boolean
+          description: Optional; when set, updates whether top/bottom banners show on this kiosk
+        bannerVerticalEnabled:
+          type: boolean
+          description: Optional; when set, updates whether left/right banners show on this kiosk
+
+    AdPlaylistItem:
+      type: object
+      required: [id, campaignId, title, type, slot]
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        type:
+          type: string
+          enum: [video, image, banner, banner_vertical, carousel]
+        slot:
+          type: string
+          enum: [idle_video, home_banner, home_banner_vertical, home_carousel]
+        mediaUrl:
+          type: string
+          nullable: true
+        mimeType:
+          type: string
+          nullable: true
+        durationSec:
+          type: integer
+          nullable: true
+
+    AdPlaylistResponse:
+      type: object
+      required: [idle, homeBanners, homeSideBanners, homeCarousels, fetchedAt]
+      properties:
+        idle:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdPlaylistItem'
+        homeBanners:
+          type: array
+          description: Horizontal banners for top and bottom (empty when device disables them)
+          items:
+            $ref: '#/components/schemas/AdPlaylistItem'
+        homeSideBanners:
+          type: array
+          description: Vertical banners for left and right (empty when device disables them)
+          items:
+            $ref: '#/components/schemas/AdPlaylistItem'
+        homeCarousels:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdPlaylistItem'
+        fetchedAt:
+          type: string
+          format: date-time
 
     PrintFreeQuotaConfig:
       type: object

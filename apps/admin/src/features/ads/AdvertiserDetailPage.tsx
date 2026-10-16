@@ -155,7 +155,7 @@ export function AdvertiserDetailPage() {
         {creatives.length === 0 ? (
           <EmptyState
             title="No creatives yet"
-            description="Upload idle video/photos or a home banner for campaigns."
+            description="Upload idle video/photos or horizontal/vertical home banners for campaigns."
             action={
               <Button type="button" onClick={() => setUploadOpen(true)}>
                 Upload creative

@@ -13,7 +13,12 @@ final adsRepositoryProvider = Provider<AdsRepository>((ref) {
 
 class AdsUiState {
   const AdsUiState({
-    this.playlist = const AdPlaylist(idle: [], homeBanners: [], homeCarousels: []),
+    this.playlist = const AdPlaylist(
+      idle: [],
+      homeBanners: [],
+      homeSideBanners: [],
+      homeCarousels: [],
+    ),
     this.idleVisible = false,
     this.loading = false,
     this.error,

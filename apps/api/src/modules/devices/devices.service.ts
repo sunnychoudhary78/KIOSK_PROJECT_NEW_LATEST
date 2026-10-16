@@ -41,6 +41,8 @@ function mapDevice(device: {
   extraColorPageChargeRupees?: number;
   freeDisabledFromLocal?: string | null;
   freeDisabledToLocal?: string | null;
+  bannerHorizontalEnabled?: boolean;
+  bannerVerticalEnabled?: boolean;
   site: { name: string };
 }) {
   return {
@@ -56,6 +58,8 @@ function mapDevice(device: {
     surveillanceEnabled: device.surveillanceEnabled,
     surveillanceHealth: mapSurveillanceHealth(device.surveillanceHealth),
     surveillanceHealthAt: device.surveillanceHealthAt?.toISOString() ?? null,
+    bannerHorizontalEnabled: device.bannerHorizontalEnabled !== false,
+    bannerVerticalEnabled: device.bannerVerticalEnabled !== false,
     ...printLimitsFromDevice(device),
   };
 }
@@ -281,6 +285,12 @@ export class DevicesService {
           : {}),
         ...(input.freeDisabledToLocal !== undefined
           ? { freeDisabledToLocal: input.freeDisabledToLocal }
+          : {}),
+        ...(input.bannerHorizontalEnabled !== undefined
+          ? { bannerHorizontalEnabled: input.bannerHorizontalEnabled }
+          : {}),
+        ...(input.bannerVerticalEnabled !== undefined
+          ? { bannerVerticalEnabled: input.bannerVerticalEnabled }
           : {}),
       },
       include: { site: true },

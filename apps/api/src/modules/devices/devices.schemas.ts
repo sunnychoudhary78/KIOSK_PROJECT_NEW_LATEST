@@ -79,6 +79,8 @@ export const setDevicePrintLimitsSchema = z
     extraColorPageChargeRupees: z.number().int().min(0).max(1000),
     freeDisabledFromLocal: localTimeHmm.optional(),
     freeDisabledToLocal: localTimeHmm.optional(),
+    bannerHorizontalEnabled: z.boolean().optional(),
+    bannerVerticalEnabled: z.boolean().optional(),
   })
   .refine((value) => value.freePagesPerSession <= value.maxPagesPerSession, {
     message: 'freePagesPerSession cannot exceed maxPagesPerSession',

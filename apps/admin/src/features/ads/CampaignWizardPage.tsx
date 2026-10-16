@@ -45,6 +45,7 @@ export function CampaignWizardPage() {
   const [priority, setPriority] = useState(0);
   const [idleCreativeId, setIdleCreativeId] = useState('');
   const [bannerCreativeId, setBannerCreativeId] = useState('');
+  const [sideBannerCreativeId, setSideBannerCreativeId] = useState('');
   const [targetMode, setTargetMode] = useState<TargetMode>('all');
   const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
@@ -80,6 +81,7 @@ export function CampaignWizardPage() {
   const selectedAdvertiser = advertisers.find((a) => a.id === advertiserId);
   const idleCreative = advertiserCreatives.find((c) => c.id === idleCreativeId);
   const bannerCreative = advertiserCreatives.find((c) => c.id === bannerCreativeId);
+  const sideBannerCreative = advertiserCreatives.find((c) => c.id === sideBannerCreativeId);
 
   function validateStep(): boolean {
     setError(null);
@@ -90,7 +92,7 @@ export function CampaignWizardPage() {
       }
     }
     if (step === 1) {
-      if (!idleCreativeId && !bannerCreativeId) {
+      if (!idleCreativeId && !bannerCreativeId && !sideBannerCreativeId) {
         setError('Select at least one idle media or home banner creative');
         return false;
       }
@@ -149,6 +151,9 @@ export function CampaignWizardPage() {
       }
       if (bannerCreativeId) {
         items.push({ creativeId: bannerCreativeId, slot: 'home_banner' });
+      }
+      if (sideBannerCreativeId) {
+        items.push({ creativeId: sideBannerCreativeId, slot: 'home_banner_vertical' });
       }
       await apiRequest(`/ads/campaigns/${campaign.id}/creatives`, {
         method: 'PUT',
@@ -244,8 +249,8 @@ export function CampaignWizardPage() {
           <div className="stack">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="muted m-0">
-                Choose existing media or upload new idle video/photos or a home banner. At least
-                one is required.
+                Choose existing media or upload new idle video/photos or home banners (horizontal
+                and/or vertical). At least one is required.
               </p>
               <Button
                 type="button"
@@ -279,7 +284,7 @@ export function CampaignWizardPage() {
               </Select>
             </label>
             <label>
-              Home banner
+              Horizontal banner (top / bottom)
               <Select
                 value={bannerCreativeId}
                 onChange={(e) => setBannerCreativeId(e.target.value)}
@@ -289,7 +294,23 @@ export function CampaignWizardPage() {
                   .filter((c) => c.type === 'banner')
                   .map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.title} (banner)
+                      {c.title} (horizontal)
+                    </option>
+                  ))}
+              </Select>
+            </label>
+            <label>
+              Vertical banner (left / right)
+              <Select
+                value={sideBannerCreativeId}
+                onChange={(e) => setSideBannerCreativeId(e.target.value)}
+              >
+                <option value="">— none —</option>
+                {advertiserCreatives
+                  .filter((c) => c.type === 'banner_vertical')
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} (vertical)
                     </option>
                   ))}
               </Select>
@@ -377,7 +398,10 @@ export function CampaignWizardPage() {
                 : '—'}
             </p>
             <p>
-              <strong>Home banner:</strong> {bannerCreative?.title ?? '—'}
+              <strong>Horizontal banner:</strong> {bannerCreative?.title ?? '—'}
+            </p>
+            <p>
+              <strong>Vertical banner:</strong> {sideBannerCreative?.title ?? '—'}
             </p>
             <p>
               <strong>Targeting:</strong>{' '}
@@ -406,6 +430,8 @@ export function CampaignWizardPage() {
             setCreatives((list) => [created, ...list.filter((c) => c.id !== created.id)]);
             if (created.type === 'banner') {
               setBannerCreativeId(created.id);
+            } else if (created.type === 'banner_vertical') {
+              setSideBannerCreativeId(created.id);
             } else {
               setIdleCreativeId(created.id);
             }

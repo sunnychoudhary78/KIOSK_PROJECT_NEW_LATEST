@@ -30,6 +30,7 @@ abstract final class SkpTokens {
   static const double keypadKeySize = 80;
   static const double pinSlotSize = 72;
   static const double bannerHeight = 80;
+  static const double bannerSideWidth = 80;
   static const EdgeInsets pagePadding = EdgeInsets.fromLTRB(32, 16, 32, 16);
 }
 

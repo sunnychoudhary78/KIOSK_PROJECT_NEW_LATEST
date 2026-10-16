@@ -8,10 +8,19 @@ import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/ads/data/ads_repository.dart';
 
-class HomeBannerStrip extends ConsumerStatefulWidget {
-  const HomeBannerStrip({super.key, this.height = SkpTokens.bannerHeight});
+enum HomeBannerAxis { horizontal, vertical }
 
+class HomeBannerStrip extends ConsumerStatefulWidget {
+  const HomeBannerStrip({
+    super.key,
+    this.axis = HomeBannerAxis.horizontal,
+    this.height = SkpTokens.bannerHeight,
+    this.width = SkpTokens.bannerSideWidth,
+  });
+
+  final HomeBannerAxis axis;
   final double height;
+  final double width;
 
   @override
   ConsumerState<HomeBannerStrip> createState() => _HomeBannerStripState();
@@ -23,14 +32,21 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
 
   @override
   Widget build(BuildContext context) {
-    final banners = ref.watch(adsControllerProvider).playlist.homeBanners;
+    final playlist = ref.watch(adsControllerProvider).playlist;
+    final banners = widget.axis == HomeBannerAxis.horizontal
+        ? playlist.homeBanners
+        : playlist.homeSideBanners;
     if (banners.isEmpty) {
       return const SizedBox.shrink();
     }
 
+    final isHorizontal = widget.axis == HomeBannerAxis.horizontal;
+
     return SizedBox(
-      height: widget.height,
+      height: isHorizontal ? widget.height : null,
+      width: isHorizontal ? null : widget.width,
       child: PageView.builder(
+        scrollDirection: isHorizontal ? Axis.horizontal : Axis.vertical,
         itemCount: banners.length,
         itemBuilder: (context, index) {
           final ad = banners[index];
@@ -38,7 +54,10 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
           _reportImpression(ad);
           final data = _bytes[ad.id];
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: EdgeInsets.symmetric(
+              vertical: isHorizontal ? 4 : 0,
+              horizontal: isHorizontal ? 0 : 4,
+            ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
               child: data == null
@@ -46,7 +65,12 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
                       color: SkpColors.raised,
                       child: Center(child: CircularProgressIndicator()),
                     )
-                  : Image.memory(data, fit: BoxFit.cover, width: double.infinity),
+                  : Image.memory(
+                      data,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
             ),
           );
         },

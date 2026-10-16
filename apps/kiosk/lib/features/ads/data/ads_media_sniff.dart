@@ -34,7 +34,10 @@ AdMediaSniff sniffAdMedia({
   if (type == 'video') {
     return const AdMediaSniff(isVideo: true, extension: '.mp4', detectedMime: 'video/mp4');
   }
-  if (type == 'image' || type == 'banner' || type == 'carousel') {
+  if (type == 'image' ||
+      type == 'banner' ||
+      type == 'banner_vertical' ||
+      type == 'carousel') {
     return const AdMediaSniff(isVideo: false, extension: '.bin');
   }
 

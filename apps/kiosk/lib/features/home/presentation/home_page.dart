@@ -220,8 +220,18 @@ class _ServiceCatalog extends ConsumerWidget {
                   const rows = 3;
                   final gridMin =
                       SkpTokens.tileMinHeight * rows + gap * (rows - 1);
-                  final showBanner =
-                      constraints.maxHeight >= gridMin + SkpTokens.bannerHeight + 12;
+                  final playlist = ref.watch(adsControllerProvider).playlist;
+                  final hasHorizontal = playlist.homeBanners.isNotEmpty;
+                  final hasVertical = playlist.homeSideBanners.isNotEmpty;
+                  final showHorizontal = hasHorizontal &&
+                      constraints.maxHeight >=
+                          gridMin + SkpTokens.bannerHeight * 2 + 24;
+                  final showVertical = hasVertical &&
+                      constraints.maxWidth >=
+                          SkpTokens.tileMinWidth * 2 +
+                              gap +
+                              SkpTokens.bannerSideWidth * 2 +
+                              24;
 
                   final tiles = [
                     KioskServiceTile(
@@ -262,31 +272,50 @@ class _ServiceCatalog extends ConsumerWidget {
                     ),
                   ];
 
-                  return Column(
+                  final serviceGrid = Column(
+                    children: [
+                      for (var row = 0; row < rows; row++) ...[
+                        if (row > 0) const SizedBox(height: gap),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Expanded(child: tiles[row * 2]),
+                              const SizedBox(width: gap),
+                              Expanded(child: tiles[row * 2 + 1]),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+
+                  final centerColumn = Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (showBanner) ...[
+                      if (showHorizontal) ...[
                         const HomeBannerStrip(),
                         const SizedBox(height: 10),
                       ],
-                      Expanded(
-                        child: Column(
-                          children: [
-                            for (var row = 0; row < rows; row++) ...[
-                              if (row > 0) const SizedBox(height: gap),
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Expanded(child: tiles[row * 2]),
-                                    const SizedBox(width: gap),
-                                    Expanded(child: tiles[row * 2 + 1]),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                      Expanded(child: serviceGrid),
+                      if (showHorizontal) ...[
+                        const SizedBox(height: 10),
+                        const HomeBannerStrip(),
+                      ],
+                    ],
+                  );
+
+                  if (!showVertical) {
+                    return centerColumn;
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const HomeBannerStrip(axis: HomeBannerAxis.vertical),
+                      const SizedBox(width: 10),
+                      Expanded(child: centerColumn),
+                      const SizedBox(width: 10),
+                      const HomeBannerStrip(axis: HomeBannerAxis.vertical),
                     ],
                   );
                 },

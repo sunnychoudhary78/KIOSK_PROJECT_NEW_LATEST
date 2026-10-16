@@ -32,7 +32,7 @@ export const setCampaignCreativesSchema = z.object({
     .array(
       z.object({
         creativeId: z.string().uuid(),
-        slot: z.enum(['idle_video', 'home_banner', 'home_carousel']),
+        slot: z.enum(['idle_video', 'home_banner', 'home_banner_vertical', 'home_carousel']),
         sortOrder: z.number().int().min(0).optional(),
         weight: z.number().int().min(1).max(100).optional(),
       }),
