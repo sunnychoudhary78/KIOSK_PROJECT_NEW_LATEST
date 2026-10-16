@@ -1361,6 +1361,61 @@ paths:
                 type: string
                 format: binary
 
+  /print-quota/usage:
+    get:
+      tags: [Printing]
+      summary: List free-print usage by phone for the current quota period (admin)
+      operationId: listPrintQuotaUsage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Optional phone search (digits; suffix or contains after normalize)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Max phones to return (default 50, max 200)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Aggregated free-page usage for the current period
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintQuotaUsageListResponse'
+
+  /print-quota/usage/{phone}:
+    get:
+      tags: [Printing]
+      summary: Free-print ledger detail for a phone in the current quota period (admin)
+      operationId: getPrintQuotaUsageByPhone
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: phone
+          in: path
+          required: true
+          description: Phone number (10-digit Indian mobile or E.164)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Usage summary and recent ledger entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintQuotaUsageDetailResponse'
+        '400':
+          description: Invalid phone
+
   /audit-logs:
     get:
       tags: [Audit]
@@ -2018,6 +2073,130 @@ components:
           type: integer
         freeColorPages:
           type: integer
+
+    PrintQuotaUsageItem:
+      type: object
+      required: [phone, bwUsed, bwRemaining, colorUsed, colorRemaining, lastActivityAt]
+      properties:
+        phone:
+          type: string
+        bwUsed:
+          type: integer
+        bwRemaining:
+          type: integer
+        colorUsed:
+          type: integer
+        colorRemaining:
+          type: integer
+        lastActivityAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PrintQuotaUsageLimits:
+      type: object
+      required: [freeBwPages, freeColorPages]
+      properties:
+        freeBwPages:
+          type: integer
+        freeColorPages:
+          type: integer
+
+    PrintQuotaUsageListResponse:
+      type: object
+      required: [period, periodKey, limits, items]
+      properties:
+        period:
+          type: string
+          enum: [daily, weekly, monthly]
+        periodKey:
+          type: string
+        limits:
+          $ref: '#/components/schemas/PrintQuotaUsageLimits'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrintQuotaUsageItem'
+
+    PrintQuotaUsageLedgerEntry:
+      type: object
+      required:
+        - id
+        - printColorMode
+        - pages
+        - status
+        - periodKey
+        - source
+        - otpChallengeId
+        - quickPrintSessionId
+        - printJobId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        printColorMode:
+          type: string
+          enum: [bw, color]
+        pages:
+          type: integer
+        status:
+          type: string
+          enum: [reserved, consumed, released]
+        periodKey:
+          type: string
+        source:
+          type: string
+          enum: [otp_print, quick_print, unknown]
+        otpChallengeId:
+          type: string
+          format: uuid
+          nullable: true
+        quickPrintSessionId:
+          type: string
+          format: uuid
+          nullable: true
+        printJobId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PrintQuotaUsageDetailResponse:
+      type: object
+      required: [phone, period, periodKey, limits, summary, entries]
+      properties:
+        phone:
+          type: string
+        period:
+          type: string
+          enum: [daily, weekly, monthly]
+        periodKey:
+          type: string
+        limits:
+          $ref: '#/components/schemas/PrintQuotaUsageLimits'
+        summary:
+          type: object
+          required: [bwUsed, bwRemaining, colorUsed, colorRemaining]
+          properties:
+            bwUsed:
+              type: integer
+            bwRemaining:
+              type: integer
+            colorUsed:
+              type: integer
+            colorRemaining:
+              type: integer
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrintQuotaUsageLedgerEntry'
 
     QuickPrintClaimResponse:
       type: object

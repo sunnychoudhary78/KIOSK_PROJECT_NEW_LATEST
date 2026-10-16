@@ -293,4 +293,137 @@ export class PrintQuotaService {
       throw new AppError('invalid_phone', 'Enter a valid 10-digit Indian mobile number', 400);
     }
   }
+
+  async listUsage(input: { q?: string; limit?: number; now?: Date } = {}) {
+    const now = input.now ?? new Date();
+    const limit = Math.min(200, Math.max(1, Math.floor(input.limit ?? 50)));
+    const config = await this.settings.getPrintFreeQuotaConfig();
+    const periodKey = periodKeyFor(now, config.period);
+
+    const rows = await this.db.phoneFreePageLedger.findMany({
+      where: {
+        periodKey,
+        status: { in: [FreePageLedgerStatus.reserved, FreePageLedgerStatus.consumed] },
+      },
+      select: {
+        phone: true,
+        printColorMode: true,
+        pages: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const byPhone = new Map<
+      string,
+      { bwUsed: number; colorUsed: number; lastActivityAt: Date | null }
+    >();
+
+    for (const row of rows) {
+      let entry = byPhone.get(row.phone);
+      if (!entry) {
+        entry = { bwUsed: 0, colorUsed: 0, lastActivityAt: null };
+        byPhone.set(row.phone, entry);
+      }
+      if (row.printColorMode === PrintColorMode.color) {
+        entry.colorUsed += row.pages;
+      } else {
+        entry.bwUsed += row.pages;
+      }
+      if (!entry.lastActivityAt || row.updatedAt > entry.lastActivityAt) {
+        entry.lastActivityAt = row.updatedAt;
+      }
+    }
+
+    const searchDigits = (input.q ?? '').replace(/\D/g, '');
+    let items = Array.from(byPhone.entries()).map(([phone, stats]) => ({
+      phone,
+      bwUsed: stats.bwUsed,
+      bwRemaining: Math.max(0, config.freeBwPages - stats.bwUsed),
+      colorUsed: stats.colorUsed,
+      colorRemaining: Math.max(0, config.freeColorPages - stats.colorUsed),
+      lastActivityAt: stats.lastActivityAt?.toISOString() ?? null,
+    }));
+
+    if (searchDigits) {
+      items = items.filter((item) => item.phone.replace(/\D/g, '').includes(searchDigits));
+    }
+
+    items.sort((a, b) => {
+      const aTime = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
+      const bTime = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
+      return bTime - aTime;
+    });
+
+    return {
+      period: config.period,
+      periodKey,
+      limits: {
+        freeBwPages: config.freeBwPages,
+        freeColorPages: config.freeColorPages,
+      },
+      items: items.slice(0, limit),
+    };
+  }
+
+  async getPhoneUsageDetail(phoneRaw: string, now: Date = new Date()) {
+    const phone = this.requireNormalizedPhone(phoneRaw);
+    const config = await this.settings.getPrintFreeQuotaConfig();
+    const periodKey = periodKeyFor(now, config.period);
+    const [bw, color] = await Promise.all([
+      this.getRemaining(phone, 'bw', now),
+      this.getRemaining(phone, 'color', now),
+    ]);
+
+    const entries = await this.db.phoneFreePageLedger.findMany({
+      where: { phone, periodKey },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        printColorMode: true,
+        pages: true,
+        status: true,
+        periodKey: true,
+        otpChallengeId: true,
+        quickPrintSessionId: true,
+        printJobId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      phone,
+      period: config.period,
+      periodKey,
+      limits: {
+        freeBwPages: config.freeBwPages,
+        freeColorPages: config.freeColorPages,
+      },
+      summary: {
+        bwUsed: config.freeBwPages - bw.remaining,
+        bwRemaining: bw.remaining,
+        colorUsed: config.freeColorPages - color.remaining,
+        colorRemaining: color.remaining,
+      },
+      entries: entries.map((entry) => ({
+        id: entry.id,
+        printColorMode: entry.printColorMode === PrintColorMode.color ? 'color' : 'bw',
+        pages: entry.pages,
+        status: entry.status,
+        periodKey: entry.periodKey,
+        source: entry.otpChallengeId
+          ? 'otp_print'
+          : entry.quickPrintSessionId
+            ? 'quick_print'
+            : 'unknown',
+        otpChallengeId: entry.otpChallengeId,
+        quickPrintSessionId: entry.quickPrintSessionId,
+        printJobId: entry.printJobId,
+        createdAt: entry.createdAt.toISOString(),
+        updatedAt: entry.updatedAt.toISOString(),
+      })),
+    };
+  }
 }

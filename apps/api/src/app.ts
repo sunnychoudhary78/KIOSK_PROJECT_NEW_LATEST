@@ -28,6 +28,7 @@ import { registerFuelStationsModule } from './modules/fuel_stations/index.js';
 import { registerWeatherModule } from './modules/weather/index.js';
 import { registerSurveillanceModule } from './modules/surveillance/index.js';
 import { registerQuickPrintModule } from './modules/quick_print/index.js';
+import { registerPrintQuotaModule } from './modules/print_quota/index.js';
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -92,6 +93,7 @@ export function createApp(deps: AppDeps): Express {
   registerPrintingModule(v1, deps);
   registerOtpPrintModule(v1, deps);
   registerQuickPrintModule(v1, deps);
+  registerPrintQuotaModule(v1, deps);
   registerPaymentsModule(v1, deps);
   registerDigiLockerModule(v1, deps);
   registerAdsModule(v1, deps);
