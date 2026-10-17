@@ -22,8 +22,60 @@ export type VedAstroChartResult = {
   details: CompactVedicChart;
 };
 
+export type KundaliStyle = 'north' | 'south';
+export type KundaliChartType = 'RasiD1';
+
+export type VedAstroKundaliInput = VedAstroBirthInput & {
+  style: KundaliStyle;
+  chartType?: KundaliChartType;
+};
+
+export type VedAstroKundaliResult = {
+  style: KundaliStyle;
+  chartType: KundaliChartType;
+  svg: string;
+};
+
 export interface VedAstroClient {
   getChart(input: VedAstroBirthInput): Promise<VedAstroChartResult>;
+  getKundaliSvg(input: VedAstroKundaliInput): Promise<VedAstroKundaliResult>;
+}
+
+export function kundaliCalculatorForStyle(style: KundaliStyle): 'NorthIndianChart' | 'SouthIndianChart' {
+  return style === 'south' ? 'SouthIndianChart' : 'NorthIndianChart';
+}
+
+/** Extract SVG markup from a VedAstro JSON or raw text response body. */
+export function extractKundaliSvg(body: unknown): string | undefined {
+  if (typeof body === 'string') {
+    const trimmed = body.trim();
+    if (trimmed.includes('<svg')) {
+      const start = trimmed.indexOf('<svg');
+      return trimmed.slice(start);
+    }
+    return undefined;
+  }
+  const record = asRecord(body);
+  if (!record) {
+    return undefined;
+  }
+  const payload = record.Payload ?? record.payload;
+  if (typeof payload === 'string' && payload.includes('<svg')) {
+    const trimmed = payload.trim();
+    const start = trimmed.indexOf('<svg');
+    return trimmed.slice(start);
+  }
+  if (payload && typeof payload === 'object') {
+    const nested = asRecord(payload);
+    for (const key of ['Svg', 'svg', 'Chart', 'chart', 'Content', 'content']) {
+      const value = nested?.[key];
+      if (typeof value === 'string' && value.includes('<svg')) {
+        const trimmed = value.trim();
+        return trimmed.slice(trimmed.indexOf('<svg'));
+      }
+    }
+  }
+  return undefined;
 }
 
 type FetchLike = typeof fetch;
@@ -330,6 +382,43 @@ export function createVedAstroClient(options: {
     return body;
   }
 
+  async function getKundaliBody(url: string): Promise<unknown> {
+    const response = await fetchImpl(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json, image/svg+xml, text/plain, */*' },
+      signal: AbortSignal.timeout(VEDASTRO_FETCH_TIMEOUT_MS),
+    });
+    const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
+    const text = await response.text();
+    if (!response.ok) {
+      throw new AppError('vedastro_failed', 'VedAstro kundali request failed', 502, {
+        status: response.status,
+        url,
+      });
+    }
+
+    if (contentType.includes('json') || text.trimStart().startsWith('{')) {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(text) as unknown;
+      } catch {
+        body = null;
+      }
+      const record = asRecord(body);
+      const status = asString(record?.Status ?? record?.status);
+      if (status && status.toLowerCase() !== 'pass' && status.toLowerCase() !== 'success') {
+        throw new AppError('vedastro_failed', 'VedAstro returned an error status', 502, {
+          status,
+          url,
+          payload: record?.Payload ?? record?.payload,
+        });
+      }
+      return body;
+    }
+
+    return text;
+  }
+
   return {
     async getChart(input: VedAstroBirthInput): Promise<VedAstroChartResult> {
       const location = sanitizeVedAstroLocation(input.birthPlace);
@@ -389,6 +478,58 @@ export function createVedAstroClient(options: {
         }
         options.logger.error({ err: error }, '[VedAstro] chart fetch failed');
         throw new AppError('vedastro_failed', 'Unable to compute Vedic chart', 502);
+      }
+    },
+
+    async getKundaliSvg(input: VedAstroKundaliInput): Promise<VedAstroKundaliResult> {
+      const chartType: KundaliChartType = input.chartType ?? 'RasiD1';
+      const calculator = kundaliCalculatorForStyle(input.style);
+      const location = sanitizeVedAstroLocation(input.birthPlace);
+      const url = buildVedAstroCalculateUrl({
+        baseUrl,
+        calculator,
+        extraPath: `ChartType/${chartType}`,
+        location,
+        birthTime: input.birthTime,
+        dateOfBirth: input.dateOfBirth,
+        utcOffset: input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET,
+      });
+
+      options.logger.info(
+        { location, dateOfBirth: input.dateOfBirth, style: input.style, chartType, calculator },
+        '[VedAstro] fetching kundali SVG',
+      );
+      const startedAt = Date.now();
+
+      try {
+        const body = await getKundaliBody(url);
+        const svg = extractKundaliSvg(body);
+        if (!svg) {
+          throw new AppError('vedastro_failed', 'VedAstro returned an empty kundali chart', 502, {
+            url,
+          });
+        }
+        options.logger.info(
+          {
+            url,
+            style: input.style,
+            chartType,
+            svgBytes: svg.length,
+            durationMs: Date.now() - startedAt,
+          },
+          '[VedAstro] kundali SVG ready',
+        );
+        return {
+          style: input.style,
+          chartType,
+          svg,
+        };
+      } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
+        options.logger.error({ err: error }, '[VedAstro] kundali fetch failed');
+        throw new AppError('vedastro_failed', 'Unable to generate kundali chart', 502);
       }
     },
   };

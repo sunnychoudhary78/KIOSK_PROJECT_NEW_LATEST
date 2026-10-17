@@ -69,6 +69,13 @@ export const createReadingFieldsSchema = z.object({
 
 export type CreateReadingFields = z.infer<typeof createReadingFieldsSchema>;
 
+export const createKundaliBodySchema = createReadingFieldsSchema.extend({
+  style: z.enum(['north', 'south']),
+  chartType: z.literal('RasiD1').optional().default('RasiD1'),
+});
+
+export type CreateKundaliBody = z.infer<typeof createKundaliBodySchema>;
+
 export const chartSummarySchema = z.object({
   lagna: z.string().optional(),
   sunSign: z.string().optional(),

@@ -5,6 +5,8 @@ import {
   normalizeVedAstroBaseUrl,
   sanitizeVedAstroLocation,
   createVedAstroClient,
+  extractKundaliSvg,
+  kundaliCalculatorForStyle,
   toChartSummary,
 } from '../src/infrastructure/external/vedastro.client.js';
 import { AppError } from '../src/shared/errors.js';
@@ -113,6 +115,47 @@ describe('VedAstro URL builder', () => {
     expect(url).toContain(
       '/Calculate/AllHouseData/HouseName/All/Location/NewDelhi/Time/12:00/01/12/2000/+05:30',
     );
+  });
+
+  it('builds North/South kundali Calculate paths with ChartType', () => {
+    expect(kundaliCalculatorForStyle('north')).toBe('NorthIndianChart');
+    expect(kundaliCalculatorForStyle('south')).toBe('SouthIndianChart');
+    const north = buildVedAstroCalculateUrl({
+      baseUrl: 'https://api.vedastro.org',
+      calculator: kundaliCalculatorForStyle('north'),
+      extraPath: 'ChartType/RasiD1',
+      location: 'Jaipur/Rajasthan',
+      birthTime: '14:20',
+      dateOfBirth: '1990-01-15',
+    });
+    expect(north).toBe(
+      'https://api.vedastro.org/api/Calculate/NorthIndianChart/ChartType/RasiD1/Location/Jaipur/Rajasthan/Time/14:20/15/01/1990/+05:30',
+    );
+    const south = buildVedAstroCalculateUrl({
+      baseUrl: 'https://api.vedastro.org/api',
+      calculator: kundaliCalculatorForStyle('south'),
+      extraPath: 'ChartType/RasiD1',
+      location: 'NewDelhi',
+      birthTime: '12:00',
+      dateOfBirth: '2000-12-01',
+    });
+    expect(south).toContain('/Calculate/SouthIndianChart/ChartType/RasiD1/Location/NewDelhi/');
+  });
+});
+
+describe('extractKundaliSvg', () => {
+  const sampleSvg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>';
+
+  it('reads SVG from Payload string', () => {
+    expect(extractKundaliSvg({ Status: 'Pass', Payload: sampleSvg })).toBe(sampleSvg);
+  });
+
+  it('reads raw SVG text and strips leading junk', () => {
+    expect(extractKundaliSvg(`prefix ${sampleSvg}`)).toBe(sampleSvg);
+  });
+
+  it('returns undefined when no SVG is present', () => {
+    expect(extractKundaliSvg({ Status: 'Pass', Payload: 'not a chart' })).toBeUndefined();
   });
 });
 
@@ -272,5 +315,52 @@ describe('createVedAstroClient', () => {
       code: 'vedastro_failed',
       details: { payload: 'Calculator method not found!' },
     });
+  });
+
+  it('returns kundali SVG from NorthIndianChart Payload', async () => {
+    const sampleSvg = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>';
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+      expect(href).toContain('/Calculate/NorthIndianChart/ChartType/RasiD1/');
+      return new Response(JSON.stringify({ Status: 'Pass', Payload: sampleSvg }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const result = await client.getKundaliSvg({
+      dateOfBirth: '1991-06-02',
+      birthTime: '08:15',
+      birthPlace: 'Pune',
+      style: 'north',
+    });
+    expect(result).toEqual({
+      style: 'north',
+      chartType: 'RasiD1',
+      svg: sampleSvg,
+    });
+  });
+
+  it('throws when kundali response has no SVG', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ Status: 'Pass', Payload: 'ok' }), { status: 200 }),
+    );
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(
+      client.getKundaliSvg({
+        dateOfBirth: '1991-06-02',
+        birthTime: '08:15',
+        birthPlace: 'Pune',
+        style: 'south',
+      }),
+    ).rejects.toMatchObject({ code: 'vedastro_failed' });
   });
 });

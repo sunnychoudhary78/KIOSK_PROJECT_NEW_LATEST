@@ -42,38 +42,34 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
 
     final isHorizontal = widget.axis == HomeBannerAxis.horizontal;
 
-    return SizedBox(
-      height: isHorizontal ? widget.height : null,
-      width: isHorizontal ? null : widget.width,
-      child: PageView.builder(
-        scrollDirection: isHorizontal ? Axis.horizontal : Axis.vertical,
-        itemCount: banners.length,
-        itemBuilder: (context, index) {
-          final ad = banners[index];
-          unawaited(_ensureLoaded(ad));
-          _reportImpression(ad);
-          final data = _bytes[ad.id];
-          return Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: isHorizontal ? 4 : 0,
-              horizontal: isHorizontal ? 0 : 4,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-              child: data == null
-                  ? const ColoredBox(
-                      color: SkpColors.raised,
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  : Image.memory(
-                      data,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                    ),
-            ),
-          );
-        },
+    return ColoredBox(
+      color: SkpColors.raised,
+      child: SizedBox(
+        height: isHorizontal ? widget.height : null,
+        width: isHorizontal ? null : widget.width,
+        child: PageView.builder(
+          scrollDirection: isHorizontal ? Axis.horizontal : Axis.vertical,
+          itemCount: banners.length,
+          itemBuilder: (context, index) {
+            final ad = banners[index];
+            unawaited(_ensureLoaded(ad));
+            _reportImpression(ad);
+            final data = _bytes[ad.id];
+            if (data == null) {
+              return const ColoredBox(
+                color: SkpColors.raised,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return Image.memory(
+              data,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              gaplessPlayback: true,
+            );
+          },
+        ),
       ),
     );
   }

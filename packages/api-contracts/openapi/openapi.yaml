@@ -604,6 +604,60 @@ paths:
         '502':
           description: VedAstro or OpenAI failed
 
+  /astrology/kundali:
+    post:
+      tags: [Astrology]
+      summary: Generate a North or South Indian SVG kundali with chart summary tiles
+      operationId: createAstrologyKundali
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, gender, dateOfBirth, birthTime, birthPlace, style]
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                gender:
+                  type: string
+                  enum: [male, female, other]
+                dateOfBirth:
+                  type: string
+                  format: date
+                birthTime:
+                  type: string
+                  description: HH:mm, 24-hour. Use 12:00 when unknown.
+                  example: '14:20'
+                birthPlace:
+                  type: string
+                  example: Jaipur, Rajasthan
+                birthTimeUnknown:
+                  type: boolean
+                style:
+                  type: string
+                  enum: [north, south]
+                chartType:
+                  type: string
+                  enum: [RasiD1]
+                  default: RasiD1
+      responses:
+        '200':
+          description: SVG kundali plus chart summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AstrologyKundaliResponse'
+        '400':
+          description: Validation failed
+        '403':
+          description: Service disabled for this device
+        '502':
+          description: VedAstro failed
+
   /otp-challenges:
     get:
       tags: [OtpPrint]
@@ -2678,4 +2732,51 @@ components:
             relationships:
               type: string
             period:
+              type: string
+
+    AstrologyKundaliResponse:
+      type: object
+      required: [disclaimer, subject, style, chartType, svg, chart]
+      properties:
+        disclaimer:
+          type: string
+        subject:
+          type: object
+          required: [name, gender, dateOfBirth, birthTime, birthPlace, birthTimeUnknown]
+          properties:
+            name:
+              type: string
+            gender:
+              type: string
+              enum: [male, female, other]
+            dateOfBirth:
+              type: string
+              format: date
+            birthTime:
+              type: string
+            birthPlace:
+              type: string
+            birthTimeUnknown:
+              type: boolean
+        style:
+          type: string
+          enum: [north, south]
+        chartType:
+          type: string
+          enum: [RasiD1]
+        svg:
+          type: string
+          description: Raw SVG markup for the kundali chart
+        chart:
+          type: object
+          properties:
+            lagna:
+              type: string
+            sunSign:
+              type: string
+            moonSign:
+              type: string
+            nakshatra:
+              type: string
+            currentDasha:
               type: string

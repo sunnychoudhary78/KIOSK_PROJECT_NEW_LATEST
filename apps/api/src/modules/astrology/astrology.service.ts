@@ -10,6 +10,7 @@ import {
   ASTROLOGY_DISCLAIMER,
   sniffPalmImageMime,
   type ChartSummary,
+  type CreateKundaliBody,
   type CreateReadingFields,
   type LlmReading,
   type ReadingSubject,
@@ -25,6 +26,15 @@ export type AstrologyReadingResponse = {
   chart: ChartSummary;
   palm: LlmReading['palm'];
   reading: LlmReading['reading'];
+};
+
+export type AstrologyKundaliResponse = {
+  disclaimer: string;
+  subject: ReadingSubject;
+  style: 'north' | 'south';
+  chartType: 'RasiD1';
+  svg: string;
+  chart: ChartSummary;
 };
 
 export class AstrologyService {
@@ -129,6 +139,84 @@ export class AstrologyService {
       chart: chart.summary,
       palm: generated.palm,
       reading: generated.reading,
+    };
+  }
+
+  async createKundali(
+    deviceId: string,
+    fields: CreateKundaliBody,
+    correlationId?: string,
+  ): Promise<AstrologyKundaliResponse> {
+    const startedAt = Date.now();
+    await this.services.assertEnabled(deviceId, 'astrology');
+
+    const subject: ReadingSubject = {
+      name: fields.name,
+      gender: fields.gender,
+      dateOfBirth: fields.dateOfBirth,
+      birthTime: fields.birthTime,
+      birthPlace: fields.birthPlace,
+      birthTimeUnknown: Boolean(fields.birthTimeUnknown),
+    };
+
+    this.logger.info(
+      {
+        correlationId,
+        deviceId,
+        style: fields.style,
+        chartType: fields.chartType,
+        subject,
+      },
+      '[Astrology] kundali started',
+    );
+
+    const birth = {
+      dateOfBirth: subject.dateOfBirth,
+      birthTime: subject.birthTime,
+      birthPlace: subject.birthPlace,
+    };
+
+    const [kundali, chart] = await Promise.all([
+      this.vedastro.getKundaliSvg({
+        ...birth,
+        style: fields.style,
+        chartType: fields.chartType,
+      }),
+      this.vedastro.getChart(birth),
+    ]);
+
+    await this.audit.record({
+      action: 'astrology.kundali_generated',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'astrology_kundali',
+      correlationId,
+      metadata: {
+        style: fields.style,
+        chartType: fields.chartType,
+        birthPlace: subject.birthPlace,
+        birthTimeUnknown: subject.birthTimeUnknown,
+      },
+    });
+
+    this.logger.info(
+      {
+        correlationId,
+        style: fields.style,
+        chart: chart.summary,
+        svgBytes: kundali.svg.length,
+        durationMs: Date.now() - startedAt,
+      },
+      '[Astrology] kundali ready',
+    );
+
+    return {
+      disclaimer: ASTROLOGY_DISCLAIMER,
+      subject,
+      style: kundali.style,
+      chartType: kundali.chartType,
+      svg: kundali.svg,
+      chart: chart.summary,
     };
   }
 

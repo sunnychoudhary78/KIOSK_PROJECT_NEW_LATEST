@@ -19,6 +19,7 @@ import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view
 import 'package:skp_kiosk/features/astrology/presentation/astrology_result_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/palm_overlay.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/palm_seal_ring.dart';
@@ -889,403 +890,106 @@ class _FormView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showKeyboard = focus == 0 || focus == 1;
-    final showDate = focus == 2;
-    final showTime = focus == 3 && !timeUnknown;
     final theme = Theme.of(context);
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const CosmicBackdrop(),
-        Column(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(32, 8, 32, 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (palmPreview != null) ...[
-                      SizedBox(
-                        width: 220,
-                        child: GlassPanel(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            children: [
-                              Row(
-                                children: [
-                                  const ClipOval(
-                                    child: AstrologyAssetImage(
-                                      asset: AstrologyAssets.sealMedallion,
-                                      width: 36,
-                                      height: 36,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AstrologyColors.gold
-                                            .withValues(alpha: 0.16),
-                                        borderRadius: BorderRadius.circular(999),
-                                        border: Border.all(
-                                          color: AstrologyColors.gold
-                                              .withValues(alpha: 0.55),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'PALM LOCKED',
-                                        textAlign: TextAlign.center,
-                                        style:
-                                            theme.textTheme.labelMedium?.copyWith(
-                                          color: AstrologyColors.gold,
-                                          letterSpacing: 1.2,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Expanded(
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Image.memory(
-                                        palmPreview!,
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                      ),
-                                    ),
-                                    const Positioned(
-                                      right: 8,
-                                      bottom: 8,
-                                      child: AstrologyAssetImage(
-                                        asset: AstrologyAssets.sealMedallion,
-                                        width: 48,
-                                        height: 48,
-                                        opacity: 0.9,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+    Widget? leading;
+    if (palmPreview != null) {
+      leading = SizedBox(
+        width: 220,
+        child: GlassPanel(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const ClipOval(
+                    child: AstrologyAssetImage(
+                      asset: AstrologyAssets.sealMedallion,
+                      width: 36,
+                      height: 36,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AstrologyColors.gold.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: AstrologyColors.gold.withValues(alpha: 0.55),
                         ),
                       ),
-                      const SizedBox(width: 20),
-                    ],
-                    Expanded(
-                      child: GlassPanel(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                        child: ListView(
-                          children: [
-                            Text(
-                              'Birth details',
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                color: AstrologyColors.gold,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Tell the stars a little about you',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: AstrologyColors.muted,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            _CosmicTextField(
-                              label: 'Name',
-                              hint: 'Your name',
-                              value: nameController.text,
-                              focused: focus == 0,
-                              onTap: () => onFocus(0),
-                            ),
-                            const SizedBox(height: 10),
-                            _CosmicTextField(
-                              label: 'Place of birth',
-                              hint: 'City, State',
-                              value: placeController.text,
-                              focused: focus == 1,
-                              onTap: () => onFocus(1),
-                            ),
-                            const SizedBox(height: 14),
-                            Text(
-                              'Gender',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: AstrologyColors.text,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            _GenderSegment(
-                              gender: gender,
-                              onGender: onGender,
-                            ),
-                            const SizedBox(height: 12),
-                            _CosmicTextField(
-                              label: 'Date of birth',
-                              value: dob.toIso8601String().split('T').first,
-                              focused: focus == 2,
-                              onTap: () => onFocus(2),
-                            ),
-                            const SizedBox(height: 10),
-                            _ChoiceTile(
-                              label: 'I do not know the birth time',
-                              selected: timeUnknown,
-                              onTap: () => onTimeUnknown(!timeUnknown),
-                            ),
-                            if (!timeUnknown) ...[
-                              const SizedBox(height: 10),
-                              _CosmicTextField(
-                                label: 'Birth time',
-                                value:
-                                    '${birthTime.hour.toString().padLeft(2, '0')}:${birthTime.minute.toString().padLeft(2, '0')}',
-                                focused: focus == 3,
-                                onTap: () => onFocus(3),
-                              ),
-                            ],
-                            if (error != null) ...[
-                              const SizedBox(height: 12),
-                              GlassPanel(
-                                padding: const EdgeInsets.all(14),
-                                borderColor: AstrologyColors.danger.withValues(alpha: 0.55),
-                                color: AstrologyColors.danger.withValues(alpha: 0.18),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.error_outline,
-                                      color: AstrologyColors.danger,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        error!,
-                                        style: theme.textTheme.bodyLarge?.copyWith(
-                                          color: AstrologyColors.text,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
+                      child: Text(
+                        'PALM LOCKED',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: AstrologyColors.gold,
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.memory(
+                        palmPreview!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      ),
+                    ),
+                    const Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: AstrologyAssetImage(
+                        asset: AstrologyAssets.sealMedallion,
+                        width: 48,
+                        height: 48,
+                        opacity: 0.9,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            if (showKeyboard)
-              SizedBox(
-                height: 220,
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                    colorScheme: Theme.of(context).colorScheme.copyWith(
-                          surface: AstrologyColors.panelSolid,
-                          onSurface: AstrologyColors.text,
-                        ),
-                  ),
-                  child: KioskKeyboard(onKey: onKey, onBackspace: onBackspace),
-                ),
-              )
-            else if (showDate)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
-                child: SizedBox(
-                  height: 200,
-                  child: KioskDateStepper(value: dob, onChanged: onDob),
-                ),
-              )
-            else if (showTime)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
-                child: SizedBox(
-                  height: 200,
-                  child: KioskTimeStepper(value: birthTime, onChanged: onTime),
-                ),
-              ),
-          ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const CosmicBackdrop(),
+        AstrologyBirthFormPanel(
+          nameController: nameController,
+          placeController: placeController,
+          dob: dob,
+          birthTime: birthTime,
+          timeUnknown: timeUnknown,
+          gender: gender,
+          focus: focus,
+          error: error,
+          leading: leading,
+          onFocus: onFocus,
+          onDob: onDob,
+          onTime: onTime,
+          onTimeUnknown: onTimeUnknown,
+          onGender: onGender,
+          onKey: onKey,
+          onBackspace: onBackspace,
         ),
       ],
-    );
-  }
-}
-
-class _CosmicTextField extends StatelessWidget {
-  const _CosmicTextField({
-    required this.label,
-    required this.value,
-    required this.focused,
-    required this.onTap,
-    this.hint,
-  });
-
-  final String label;
-  final String value;
-  final bool focused;
-  final VoidCallback onTap;
-  final String? hint;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: double.infinity,
-        constraints: const BoxConstraints(minHeight: SkpTokens.tapMin),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: AstrologyColors.raised,
-          borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-          border: Border.all(
-            color: focused
-                ? AstrologyColors.gold
-                : AstrologyColors.line,
-            width: focused ? 2 : SkpTokens.hairline,
-          ),
-          boxShadow: focused
-              ? [
-                  BoxShadow(
-                    color: AstrologyColors.gold.withValues(alpha: 0.22),
-                    blurRadius: 12,
-                  ),
-                ]
-              : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: focused ? AstrologyColors.gold : AstrologyColors.muted,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value.isEmpty ? (hint ?? '') : value,
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: value.isEmpty ? AstrologyColors.muted : AstrologyColors.text,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GenderSegment extends StatelessWidget {
-  const _GenderSegment({required this.gender, required this.onGender});
-
-  final String gender;
-  final ValueChanged<String> onGender;
-
-  @override
-  Widget build(BuildContext context) {
-    const options = [
-      ('female', 'Female'),
-      ('male', 'Male'),
-      ('other', 'Other'),
-    ];
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: AstrologyColors.raised,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-        border: Border.all(color: AstrologyColors.line),
-      ),
-      child: Row(
-        children: [
-          for (final option in options)
-            Expanded(
-              child: InkWell(
-                onTap: () => onGender(option.$1),
-                borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: gender == option.$1
-                            ? AstrologyColors.gold
-                            : Colors.transparent,
-                        width: 3,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    option.$2,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: gender == option.$1
-                              ? AstrologyColors.gold
-                              : AstrologyColors.muted,
-                          fontWeight:
-                              gender == option.$1 ? FontWeight.w700 : FontWeight.w500,
-                        ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChoiceTile extends StatelessWidget {
-  const _ChoiceTile({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? AstrologyColors.gold.withValues(alpha: 0.18)
-          : AstrologyColors.raised,
-      borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-        child: Container(
-          height: 64,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-            border: Border.all(
-              color: selected ? AstrologyColors.gold : AstrologyColors.line,
-            ),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: selected ? AstrologyColors.gold : AstrologyColors.text,
-                ),
-          ),
-        ),
-      ),
     );
   }
 }

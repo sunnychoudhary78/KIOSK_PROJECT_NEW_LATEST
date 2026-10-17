@@ -43,6 +43,11 @@ describe('AstrologyService.createReading', () => {
         summary: { sunSign: 'Pisces', moonSign: 'Taurus' },
         details: { sunSign: 'Pisces', moonSign: 'Taurus', planets: [], houses: [] },
       })),
+      getKundaliSvg: vi.fn(async () => ({
+        style: 'north' as const,
+        chartType: 'RasiD1' as const,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+      })),
     };
     const llm: AstrologyLlmClient = {
       generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
@@ -128,5 +133,94 @@ describe('AstrologyService.createReading', () => {
     });
     expect(vedastro.getChart).not.toHaveBeenCalled();
     expect(llm.generateReading).not.toHaveBeenCalled();
+  });
+});
+
+describe('AstrologyService.createKundali', () => {
+  const fields = {
+    name: 'Asha',
+    gender: 'female' as const,
+    dateOfBirth: '1992-03-18',
+    birthTime: '12:00',
+    birthPlace: 'Jaipur',
+    birthTimeUnknown: true,
+    style: 'north' as const,
+    chartType: 'RasiD1' as const,
+  };
+
+  function setup(overrides?: { enabled?: boolean }) {
+    const db = {
+      astrologyReading: {
+        create: vi.fn(async () => {
+          throw new Error('kundali must not persist readings');
+        }),
+      },
+    };
+    const vedastro: VedAstroClient = {
+      getChart: vi.fn(async () => ({
+        summary: { lagna: 'Pisces', sunSign: 'Pisces', moonSign: 'Taurus' },
+        details: {
+          lagna: 'Pisces',
+          sunSign: 'Pisces',
+          moonSign: 'Taurus',
+          planets: [],
+          houses: [],
+        },
+      })),
+      getKundaliSvg: vi.fn(async () => ({
+        style: 'north' as const,
+        chartType: 'RasiD1' as const,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
+      })),
+    };
+    const llm: AstrologyLlmClient = {
+      generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
+    };
+    const audit = { record: vi.fn(async () => undefined) };
+    const services = {
+      assertEnabled: vi.fn(async () => {
+        if (overrides?.enabled === false) {
+          throw new AppError('service_disabled', 'Service astrology is disabled for this device', 403);
+        }
+      }),
+    };
+    const service = new AstrologyService(
+      db as unknown as DbClient,
+      vedastro,
+      llm,
+      audit as unknown as AuditService,
+      services as unknown as ServicesCatalogService,
+      silentLogger,
+    );
+    return { service, db, vedastro, llm, audit };
+  }
+
+  it('returns SVG and chart summary without LLM or DB', async () => {
+    const { service, vedastro, llm, db, audit } = setup();
+    const result = await service.createKundali('device-1', fields, 'corr-k');
+    expect(result.svg).toContain('<svg');
+    expect(result.style).toBe('north');
+    expect(result.chartType).toBe('RasiD1');
+    expect(result.chart.lagna).toBe('Pisces');
+    expect(result.disclaimer).toBe(ASTROLOGY_DISCLAIMER);
+    expect(vedastro.getKundaliSvg).toHaveBeenCalledOnce();
+    expect(vedastro.getChart).toHaveBeenCalledOnce();
+    expect(llm.generateReading).not.toHaveBeenCalled();
+    expect(db.astrologyReading.create).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'astrology.kundali_generated',
+        metadata: expect.objectContaining({ style: 'north', birthPlace: 'Jaipur' }),
+      }),
+    );
+  });
+
+  it('does not call VedAstro when the service is disabled', async () => {
+    const { service, vedastro } = setup({ enabled: false });
+    await expect(service.createKundali('device-1', fields)).rejects.toMatchObject({
+      code: 'service_disabled',
+    });
+    expect(vedastro.getKundaliSvg).not.toHaveBeenCalled();
+    expect(vedastro.getChart).not.toHaveBeenCalled();
   });
 });

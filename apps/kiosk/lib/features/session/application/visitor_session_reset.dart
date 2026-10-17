@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
+import 'package:skp_kiosk/features/astrology/application/my_kundali_controller.dart';
 import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
 import 'package:skp_kiosk/features/fuel_stations/application/fuel_stations_controller.dart';
@@ -55,6 +56,7 @@ Future<void> resetVisitorSession(
   ref.invalidate(otpPrintControllerProvider);
   ref.invalidate(quickPrintControllerProvider);
   ref.invalidate(astrologyControllerProvider);
+  ref.invalidate(myKundaliControllerProvider);
   ref.invalidate(wellBeingControllerProvider);
   ref.invalidate(chargingControllerProvider);
   ref.invalidate(fuelStationsControllerProvider);

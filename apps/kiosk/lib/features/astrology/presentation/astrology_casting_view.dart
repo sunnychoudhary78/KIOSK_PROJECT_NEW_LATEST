@@ -9,7 +9,10 @@ import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.da
 
 /// Casting wait: ads behind a glass “chart casting” overlay (keeps session hold).
 class AstrologyCastingView extends StatefulWidget {
-  const AstrologyCastingView({super.key});
+  const AstrologyCastingView({super.key, this.lines});
+
+  /// Rotating status lines. Defaults to the palm-reading copy.
+  final List<String>? lines;
 
   @override
   State<AstrologyCastingView> createState() => _AstrologyCastingViewState();
@@ -17,11 +20,14 @@ class AstrologyCastingView extends StatefulWidget {
 
 class _AstrologyCastingViewState extends State<AstrologyCastingView>
     with TickerProviderStateMixin {
-  static const _lines = [
+  static const _defaultLines = [
     'Reading your palm lines…',
     'Mapping Lagna & Nakshatra…',
     'Weaving your period guidance…',
   ];
+
+  List<String> get _lines =>
+      (widget.lines == null || widget.lines!.isEmpty) ? _defaultLines : widget.lines!;
 
   late final AnimationController _orbit;
   late final AnimationController _copy;

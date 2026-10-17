@@ -4,7 +4,11 @@ import type { AppDeps } from '../../types/deps.js';
 import { requireDevice } from '../../shared/device-guard.js';
 import { AppError } from '../../shared/errors.js';
 import { ServicesCatalogService } from '../services/services.service.js';
-import { createReadingFieldsSchema, type UploadedPalm } from './astrology.schemas.js';
+import {
+  createKundaliBodySchema,
+  createReadingFieldsSchema,
+  type UploadedPalm,
+} from './astrology.schemas.js';
 import { AstrologyService } from './astrology.service.js';
 
 const upload = multer({
@@ -58,6 +62,35 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
           req.correlationId,
         );
         res.status(201).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/kundali',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const parsed = createKundaliBodySchema.safeParse(req.body);
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_error',
+            'Request validation failed',
+            400,
+            parsed.error.flatten(),
+          );
+        }
+        const result = await service.createKundali(
+          req.principal.deviceId,
+          parsed.data,
+          req.correlationId,
+        );
+        res.status(200).json(result);
       } catch (error) {
         next(error);
       }

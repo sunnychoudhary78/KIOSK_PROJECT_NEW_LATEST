@@ -1,0 +1,177 @@
+<!-- MADE BY MACHINES FOR HUMAN EYES -->
+<svg viewBox="0 0 1000 1000" width="1000px" height="1000px"
+     class="SkyChartHolder north-indian-chart" id="4a076a4d703a4394b9a245bceb264731"
+     role="img" aria-label="North Indian RasiD1 astrology chart"
+     xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <linearGradient id="pageBackground" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#e7ebf1"/>
+    </linearGradient>
+    <linearGradient id="frameGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb348"/>
+      <stop offset="0.46" stop-color="#f79524"/>
+      <stop offset="1" stop-color="#d97812"/>
+    </linearGradient>
+    <linearGradient id="centerHouse" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="1" stop-color="#fff1d6"/>
+    </linearGradient>
+    <linearGradient id="medallion" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffad38"/>
+      <stop offset="1" stop-color="#e37d13"/>
+    </linearGradient>
+    <filter id="boardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="9" stdDeviation="12" flood-color="#6b3e16" flood-opacity="0.25"/>
+    </filter>
+    <style><![CDATA[
+      .chart-text { font-family: Inter, "Segoe UI", Arial, sans-serif; }
+      .house-shape { transition: fill .18s ease; }
+      .house:hover .house-shape { fill: #fff0cf; }
+      .sign-name { fill: #a65221; font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+      .zodiac-symbol { fill: #ff5f8f; font-family: "Segoe UI Symbol", sans-serif; font-size: 27px; }
+      .planet-name { fill: #20242b; font-size: 28px; font-weight: 600; }
+      .house-number { fill: #fff; font-size: 15px; font-weight: 800; }
+    ]]></style>
+  </defs>
+  <rect width="1000" height="1000" fill="url(#pageBackground)"/>
+  <rect x="29" y="29" width="942" height="942" rx="30" fill="#78491f" opacity="0.22" filter="url(#boardShadow)"/>
+  <rect x="25" y="25" width="950" height="950" rx="30" fill="url(#frameGold)" stroke="#9a6127" stroke-width="4"/>
+  <rect x="39" y="39" width="922" height="922" rx="22" fill="#ffd18a" stroke="#8f5923" stroke-width="3"/>
+  <rect x="54" y="54" width="892" height="892" rx="13" fill="#fffdf8" stroke="#f39a2c" stroke-width="8"/>
+  <g id="HouseBackgroundLayer">
+    <g class="house house-1"><polygon class="house-shape" points="500,64 718,282 500,500 282,282" fill="url(#centerHouse)"/></g>
+    <g class="house house-2"><polygon class="house-shape" points="64,64 500,64 282,282" fill="#fffdf8"/></g>
+    <g class="house house-3"><polygon class="house-shape" points="64,64 282,282 64,500" fill="#fff9ee"/></g>
+    <g class="house house-4"><polygon class="house-shape" points="64,500 282,282 500,500 282,718" fill="url(#centerHouse)"/></g>
+    <g class="house house-5"><polygon class="house-shape" points="64,500 282,718 64,936" fill="#fff9ee"/></g>
+    <g class="house house-6"><polygon class="house-shape" points="64,936 282,718 500,936" fill="#fffdf8"/></g>
+    <g class="house house-7"><polygon class="house-shape" points="282,718 500,500 718,718 500,936" fill="url(#centerHouse)"/></g>
+    <g class="house house-8"><polygon class="house-shape" points="500,936 718,718 936,936" fill="#fffdf8"/></g>
+    <g class="house house-9"><polygon class="house-shape" points="718,718 936,500 936,936" fill="#fff9ee"/></g>
+    <g class="house house-10"><polygon class="house-shape" points="500,500 718,282 936,500 718,718" fill="url(#centerHouse)"/></g>
+    <g class="house house-11"><polygon class="house-shape" points="718,282 936,64 936,500" fill="#fff9ee"/></g>
+    <g class="house house-12"><polygon class="house-shape" points="500,64 936,64 718,282" fill="#fffdf8"/></g>
+  </g>
+  <g id="HouseGridLayer" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 64H936V936H64Z" stroke="#9b5f25" stroke-width="5"/>
+    <path d="M64 64L500 500L936 64 M64 936L500 500L936 936" stroke="#bd7128" stroke-width="3.5"/>
+    <path d="M500 64L936 500L500 936L64 500Z" stroke="#bd7128" stroke-width="3.5"/>
+  </g>
+  <g id="ChartContentLayer" class="chart-text">
+    <g class="house-label house-label-1">
+      <title>House 1: Capricorn</title>
+      <rect x="395" y="178" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="425" cy="200" r="17" fill="#3927e8"/>
+      <text class="house-number" x="425" y="205" text-anchor="middle">1</text>
+      <text class="zodiac-symbol" x="452" y="209">♑</text>
+      <text class="sign-name" x="487" y="206" text-anchor="start">CAPRICORN</text>
+    </g>
+    <g class="house-label house-label-2">
+      <title>House 2: Aquarius — Jupiter, Ketu</title>
+      <rect x="185" y="73" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="215" cy="95" r="17" fill="#3927e8"/>
+      <text class="house-number" x="215" y="100" text-anchor="middle">2</text>
+      <text class="zodiac-symbol" x="242" y="104">♒</text>
+      <text class="sign-name" x="277" y="101" text-anchor="start">AQUARIUS</text>
+      <text class="planet-name" x="290" y="150.5" text-anchor="middle" style="font-size:28px">Jupiter</text>
+      <text class="planet-name" x="290" y="183.5" text-anchor="middle" style="font-size:28px">Ketu</text>
+    </g>
+    <g class="house-label house-label-3">
+      <title>House 3: Pisces</title>
+      <rect x="64" y="232" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="94" cy="254" r="17" fill="#3927e8"/>
+      <text class="house-number" x="94" y="259" text-anchor="middle">3</text>
+      <text class="zodiac-symbol" x="121" y="263">♓</text>
+      <text class="sign-name" x="156" y="260" text-anchor="start">PISCES</text>
+    </g>
+    <g class="house-label house-label-4">
+      <title>House 4: Aries — Saturn</title>
+      <rect x="133" y="440" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="163" cy="462" r="17" fill="#3927e8"/>
+      <text class="house-number" x="163" y="467" text-anchor="middle">4</text>
+      <text class="zodiac-symbol" x="190" y="471">♈</text>
+      <text class="sign-name" x="225" y="468" text-anchor="start">ARIES</text>
+      <text class="planet-name" x="238" y="534" text-anchor="middle" style="font-size:28px">Saturn</text>
+    </g>
+    <g class="house-label house-label-5">
+      <title>House 5: Taurus</title>
+      <rect x="64" y="648" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="94" cy="670" r="17" fill="#3927e8"/>
+      <text class="house-number" x="94" y="675" text-anchor="middle">5</text>
+      <text class="zodiac-symbol" x="121" y="679">♉</text>
+      <text class="sign-name" x="156" y="676" text-anchor="start">TAURUS</text>
+    </g>
+    <g class="house-label house-label-6">
+      <title>House 6: Gemini</title>
+      <rect x="185" y="807" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="215" cy="829" r="17" fill="#3927e8"/>
+      <text class="house-number" x="215" y="834" text-anchor="middle">6</text>
+      <text class="zodiac-symbol" x="242" y="838">♊</text>
+      <text class="sign-name" x="277" y="835" text-anchor="start">GEMINI</text>
+    </g>
+    <g class="house-label house-label-7">
+      <title>House 7: Cancer</title>
+      <rect x="395" y="702" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="425" cy="724" r="17" fill="#3927e8"/>
+      <text class="house-number" x="425" y="729" text-anchor="middle">7</text>
+      <text class="zodiac-symbol" x="452" y="733">♋</text>
+      <text class="sign-name" x="487" y="730" text-anchor="start">CANCER</text>
+    </g>
+    <g class="house-label house-label-8">
+      <title>House 8: Leo — Moon, Mars, Rahu</title>
+      <rect x="605" y="807" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="635" cy="829" r="17" fill="#3927e8"/>
+      <text class="house-number" x="635" y="834" text-anchor="middle">8</text>
+      <text class="zodiac-symbol" x="662" y="838">♌</text>
+      <text class="sign-name" x="697" y="835" text-anchor="start">LEO</text>
+      <text class="planet-name" x="710" y="868" text-anchor="middle" style="font-size:28px">Moon</text>
+      <text class="planet-name" x="710" y="901" text-anchor="middle" style="font-size:28px">Mars</text>
+      <text class="planet-name" x="710" y="934" text-anchor="middle" style="font-size:28px">Rahu</text>
+    </g>
+    <g class="house-label house-label-9">
+      <title>House 9: Virgo — Venus</title>
+      <rect x="726" y="648" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="756" cy="670" r="17" fill="#3927e8"/>
+      <text class="house-number" x="756" y="675" text-anchor="middle">9</text>
+      <text class="zodiac-symbol" x="783" y="679">♍</text>
+      <text class="sign-name" x="818" y="676" text-anchor="start">VIRGO</text>
+      <text class="planet-name" x="831" y="742" text-anchor="middle" style="font-size:28px">Venus</text>
+    </g>
+    <g class="house-label house-label-10">
+      <title>House 10: Libra — Sun, Mercury</title>
+      <rect x="657" y="440" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="687" cy="462" r="17" fill="#3927e8"/>
+      <text class="house-number" x="687" y="467" text-anchor="middle">10</text>
+      <text class="zodiac-symbol" x="714" y="471">♎</text>
+      <text class="sign-name" x="749" y="468" text-anchor="start">LIBRA</text>
+      <text class="planet-name" x="762" y="517.5" text-anchor="middle" style="font-size:28px">Sun</text>
+      <text class="planet-name" x="762" y="550.5" text-anchor="middle" style="font-size:28px">Mercury</text>
+    </g>
+    <g class="house-label house-label-11">
+      <title>House 11: Scorpio</title>
+      <rect x="726" y="232" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="756" cy="254" r="17" fill="#3927e8"/>
+      <text class="house-number" x="756" y="259" text-anchor="middle">11</text>
+      <text class="zodiac-symbol" x="783" y="263">♏</text>
+      <text class="sign-name" x="818" y="260" text-anchor="start">SCORPIO</text>
+    </g>
+    <g class="house-label house-label-12">
+      <title>House 12: Sagittarius</title>
+      <rect x="605" y="73" width="210" height="43" rx="21.5" fill="#fffaf1" fill-opacity="0.96" stroke="#efbd82" stroke-width="1.25"/>
+      <circle cx="635" cy="95" r="17" fill="#3927e8"/>
+      <text class="house-number" x="635" y="100" text-anchor="middle">12</text>
+      <text class="zodiac-symbol" x="662" y="104">♐</text>
+      <text class="sign-name" x="697" y="101" text-anchor="start">SAGITTARIUS</text>
+    </g>
+  </g>
+  <g id="ChartTypeMedallion" class="chart-text">
+    <circle cx="503" cy="504" r="36" fill="#6b3e16" opacity="0.2"/>
+    <circle cx="500" cy="500" r="35" fill="url(#medallion)" stroke="#fff4de" stroke-width="4"/>
+    <circle cx="500" cy="500" r="29" fill="none" stroke="#a75a16" stroke-width="1.5" opacity="0.65"/>
+    <text x="500" y="507" text-anchor="middle" fill="white" font-size="19" font-weight="800" letter-spacing="0.5">D1</text>
+  </g>
+  <g id="CornerOrnaments" fill="none" stroke="#ffd28b" stroke-width="3" opacity="0.9">
+    <path d="M53 103V72Q53 53 72 53H103 M897 53H928Q947 53 947 72V103 M53 897V928Q53 947 72 947H103 M897 947H928Q947 947 947 928V897"/>
+  </g>
+</svg>

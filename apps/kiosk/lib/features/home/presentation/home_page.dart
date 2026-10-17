@@ -192,138 +192,144 @@ class _ServiceCatalog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    const gap = 12.0;
+    const rows = 3;
+    final playlist = ref.watch(adsControllerProvider).playlist;
+    final showHorizontal = playlist.homeBanners.isNotEmpty;
+    final showVertical = playlist.homeSideBanners.isNotEmpty;
+
+    final tiles = [
+      KioskServiceTile(
+        icon: Icons.print_outlined,
+        title: 'Print',
+        subtitle: 'Upload from your phone or enter the app OTP',
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.print),
+      ),
+      KioskServiceTile(
+        icon: Icons.account_balance_outlined,
+        title: 'DigiLocker Print',
+        subtitle: 'Sign in and print government documents',
+        onTap: () =>
+            Navigator.of(context).pushNamed(AppRoutes.digilockerPrint),
+      ),
+      KioskServiceTile(
+        icon: Icons.favorite_outline,
+        title: 'Well Being',
+        subtitle: 'Heart rate, blood oxygen, and temperature',
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
+      ),
+      KioskServiceTile(
+        icon: Icons.battery_charging_full,
+        title: 'Phone Charging',
+        subtitle: 'Watch a short message, then charge your phone',
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.charging),
+      ),
+      KioskServiceTile(
+        icon: Icons.auto_awesome,
+        title: 'Astrology',
+        subtitle: 'Kundali · Palm · Match · Today',
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
+      ),
+      KioskServiceTile(
+        icon: Icons.local_gas_station_outlined,
+        title: 'Fuel stations',
+        subtitle: 'Petrol, diesel, CNG, and EV stations nearby',
+        onTap: () =>
+            Navigator.of(context).pushNamed(AppRoutes.fuelStations),
+      ),
+    ];
+
+    final serviceGrid = Column(
+      children: [
+        for (var row = 0; row < rows; row++) ...[
+          if (row > 0) const SizedBox(height: gap),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: tiles[row * 2]),
+                const SizedBox(width: gap),
+                Expanded(child: tiles[row * 2 + 1]),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+
+    final contentIsland = Padding(
+      padding: EdgeInsets.fromLTRB(
+        showVertical ? 20 : 28,
+        showHorizontal ? 12 : 8,
+        showVertical ? 20 : 28,
+        showHorizontal ? 12 : 16,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Select a service',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Touch a tile to begin',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: SkpColors.muted,
+                ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(child: serviceGrid),
+        ],
+      ),
+    );
+
+    final centerColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showHorizontal) ...[
+          const HomeBannerStrip(),
+          const ColoredBox(
+            color: SkpColors.line,
+            child: SizedBox(height: SkpTokens.hairline),
+          ),
+        ],
+        Expanded(child: contentIsland),
+        if (showHorizontal) ...[
+          const ColoredBox(
+            color: SkpColors.line,
+            child: SizedBox(height: SkpTokens.hairline),
+          ),
+          const HomeBannerStrip(),
+        ],
+      ],
+    );
+
+    final body = showVertical
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const HomeBannerStrip(axis: HomeBannerAxis.vertical),
+              const ColoredBox(
+                color: SkpColors.line,
+                child: SizedBox(width: SkpTokens.hairline),
+              ),
+              Expanded(child: centerColumn),
+              const ColoredBox(
+                color: SkpColors.line,
+                child: SizedBox(width: SkpTokens.hairline),
+              ),
+              const HomeBannerStrip(axis: HomeBannerAxis.vertical),
+            ],
+          )
+        : centerColumn;
+
     return KioskShell(
       showHome: false,
       subtitle: auth.deviceName,
       headerExtra: const WeatherHeaderStrip(),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 8, 28, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Select a service',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Touch a tile to begin',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const gap = 12.0;
-                  const rows = 3;
-                  final gridMin =
-                      SkpTokens.tileMinHeight * rows + gap * (rows - 1);
-                  final playlist = ref.watch(adsControllerProvider).playlist;
-                  final hasHorizontal = playlist.homeBanners.isNotEmpty;
-                  final hasVertical = playlist.homeSideBanners.isNotEmpty;
-                  final showHorizontal = hasHorizontal &&
-                      constraints.maxHeight >=
-                          gridMin + SkpTokens.bannerHeight * 2 + 24;
-                  final showVertical = hasVertical &&
-                      constraints.maxWidth >=
-                          SkpTokens.tileMinWidth * 2 +
-                              gap +
-                              SkpTokens.bannerSideWidth * 2 +
-                              24;
-
-                  final tiles = [
-                    KioskServiceTile(
-                      icon: Icons.print_outlined,
-                      title: 'Print',
-                      subtitle: 'Upload from your phone or enter the app OTP',
-                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.print),
-                    ),
-                    KioskServiceTile(
-                      icon: Icons.account_balance_outlined,
-                      title: 'DigiLocker Print',
-                      subtitle: 'Sign in and print government documents',
-                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.digilockerPrint),
-                    ),
-                    KioskServiceTile(
-                      icon: Icons.favorite_outline,
-                      title: 'Well Being',
-                      subtitle: 'Heart rate, blood oxygen, and temperature',
-                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
-                    ),
-                    KioskServiceTile(
-                      icon: Icons.battery_charging_full,
-                      title: 'Phone Charging',
-                      subtitle: 'Watch a short message, then charge your phone',
-                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.charging),
-                    ),
-                    KioskServiceTile(
-                      icon: Icons.auto_awesome,
-                      title: 'Astrology',
-                      subtitle: 'Palm · Chart · Guidance',
-                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
-                    ),
-                    KioskServiceTile(
-                      icon: Icons.local_gas_station_outlined,
-                      title: 'Fuel stations',
-                      subtitle: 'Petrol, diesel, CNG, and EV stations nearby',
-                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.fuelStations),
-                    ),
-                  ];
-
-                  final serviceGrid = Column(
-                    children: [
-                      for (var row = 0; row < rows; row++) ...[
-                        if (row > 0) const SizedBox(height: gap),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Expanded(child: tiles[row * 2]),
-                              const SizedBox(width: gap),
-                              Expanded(child: tiles[row * 2 + 1]),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-
-                  final centerColumn = Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (showHorizontal) ...[
-                        const HomeBannerStrip(),
-                        const SizedBox(height: 10),
-                      ],
-                      Expanded(child: serviceGrid),
-                      if (showHorizontal) ...[
-                        const SizedBox(height: 10),
-                        const HomeBannerStrip(),
-                      ],
-                    ],
-                  );
-
-                  if (!showVertical) {
-                    return centerColumn;
-                  }
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const HomeBannerStrip(axis: HomeBannerAxis.vertical),
-                      const SizedBox(width: 10),
-                      Expanded(child: centerColumn),
-                      const SizedBox(width: 10),
-                      const HomeBannerStrip(axis: HomeBannerAxis.vertical),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+      body: body,
     );
   }
 }

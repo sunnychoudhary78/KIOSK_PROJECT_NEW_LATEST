@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_hub_page.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_page.dart';
+import 'package:skp_kiosk/features/astrology/presentation/my_kundali_page.dart';
 import 'package:skp_kiosk/features/charging/presentation/charging_page.dart';
 import 'package:skp_kiosk/features/fuel_stations/presentation/fuel_stations_page.dart';
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_print_page.dart';
@@ -21,6 +23,8 @@ class AppRoutes {
   static const wellBeing = '/well-being';
   static const charging = '/charging';
   static const astrology = '/astrology';
+  static const astrologyPalm = '/astrology/palm';
+  static const astrologyKundali = '/astrology/kundali';
   static const fuelStations = '/fuel-stations';
   static const serialDebug = '/serial-debug';
 }
@@ -41,7 +45,11 @@ class AppRouter {
       case AppRoutes.charging:
         return MaterialPageRoute(builder: (_) => const ChargingPage());
       case AppRoutes.astrology:
+        return MaterialPageRoute(builder: (_) => const AstrologyHubPage());
+      case AppRoutes.astrologyPalm:
         return MaterialPageRoute(builder: (_) => const AstrologyPage());
+      case AppRoutes.astrologyKundali:
+        return MaterialPageRoute(builder: (_) => const MyKundaliPage());
       case AppRoutes.fuelStations:
         return MaterialPageRoute(builder: (_) => const FuelStationsPage());
       case AppRoutes.serialDebug:
