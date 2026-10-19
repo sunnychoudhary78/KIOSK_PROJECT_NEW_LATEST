@@ -69,12 +69,24 @@ export const createReadingFieldsSchema = z.object({
 
 export type CreateReadingFields = z.infer<typeof createReadingFieldsSchema>;
 
+export const kundaliChartTypeSchema = z.enum(['RasiD1', 'NavamshaD9', 'DashamamshaD10']);
+
 export const createKundaliBodySchema = createReadingFieldsSchema.extend({
   style: z.enum(['north', 'south']),
-  chartType: z.literal('RasiD1').optional().default('RasiD1'),
+  /** Optional; Phase B always returns the full charts map regardless. */
+  chartType: kundaliChartTypeSchema.optional().default('RasiD1'),
 });
 
 export type CreateKundaliBody = z.infer<typeof createKundaliBodySchema>;
+export type KundaliChartTypeName = z.infer<typeof kundaliChartTypeSchema>;
+
+export const kundaliChartEntrySchema = z.object({
+  svg: z.string().min(1),
+  title: z.enum(['Birth', 'Marriage', 'Career']),
+  subtitle: z.string().min(1),
+});
+
+export type KundaliChartEntry = z.infer<typeof kundaliChartEntrySchema>;
 
 export const chartSummarySchema = z.object({
   lagna: z.string().optional(),

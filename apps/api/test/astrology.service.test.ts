@@ -48,6 +48,7 @@ describe('AstrologyService.createReading', () => {
         chartType: 'RasiD1' as const,
         svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
       })),
+      getDasaForNow: vi.fn(async () => ({ label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] })),
     };
     const llm: AstrologyLlmClient = {
       generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
@@ -167,11 +168,12 @@ describe('AstrologyService.createKundali', () => {
           houses: [],
         },
       })),
-      getKundaliSvg: vi.fn(async () => ({
+      getKundaliSvg: vi.fn(async (input) => ({
         style: 'north' as const,
-        chartType: 'RasiD1' as const,
-        svg: '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
+        chartType: input.chartType ?? ('RasiD1' as const),
+        svg: `<svg xmlns="http://www.w3.org/2000/svg"><title>${input.chartType ?? 'RasiD1'}</title></svg>`,
       })),
+      getDasaForNow: vi.fn(async () => ({ label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] })),
     };
     const llm: AstrologyLlmClient = {
       generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
@@ -195,15 +197,20 @@ describe('AstrologyService.createKundali', () => {
     return { service, db, vedastro, llm, audit };
   }
 
-  it('returns SVG and chart summary without LLM or DB', async () => {
+  it('returns SVG map, dasha, and chart summary without LLM or DB', async () => {
     const { service, vedastro, llm, db, audit } = setup();
     const result = await service.createKundali('device-1', fields, 'corr-k');
     expect(result.svg).toContain('<svg');
     expect(result.style).toBe('north');
     expect(result.chartType).toBe('RasiD1');
     expect(result.chart.lagna).toBe('Pisces');
+    expect(result.chart.currentDasha).toBe('Rahu – Saturn');
+    expect(result.charts.RasiD1?.title).toBe('Birth');
+    expect(result.charts.NavamshaD9?.title).toBe('Marriage');
+    expect(result.charts.DashamamshaD10?.title).toBe('Career');
     expect(result.disclaimer).toBe(ASTROLOGY_DISCLAIMER);
-    expect(vedastro.getKundaliSvg).toHaveBeenCalledOnce();
+    expect(vedastro.getKundaliSvg).toHaveBeenCalledTimes(3);
+    expect(vedastro.getDasaForNow).toHaveBeenCalledOnce();
     expect(vedastro.getChart).toHaveBeenCalledOnce();
     expect(llm.generateReading).not.toHaveBeenCalled();
     expect(db.astrologyReading.create).not.toHaveBeenCalled();
@@ -215,6 +222,41 @@ describe('AstrologyService.createKundali', () => {
     );
   });
 
+  it('omits failed D9/D10 but keeps Birth', async () => {
+    const { service, vedastro } = setup();
+    vi.mocked(vedastro.getKundaliSvg).mockImplementation(async (input) => {
+      if (input.chartType === 'NavamshaD9') {
+        throw new Error('d9 down');
+      }
+      return {
+        style: 'north',
+        chartType: input.chartType ?? 'RasiD1',
+        svg: `<svg>${input.chartType ?? 'RasiD1'}</svg>`,
+      };
+    });
+    const result = await service.createKundali('device-1', fields);
+    expect(result.charts.RasiD1).toBeDefined();
+    expect(result.charts.NavamshaD9).toBeUndefined();
+    expect(result.charts.DashamamshaD10).toBeDefined();
+  });
+
+  it('fails the request when Birth (D1) SVG is unavailable', async () => {
+    const { service, vedastro } = setup();
+    vi.mocked(vedastro.getKundaliSvg).mockImplementation(async (input) => {
+      if (input.chartType === 'RasiD1' || input.chartType == null) {
+        throw new Error('d1 down');
+      }
+      return {
+        style: 'north',
+        chartType: input.chartType,
+        svg: `<svg>${input.chartType}</svg>`,
+      };
+    });
+    await expect(service.createKundali('device-1', fields)).rejects.toMatchObject({
+      code: 'vedastro_failed',
+    });
+  });
+
   it('does not call VedAstro when the service is disabled', async () => {
     const { service, vedastro } = setup({ enabled: false });
     await expect(service.createKundali('device-1', fields)).rejects.toMatchObject({
@@ -222,5 +264,6 @@ describe('AstrologyService.createKundali', () => {
     });
     expect(vedastro.getKundaliSvg).not.toHaveBeenCalled();
     expect(vedastro.getChart).not.toHaveBeenCalled();
+    expect(vedastro.getDasaForNow).not.toHaveBeenCalled();
   });
 });

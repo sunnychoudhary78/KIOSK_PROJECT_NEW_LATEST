@@ -6,6 +6,7 @@ import {
   sanitizeVedAstroLocation,
   createVedAstroClient,
   extractKundaliSvg,
+  formatDasaLabel,
   kundaliCalculatorForStyle,
   toChartSummary,
 } from '../src/infrastructure/external/vedastro.client.js';
@@ -156,6 +157,33 @@ describe('extractKundaliSvg', () => {
 
   it('returns undefined when no SVG is present', () => {
     expect(extractKundaliSvg({ Status: 'Pass', Payload: 'not a chart' })).toBeUndefined();
+  });
+});
+
+describe('formatDasaLabel', () => {
+  it('formats Maha and Bhukti lords', () => {
+    const body = {
+      Status: 'Pass',
+      Payload: {
+        DasaForNow: {
+          Rahu: {
+            Type: 'Dasa',
+            Lord: 'Rahu',
+            SubDasas: {
+              Saturn: {
+                Type: 'Bhukti',
+                Lord: 'Saturn',
+                SubDasas: {},
+              },
+            },
+          },
+        },
+      },
+    };
+    expect(formatDasaLabel(body, 2)).toEqual({
+      label: 'Rahu – Saturn',
+      levels: ['Rahu', 'Saturn'],
+    });
   });
 });
 
@@ -362,5 +390,38 @@ describe('createVedAstroClient', () => {
         style: 'south',
       }),
     ).rejects.toMatchObject({ code: 'vedastro_failed' });
+  });
+
+  it('returns a dasha label from DasaForNow', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      expect(String(url)).toContain('/Calculate/DasaForNow/Location/');
+      expect(String(url)).not.toContain('/Levels/');
+      return new Response(
+        JSON.stringify({
+          Status: 'Pass',
+          Payload: {
+            DasaForNow: {
+              Venus: {
+                Lord: 'Venus',
+                SubDasas: { Mercury: { Lord: 'Mercury', SubDasas: {} } },
+              },
+            },
+          },
+        }),
+        { status: 200 },
+      );
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(
+      client.getDasaForNow({
+        dateOfBirth: '1991-06-02',
+        birthTime: '08:15',
+        birthPlace: 'Pune',
+      }),
+    ).resolves.toEqual({ label: 'Venus – Mercury', levels: ['Venus', 'Mercury'] });
   });
 });

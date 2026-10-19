@@ -2,7 +2,12 @@ import type { Prisma } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { Logger } from '../../infrastructure/logging/logger.js';
 import type { AstrologyLlmClient } from '../../infrastructure/external/openai.client.js';
-import type { VedAstroClient } from '../../infrastructure/external/vedastro.client.js';
+import {
+  KUNDALI_CHART_META,
+  KUNDALI_PREFETCH_TYPES,
+  type KundaliChartType,
+  type VedAstroClient,
+} from '../../infrastructure/external/vedastro.client.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
@@ -12,6 +17,7 @@ import {
   type ChartSummary,
   type CreateKundaliBody,
   type CreateReadingFields,
+  type KundaliChartEntry,
   type LlmReading,
   type ReadingSubject,
   type UploadedPalm,
@@ -35,6 +41,7 @@ export type AstrologyKundaliResponse = {
   chartType: 'RasiD1';
   svg: string;
   chart: ChartSummary;
+  charts: Partial<Record<KundaliChartType, KundaliChartEntry>>;
 };
 
 export class AstrologyService {
@@ -176,14 +183,50 @@ export class AstrologyService {
       birthPlace: subject.birthPlace,
     };
 
-    const [kundali, chart] = await Promise.all([
-      this.vedastro.getKundaliSvg({
-        ...birth,
-        style: fields.style,
-        chartType: fields.chartType,
-      }),
+    const [chartResult, dasaResult, ...svgResults] = await Promise.all([
       this.vedastro.getChart(birth),
+      this.vedastro.getDasaForNow(birth).then(
+        (dasa) => dasa,
+        (error: unknown) => {
+          this.logger.warn({ err: error }, '[Astrology] DasaForNow failed; continuing');
+          return null;
+        },
+      ),
+      ...KUNDALI_PREFETCH_TYPES.map((chartType) =>
+        this.vedastro
+          .getKundaliSvg({ ...birth, style: fields.style, chartType })
+          .then(
+            (svg) => ({ chartType, svg }),
+            (error: unknown) => {
+              this.logger.warn({ err: error, chartType }, '[Astrology] chart SVG failed');
+              return { chartType, svg: null as null };
+            },
+          ),
+      ),
     ]);
+
+    const charts: AstrologyKundaliResponse['charts'] = {};
+    for (const entry of svgResults) {
+      if (!entry.svg) {
+        continue;
+      }
+      const meta = KUNDALI_CHART_META[entry.chartType];
+      charts[entry.chartType] = {
+        svg: entry.svg.svg,
+        title: meta.title,
+        subtitle: meta.subtitle,
+      };
+    }
+
+    const primary = charts.RasiD1;
+    if (!primary) {
+      throw new AppError('vedastro_failed', 'Unable to generate birth kundali chart', 502);
+    }
+
+    const summary: ChartSummary = {
+      ...chartResult.summary,
+      ...(dasaResult?.label ? { currentDasha: dasaResult.label } : {}),
+    };
 
     await this.audit.record({
       action: 'astrology.kundali_generated',
@@ -193,9 +236,10 @@ export class AstrologyService {
       correlationId,
       metadata: {
         style: fields.style,
-        chartType: fields.chartType,
+        chartTypes: Object.keys(charts),
         birthPlace: subject.birthPlace,
         birthTimeUnknown: subject.birthTimeUnknown,
+        currentDasha: summary.currentDasha,
       },
     });
 
@@ -203,8 +247,9 @@ export class AstrologyService {
       {
         correlationId,
         style: fields.style,
-        chart: chart.summary,
-        svgBytes: kundali.svg.length,
+        chart: summary,
+        chartTypes: Object.keys(charts),
+        svgBytes: primary.svg.length,
         durationMs: Date.now() - startedAt,
       },
       '[Astrology] kundali ready',
@@ -213,10 +258,11 @@ export class AstrologyService {
     return {
       disclaimer: ASTROLOGY_DISCLAIMER,
       subject,
-      style: kundali.style,
-      chartType: kundali.chartType,
-      svg: kundali.svg,
-      chart: chart.summary,
+      style: fields.style,
+      chartType: 'RasiD1',
+      svg: primary.svg,
+      chart: summary,
+      charts,
     };
   }
 

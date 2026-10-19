@@ -23,7 +23,22 @@ export type VedAstroChartResult = {
 };
 
 export type KundaliStyle = 'north' | 'south';
-export type KundaliChartType = 'RasiD1';
+export type KundaliChartType = 'RasiD1' | 'NavamshaD9' | 'DashamamshaD10';
+
+export const KUNDALI_CHART_META: Record<
+  KundaliChartType,
+  { title: 'Birth' | 'Marriage' | 'Career'; subtitle: string }
+> = {
+  RasiD1: { title: 'Birth', subtitle: 'Rasi' },
+  NavamshaD9: { title: 'Marriage', subtitle: 'Navamsha' },
+  DashamamshaD10: { title: 'Career', subtitle: 'Dashamsha' },
+};
+
+export const KUNDALI_PREFETCH_TYPES: KundaliChartType[] = [
+  'RasiD1',
+  'NavamshaD9',
+  'DashamamshaD10',
+];
 
 export type VedAstroKundaliInput = VedAstroBirthInput & {
   style: KundaliStyle;
@@ -36,13 +51,57 @@ export type VedAstroKundaliResult = {
   svg: string;
 };
 
+export type VedAstroDasaResult = {
+  label: string;
+  levels: string[];
+};
+
 export interface VedAstroClient {
   getChart(input: VedAstroBirthInput): Promise<VedAstroChartResult>;
   getKundaliSvg(input: VedAstroKundaliInput): Promise<VedAstroKundaliResult>;
+  getDasaForNow(input: VedAstroBirthInput): Promise<VedAstroDasaResult>;
 }
 
 export function kundaliCalculatorForStyle(style: KundaliStyle): 'NorthIndianChart' | 'SouthIndianChart' {
   return style === 'south' ? 'SouthIndianChart' : 'NorthIndianChart';
+}
+
+/**
+ * Turn VedAstro DasaForNow payload into "Rahu – Saturn" (Maha + Bhukti).
+ * Walks nested SubDasas up to two lords.
+ */
+export function formatDasaLabel(body: unknown, maxLevels = 2): VedAstroDasaResult {
+  const root = asRecord(body);
+  const payload = asRecord(root?.Payload ?? root?.payload) ?? root;
+  const dasaRoot =
+    asRecord(payload?.DasaForNow) ??
+    asRecord(payload?.dasaForNow) ??
+    payload;
+  if (!dasaRoot) {
+    return { label: '', levels: [] };
+  }
+
+  const levels: string[] = [];
+  let current: Record<string, unknown> | null = dasaRoot;
+
+  for (let depth = 0; depth < maxLevels && current; depth++) {
+    const entries = Object.entries(current).filter(
+      ([key, value]) => key !== 'SubDasas' && key !== 'subDasas' && asRecord(value) !== null,
+    );
+    if (entries.length === 0) {
+      break;
+    }
+    const [name, node] = entries[0]!;
+    const record = asRecord(node);
+    const lord = asString(record?.Lord ?? record?.lord) ?? name;
+    levels.push(lord);
+    current = asRecord(record?.SubDasas ?? record?.subDasas);
+  }
+
+  return {
+    label: levels.join(' – '),
+    levels,
+  };
 }
 
 /** Extract SVG markup from a VedAstro JSON or raw text response body. */
@@ -530,6 +589,45 @@ export function createVedAstroClient(options: {
         }
         options.logger.error({ err: error }, '[VedAstro] kundali fetch failed');
         throw new AppError('vedastro_failed', 'Unable to generate kundali chart', 502);
+      }
+    },
+
+    async getDasaForNow(input: VedAstroBirthInput): Promise<VedAstroDasaResult> {
+      const location = sanitizeVedAstroLocation(input.birthPlace);
+      // Levels in the path breaks Location parsing on the free API; use defaults (3)
+      // and trim to Maha + Bhukti in formatDasaLabel.
+      const url = buildVedAstroCalculateUrl({
+        baseUrl,
+        calculator: 'DasaForNow',
+        location,
+        birthTime: input.birthTime,
+        dateOfBirth: input.dateOfBirth,
+        utcOffset: input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET,
+      });
+
+      options.logger.info(
+        { location, dateOfBirth: input.dateOfBirth },
+        '[VedAstro] fetching DasaForNow',
+      );
+      const startedAt = Date.now();
+
+      try {
+        const body = await getJson(url);
+        const dasa = formatDasaLabel(body, 2);
+        if (!dasa.label) {
+          throw new AppError('vedastro_failed', 'VedAstro returned an empty dasha', 502, { url });
+        }
+        options.logger.info(
+          { url, label: dasa.label, levels: dasa.levels, durationMs: Date.now() - startedAt },
+          '[VedAstro] DasaForNow ready',
+        );
+        return dasa;
+      } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
+        options.logger.error({ err: error }, '[VedAstro] DasaForNow failed');
+        throw new AppError('vedastro_failed', 'Unable to compute current dasha', 502);
       }
     },
   };

@@ -642,11 +642,12 @@ paths:
                   enum: [north, south]
                 chartType:
                   type: string
-                  enum: [RasiD1]
+                  enum: [RasiD1, NavamshaD9, DashamamshaD10]
                   default: RasiD1
+                  description: Optional; response always includes the charts map when available.
       responses:
         '200':
-          description: SVG kundali plus chart summary
+          description: SVG kundali map (Birth/Marriage/Career) plus chart summary and dasha
           content:
             application/json:
               schema:
@@ -2736,7 +2737,7 @@ components:
 
     AstrologyKundaliResponse:
       type: object
-      required: [disclaimer, subject, style, chartType, svg, chart]
+      required: [disclaimer, subject, style, chartType, svg, chart, charts]
       properties:
         disclaimer:
           type: string
@@ -2764,9 +2765,10 @@ components:
         chartType:
           type: string
           enum: [RasiD1]
+          description: Alias for the Birth (RasiD1) chart
         svg:
           type: string
-          description: Raw SVG markup for the kundali chart
+          description: Alias for charts.RasiD1.svg
         chart:
           type: object
           properties:
@@ -2780,3 +2782,26 @@ components:
               type: string
             currentDasha:
               type: string
+        charts:
+          type: object
+          additionalProperties: false
+          properties:
+            RasiD1:
+              $ref: '#/components/schemas/AstrologyKundaliChartEntry'
+            NavamshaD9:
+              $ref: '#/components/schemas/AstrologyKundaliChartEntry'
+            DashamamshaD10:
+              $ref: '#/components/schemas/AstrologyKundaliChartEntry'
+
+    AstrologyKundaliChartEntry:
+      type: object
+      required: [svg, title, subtitle]
+      properties:
+        svg:
+          type: string
+        title:
+          type: string
+          enum: [Birth, Marriage, Career]
+        subtitle:
+          type: string
+          example: Navamsha
