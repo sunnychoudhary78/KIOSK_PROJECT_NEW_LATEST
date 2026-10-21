@@ -35,6 +35,8 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
   bool _brideTimeUnknown = false;
   int _focus = 0;
   int _stepperColumn = 0;
+  ResolvedBirthPlace? _groomPlaceCoords;
+  ResolvedBirthPlace? _bridePlaceCoords;
 
   bool get _isBride =>
       ref.read(matchKundaliControllerProvider).phase == MatchKundaliPhase.bride;
@@ -72,6 +74,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
     required DateTime dob,
     required TimeOfDay time,
     required bool timeUnknown,
+    ResolvedBirthPlace? placeCoords,
   }) {
     return MatchPersonInput(
       name: name.text.trim(),
@@ -79,6 +82,8 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
       birthTime: timeUnknown ? '12:00' : _time(time),
       birthPlace: place.text.trim(),
       birthTimeUnknown: timeUnknown,
+      latitude: placeCoords?.latitude,
+      longitude: placeCoords?.longitude,
     );
   }
 
@@ -112,6 +117,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
             dob: _groomDob,
             time: _groomTime,
             timeUnknown: _groomTimeUnknown,
+            placeCoords: _groomPlaceCoords,
           ),
           bride: _person(
             name: _brideName,
@@ -119,6 +125,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
             dob: _brideDob,
             time: _brideTime,
             timeUnknown: _brideTimeUnknown,
+            placeCoords: _bridePlaceCoords,
           ),
         );
   }
@@ -314,6 +321,8 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               onDob: (value) => setState(() => _groomDob = value),
               onTime: (value) => setState(() => _groomTime = value),
               onUnknown: (value) => setState(() => _groomTimeUnknown = value),
+              onPlaceResolved: (value) =>
+                  setState(() => _groomPlaceCoords = value),
             ),
             MatchKundaliPhase.bride => _birthForm(
               key: const ValueKey('match-bride'),
@@ -333,6 +342,8 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               onDob: (value) => setState(() => _brideDob = value),
               onTime: (value) => setState(() => _brideTime = value),
               onUnknown: (value) => setState(() => _brideTimeUnknown = value),
+              onPlaceResolved: (value) =>
+                  setState(() => _bridePlaceCoords = value),
             ),
             MatchKundaliPhase.loading => const AstrologyCastingView(
               key: ValueKey('match-loading'),
@@ -373,6 +384,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
     required ValueChanged<DateTime> onDob,
     required ValueChanged<TimeOfDay> onTime,
     required ValueChanged<bool> onUnknown,
+    required ValueChanged<ResolvedBirthPlace?> onPlaceResolved,
     String? error,
     Widget? leading,
   }) {
@@ -401,6 +413,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
           onGender: (_) {},
           onKey: _type,
           onBackspace: _backspace,
+          onPlaceResolved: onPlaceResolved,
         ),
       ],
     );

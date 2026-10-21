@@ -48,6 +48,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
     required String birthTime,
     required String birthPlace,
     required bool birthTimeUnknown,
+    double? latitude,
+    double? longitude,
   }) async {
     final trimmedName = name.trim();
     final trimmedPlace = birthPlace.trim();
@@ -71,6 +73,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
           birthTime: birthTimeUnknown ? '12:00' : birthTime,
           birthPlace: trimmedPlace,
           birthTimeUnknown: birthTimeUnknown,
+          latitude: latitude,
+          longitude: longitude,
         ),
       );
       if (!ref.mounted) return;

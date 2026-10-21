@@ -13,6 +13,7 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_jpeg.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
+import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_phase.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
@@ -48,6 +49,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   String _gender = 'female';
   int _focus = 0;
   int _stepperColumn = 0;
+  ResolvedBirthPlace? _placeCoords;
 
   @override
   void initState() {
@@ -269,6 +271,8 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
           birthTime: _formatTime(_birthTime),
           birthPlace: _place.text,
           birthTimeUnknown: _timeUnknown,
+          latitude: _placeCoords?.latitude,
+          longitude: _placeCoords?.longitude,
         );
   }
 
@@ -366,6 +370,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
       _dob = DateTime(1995, 1, 1);
       _timeUnknown = false;
       _focus = 0;
+      _placeCoords = null;
     });
     ref.read(astrologyControllerProvider.notifier).retake();
   }
@@ -462,6 +467,8 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 onGender: (value) => setState(() => _gender = value),
                 onKey: _type,
                 onBackspace: _backspace,
+                onPlaceResolved: (value) =>
+                    setState(() => _placeCoords = value),
               ),
             AstrologyPhase.submitting => const AstrologyCastingView(
                 key: ValueKey('submitting'),
@@ -869,6 +876,7 @@ class _FormView extends StatelessWidget {
     required this.onGender,
     required this.onKey,
     required this.onBackspace,
+    required this.onPlaceResolved,
   });
 
   final TextEditingController nameController;
@@ -887,6 +895,7 @@ class _FormView extends StatelessWidget {
   final ValueChanged<String> onGender;
   final ValueChanged<String> onKey;
   final VoidCallback onBackspace;
+  final ValueChanged<ResolvedBirthPlace?> onPlaceResolved;
 
   @override
   Widget build(BuildContext context) {
@@ -988,6 +997,7 @@ class _FormView extends StatelessWidget {
           onGender: onGender,
           onKey: onKey,
           onBackspace: onBackspace,
+          onPlaceResolved: onPlaceResolved,
         ),
       ],
     );

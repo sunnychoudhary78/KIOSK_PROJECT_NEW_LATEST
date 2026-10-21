@@ -297,11 +297,28 @@ describe('mapVedAstroChart', () => {
 });
 
 describe('createVedAstroClient', () => {
+  function geoOk(name: string, latitude: number, longitude: number) {
+    return new Response(
+      JSON.stringify({
+        results: [{ name, admin1: 'State', country: 'India', latitude, longitude }],
+      }),
+      { status: 200 },
+    );
+  }
+
   it('returns a compact chart from AllPlanetData even if houses fail', async () => {
-    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+    let planetBody: Record<string, unknown> | undefined;
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const href = String(url);
-      if (href.includes('AllPlanetData') && href.includes('PlanetName/All')) {
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      if (href.endsWith('/Calculate/AllPlanetData') && init?.method === 'POST') {
+        planetBody = JSON.parse(String(init.body)) as Record<string, unknown>;
         return new Response(JSON.stringify(planetPayload), { status: 200 });
+      }
+      if (href.endsWith('/Calculate/AllHouseData')) {
+        return new Response('nope', { status: 500 });
       }
       return new Response('nope', { status: 500 });
     });
@@ -321,20 +338,26 @@ describe('createVedAstroClient', () => {
     expect(chart.summary.lagna).toBeUndefined();
     expect(chart.details.planets).toHaveLength(2);
     expect(chart.details.houses).toEqual([]);
-    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('/Location/Pune/');
-    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain(
-      '/api/Calculate/AllPlanetData/PlanetName/All/',
-    );
-    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('Time/08:15/02/06/1991/+05:30');
+    expect(planetBody).toMatchObject({
+      Ayanamsa: 'RAMAN',
+      PlanetName: { Name: 'All' },
+      Time: {
+        StdTime: '08:15 02/06/1991 +05:30',
+        Location: { Latitude: 18.52, Longitude: 73.85 },
+      },
+    });
   });
 
   it('includes house lagna when AllHouseData succeeds', async () => {
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
-      if (href.includes('AllPlanetData')) {
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Rampur', 28.8, 79.02);
+      }
+      if (href.endsWith('/Calculate/AllPlanetData')) {
         return new Response(JSON.stringify(planetPayload), { status: 200 });
       }
-      if (href.includes('AllHouseData')) {
+      if (href.endsWith('/Calculate/AllHouseData')) {
         return new Response(JSON.stringify(housePayload), { status: 200 });
       }
       return new Response('nope', { status: 500 });
@@ -355,7 +378,12 @@ describe('createVedAstroClient', () => {
   });
 
   it('throws vedastro_failed when AllPlanetData fails', async () => {
-    const fetchImpl = vi.fn(async () => new Response('down', { status: 503 }));
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      return new Response('down', { status: 503 });
+    });
     const client = createVedAstroClient({
       baseUrl: 'https://api.vedastro.org',
       logger: silentLogger,
@@ -371,12 +399,15 @@ describe('createVedAstroClient', () => {
   });
 
   it('includes VedAstro Fail payload in the error details', async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      return new Response(
         JSON.stringify({ Status: 'Fail', Payload: 'Calculator method not found!' }),
         { status: 200 },
-      ),
-    );
+      );
+    });
     const client = createVedAstroClient({
       baseUrl: 'https://api.vedastro.org',
       logger: silentLogger,
@@ -394,13 +425,17 @@ describe('createVedAstroClient', () => {
     });
   });
 
-  it('returns kundali SVG from NorthIndianChart Payload', async () => {
+  it('returns kundali SVG from NorthIndianChart POST Payload', async () => {
     const sampleSvg = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>';
-    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+    let posted: Record<string, unknown> | undefined;
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const href = String(url);
-      expect(href).toContain(
-        '/Calculate/NorthIndianChart/Location/Pune/Time/08:15/02/06/1991/+05:30/ChartType/RasiD1',
-      );
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      expect(href).toBe('https://api.vedastro.org/api/Calculate/NorthIndianChart');
+      expect(init?.method).toBe('POST');
+      posted = JSON.parse(String(init?.body)) as Record<string, unknown>;
       return new Response(JSON.stringify({ Status: 'Pass', Payload: sampleSvg }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -422,13 +457,20 @@ describe('createVedAstroClient', () => {
       chartType: 'RasiD1',
       svg: sampleSvg,
     });
+    expect(posted).toMatchObject({
+      ChartType: 'RasiD1',
+      Time: { Location: { Latitude: 18.52, Longitude: 73.85 } },
+    });
   });
 
-  it('places each divisional ChartType after Time and preserves its SVG', async () => {
-    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+  it('posts ChartType for each divisional chart and preserves its SVG', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const href = String(url);
-      const chartType = href.match(/\/ChartType\/([^/]+)$/)?.[1];
-      return new Response(`<svg aria-label="${chartType}">${chartType}</svg>`, {
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      const body = JSON.parse(String(init?.body)) as { ChartType?: string };
+      return new Response(`<svg aria-label="${body.ChartType}">${body.ChartType}</svg>`, {
         status: 200,
         headers: { 'Content-Type': 'image/svg+xml' },
       });
@@ -457,17 +499,15 @@ describe('createVedAstroClient', () => {
       'DashamamshaD10',
     ]);
     expect(new Set(results.map((result) => result.svg)).size).toBe(3);
-    for (const call of fetchImpl.mock.calls) {
-      expect(String(call[0])).toMatch(
-        /\/Location\/Pune\/Time\/08:15\/02\/06\/1991\/\+05:30\/ChartType\/(RasiD1|NavamshaD9|DashamamshaD10)$/,
-      );
-    }
   });
 
   it('throws when kundali response has no SVG', async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ Status: 'Pass', Payload: 'ok' }), { status: 200 }),
-    );
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      return new Response(JSON.stringify({ Status: 'Pass', Payload: 'ok' }), { status: 200 });
+    });
     const client = createVedAstroClient({
       baseUrl: 'https://api.vedastro.org',
       logger: silentLogger,
@@ -483,10 +523,53 @@ describe('createVedAstroClient', () => {
     ).rejects.toMatchObject({ code: 'vedastro_failed' });
   });
 
-  it('returns a dasha label from DasaForNow', async () => {
-    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
-      expect(String(url)).toContain('/Calculate/DasaForNow/Location/');
-      expect(String(url)).not.toContain('/Levels/');
+  it('skips Open-Meteo for AllPlanetData when client coords are present', async () => {
+    let planetBody: Record<string, unknown> | undefined;
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        throw new Error('should not geocode');
+      }
+      if (href.endsWith('/Calculate/AllPlanetData') && init?.method === 'POST') {
+        planetBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify(planetPayload), { status: 200 });
+      }
+      if (href.endsWith('/Calculate/AllHouseData')) {
+        return new Response(JSON.stringify(housePayload), { status: 200 });
+      }
+      return new Response('nope', { status: 500 });
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await client.getChart({
+      dateOfBirth: '1991-06-02',
+      birthTime: '08:15',
+      birthPlace: 'Pune',
+      latitude: 18.52,
+      longitude: 73.85,
+    });
+    expect(planetBody).toMatchObject({
+      Time: {
+        Location: { Name: 'Pune', Latitude: 18.52, Longitude: 73.85 },
+      },
+    });
+    expect(fetchImpl.mock.calls.some((call) => String(call[0]).includes('open-meteo'))).toBe(
+      false,
+    );
+  });
+
+  it('returns a dasha label from DasaForNow POST', async () => {
+    let posted: Record<string, unknown> | undefined;
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      expect(href).toBe('https://api.vedastro.org/api/Calculate/DasaForNow');
+      posted = JSON.parse(String(init?.body)) as Record<string, unknown>;
       return new Response(
         JSON.stringify({
           Status: 'Pass',
@@ -512,8 +595,17 @@ describe('createVedAstroClient', () => {
         dateOfBirth: '1991-06-02',
         birthTime: '08:15',
         birthPlace: 'Pune',
+        latitude: 18.52,
+        longitude: 73.85,
       }),
     ).resolves.toEqual({ label: 'Venus – Mercury', levels: ['Venus', 'Mercury'] });
+    expect(posted).toMatchObject({
+      Levels: 3,
+      BirthTime: { Location: { Latitude: 18.52, Longitude: 73.85 } },
+    });
+    expect(fetchImpl.mock.calls.some((call) => String(call[0]).includes('open-meteo'))).toBe(
+      false,
+    );
   });
 
   it('geocodes both places and POSTs MatchReport with real coordinates', async () => {

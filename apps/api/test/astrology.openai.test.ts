@@ -51,6 +51,32 @@ describe('astrology schemas', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts latitude and longitude together', () => {
+    const parsed = createReadingFieldsSchema.parse({
+      name: 'Asha',
+      gender: 'female',
+      dateOfBirth: '1992-03-18',
+      birthTime: '14:05',
+      birthPlace: 'Jaipur',
+      latitude: '26.91',
+      longitude: '75.78',
+    });
+    expect(parsed.latitude).toBe(26.91);
+    expect(parsed.longitude).toBe(75.78);
+  });
+
+  it('rejects latitude without longitude', () => {
+    const result = createReadingFieldsSchema.safeParse({
+      name: 'Asha',
+      gender: 'female',
+      dateOfBirth: '1992-03-18',
+      birthTime: '14:05',
+      birthPlace: 'Jaipur',
+      latitude: 26.91,
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('accepts nested groom and bride without gender', () => {
     const parsed = createMatchBodySchema.parse({
       groom: {

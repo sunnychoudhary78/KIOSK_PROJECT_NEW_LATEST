@@ -52,7 +52,54 @@ function isCalendarDate(value: string): boolean {
   );
 }
 
-export const createReadingFieldsSchema = z.object({
+const birthCoordFields = {
+  latitude: z
+    .union([z.number(), z.string()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value === '') {
+        return undefined;
+      }
+      const parsed = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(parsed) ? parsed : Number.NaN;
+    }),
+  longitude: z
+    .union([z.number(), z.string()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value === '') {
+        return undefined;
+      }
+      const parsed = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(parsed) ? parsed : Number.NaN;
+    }),
+};
+
+function refineBirthCoords(
+  value: { latitude?: number; longitude?: number },
+  ctx: z.RefinementCtx,
+): void {
+  const hasLat = value.latitude !== undefined;
+  const hasLng = value.longitude !== undefined;
+  if (hasLat !== hasLng) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'latitude and longitude must both be provided together',
+    });
+  }
+  if (hasLat && (value.latitude! < -90 || value.latitude! > 90)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'latitude out of range', path: ['latitude'] });
+  }
+  if (hasLng && (value.longitude! < -180 || value.longitude! > 180)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'longitude out of range',
+      path: ['longitude'],
+    });
+  }
+}
+
+const createReadingFieldsObjectSchema = z.object({
   name: z.string().trim().min(1).max(80),
   gender: z.enum(['male', 'female', 'other']),
   dateOfBirth: z
@@ -65,22 +112,37 @@ export const createReadingFieldsSchema = z.object({
     .union([z.boolean(), z.string()])
     .optional()
     .transform((value) => value === true || value === 'true' || value === '1'),
+  ...birthCoordFields,
 });
+
+export const createReadingFieldsSchema = createReadingFieldsObjectSchema.superRefine(refineBirthCoords);
 
 export type CreateReadingFields = z.infer<typeof createReadingFieldsSchema>;
 
+export const placesQuerySchema = z.object({
+  q: z.string().trim().min(2).max(120),
+});
+
+export const placeIdParamSchema = z.object({
+  id: z.string().trim().min(1).max(512),
+});
+
 export const kundaliChartTypeSchema = z.enum(['RasiD1', 'NavamshaD9', 'DashamamshaD10']);
 
-export const createKundaliBodySchema = createReadingFieldsSchema.extend({
-  style: z.enum(['north', 'south']),
-  /** Optional; Phase B always returns the full charts map regardless. */
-  chartType: kundaliChartTypeSchema.optional().default('RasiD1'),
-});
+export const createKundaliBodySchema = createReadingFieldsObjectSchema
+  .extend({
+    style: z.enum(['north', 'south']),
+    /** Optional; Phase B always returns the full charts map regardless. */
+    chartType: kundaliChartTypeSchema.optional().default('RasiD1'),
+  })
+  .superRefine(refineBirthCoords);
 
 export type CreateKundaliBody = z.infer<typeof createKundaliBodySchema>;
 export type KundaliChartTypeName = z.infer<typeof kundaliChartTypeSchema>;
 
-const matchPersonSchema = createReadingFieldsSchema.omit({ gender: true });
+const matchPersonSchema = createReadingFieldsObjectSchema
+  .omit({ gender: true })
+  .superRefine(refineBirthCoords);
 
 export const createMatchBodySchema = z.object({
   groom: matchPersonSchema,

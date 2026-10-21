@@ -132,31 +132,33 @@ void main() {
     addTearDown(place.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: KioskShell(
-          title: 'Match Kundalis',
-          cosmic: true,
-          stepLabel: 'Bride',
-          body: AstrologyBirthFormPanel(
-            nameController: name,
-            placeController: place,
-            dob: DateTime(1995),
-            birthTime: const TimeOfDay(hour: 12, minute: 0),
-            timeUnknown: false,
-            gender: 'female',
-            showGender: false,
-            focus: 0,
-            onFocus: (_) {},
-            onDob: (_) {},
-            onTime: (_) {},
-            onTimeUnknown: (_) {},
-            onGender: (_) {},
-            onKey: (_) {},
-            onBackspace: () {},
-            leading: const GroomSummaryCard(
-              name: 'Arjun',
-              dateOfBirth: '1990-01-15',
-              birthPlace: 'Jaipur',
+      ProviderScope(
+        child: MaterialApp(
+          home: KioskShell(
+            title: 'Match Kundalis',
+            cosmic: true,
+            stepLabel: 'Bride',
+            body: AstrologyBirthFormPanel(
+              nameController: name,
+              placeController: place,
+              dob: DateTime(1995),
+              birthTime: const TimeOfDay(hour: 12, minute: 0),
+              timeUnknown: false,
+              gender: 'female',
+              showGender: false,
+              focus: 0,
+              onFocus: (_) {},
+              onDob: (_) {},
+              onTime: (_) {},
+              onTimeUnknown: (_) {},
+              onGender: (_) {},
+              onKey: (_) {},
+              onBackspace: () {},
+              leading: const GroomSummaryCard(
+                name: 'Arjun',
+                dateOfBirth: '1990-01-15',
+                birthPlace: 'Jaipur',
+              ),
             ),
           ),
         ),

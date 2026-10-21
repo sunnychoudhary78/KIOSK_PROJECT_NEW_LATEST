@@ -105,11 +105,13 @@ export class AstrologyService {
       '[Astrology] reading started',
     );
 
-    const chart = await this.vedastro.getChart({
-      dateOfBirth: subject.dateOfBirth,
-      birthTime: subject.birthTime,
-      birthPlace: subject.birthPlace,
-    });
+    const chart = await this.vedastro.getChart(
+      this.toVedAstroBirth(fields, {
+        dateOfBirth: subject.dateOfBirth,
+        birthTime: subject.birthTime,
+        birthPlace: subject.birthPlace,
+      }),
+    );
 
     this.logger.info(
       {
@@ -199,11 +201,11 @@ export class AstrologyService {
       '[Astrology] kundali started',
     );
 
-    const birth = {
+    const birth = this.toVedAstroBirth(fields, {
       dateOfBirth: subject.dateOfBirth,
       birthTime: subject.birthTime,
       birthPlace: subject.birthPlace,
-    };
+    });
 
     const [chartResult, dasaResult, ...svgResults] = await Promise.all([
       this.vedastro.getChart(birth),
@@ -307,16 +309,16 @@ export class AstrologyService {
       birthTimeUnknown: Boolean(fields.bride.birthTimeUnknown),
     };
     const result = await this.vedastro.getMatchReport(
-      {
+      this.toVedAstroBirth(fields.groom, {
         dateOfBirth: groom.dateOfBirth,
         birthTime: groom.birthTime,
         birthPlace: groom.birthPlace,
-      },
-      {
+      }),
+      this.toVedAstroBirth(fields.bride, {
         dateOfBirth: bride.dateOfBirth,
         birthTime: bride.birthTime,
         birthPlace: bride.birthPlace,
-      },
+      }),
     );
 
     await this.audit.record({
@@ -375,14 +377,19 @@ export class AstrologyService {
       birthPlace: fields.birthPlace,
       birthTimeUnknown: Boolean(fields.birthTimeUnknown),
     };
-    const birth = {
+    const birth = this.toVedAstroBirth(fields, {
       dateOfBirth: subject.dateOfBirth,
       birthTime: subject.birthTime,
       birthPlace: subject.birthPlace,
-    };
+    });
     const asOf = new Date();
     const [panchang, dasha] = await Promise.all([
-      this.vedastro.getPanchangaTable({ birthPlace: subject.birthPlace, now: asOf }),
+      this.vedastro.getPanchangaTable({
+        birthPlace: subject.birthPlace,
+        now: asOf,
+        latitude: birth.latitude,
+        longitude: birth.longitude,
+      }),
       this.vedastro.getDasaForNow(birth),
     ]);
     if (!dasha.label) {
@@ -424,6 +431,18 @@ export class AstrologyService {
       asOf: asOf.toISOString(),
       panchang,
       dasha,
+    };
+  }
+
+  private toVedAstroBirth(
+    fields: { latitude?: number; longitude?: number },
+    birth: { dateOfBirth: string; birthTime: string; birthPlace: string },
+  ) {
+    return {
+      ...birth,
+      ...(typeof fields.latitude === 'number' && typeof fields.longitude === 'number'
+        ? { latitude: fields.latitude, longitude: fields.longitude }
+        : {}),
     };
   }
 

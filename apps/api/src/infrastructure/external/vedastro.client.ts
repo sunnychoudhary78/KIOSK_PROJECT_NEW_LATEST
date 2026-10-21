@@ -15,6 +15,14 @@ export type VedAstroBirthInput = {
   birthTime: string;
   birthPlace: string;
   utcOffset?: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+export type VedAstroResolvedLocation = {
+  name: string;
+  latitude: number;
+  longitude: number;
 };
 
 export type VedAstroChartResult = {
@@ -98,6 +106,8 @@ export interface VedAstroClient {
     birthPlace: string;
     now?: Date;
     utcOffset?: string;
+    latitude?: number;
+    longitude?: number;
   }): Promise<VedAstroPanchangaResult>;
 }
 
@@ -692,11 +702,7 @@ export function createVedAstroClient(options: {
     return body;
   }
 
-  async function geocodeBirthPlace(place: string): Promise<{
-    name: string;
-    latitude: number;
-    longitude: number;
-  }> {
+  async function geocodeBirthPlace(place: string): Promise<VedAstroResolvedLocation> {
     const city = place.split(/[,/|]+/)[0]?.trim() || place.trim();
     const url =
       'https://geocoding-api.open-meteo.com/v1/search?' +
@@ -749,6 +755,76 @@ export function createVedAstroClient(options: {
     };
   }
 
+  async function resolveBirthLocation(input: {
+    birthPlace: string;
+    latitude?: number;
+    longitude?: number;
+  }): Promise<VedAstroResolvedLocation> {
+    if (
+      typeof input.latitude === 'number' &&
+      Number.isFinite(input.latitude) &&
+      typeof input.longitude === 'number' &&
+      Number.isFinite(input.longitude)
+    ) {
+      return {
+        name: input.birthPlace.trim() || 'Unknown',
+        latitude: input.latitude,
+        longitude: input.longitude,
+      };
+    }
+    return geocodeBirthPlace(input.birthPlace);
+  }
+
+  function birthTimePayload(input: VedAstroBirthInput, location: VedAstroResolvedLocation) {
+    return {
+      StdTime: formatVedAstroStdTime(input),
+      Location: {
+        Name: location.name,
+        Longitude: location.longitude,
+        Latitude: location.latitude,
+      },
+    };
+  }
+
+  async function postKundaliBody(url: string, payload: unknown): Promise<unknown> {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, image/svg+xml, text/plain, */*',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(VEDASTRO_FETCH_TIMEOUT_MS),
+    });
+    const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
+    const text = await response.text();
+    if (!response.ok) {
+      throw new AppError('vedastro_failed', 'VedAstro kundali request failed', 502, {
+        status: response.status,
+        url,
+      });
+    }
+    if (contentType.includes('json') || text.trimStart().startsWith('{')) {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(text) as unknown;
+      } catch {
+        body = null;
+      }
+      const record = asRecord(body);
+      const status = asString(record?.Status ?? record?.status);
+      if (status && status.toLowerCase() !== 'pass' && status.toLowerCase() !== 'success') {
+        throw new AppError('vedastro_failed', 'VedAstro returned an error status', 502, {
+          status,
+          url,
+          payload: record?.Payload ?? record?.payload,
+        });
+      }
+      return body ?? text;
+    }
+    return text;
+  }
+
   async function getKundaliBody(url: string): Promise<unknown> {
     const response = await fetchImpl(url, {
       method: 'GET',
@@ -788,30 +864,29 @@ export function createVedAstroClient(options: {
 
   return {
     async getChart(input: VedAstroBirthInput): Promise<VedAstroChartResult> {
-      const location = sanitizeVedAstroLocation(input.birthPlace);
-      const common = {
-        baseUrl,
-        location,
-        birthTime: input.birthTime,
-        dateOfBirth: input.dateOfBirth,
-        utcOffset: input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET,
-      };
-      const planetsUrl = buildVedAstroCalculateUrl({
-        ...common,
-        calculator: 'AllPlanetData',
-        extraPath: 'PlanetName/All',
-      });
-      const housesUrl = buildVedAstroCalculateUrl({
-        ...common,
-        calculator: 'AllHouseData',
-        extraPath: 'HouseName/All',
-      });
-
-      options.logger.info({ location, dateOfBirth: input.dateOfBirth }, '[VedAstro] fetching chart');
+      const location = await resolveBirthLocation(input);
+      const time = birthTimePayload(input, location);
+      const planetsUrl = `${baseUrl}/Calculate/AllPlanetData`;
+      const housesUrl = `${baseUrl}/Calculate/AllHouseData`;
+      options.logger.info(
+        { place: location.name, dateOfBirth: input.dateOfBirth },
+        '[VedAstro] fetching chart',
+      );
       const startedAt = Date.now();
 
       try {
-        const [planets, houses] = await Promise.allSettled([getJson(planetsUrl), getJson(housesUrl)]);
+        const [planets, houses] = await Promise.allSettled([
+          postJson(planetsUrl, {
+            Ayanamsa: 'RAMAN',
+            PlanetName: { Name: 'All' },
+            Time: time,
+          }),
+          postJson(housesUrl, {
+            Ayanamsa: 'RAMAN',
+            HouseName: { Name: 'All' },
+            Time: time,
+          }),
+        ]);
 
         if (planets.status === 'rejected') {
           throw planets.reason;
@@ -851,36 +926,56 @@ export function createVedAstroClient(options: {
     async getKundaliSvg(input: VedAstroKundaliInput): Promise<VedAstroKundaliResult> {
       const chartType: KundaliChartType = input.chartType ?? 'RasiD1';
       const calculator = kundaliCalculatorForStyle(input.style);
-      const location = sanitizeVedAstroLocation(input.birthPlace);
-      const url = buildVedAstroCalculateUrl({
-        baseUrl,
-        calculator,
-        // VedAstro binds optional parameters only after the required Time
-        // path. Putting ChartType before Location silently returns RasiD1.
-        trailingPath: `ChartType/${chartType}`,
-        location,
-        birthTime: input.birthTime,
-        dateOfBirth: input.dateOfBirth,
-        utcOffset: input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET,
-      });
+      const location = await resolveBirthLocation(input);
+      const postUrl = `${baseUrl}/Calculate/${calculator}`;
+      const requestBody = {
+        Ayanamsa: 'RAMAN',
+        Time: birthTimePayload(input, location),
+        ChartType: chartType,
+      };
 
       options.logger.info(
-        { location, dateOfBirth: input.dateOfBirth, style: input.style, chartType, calculator },
+        {
+          place: location.name,
+          dateOfBirth: input.dateOfBirth,
+          style: input.style,
+          chartType,
+          calculator,
+        },
         '[VedAstro] fetching kundali SVG',
       );
       const startedAt = Date.now();
 
       try {
-        const body = await getKundaliBody(url);
+        let body: unknown;
+        try {
+          body = await postKundaliBody(postUrl, requestBody);
+        } catch (postError) {
+          // Live POST may be rate-limited or unavailable; fall back to name-path GET.
+          options.logger.warn(
+            { err: postError, calculator, chartType },
+            '[VedAstro] kundali POST failed; falling back to GET',
+          );
+          const fallbackUrl = buildVedAstroCalculateUrl({
+            baseUrl,
+            calculator,
+            trailingPath: `ChartType/${chartType}`,
+            location: sanitizeVedAstroLocation(input.birthPlace),
+            birthTime: input.birthTime,
+            dateOfBirth: input.dateOfBirth,
+            utcOffset: input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET,
+          });
+          body = await getKundaliBody(fallbackUrl);
+        }
         const svg = extractKundaliSvg(body);
         if (!svg) {
           throw new AppError('vedastro_failed', 'VedAstro returned an empty kundali chart', 502, {
-            url,
+            url: postUrl,
           });
         }
         options.logger.info(
           {
-            url,
+            url: postUrl,
             style: input.style,
             chartType,
             svgBytes: svg.length,
@@ -903,26 +998,22 @@ export function createVedAstroClient(options: {
     },
 
     async getDasaForNow(input: VedAstroBirthInput): Promise<VedAstroDasaResult> {
-      const location = sanitizeVedAstroLocation(input.birthPlace);
-      // Levels in the path breaks Location parsing on the free API; use defaults (3)
-      // and trim to Maha + Bhukti in formatDasaLabel.
-      const url = buildVedAstroCalculateUrl({
-        baseUrl,
-        calculator: 'DasaForNow',
-        location,
-        birthTime: input.birthTime,
-        dateOfBirth: input.dateOfBirth,
-        utcOffset: input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET,
-      });
+      const location = await resolveBirthLocation(input);
+      const url = `${baseUrl}/Calculate/DasaForNow`;
+      const requestBody = {
+        Ayanamsa: 'RAMAN',
+        BirthTime: birthTimePayload(input, location),
+        Levels: 3,
+      };
 
       options.logger.info(
-        { location, dateOfBirth: input.dateOfBirth },
+        { place: location.name, dateOfBirth: input.dateOfBirth },
         '[VedAstro] fetching DasaForNow',
       );
       const startedAt = Date.now();
 
       try {
-        const body = await getJson(url);
+        const body = await postJson(url, requestBody);
         const dasa = formatDasaLabel(body, 2);
         if (!dasa.label) {
           throw new AppError('vedastro_failed', 'VedAstro returned an empty dasha', 502, { url });
@@ -946,28 +1037,14 @@ export function createVedAstroClient(options: {
       bride: VedAstroBirthInput,
     ): Promise<VedAstroMatchResult> {
       const [groomLocation, brideLocation] = await Promise.all([
-        geocodeBirthPlace(groom.birthPlace),
-        geocodeBirthPlace(bride.birthPlace),
+        resolveBirthLocation(groom),
+        resolveBirthLocation(bride),
       ]);
       const url = `${baseUrl}/Calculate/MatchReport`;
       const requestBody = {
         Ayanamsa: 'RAMAN',
-        MaleBirthTime: {
-          StdTime: formatVedAstroStdTime(groom),
-          Location: {
-            Name: groomLocation.name,
-            Longitude: groomLocation.longitude,
-            Latitude: groomLocation.latitude,
-          },
-        },
-        FemaleBirthTime: {
-          StdTime: formatVedAstroStdTime(bride),
-          Location: {
-            Name: brideLocation.name,
-            Longitude: brideLocation.longitude,
-            Latitude: brideLocation.latitude,
-          },
-        },
+        MaleBirthTime: birthTimePayload(groom, groomLocation),
+        FemaleBirthTime: birthTimePayload(bride, brideLocation),
       };
       options.logger.info(
         {
@@ -1002,8 +1079,10 @@ export function createVedAstroClient(options: {
       birthPlace: string;
       now?: Date;
       utcOffset?: string;
+      latitude?: number;
+      longitude?: number;
     }): Promise<VedAstroPanchangaResult> {
-      const location = await geocodeBirthPlace(input.birthPlace);
+      const location = await resolveBirthLocation(input);
       const offset = input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET;
       const url = `${baseUrl}/Calculate/PanchangaTable`;
       const requestBody = {

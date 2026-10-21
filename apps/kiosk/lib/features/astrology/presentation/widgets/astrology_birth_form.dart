@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
+import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
+import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 
 /// Shared birth-detail fields for palm and kundali flows.
-class AstrologyBirthFormPanel extends StatelessWidget {
+class AstrologyBirthFormPanel extends ConsumerStatefulWidget {
   const AstrologyBirthFormPanel({
     super.key,
     required this.nameController,
@@ -22,6 +27,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
     required this.onGender,
     required this.onKey,
     required this.onBackspace,
+    this.onPlaceResolved,
     this.error,
     this.title = 'Birth details',
     this.subtitle = 'Tell the stars a little about you',
@@ -44,6 +50,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
   final ValueChanged<String> onGender;
   final ValueChanged<String> onKey;
   final VoidCallback onBackspace;
+  final ValueChanged<ResolvedBirthPlace?>? onPlaceResolved;
   final String? error;
   final String title;
   final String subtitle;
@@ -52,14 +59,155 @@ class AstrologyBirthFormPanel extends StatelessWidget {
   final bool showGender;
 
   @override
+  ConsumerState<AstrologyBirthFormPanel> createState() =>
+      _AstrologyBirthFormPanelState();
+}
+
+class _AstrologyBirthFormPanelState
+    extends ConsumerState<AstrologyBirthFormPanel> {
+  Timer? _placeDebounce;
+  int _placeSearchToken = 0;
+  List<PlaceSuggestion> _suggestions = const [];
+  bool _searchingPlaces = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.placeController.addListener(_onPlaceTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant AstrologyBirthFormPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.placeController != widget.placeController) {
+      oldWidget.placeController.removeListener(_onPlaceTextChanged);
+      widget.placeController.addListener(_onPlaceTextChanged);
+    }
+    if (oldWidget.focus != widget.focus && widget.focus != 1) {
+      _clearSuggestions();
+    }
+  }
+
+  @override
+  void dispose() {
+    _placeDebounce?.cancel();
+    widget.placeController.removeListener(_onPlaceTextChanged);
+    super.dispose();
+  }
+
+  void _clearSuggestions() {
+    if (_suggestions.isEmpty && !_searchingPlaces) {
+      return;
+    }
+    setState(() {
+      _suggestions = const [];
+      _searchingPlaces = false;
+    });
+  }
+
+  void _onPlaceTextChanged() {
+    _placeSearchToken++;
+    widget.onPlaceResolved?.call(null);
+    if (widget.focus != 1) {
+      _clearSuggestions();
+      return;
+    }
+    final query = widget.placeController.text.trim();
+    _placeDebounce?.cancel();
+    if (query.length < 2) {
+      _clearSuggestions();
+      return;
+    }
+    _placeDebounce = Timer(const Duration(milliseconds: 300), () {
+      unawaited(_searchPlaces(query));
+    });
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    final token = ++_placeSearchToken;
+    setState(() => _searchingPlaces = true);
+    try {
+      final results = await ref
+          .read(astrologyRepositoryProvider)
+          .searchPlaces(query);
+      if (!mounted || token != _placeSearchToken) {
+        return;
+      }
+      setState(() {
+        _suggestions = results.take(5).toList();
+        _searchingPlaces = false;
+      });
+    } catch (_) {
+      if (!mounted || token != _placeSearchToken) {
+        return;
+      }
+      setState(() {
+        _suggestions = const [];
+        _searchingPlaces = false;
+      });
+    }
+  }
+
+  Future<void> _selectSuggestion(PlaceSuggestion suggestion) async {
+    _placeDebounce?.cancel();
+    final token = ++_placeSearchToken;
+    setState(() {
+      _suggestions = const [];
+      _searchingPlaces = true;
+    });
+    try {
+      final resolved = await ref
+          .read(astrologyRepositoryProvider)
+          .resolvePlace(suggestion.id);
+      if (!mounted || token != _placeSearchToken) {
+        return;
+      }
+      widget.placeController.removeListener(_onPlaceTextChanged);
+      widget.placeController.text = resolved.name;
+      widget.placeController.addListener(_onPlaceTextChanged);
+      widget.onPlaceResolved?.call(resolved);
+      setState(() => _searchingPlaces = false);
+    } catch (_) {
+      if (!mounted || token != _placeSearchToken) {
+        return;
+      }
+      setState(() => _searchingPlaces = false);
+    }
+  }
+
+  void _type(String value) {
+    widget.onKey(value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final showKeyboard = focus == 0 || focus == 1;
-    final showDate = focus == 2;
-    final showTime = focus == 3 && !timeUnknown;
+    final showKeyboard = widget.focus == 0 || widget.focus == 1;
+    final showDate = widget.focus == 2;
+    final showTime = widget.focus == 3 && !widget.timeUnknown;
+    final showSuggestions =
+        widget.focus == 1 && (_suggestions.isNotEmpty || _searchingPlaces);
     final theme = Theme.of(context);
     final timeValue =
-        '${birthTime.hour.toString().padLeft(2, '0')}:${birthTime.minute.toString().padLeft(2, '0')}';
-
+        '${widget.birthTime.hour.toString().padLeft(2, '0')}:${widget.birthTime.minute.toString().padLeft(2, '0')}';
+    final nameController = widget.nameController;
+    final placeController = widget.placeController;
+    final dob = widget.dob;
+    final birthTime = widget.birthTime;
+    final timeUnknown = widget.timeUnknown;
+    final gender = widget.gender;
+    final focus = widget.focus;
+    final onFocus = widget.onFocus;
+    final onDob = widget.onDob;
+    final onTime = widget.onTime;
+    final onTimeUnknown = widget.onTimeUnknown;
+    final onGender = widget.onGender;
+    final onBackspace = widget.onBackspace;
+    final error = widget.error;
+    final title = widget.title;
+    final subtitle = widget.subtitle;
+    final leading = widget.leading;
+    final footer = widget.footer;
+    final showGender = widget.showGender;
     final leftColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -159,7 +307,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    error!,
+                    error,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -182,7 +330,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (leading != null) ...[leading!, const SizedBox(width: 16)],
+                if (leading != null) ...[leading, const SizedBox(width: 16)],
                 Expanded(
                   child: GlassPanel(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -193,11 +341,87 @@ class AstrologyBirthFormPanel extends StatelessWidget {
             ),
           ),
         ),
+        if (showSuggestions)
+          SizedBox(
+            key: const ValueKey('place-suggestions'),
+            height: 104,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 0, 32, 4),
+              child: GlassPanel(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: _searchingPlaces && _suggestions.isEmpty
+                    ? const Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.4),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: _suggestions.length,
+                        separatorBuilder: (_, _) => Divider(
+                          height: 1,
+                          color: AstrologyColors.line.withValues(alpha: 0.7),
+                        ),
+                        itemBuilder: (context, index) {
+                          final suggestion = _suggestions[index];
+                          return InkWell(
+                            onTap: () => _selectSuggestion(suggestion),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.place_outlined,
+                                    color: AstrologyColors.gold,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          suggestion.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.titleSmall
+                                              ?.copyWith(
+                                                color: AstrologyColors.text,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        if (suggestion.subtitle.isNotEmpty)
+                                          Text(
+                                            suggestion.subtitle,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color: AstrologyColors.muted,
+                                                ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ),
         if (showKeyboard)
           SizedBox(
             // Keep enough room for all form rows plus a validation banner in
             // the 720p kiosk viewport.
-            height: 190,
+            height: showSuggestions ? 132 : 190,
             child: Theme(
               data: Theme.of(context).copyWith(
                 colorScheme: Theme.of(context).colorScheme.copyWith(
@@ -205,7 +429,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
                   onSurface: AstrologyColors.text,
                 ),
               ),
-              child: KioskKeyboard(onKey: onKey, onBackspace: onBackspace),
+              child: KioskKeyboard(onKey: _type, onBackspace: onBackspace),
             ),
           )
         else if (showDate)

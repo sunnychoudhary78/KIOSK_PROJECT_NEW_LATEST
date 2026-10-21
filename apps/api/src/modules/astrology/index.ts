@@ -4,11 +4,14 @@ import type { AppDeps } from '../../types/deps.js';
 import { requireDevice } from '../../shared/device-guard.js';
 import { AppError } from '../../shared/errors.js';
 import { ServicesCatalogService } from '../services/services.service.js';
+import { createPlacesClient } from '../../infrastructure/external/places.client.js';
 import {
   createKundaliBodySchema,
   createMatchBodySchema,
   createReadingFieldsSchema,
   createTodayBodySchema,
+  placeIdParamSchema,
+  placesQuerySchema,
   type UploadedPalm,
 } from './astrology.schemas.js';
 import { AstrologyService } from './astrology.service.js';
@@ -27,6 +30,56 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
     deps.auditService,
     services,
     deps.logger,
+  );
+  const places = createPlacesClient({
+    apiKey: process.env.SKP_GOOGLE_PLACES_API_KEY,
+    logger: deps.logger,
+  });
+
+  router.get(
+    '/astrology/places',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const parsed = placesQuerySchema.safeParse(req.query);
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_error',
+            'Request validation failed',
+            400,
+            parsed.error.flatten(),
+          );
+        }
+        const suggestions = await places.autocomplete(parsed.data.q);
+        res.status(200).json({ suggestions });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/astrology/places/:id',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const parsed = placeIdParamSchema.safeParse({
+          id: decodeURIComponent(String(req.params.id ?? '')),
+        });
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_error',
+            'Request validation failed',
+            400,
+            parsed.error.flatten(),
+          );
+        }
+        const place = await places.resolve(parsed.data.id);
+        res.status(200).json(place);
+      } catch (error) {
+        next(error);
+      }
+    },
   );
 
   router.post(

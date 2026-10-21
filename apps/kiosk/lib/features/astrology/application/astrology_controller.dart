@@ -133,6 +133,8 @@ class AstrologyController extends Notifier<AstrologyUiState> {
     required String birthTime,
     required String birthPlace,
     required bool birthTimeUnknown,
+    double? latitude,
+    double? longitude,
   }) async {
     final palm = state.palmBytes;
     if (palm == null) {
@@ -162,6 +164,8 @@ class AstrologyController extends Notifier<AstrologyUiState> {
           birthPlace: trimmedPlace,
           birthTimeUnknown: birthTimeUnknown,
           palmJpeg: palm,
+          latitude: latitude,
+          longitude: longitude,
         ),
       );
       if (!ref.mounted) {

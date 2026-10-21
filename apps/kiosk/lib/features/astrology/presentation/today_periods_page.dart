@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/today_periods_controller.dart';
+import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
@@ -30,6 +31,7 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
   String _gender = 'female';
   int _focus = 0;
   int _stepperColumn = 0;
+  ResolvedBirthPlace? _placeCoords;
 
   @override
   void dispose() {
@@ -67,6 +69,8 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
           birthTime: _formatTime(_birthTime),
           birthPlace: _place.text,
           birthTimeUnknown: _timeUnknown,
+          latitude: _placeCoords?.latitude,
+          longitude: _placeCoords?.longitude,
         );
   }
 
@@ -239,6 +243,8 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
                   onGender: (value) => setState(() => _gender = value),
                   onKey: _type,
                   onBackspace: _backspace,
+                  onPlaceResolved: (value) =>
+                      setState(() => _placeCoords = value),
                 ),
               ],
             ),

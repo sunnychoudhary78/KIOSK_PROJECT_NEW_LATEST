@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/my_kundali_controller.dart';
+import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
@@ -33,6 +34,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
   String _style = 'north';
   int _focus = 0;
   int _stepperColumn = 0;
+  ResolvedBirthPlace? _placeCoords;
 
   @override
   void dispose() {
@@ -71,6 +73,8 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
           birthPlace: _place.text,
           birthTimeUnknown: _timeUnknown,
           style: _style,
+          latitude: _placeCoords?.latitude,
+          longitude: _placeCoords?.longitude,
         );
   }
 
@@ -243,6 +247,8 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
                   onGender: (value) => setState(() => _gender = value),
                   onKey: _type,
                   onBackspace: _backspace,
+                  onPlaceResolved: (value) =>
+                      setState(() => _placeCoords = value),
                   footer: AstrologyStyleSegment(
                     style: _style,
                     onStyle: (value) => setState(() => _style = value),

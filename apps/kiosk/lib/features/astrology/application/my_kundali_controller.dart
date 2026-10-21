@@ -49,6 +49,8 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     required String birthPlace,
     required bool birthTimeUnknown,
     required String style,
+    double? latitude,
+    double? longitude,
   }) async {
     final trimmedName = name.trim();
     final trimmedPlace = birthPlace.trim();
@@ -77,6 +79,8 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
           birthPlace: trimmedPlace,
           birthTimeUnknown: birthTimeUnknown,
           style: style,
+          latitude: latitude,
+          longitude: longitude,
         ),
       );
       if (!ref.mounted) {

@@ -15,6 +15,8 @@ class AstrologySubmitInput {
     required this.birthPlace,
     required this.birthTimeUnknown,
     required this.palmJpeg,
+    this.latitude,
+    this.longitude,
   });
 
   final String name;
@@ -24,6 +26,8 @@ class AstrologySubmitInput {
   final String birthPlace;
   final bool birthTimeUnknown;
   final Uint8List palmJpeg;
+  final double? latitude;
+  final double? longitude;
 }
 
 class KundaliSubmitInput {
@@ -35,6 +39,8 @@ class KundaliSubmitInput {
     required this.birthPlace,
     required this.birthTimeUnknown,
     required this.style,
+    this.latitude,
+    this.longitude,
   });
 
   final String name;
@@ -44,6 +50,8 @@ class KundaliSubmitInput {
   final String birthPlace;
   final bool birthTimeUnknown;
   final String style;
+  final double? latitude;
+  final double? longitude;
 }
 
 class MatchPersonInput {
@@ -53,6 +61,8 @@ class MatchPersonInput {
     required this.birthTime,
     required this.birthPlace,
     required this.birthTimeUnknown,
+    this.latitude,
+    this.longitude,
   });
 
   final String name;
@@ -60,6 +70,8 @@ class MatchPersonInput {
   final String birthTime;
   final String birthPlace;
   final bool birthTimeUnknown;
+  final double? latitude;
+  final double? longitude;
 
   Map<String, dynamic> toJson() => {
     'name': name,
@@ -67,6 +79,8 @@ class MatchPersonInput {
     'birthTime': birthTime,
     'birthPlace': birthPlace,
     'birthTimeUnknown': birthTimeUnknown,
+    if (latitude != null) 'latitude': latitude,
+    if (longitude != null) 'longitude': longitude,
   };
 }
 
@@ -78,6 +92,8 @@ class TodaySubmitInput {
     required this.birthTime,
     required this.birthPlace,
     required this.birthTimeUnknown,
+    this.latitude,
+    this.longitude,
   });
 
   final String name;
@@ -86,12 +102,75 @@ class TodaySubmitInput {
   final String birthTime;
   final String birthPlace;
   final bool birthTimeUnknown;
+  final double? latitude;
+  final double? longitude;
+}
+
+class PlaceSuggestion {
+  const PlaceSuggestion({
+    required this.id,
+    required this.label,
+    required this.subtitle,
+  });
+
+  final String id;
+  final String label;
+  final String subtitle;
+
+  factory PlaceSuggestion.fromJson(Map<String, dynamic> json) {
+    return PlaceSuggestion(
+      id: json['id']?.toString() ?? '',
+      label: json['label']?.toString() ?? '',
+      subtitle: json['subtitle']?.toString() ?? '',
+    );
+  }
+}
+
+class ResolvedBirthPlace {
+  const ResolvedBirthPlace({
+    required this.id,
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String id;
+  final String name;
+  final double latitude;
+  final double longitude;
+
+  factory ResolvedBirthPlace.fromJson(Map<String, dynamic> json) {
+    return ResolvedBirthPlace(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+    );
+  }
 }
 
 class AstrologyRepository {
   AstrologyRepository(this._api);
 
   final ApiClient _api;
+
+  Future<List<PlaceSuggestion>> searchPlaces(String query) async {
+    final result = await _api.get(
+      '/astrology/places?q=${Uri.encodeQueryComponent(query)}',
+    );
+    final raw = result['suggestions'] as List<dynamic>? ?? const [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(PlaceSuggestion.fromJson)
+        .toList();
+  }
+
+  Future<ResolvedBirthPlace> resolvePlace(String id) async {
+    final result = await _api.get(
+      '/astrology/places/${Uri.encodeComponent(id)}',
+    );
+    return ResolvedBirthPlace.fromJson(result);
+  }
 
   Future<AstrologyReading> createReading(AstrologySubmitInput input) async {
     final result = await _api.postMultipart(
@@ -103,6 +182,8 @@ class AstrologyRepository {
         'birthTime': input.birthTime,
         'birthPlace': input.birthPlace,
         'birthTimeUnknown': input.birthTimeUnknown ? 'true' : 'false',
+        if (input.latitude != null) 'latitude': '${input.latitude}',
+        if (input.longitude != null) 'longitude': '${input.longitude}',
       },
       fileBytes: input.palmJpeg,
       fileField: 'palm',
@@ -124,6 +205,8 @@ class AstrologyRepository {
         'birthTimeUnknown': input.birthTimeUnknown,
         'style': input.style,
         'chartType': 'RasiD1',
+        if (input.latitude != null) 'latitude': input.latitude,
+        if (input.longitude != null) 'longitude': input.longitude,
       },
     );
     return KundaliResult.fromJson(result);
@@ -150,6 +233,8 @@ class AstrologyRepository {
         'birthTime': input.birthTime,
         'birthPlace': input.birthPlace,
         'birthTimeUnknown': input.birthTimeUnknown,
+        if (input.latitude != null) 'latitude': input.latitude,
+        if (input.longitude != null) 'longitude': input.longitude,
       },
     );
     return TodayPeriodsResult.fromJson(result);
