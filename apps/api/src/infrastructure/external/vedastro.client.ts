@@ -73,6 +73,19 @@ export type VedAstroMatchResult = {
   kutas: VedAstroMatchKuta[];
 };
 
+export type VedAstroPanchangaResult = {
+  weekday?: string;
+  tithi?: string;
+  nakshatra?: string;
+  yoga?: string;
+  karana?: string;
+  lunarMonth?: string;
+  sunrise?: string;
+  sunset?: string;
+  horaLord?: string;
+  dishaShool?: string;
+};
+
 export interface VedAstroClient {
   getChart(input: VedAstroBirthInput): Promise<VedAstroChartResult>;
   getKundaliSvg(input: VedAstroKundaliInput): Promise<VedAstroKundaliResult>;
@@ -81,6 +94,11 @@ export interface VedAstroClient {
     groom: VedAstroBirthInput,
     bride: VedAstroBirthInput,
   ): Promise<VedAstroMatchResult>;
+  getPanchangaTable(input: {
+    birthPlace: string;
+    now?: Date;
+    utcOffset?: string;
+  }): Promise<VedAstroPanchangaResult>;
 }
 
 export function kundaliCalculatorForStyle(style: KundaliStyle): 'NorthIndianChart' | 'SouthIndianChart' {
@@ -144,6 +162,101 @@ const MATCH_KUTAS = [
 export function formatVedAstroStdTime(input: VedAstroBirthInput): string {
   const { year, month, day } = splitIsoDate(input.dateOfBirth);
   return `${input.birthTime} ${day}/${month}/${year} ${input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET}`;
+}
+
+/** Format a wall-clock instant as VedAstro StdTime in the given offset (default IST). */
+export function formatVedAstroNowStdTime(
+  now: Date = new Date(),
+  utcOffset: string = VEDASTRO_DEFAULT_OFFSET,
+): string {
+  const offsetMinutes = parseUtcOffsetMinutes(utcOffset);
+  const local = new Date(now.getTime() + offsetMinutes * 60_000);
+  const hours = String(local.getUTCHours()).padStart(2, '0');
+  const minutes = String(local.getUTCMinutes()).padStart(2, '0');
+  const day = String(local.getUTCDate()).padStart(2, '0');
+  const month = String(local.getUTCMonth() + 1).padStart(2, '0');
+  const year = String(local.getUTCFullYear());
+  return `${hours}:${minutes} ${day}/${month}/${year} ${utcOffset}`;
+}
+
+function parseUtcOffsetMinutes(offset: string): number {
+  const match = /^([+-])(\d{2}):(\d{2})$/.exec(offset.trim());
+  if (!match) {
+    return 5 * 60 + 30;
+  }
+  const sign = match[1] === '-' ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3]));
+}
+
+function clockFromStdTime(value: unknown): string | undefined {
+  const text = asString(value);
+  if (!text) {
+    return undefined;
+  }
+  const match = /^(\d{1,2}:\d{2})/.exec(text);
+  return match?.[1];
+}
+
+function namedValue(value: unknown): string | undefined {
+  const direct = asString(value);
+  if (direct) {
+    return direct;
+  }
+  const record = asRecord(value);
+  return asString(record?.Name ?? record?.name);
+}
+
+export function mapVedAstroPanchangaTable(body: unknown): VedAstroPanchangaResult {
+  const root = asRecord(body);
+  const payload = asRecord(root?.Payload ?? root?.payload) ?? root;
+  const table =
+    asRecord(payload?.PanchangaTable ?? payload?.panchangaTable) ?? payload;
+  if (!table) {
+    throw new AppError('vedastro_failed', 'VedAstro returned an empty panchanga table', 502);
+  }
+
+  const tithiRecord = asRecord(table.Tithi ?? table.tithi);
+  const tithiName = asString(tithiRecord?.Name ?? tithiRecord?.name);
+  const tithiPaksha = asString(tithiRecord?.Paksha ?? tithiRecord?.paksha);
+  const tithi =
+    tithiName && tithiPaksha
+      ? `${tithiName} (${tithiPaksha})`
+      : tithiName ?? namedValue(table.Tithi ?? table.tithi);
+
+  const yoga = namedValue(asRecord(table.Yoga ?? table.yoga) ?? table.Yoga ?? table.yoga);
+  const horaLord = namedValue(
+    asRecord(table.HoraLord ?? table.horaLord) ?? table.HoraLord ?? table.horaLord,
+  );
+  const sunrise = clockFromStdTime(
+    asRecord(table.Sunrise ?? table.sunrise)?.StdTime ??
+      asRecord(table.Sunrise ?? table.sunrise)?.stdTime ??
+      table.Sunrise ??
+      table.sunrise,
+  );
+  const sunset = clockFromStdTime(
+    asRecord(table.Sunset ?? table.sunset)?.StdTime ??
+      asRecord(table.Sunset ?? table.sunset)?.stdTime ??
+      table.Sunset ??
+      table.sunset,
+  );
+
+  const result: VedAstroPanchangaResult = {};
+  const weekday = asString(table.Vara ?? table.vara ?? table.Weekday ?? table.weekday);
+  const nakshatra = asString(table.Nakshatra ?? table.nakshatra);
+  const karana = asString(table.Karana ?? table.karana);
+  const lunarMonth = asString(table.LunarMonth ?? table.lunarMonth);
+  const dishaShool = asString(table.DishaShool ?? table.dishaShool);
+  if (weekday) result.weekday = weekday;
+  if (tithi) result.tithi = tithi;
+  if (nakshatra) result.nakshatra = nakshatra;
+  if (yoga) result.yoga = yoga;
+  if (karana) result.karana = karana;
+  if (lunarMonth) result.lunarMonth = lunarMonth;
+  if (sunrise) result.sunrise = sunrise;
+  if (sunset) result.sunset = sunset;
+  if (horaLord) result.horaLord = horaLord;
+  if (dishaShool) result.dishaShool = dishaShool;
+  return result;
 }
 
 function shortVerdict(value: unknown): string {
@@ -882,6 +995,51 @@ export function createVedAstroClient(options: {
         }
         options.logger.error({ err: error }, '[VedAstro] MatchReport failed');
         throw new AppError('vedastro_failed', 'Unable to compute kundali match', 502);
+      }
+    },
+
+    async getPanchangaTable(input: {
+      birthPlace: string;
+      now?: Date;
+      utcOffset?: string;
+    }): Promise<VedAstroPanchangaResult> {
+      const location = await geocodeBirthPlace(input.birthPlace);
+      const offset = input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET;
+      const url = `${baseUrl}/Calculate/PanchangaTable`;
+      const requestBody = {
+        Ayanamsa: 'RAMAN',
+        InputTime: {
+          StdTime: formatVedAstroNowStdTime(input.now ?? new Date(), offset),
+          Location: {
+            Name: location.name,
+            Longitude: location.longitude,
+            Latitude: location.latitude,
+          },
+        },
+      };
+      options.logger.info(
+        { place: location.name },
+        '[VedAstro] fetching PanchangaTable',
+      );
+      const startedAt = Date.now();
+      try {
+        const body = await postJson(url, requestBody);
+        const result = mapVedAstroPanchangaTable(body);
+        options.logger.info(
+          {
+            weekday: result.weekday,
+            tithi: result.tithi,
+            durationMs: Date.now() - startedAt,
+          },
+          '[VedAstro] PanchangaTable ready',
+        );
+        return result;
+      } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
+        options.logger.error({ err: error }, '[VedAstro] PanchangaTable failed');
+        throw new AppError('vedastro_failed', 'Unable to compute today panchang', 502);
       }
     },
   };

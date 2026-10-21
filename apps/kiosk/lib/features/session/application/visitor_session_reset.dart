@@ -8,6 +8,7 @@ import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/match_kundali_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/my_kundali_controller.dart';
+import 'package:skp_kiosk/features/astrology/application/today_periods_controller.dart';
 import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
 import 'package:skp_kiosk/features/fuel_stations/application/fuel_stations_controller.dart';
@@ -57,6 +58,7 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
   ref.invalidate(astrologyControllerProvider);
   ref.invalidate(myKundaliControllerProvider);
   ref.invalidate(matchKundaliControllerProvider);
+  ref.invalidate(todayPeriodsControllerProvider);
   ref.invalidate(wellBeingControllerProvider);
   ref.invalidate(chargingControllerProvider);
   ref.invalidate(fuelStationsControllerProvider);

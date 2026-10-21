@@ -4,6 +4,7 @@ import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_result.dart';
+import 'package:skp_kiosk/features/astrology/domain/today_periods_result.dart';
 
 class AstrologySubmitInput {
   const AstrologySubmitInput({
@@ -69,6 +70,24 @@ class MatchPersonInput {
   };
 }
 
+class TodaySubmitInput {
+  const TodaySubmitInput({
+    required this.name,
+    required this.gender,
+    required this.dateOfBirth,
+    required this.birthTime,
+    required this.birthPlace,
+    required this.birthTimeUnknown,
+  });
+
+  final String name;
+  final String gender;
+  final String dateOfBirth;
+  final String birthTime;
+  final String birthPlace;
+  final bool birthTimeUnknown;
+}
+
 class AstrologyRepository {
   AstrologyRepository(this._api);
 
@@ -119,5 +138,20 @@ class AstrologyRepository {
       body: {'groom': groom.toJson(), 'bride': bride.toJson()},
     );
     return MatchKundaliResult.fromJson(result);
+  }
+
+  Future<TodayPeriodsResult> createToday(TodaySubmitInput input) async {
+    final result = await _api.post(
+      '/astrology/today',
+      body: {
+        'name': input.name,
+        'gender': input.gender,
+        'dateOfBirth': input.dateOfBirth,
+        'birthTime': input.birthTime,
+        'birthPlace': input.birthPlace,
+        'birthTimeUnknown': input.birthTimeUnknown,
+      },
+    );
+    return TodayPeriodsResult.fromJson(result);
   }
 }

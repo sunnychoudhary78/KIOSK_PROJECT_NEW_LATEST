@@ -56,6 +56,18 @@ describe('AstrologyService.createReading', () => {
         tone: 'good' as const,
         kutas: [],
       })),
+      getPanchangaTable: vi.fn(async () => ({
+        weekday: 'Wednesday',
+        tithi: 'Ekadasi (Sukla)',
+        nakshatra: 'Dhanishta - 4',
+        yoga: 'Ganda',
+        karana: 'Vanija',
+        lunarMonth: 'Aaswayuja',
+        sunrise: '06:33',
+        sunset: '17:49',
+        horaLord: 'Saturn',
+        dishaShool: 'North',
+      })),
     };
     const llm: AstrologyLlmClient = {
       generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
@@ -187,6 +199,18 @@ describe('AstrologyService.createKundali', () => {
         summary: 'Strong compatibility',
         tone: 'good' as const,
         kutas: [],
+      })),
+      getPanchangaTable: vi.fn(async () => ({
+        weekday: 'Wednesday',
+        tithi: 'Ekadasi (Sukla)',
+        nakshatra: 'Dhanishta - 4',
+        yoga: 'Ganda',
+        karana: 'Vanija',
+        lunarMonth: 'Aaswayuja',
+        sunrise: '06:33',
+        sunset: '17:49',
+        horaLord: 'Saturn',
+        dishaShool: 'North',
       })),
     };
     const llm: AstrologyLlmClient = {
@@ -324,6 +348,7 @@ describe('AstrologyService.createMatch', () => {
           },
         ],
       })),
+      getPanchangaTable: vi.fn(),
     };
     const db = {
       astrologyReading: {
@@ -367,6 +392,7 @@ describe('AstrologyService.createMatch', () => {
       getKundaliSvg: vi.fn(),
       getDasaForNow: vi.fn(),
       getMatchReport: vi.fn(),
+      getPanchangaTable: vi.fn(),
     };
     const service = new AstrologyService(
       { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
@@ -384,5 +410,97 @@ describe('AstrologyService.createMatch', () => {
       code: 'service_disabled',
     });
     expect(vedastro.getMatchReport).not.toHaveBeenCalled();
+  });
+});
+
+describe('AstrologyService.createToday', () => {
+  const fields = {
+    name: 'Asha',
+    gender: 'female' as const,
+    dateOfBirth: '1992-03-18',
+    birthTime: '12:00',
+    birthPlace: 'Jaipur',
+    birthTimeUnknown: true,
+  };
+
+  it('returns ephemeral panchang and dasha with audit metadata', async () => {
+    const vedastro = {
+      getChart: vi.fn(),
+      getKundaliSvg: vi.fn(),
+      getDasaForNow: vi.fn(async () => ({ label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] })),
+      getMatchReport: vi.fn(),
+      getPanchangaTable: vi.fn(async () => ({
+        weekday: 'Wednesday',
+        tithi: 'Ekadasi (Sukla)',
+        nakshatra: 'Dhanishta - 4',
+        yoga: 'Ganda',
+        karana: 'Vanija',
+        lunarMonth: 'Aaswayuja',
+        sunrise: '06:33',
+        sunset: '17:49',
+        horaLord: 'Saturn',
+        dishaShool: 'North',
+      })),
+    };
+    const db = {
+      astrologyReading: {
+        create: vi.fn(async () => {
+          throw new Error('today must not persist readings');
+        }),
+      },
+    };
+    const audit = { record: vi.fn(async () => undefined) };
+    const services = { assertEnabled: vi.fn(async () => undefined) };
+    const service = new AstrologyService(
+      db as unknown as DbClient,
+      vedastro as unknown as VedAstroClient,
+      { generateReading: vi.fn() },
+      audit as unknown as AuditService,
+      services as unknown as ServicesCatalogService,
+      silentLogger,
+    );
+
+    const result = await service.createToday('device-1', fields, 'corr-today');
+
+    expect(result.panchang.tithi).toBe('Ekadasi (Sukla)');
+    expect(result.dasha).toEqual({ label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] });
+    expect(result.accuracyNote).toContain('12:00');
+    expect(result.asOf).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(vedastro.getPanchangaTable).toHaveBeenCalledOnce();
+    expect(vedastro.getDasaForNow).toHaveBeenCalledOnce();
+    expect(db.astrologyReading.create).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'astrology.today_generated',
+        metadata: expect.objectContaining({ dasha: 'Rahu – Saturn', birthTimeUnknown: true }),
+      }),
+    );
+  });
+
+  it('does not call VedAstro when the service is disabled', async () => {
+    const vedastro = {
+      getChart: vi.fn(),
+      getKundaliSvg: vi.fn(),
+      getDasaForNow: vi.fn(),
+      getMatchReport: vi.fn(),
+      getPanchangaTable: vi.fn(),
+    };
+    const service = new AstrologyService(
+      { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
+      vedastro as unknown as VedAstroClient,
+      { generateReading: vi.fn() },
+      { record: vi.fn() } as unknown as AuditService,
+      {
+        assertEnabled: vi.fn(async () => {
+          throw new AppError('service_disabled', 'Service astrology is disabled for this device', 403);
+        }),
+      } as unknown as ServicesCatalogService,
+      silentLogger,
+    );
+    await expect(service.createToday('device-1', fields)).rejects.toMatchObject({
+      code: 'service_disabled',
+    });
+    expect(vedastro.getPanchangaTable).not.toHaveBeenCalled();
+    expect(vedastro.getDasaForNow).not.toHaveBeenCalled();
   });
 });

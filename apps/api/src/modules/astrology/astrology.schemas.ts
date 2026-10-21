@@ -89,6 +89,10 @@ export const createMatchBodySchema = z.object({
 
 export type CreateMatchBody = z.infer<typeof createMatchBodySchema>;
 
+export const createTodayBodySchema = createReadingFieldsSchema;
+
+export type CreateTodayBody = z.infer<typeof createTodayBodySchema>;
+
 export const kundaliChartEntrySchema = z.object({
   svg: z.string().min(1),
   title: z.enum(['Birth', 'Marriage', 'Career']),

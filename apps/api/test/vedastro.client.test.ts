@@ -10,9 +10,11 @@ import {
   createVedAstroClient,
   extractKundaliSvg,
   formatDasaLabel,
+  formatVedAstroNowStdTime,
   formatVedAstroStdTime,
   kundaliCalculatorForStyle,
   mapVedAstroMatchReport,
+  mapVedAstroPanchangaTable,
   toChartSummary,
 } from '../src/infrastructure/external/vedastro.client.js';
 import { AppError } from '../src/shared/errors.js';
@@ -21,6 +23,9 @@ import type { Logger } from '../src/infrastructure/logging/logger.js';
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
 const matchReportFixture = JSON.parse(
   readFileSync(join(fixtureDir, 'fixtures/match-report.json'), 'utf8'),
+) as unknown;
+const panchangaFixture = JSON.parse(
+  readFileSync(join(fixtureDir, 'fixtures/panchanga-table.json'), 'utf8'),
 ) as unknown;
 
 const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
@@ -629,6 +634,89 @@ describe('createVedAstroClient', () => {
     };
     await expect(client.getMatchReport(birth, birth)).rejects.toMatchObject({
       code: 'validation_error',
+    });
+  });
+});
+
+describe('PanchangaTable mapping', () => {
+  it('formats now StdTime in IST and maps a compact panchang snapshot', () => {
+    const now = new Date(Date.UTC(2026, 9, 21, 10, 21, 0));
+    expect(formatVedAstroNowStdTime(now)).toBe('15:51 21/10/2026 +05:30');
+    expect(mapVedAstroPanchangaTable(panchangaFixture)).toEqual({
+      weekday: 'Wednesday',
+      tithi: 'Ekadasi (Sukla)',
+      nakshatra: 'Dhanishta - 4',
+      yoga: 'Ganda',
+      karana: 'Vanija',
+      lunarMonth: 'Aaswayuja',
+      sunrise: '06:33',
+      sunset: '17:49',
+      horaLord: 'Saturn',
+      dishaShool: 'North',
+    });
+  });
+
+  it('geocodes the place and POSTs PanchangaTable with real coordinates', async () => {
+    let posted: Record<string, unknown> | undefined;
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        return new Response(
+          JSON.stringify({
+            results: [
+              {
+                name: 'Jaipur',
+                admin1: 'Rajasthan',
+                country: 'India',
+                latitude: 26.91,
+                longitude: 75.78,
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      expect(href).toBe('https://api.vedastro.org/api/Calculate/PanchangaTable');
+      expect(init?.method).toBe('POST');
+      posted = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify(panchangaFixture), { status: 200 });
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const now = new Date(Date.UTC(2026, 9, 21, 10, 21, 0));
+    const result = await client.getPanchangaTable({ birthPlace: 'Jaipur', now });
+    expect(result.tithi).toBe('Ekadasi (Sukla)');
+    expect(posted).toMatchObject({
+      Ayanamsa: 'RAMAN',
+      InputTime: {
+        StdTime: '15:51 21/10/2026 +05:30',
+        Location: { Latitude: 26.91, Longitude: 75.78 },
+      },
+    });
+  });
+
+  it('surfaces a PanchangaTable Fail status', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('geocoding-api.open-meteo.com')) {
+        return new Response(
+          JSON.stringify({ results: [{ name: 'Pune', latitude: 18.52, longitude: 73.85 }] }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ Status: 'Fail', Payload: 'Calculator method not found!' }), {
+        status: 200,
+      });
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(client.getPanchangaTable({ birthPlace: 'Pune' })).rejects.toMatchObject({
+      code: 'vedastro_failed',
     });
   });
 });

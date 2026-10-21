@@ -16,34 +16,6 @@ class AstrologyHubPage extends ConsumerWidget {
         .endVisitorSession(attract: false);
   }
 
-  void _comingSoon(BuildContext context, String title) {
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AstrologyColors.panelSolid,
-          title: Text(
-            title,
-            style: const TextStyle(color: AstrologyColors.gold),
-          ),
-          content: const Text(
-            'Coming soon on this kiosk.',
-            style: TextStyle(color: AstrologyColors.text),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'OK',
-                style: TextStyle(color: AstrologyColors.gold),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tiles = [
@@ -70,7 +42,7 @@ class AstrologyHubPage extends ConsumerWidget {
         icon: Icons.calendar_month_outlined,
         title: 'Today & Periods',
         subtitle: 'Panchang · Current dasha',
-        onTap: () => _comingSoon(context, 'Today & Periods'),
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrologyToday),
       ),
     ];
 

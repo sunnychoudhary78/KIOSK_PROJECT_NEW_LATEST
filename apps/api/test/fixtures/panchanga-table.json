@@ -1,0 +1,37 @@
+{
+  "Status": "Pass",
+  "Payload": {
+    "PanchangaTable": {
+      "Ayanamsa": "22° 46' 33",
+      "Tithi": {
+        "Name": "Ekadasi",
+        "Paksha": "Sukla",
+        "Date": "11/30",
+        "Day": "11/15",
+        "Phase": "BrightHalf"
+      },
+      "LunarMonth": "Aaswayuja",
+      "Vara": "Wednesday",
+      "Nakshatra": "Dhanishta - 4",
+      "Yoga": {
+        "Name": "Ganda",
+        "Description": "Danger"
+      },
+      "Karana": "Vanija",
+      "HoraLord": {
+        "Name": "Saturn"
+      },
+      "DishaShool": "North",
+      "Sunrise": {
+        "StdTime": "06:33 21/10/2026 +05:30"
+      },
+      "Sunset": {
+        "StdTime": "17:49 21/10/2026 +05:30"
+      },
+      "IshtaKaala": {
+        "DegreeMinuteSecond": "23° 13' 52",
+        "TotalDegrees": "23.23111111111111"
+      }
+    }
+  }
+}

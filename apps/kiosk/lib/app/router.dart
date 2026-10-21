@@ -3,6 +3,7 @@ import 'package:skp_kiosk/features/astrology/presentation/astrology_hub_page.dar
 import 'package:skp_kiosk/features/astrology/presentation/astrology_page.dart';
 import 'package:skp_kiosk/features/astrology/presentation/match_kundali_page.dart';
 import 'package:skp_kiosk/features/astrology/presentation/my_kundali_page.dart';
+import 'package:skp_kiosk/features/astrology/presentation/today_periods_page.dart';
 import 'package:skp_kiosk/features/charging/presentation/charging_page.dart';
 import 'package:skp_kiosk/features/fuel_stations/presentation/fuel_stations_page.dart';
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_print_page.dart';
@@ -27,6 +28,7 @@ class AppRoutes {
   static const astrologyPalm = '/astrology/palm';
   static const astrologyKundali = '/astrology/kundali';
   static const astrologyMatch = '/astrology/match';
+  static const astrologyToday = '/astrology/today';
   static const fuelStations = '/fuel-stations';
   static const serialDebug = '/serial-debug';
 }
@@ -54,6 +56,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const MyKundaliPage());
       case AppRoutes.astrologyMatch:
         return MaterialPageRoute(builder: (_) => const MatchKundaliPage());
+      case AppRoutes.astrologyToday:
+        return MaterialPageRoute(builder: (_) => const TodayPeriodsPage());
       case AppRoutes.fuelStations:
         return MaterialPageRoute(builder: (_) => const FuelStationsPage());
       case AppRoutes.serialDebug:

@@ -8,6 +8,7 @@ import {
   type KundaliChartType,
   type VedAstroClient,
   type VedAstroMatchResult,
+  type VedAstroPanchangaResult,
 } from '../../infrastructure/external/vedastro.client.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
@@ -19,6 +20,7 @@ import {
   type CreateKundaliBody,
   type CreateMatchBody,
   type CreateReadingFields,
+  type CreateTodayBody,
   type KundaliChartEntry,
   type LlmReading,
   type ReadingSubject,
@@ -53,6 +55,15 @@ export type AstrologyMatchResponse = {
   bride: ReadingSubject;
   score: Pick<VedAstroMatchResult, 'total' | 'max' | 'summary' | 'tone'>;
   kutas: VedAstroMatchResult['kutas'];
+};
+
+export type AstrologyTodayResponse = {
+  disclaimer: string;
+  accuracyNote?: string;
+  subject: ReadingSubject;
+  asOf: string;
+  panchang: VedAstroPanchangaResult;
+  dasha: { label: string; levels: string[] };
 };
 
 export class AstrologyService {
@@ -345,6 +356,74 @@ export class AstrologyService {
         tone: result.tone,
       },
       kutas: result.kutas,
+    };
+  }
+
+  async createToday(
+    deviceId: string,
+    fields: CreateTodayBody,
+    correlationId?: string,
+  ): Promise<AstrologyTodayResponse> {
+    const startedAt = Date.now();
+    await this.services.assertEnabled(deviceId, 'astrology');
+
+    const subject: ReadingSubject = {
+      name: fields.name,
+      gender: fields.gender,
+      dateOfBirth: fields.dateOfBirth,
+      birthTime: fields.birthTime,
+      birthPlace: fields.birthPlace,
+      birthTimeUnknown: Boolean(fields.birthTimeUnknown),
+    };
+    const birth = {
+      dateOfBirth: subject.dateOfBirth,
+      birthTime: subject.birthTime,
+      birthPlace: subject.birthPlace,
+    };
+    const asOf = new Date();
+    const [panchang, dasha] = await Promise.all([
+      this.vedastro.getPanchangaTable({ birthPlace: subject.birthPlace, now: asOf }),
+      this.vedastro.getDasaForNow(birth),
+    ]);
+    if (!dasha.label) {
+      throw new AppError('vedastro_failed', 'Unable to compute current dasha', 502);
+    }
+
+    await this.audit.record({
+      action: 'astrology.today_generated',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'astrology_today',
+      correlationId,
+      metadata: {
+        birthPlace: subject.birthPlace,
+        birthTimeUnknown: subject.birthTimeUnknown,
+        dasha: dasha.label,
+        weekday: panchang.weekday,
+      },
+    });
+
+    this.logger.info(
+      {
+        correlationId,
+        dasha: dasha.label,
+        durationMs: Date.now() - startedAt,
+      },
+      '[Astrology] today periods ready',
+    );
+
+    return {
+      disclaimer: ASTROLOGY_DISCLAIMER,
+      ...(subject.birthTimeUnknown
+        ? {
+            accuracyNote:
+              'An unknown birth time was set to 12:00; current dasha may be less precise.',
+          }
+        : {}),
+      subject,
+      asOf: asOf.toISOString(),
+      panchang,
+      dasha,
     };
   }
 

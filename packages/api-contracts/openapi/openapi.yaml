@@ -692,6 +692,33 @@ paths:
         '502':
           description: VedAstro or geocoding failed
 
+  /astrology/today:
+    post:
+      tags: [Astrology]
+      summary: Generate today's panchang at the birth place plus current Vimshottari dasha
+      operationId: createAstrologyToday
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AstrologyTodayRequest'
+      responses:
+        '200':
+          description: Compact panchang snapshot and current dasha
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AstrologyTodayResponse'
+        '400':
+          description: Validation failed or birth place could not be resolved
+        '403':
+          description: Service disabled for this device
+        '502':
+          description: VedAstro or geocoding failed
+
   /otp-challenges:
     get:
       tags: [OtpPrint]
@@ -2904,4 +2931,73 @@ components:
               nature:
                 type: string
               verdict:
+                type: string
+
+    AstrologyTodayRequest:
+      type: object
+      required: [name, gender, dateOfBirth, birthTime, birthPlace]
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        gender:
+          type: string
+          enum: [male, female, other]
+        dateOfBirth:
+          type: string
+          format: date
+        birthTime:
+          type: string
+          description: HH:mm, 24-hour. Use 12:00 when unknown.
+        birthPlace:
+          type: string
+        birthTimeUnknown:
+          type: boolean
+
+    AstrologyTodayResponse:
+      type: object
+      required: [disclaimer, subject, asOf, panchang, dasha]
+      properties:
+        disclaimer:
+          type: string
+        accuracyNote:
+          type: string
+        subject:
+          type: object
+          additionalProperties: true
+        asOf:
+          type: string
+          format: date-time
+        panchang:
+          type: object
+          properties:
+            weekday:
+              type: string
+            tithi:
+              type: string
+            nakshatra:
+              type: string
+            yoga:
+              type: string
+            karana:
+              type: string
+            lunarMonth:
+              type: string
+            sunrise:
+              type: string
+            sunset:
+              type: string
+            horaLord:
+              type: string
+            dishaShool:
+              type: string
+        dasha:
+          type: object
+          required: [label, levels]
+          properties:
+            label:
+              type: string
+            levels:
+              type: array
+              items:
                 type: string
