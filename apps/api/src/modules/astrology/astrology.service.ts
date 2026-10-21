@@ -7,6 +7,7 @@ import {
   KUNDALI_PREFETCH_TYPES,
   type KundaliChartType,
   type VedAstroClient,
+  type VedAstroMatchResult,
 } from '../../infrastructure/external/vedastro.client.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
@@ -16,6 +17,7 @@ import {
   sniffPalmImageMime,
   type ChartSummary,
   type CreateKundaliBody,
+  type CreateMatchBody,
   type CreateReadingFields,
   type KundaliChartEntry,
   type LlmReading,
@@ -42,6 +44,15 @@ export type AstrologyKundaliResponse = {
   svg: string;
   chart: ChartSummary;
   charts: Partial<Record<KundaliChartType, KundaliChartEntry>>;
+};
+
+export type AstrologyMatchResponse = {
+  disclaimer: string;
+  accuracyNote?: string;
+  groom: ReadingSubject;
+  bride: ReadingSubject;
+  score: Pick<VedAstroMatchResult, 'total' | 'max' | 'summary' | 'tone'>;
+  kutas: VedAstroMatchResult['kutas'];
 };
 
 export class AstrologyService {
@@ -263,6 +274,77 @@ export class AstrologyService {
       svg: primary.svg,
       chart: summary,
       charts,
+    };
+  }
+
+  async createMatch(
+    deviceId: string,
+    fields: CreateMatchBody,
+    correlationId?: string,
+  ): Promise<AstrologyMatchResponse> {
+    const startedAt = Date.now();
+    await this.services.assertEnabled(deviceId, 'astrology');
+
+    const groom: ReadingSubject = {
+      ...fields.groom,
+      gender: 'male',
+      birthTimeUnknown: Boolean(fields.groom.birthTimeUnknown),
+    };
+    const bride: ReadingSubject = {
+      ...fields.bride,
+      gender: 'female',
+      birthTimeUnknown: Boolean(fields.bride.birthTimeUnknown),
+    };
+    const result = await this.vedastro.getMatchReport(
+      {
+        dateOfBirth: groom.dateOfBirth,
+        birthTime: groom.birthTime,
+        birthPlace: groom.birthPlace,
+      },
+      {
+        dateOfBirth: bride.dateOfBirth,
+        birthTime: bride.birthTime,
+        birthPlace: bride.birthPlace,
+      },
+    );
+
+    await this.audit.record({
+      action: 'astrology.match_generated',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'astrology_match',
+      correlationId,
+      metadata: {
+        score: result.total,
+        groomBirthPlace: groom.birthPlace,
+        brideBirthPlace: bride.birthPlace,
+        birthTimeUnknown: groom.birthTimeUnknown || bride.birthTimeUnknown,
+      },
+    });
+
+    this.logger.info(
+      {
+        correlationId,
+        score: result.total,
+        durationMs: Date.now() - startedAt,
+      },
+      '[Astrology] kundali match ready',
+    );
+
+    return {
+      disclaimer: ASTROLOGY_DISCLAIMER,
+      ...(groom.birthTimeUnknown || bride.birthTimeUnknown
+        ? { accuracyNote: 'An unknown birth time was set to 12:00; compatibility may be less precise.' }
+        : {}),
+      groom,
+      bride,
+      score: {
+        total: result.total,
+        max: result.max,
+        summary: result.summary,
+        tone: result.tone,
+      },
+      kutas: result.kutas,
     };
   }
 

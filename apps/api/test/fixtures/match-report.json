@@ -1,0 +1,21 @@
+{
+  "Status": "Pass",
+  "Payload": {
+    "MatchReport": {
+      "KutaScore": 20,
+      "Summary": {
+        "ScoreSummary": "Problematic relationship"
+      },
+      "PredictionList": [
+        { "Name": "Varna", "Nature": "Good", "Info": "boy higher and girl lower or both same Varna, is good" },
+        { "Name": "Vasya Kuta", "Nature": "Bad", "Info": "neither controls the other" },
+        { "Name": "Dina Kuta", "Nature": "Bad", "Info": "remainder is 7" },
+        { "Name": "Yoni Kuta", "Nature": "Bad", "Score": 0, "Info": "pairs are hostile, should be avoided." },
+        { "Name": "Graha Maitram", "Nature": "Bad", "Score": 0, "Info": "both are enemies, must be avoided" },
+        { "Name": "Guna Kuta", "Nature": "Bad", "Score": 0, "Info": "Manusha/Deva boy cannot marry a Rakshasa girl unless there are other neutralizing factors" },
+        { "Name": "Rasi Kuta", "Nature": "Good", "Info": "health, agreement and happiness" },
+        { "Name": "Nadi Kuta", "Nature": "Neutral", "Info": "bad Nadi Kuta is neutralized by good Rasi Kuta and Rajju" }
+      ]
+    }
+  }
+}

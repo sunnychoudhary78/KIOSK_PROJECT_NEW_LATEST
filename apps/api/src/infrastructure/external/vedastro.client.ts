@@ -56,10 +56,31 @@ export type VedAstroDasaResult = {
   levels: string[];
 };
 
+export type VedAstroMatchKuta = {
+  key: string;
+  name: string;
+  maxPoints: number;
+  points?: number;
+  nature: string;
+  verdict: string;
+};
+
+export type VedAstroMatchResult = {
+  total: number;
+  max: 36;
+  summary: string;
+  tone: 'good' | 'mixed' | 'poor';
+  kutas: VedAstroMatchKuta[];
+};
+
 export interface VedAstroClient {
   getChart(input: VedAstroBirthInput): Promise<VedAstroChartResult>;
   getKundaliSvg(input: VedAstroKundaliInput): Promise<VedAstroKundaliResult>;
   getDasaForNow(input: VedAstroBirthInput): Promise<VedAstroDasaResult>;
+  getMatchReport(
+    groom: VedAstroBirthInput,
+    bride: VedAstroBirthInput,
+  ): Promise<VedAstroMatchResult>;
 }
 
 export function kundaliCalculatorForStyle(style: KundaliStyle): 'NorthIndianChart' | 'SouthIndianChart' {
@@ -101,6 +122,80 @@ export function formatDasaLabel(body: unknown, maxLevels = 2): VedAstroDasaResul
   return {
     label: levels.join(' – '),
     levels,
+  };
+}
+
+const MATCH_KUTAS = [
+  { key: 'varna', name: 'Varna', aliases: ['Varna'], maxPoints: 1 },
+  { key: 'vasya', name: 'Vasya', aliases: ['Vasya Kuta', 'Vashya Kuta'], maxPoints: 2 },
+  { key: 'dina', name: 'Dina (Tara)', aliases: ['Dina Kuta', 'Tara Kuta'], maxPoints: 3 },
+  { key: 'yoni', name: 'Yoni', aliases: ['Yoni Kuta'], maxPoints: 4 },
+  {
+    key: 'graha-maitri',
+    name: 'Graha Maitri',
+    aliases: ['Graha Maitram', 'Graha Maitri'],
+    maxPoints: 5,
+  },
+  { key: 'gana', name: 'Gana', aliases: ['Guna Kuta', 'Gana Kuta'], maxPoints: 6 },
+  { key: 'rasi', name: 'Rasi (Bhakoot)', aliases: ['Rasi Kuta', 'Bhakoot'], maxPoints: 7 },
+  { key: 'nadi', name: 'Nadi', aliases: ['Nadi Kuta'], maxPoints: 8 },
+] as const;
+
+export function formatVedAstroStdTime(input: VedAstroBirthInput): string {
+  const { year, month, day } = splitIsoDate(input.dateOfBirth);
+  return `${input.birthTime} ${day}/${month}/${year} ${input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET}`;
+}
+
+function shortVerdict(value: unknown): string {
+  const text = asString(value) ?? 'No detailed note returned.';
+  return text.length <= 140 ? text : `${text.slice(0, 137).trimEnd()}…`;
+}
+
+export function mapVedAstroMatchReport(body: unknown): VedAstroMatchResult {
+  const root = asRecord(body);
+  const payload = asRecord(root?.Payload ?? root?.payload) ?? root;
+  const report =
+    asRecord(payload?.MatchReport ?? payload?.matchReport) ??
+    payload;
+  if (!report) {
+    throw new AppError('vedastro_failed', 'VedAstro returned an empty match report', 502);
+  }
+
+  const predictions = Array.isArray(report.PredictionList)
+    ? report.PredictionList.map(asRecord).filter((row): row is Record<string, unknown> => row !== null)
+    : [];
+  const total = asNumber(report.KutaScore) ?? 0;
+  const summaryRecord = asRecord(report.Summary);
+  const summary =
+    asString(summaryRecord?.ScoreSummary) ??
+    (total >= 24
+      ? 'Strong compatibility'
+      : total >= 18
+        ? 'Moderate compatibility'
+        : 'Compatibility needs careful consideration');
+
+  const kutas = MATCH_KUTAS.map((spec) => {
+    const row = predictions.find((candidate) => {
+      const rowName = asString(candidate.Name)?.toLowerCase();
+      return spec.aliases.some((alias) => alias.toLowerCase() === rowName);
+    });
+    const points = asNumber(row?.Score);
+    return {
+      key: spec.key,
+      name: spec.name,
+      maxPoints: spec.maxPoints,
+      ...(points !== undefined ? { points } : {}),
+      nature: asString(row?.Nature) ?? 'Neutral',
+      verdict: shortVerdict(row?.Info),
+    };
+  });
+
+  return {
+    total,
+    max: 36,
+    summary,
+    tone: total >= 24 ? 'good' : total >= 18 ? 'mixed' : 'poor',
+    kutas,
   };
 }
 
@@ -209,6 +304,14 @@ function asString(value: unknown): string | undefined {
     return String(value);
   }
   return undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  const parsed = Number(asString(value));
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function asBoolean(value: unknown): boolean | undefined {
@@ -445,6 +548,94 @@ export function createVedAstroClient(options: {
     return body;
   }
 
+  async function postJson(url: string, payload: unknown): Promise<unknown> {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(VEDASTRO_FETCH_TIMEOUT_MS),
+    });
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+    if (!response.ok) {
+      throw new AppError('vedastro_failed', 'VedAstro request failed', 502, {
+        status: response.status,
+        url,
+      });
+    }
+    const record = asRecord(body);
+    const status = asString(record?.Status ?? record?.status);
+    if (status && status.toLowerCase() !== 'pass' && status.toLowerCase() !== 'success') {
+      throw new AppError('vedastro_failed', 'VedAstro returned an error status', 502, {
+        status,
+        url,
+        payload: record?.Payload ?? record?.payload,
+      });
+    }
+    return body;
+  }
+
+  async function geocodeBirthPlace(place: string): Promise<{
+    name: string;
+    latitude: number;
+    longitude: number;
+  }> {
+    const city = place.split(/[,/|]+/)[0]?.trim() || place.trim();
+    const url =
+      'https://geocoding-api.open-meteo.com/v1/search?' +
+      new URLSearchParams({
+        name: city,
+        count: '5',
+        language: 'en',
+        format: 'json',
+      }).toString();
+    const response = await fetchImpl(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(VEDASTRO_FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw new AppError('vedastro_failed', 'Unable to resolve birth place', 502, {
+        status: response.status,
+      });
+    }
+    const body = asRecord(await response.json());
+    const results = Array.isArray(body?.results) ? body.results.map(asRecord).filter(Boolean) : [];
+    const wanted = place.toLowerCase();
+    const candidate =
+      results.find((entry) => {
+        const record = entry as Record<string, unknown>;
+        const terms = [record.name, record.admin1, record.country]
+          .map(asString)
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return wanted
+          .split(/[\s,]+/)
+          .filter((term) => term.length > 2)
+          .every((term) => terms.includes(term));
+      }) ??
+      results[0];
+    const record = asRecord(candidate);
+    const latitude = asNumber(record?.latitude);
+    const longitude = asNumber(record?.longitude);
+    if (latitude === undefined || longitude === undefined) {
+      throw new AppError('validation_error', `Birth place not found: ${place}`, 400);
+    }
+    const nameParts = [record?.name, record?.admin1, record?.country]
+      .map(asString)
+      .filter((value): value is string => Boolean(value));
+    return {
+      name: nameParts.join(', ') || place,
+      latitude,
+      longitude,
+    };
+  }
+
   async function getKundaliBody(url: string): Promise<unknown> {
     const response = await fetchImpl(url, {
       method: 'GET',
@@ -634,6 +825,63 @@ export function createVedAstroClient(options: {
         }
         options.logger.error({ err: error }, '[VedAstro] DasaForNow failed');
         throw new AppError('vedastro_failed', 'Unable to compute current dasha', 502);
+      }
+    },
+
+    async getMatchReport(
+      groom: VedAstroBirthInput,
+      bride: VedAstroBirthInput,
+    ): Promise<VedAstroMatchResult> {
+      const [groomLocation, brideLocation] = await Promise.all([
+        geocodeBirthPlace(groom.birthPlace),
+        geocodeBirthPlace(bride.birthPlace),
+      ]);
+      const url = `${baseUrl}/Calculate/MatchReport`;
+      const requestBody = {
+        Ayanamsa: 'RAMAN',
+        MaleBirthTime: {
+          StdTime: formatVedAstroStdTime(groom),
+          Location: {
+            Name: groomLocation.name,
+            Longitude: groomLocation.longitude,
+            Latitude: groomLocation.latitude,
+          },
+        },
+        FemaleBirthTime: {
+          StdTime: formatVedAstroStdTime(bride),
+          Location: {
+            Name: brideLocation.name,
+            Longitude: brideLocation.longitude,
+            Latitude: brideLocation.latitude,
+          },
+        },
+      };
+      options.logger.info(
+        {
+          groomPlace: groomLocation.name,
+          bridePlace: brideLocation.name,
+        },
+        '[VedAstro] fetching MatchReport',
+      );
+      const startedAt = Date.now();
+      try {
+        const body = await postJson(url, requestBody);
+        const result = mapVedAstroMatchReport(body);
+        options.logger.info(
+          {
+            total: result.total,
+            kutaCount: result.kutas.length,
+            durationMs: Date.now() - startedAt,
+          },
+          '[VedAstro] MatchReport ready',
+        );
+        return result;
+      } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
+        options.logger.error({ err: error }, '[VedAstro] MatchReport failed');
+        throw new AppError('vedastro_failed', 'Unable to compute kundali match', 502);
       }
     },
   };

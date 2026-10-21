@@ -373,12 +373,6 @@ class _KundaliResultViewState extends State<KundaliResultView>
     final styleLabel = result.style == 'south'
         ? 'South Indian'
         : 'North Indian';
-    final title = result.name.isEmpty
-        ? 'Your kundali'
-        : "${result.name}'s kundali";
-    final subtitle = selectedEntry == null
-        ? null
-        : '${selectedEntry.subtitle} · ${selectedEntry.title}';
 
     return Stack(
       fit: StackFit.expand,
@@ -389,30 +383,18 @@ class _KundaliResultViewState extends State<KundaliResultView>
           child: SlideTransition(
             position: _slide,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _KundaliResultHeader(
-                    title: title,
-                    styleLabel: styleLabel,
-                    subtitle: subtitle,
-                    tabs: tabs,
-                    selectedTab: _selectedTab,
-                    onTabSelected: (key) {
-                      if (key == _selectedTab) return;
-                      setState(() => _selectedTab = key);
-                    },
-                  ),
-                  const SizedBox(height: 12),
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          flex: 3,
                           child: GlassPanel(
-                            padding: const EdgeInsets.all(12),
+                            key: const ValueKey('kundali-chart-stage'),
+                            padding: const EdgeInsets.all(6),
                             borderColor: AstrologyColors.gold.withValues(
                               alpha: 0.55,
                             ),
@@ -437,7 +419,7 @@ class _KundaliResultViewState extends State<KundaliResultView>
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(14),
                                 child: Padding(
-                                  padding: const EdgeInsets.all(8),
+                                  padding: const EdgeInsets.all(4),
                                   child: AnimatedSwitcher(
                                     duration: const Duration(milliseconds: 220),
                                     switchInCurve: Curves.easeOut,
@@ -460,26 +442,28 @@ class _KundaliResultViewState extends State<KundaliResultView>
                             ),
                           ),
                         ),
-                        if (tiles.isNotEmpty) ...[
-                          const SizedBox(width: 14),
-                          Expanded(
-                            flex: 2,
-                            child: Column(
-                              children: [
-                                for (var i = 0; i < tiles.length; i++) ...[
-                                  if (i > 0) const SizedBox(height: 8),
-                                  Expanded(
-                                    child: _KundaliSummaryTile(tile: tiles[i]),
-                                  ),
-                                ],
-                              ],
+                        if (tabs.isNotEmpty || tiles.isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            width: 244,
+                            child: _KundaliSummaryRail(
+                              key: const ValueKey('kundali-chart-controls'),
+                              styleLabel: styleLabel,
+                              chartLabel: selectedEntry?.subtitle,
+                              tabs: tabs,
+                              selectedTab: _selectedTab,
+                              onTabSelected: (key) {
+                                if (key == _selectedTab) return;
+                                setState(() => _selectedTab = key);
+                              },
+                              tiles: tiles,
                             ),
                           ),
                         ],
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     result.disclaimer,
                     maxLines: 1,
@@ -499,74 +483,63 @@ class _KundaliResultViewState extends State<KundaliResultView>
   }
 }
 
-class _KundaliResultHeader extends StatelessWidget {
-  const _KundaliResultHeader({
-    required this.title,
+class _KundaliSummaryRail extends StatelessWidget {
+  const _KundaliSummaryRail({
+    super.key,
     required this.styleLabel,
     required this.tabs,
     required this.selectedTab,
     required this.onTabSelected,
-    this.subtitle,
+    required this.tiles,
+    this.chartLabel,
   });
 
-  final String title;
   final String styleLabel;
-  final String? subtitle;
+  final String? chartLabel;
   final List<MapEntry<String, KundaliChartEntry>> tabs;
   final String selectedTab;
   final ValueChanged<String> onTabSelected;
+  final List<({String label, String value, String? art})> tiles;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return GlassPanel(
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: AstrologyColors.gold,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: AstrologyColors.muted,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              _MetaChip(label: styleLabel),
-            ],
-          ),
-          if (tabs.length > 1) ...[
-            const SizedBox(height: 10),
-            _ChartTabBar(
+    return Column(
+      children: [
+        if (tabs.isNotEmpty)
+          SizedBox(
+            height: 40,
+            child: _ChartTabBar(
               tabs: tabs,
               selectedTab: selectedTab,
               onTabSelected: onTabSelected,
             ),
+          ),
+        if (tabs.isNotEmpty) const SizedBox(height: 6),
+        Row(
+          children: [
+            if (chartLabel != null)
+              Expanded(
+                child: Text(
+                  chartLabel!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AstrologyColors.goldSoft,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            if (chartLabel == null) const Spacer(),
+            const SizedBox(width: 6),
+            _MetaChip(label: styleLabel),
           ],
+        ),
+        if (tiles.isNotEmpty) const SizedBox(height: 6),
+        for (var i = 0; i < tiles.length; i++) ...[
+          if (i > 0) const SizedBox(height: 6),
+          Expanded(child: _KundaliSummaryTile(tile: tiles[i])),
         ],
-      ),
+      ],
     );
   }
 }
@@ -627,7 +600,7 @@ class _ChartTabButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
             color: selected
                 ? AstrologyColors.gold.withValues(alpha: 0.22)

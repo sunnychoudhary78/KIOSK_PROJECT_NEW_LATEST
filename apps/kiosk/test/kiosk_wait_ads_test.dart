@@ -56,11 +56,15 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('non-empty playlist reveals ads surface after delay', (tester) async {
+  testWidgets('non-empty playlist reveals ads surface after delay', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          adsControllerProvider.overrideWith(() => _PlaylistAds(_idlePlaylist())),
+          adsControllerProvider.overrideWith(
+            () => _PlaylistAds(_idlePlaylist()),
+          ),
         ],
         child: const MaterialApp(
           home: Scaffold(body: KioskWaitAds(message: _message)),
@@ -76,5 +80,6 @@ void main() {
     expect(find.text(_message), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 3));
+    expect(tester.takeException(), isNull);
   });
 }

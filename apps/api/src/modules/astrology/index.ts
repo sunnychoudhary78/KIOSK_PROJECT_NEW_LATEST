@@ -6,6 +6,7 @@ import { AppError } from '../../shared/errors.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import {
   createKundaliBodySchema,
+  createMatchBodySchema,
   createReadingFieldsSchema,
   type UploadedPalm,
 } from './astrology.schemas.js';
@@ -86,6 +87,35 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
           );
         }
         const result = await service.createKundali(
+          req.principal.deviceId,
+          parsed.data,
+          req.correlationId,
+        );
+        res.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/match',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const parsed = createMatchBodySchema.safeParse(req.body);
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_error',
+            'Request validation failed',
+            400,
+            parsed.error.flatten(),
+          );
+        }
+        const result = await service.createMatch(
           req.principal.deviceId,
           parsed.data,
           req.correlationId,

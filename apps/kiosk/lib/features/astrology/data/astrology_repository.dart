@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
+import 'package:skp_kiosk/features/astrology/domain/match_kundali_result.dart';
 
 class AstrologySubmitInput {
   const AstrologySubmitInput({
@@ -44,6 +45,30 @@ class KundaliSubmitInput {
   final String style;
 }
 
+class MatchPersonInput {
+  const MatchPersonInput({
+    required this.name,
+    required this.dateOfBirth,
+    required this.birthTime,
+    required this.birthPlace,
+    required this.birthTimeUnknown,
+  });
+
+  final String name;
+  final String dateOfBirth;
+  final String birthTime;
+  final String birthPlace;
+  final bool birthTimeUnknown;
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'dateOfBirth': dateOfBirth,
+    'birthTime': birthTime,
+    'birthPlace': birthPlace,
+    'birthTimeUnknown': birthTimeUnknown,
+  };
+}
+
 class AstrologyRepository {
   AstrologyRepository(this._api);
 
@@ -83,5 +108,16 @@ class AstrologyRepository {
       },
     );
     return KundaliResult.fromJson(result);
+  }
+
+  Future<MatchKundaliResult> createMatch({
+    required MatchPersonInput groom,
+    required MatchPersonInput bride,
+  }) async {
+    final result = await _api.post(
+      '/astrology/match',
+      body: {'groom': groom.toJson(), 'bride': bride.toJson()},
+    );
+    return MatchKundaliResult.fromJson(result);
   }
 }

@@ -51,7 +51,8 @@ class AstrologyHubPage extends ConsumerWidget {
         icon: Icons.auto_awesome,
         title: 'My Kundali',
         subtitle: 'North or South Indian chart',
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrologyKundali),
+        onTap: () =>
+            Navigator.of(context).pushNamed(AppRoutes.astrologyKundali),
       ),
       (
         icon: Icons.back_hand_outlined,
@@ -63,7 +64,7 @@ class AstrologyHubPage extends ConsumerWidget {
         icon: Icons.favorite_outline,
         title: 'Match Kundalis',
         subtitle: 'Gun milan for two people',
-        onTap: () => _comingSoon(context, 'Match Kundalis'),
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrologyMatch),
       ),
       (
         icon: Icons.calendar_month_outlined,
@@ -95,16 +96,16 @@ class AstrologyHubPage extends ConsumerWidget {
                   Text(
                     'Choose a reading',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: AstrologyColors.gold,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      color: AstrologyColors.gold,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Kundali, palm, matching, and daily periods',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AstrologyColors.muted,
-                        ),
+                      color: AstrologyColors.muted,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   Expanded(

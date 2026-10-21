@@ -16,12 +16,13 @@ class KioskScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canvas = cosmic ? const Color(0xFF0B1220) : SkpColors.canvas;
-    return ColoredBox(
+    return Material(
       color: canvas,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (useAtmosphere && !cosmic) const IgnorePointer(child: KioskAtmosphere()),
+          if (useAtmosphere && !cosmic)
+            const IgnorePointer(child: KioskAtmosphere()),
           body,
         ],
       ),
@@ -42,10 +43,7 @@ class KioskAtmosphere extends StatelessWidget {
             gradient: RadialGradient(
               center: Alignment(-0.7, -0.85),
               radius: 1.15,
-              colors: [
-                Color(0x280F6A5A),
-                Color(0x00F4F7F8),
-              ],
+              colors: [Color(0x280F6A5A), Color(0x00F4F7F8)],
             ),
           ),
         ),
@@ -54,10 +52,7 @@ class KioskAtmosphere extends StatelessWidget {
             gradient: RadialGradient(
               center: Alignment(0.85, 1.05),
               radius: 0.9,
-              colors: [
-                Color(0x1A2EC4A0),
-                Color(0x00F4F7F8),
-              ],
+              colors: [Color(0x1A2EC4A0), Color(0x00F4F7F8)],
             ),
           ),
         ),

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildVedAstroCalculateUrl,
@@ -7,11 +10,18 @@ import {
   createVedAstroClient,
   extractKundaliSvg,
   formatDasaLabel,
+  formatVedAstroStdTime,
   kundaliCalculatorForStyle,
+  mapVedAstroMatchReport,
   toChartSummary,
 } from '../src/infrastructure/external/vedastro.client.js';
 import { AppError } from '../src/shared/errors.js';
 import type { Logger } from '../src/infrastructure/logging/logger.js';
+
+const fixtureDir = dirname(fileURLToPath(import.meta.url));
+const matchReportFixture = JSON.parse(
+  readFileSync(join(fixtureDir, 'fixtures/match-report.json'), 'utf8'),
+) as unknown;
 
 const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
 
@@ -186,6 +196,38 @@ describe('formatDasaLabel', () => {
       label: 'Rahu – Saturn',
       levels: ['Rahu', 'Saturn'],
     });
+  });
+});
+
+describe('MatchReport mapping', () => {
+  it('formats StdTime and maps a compact ordered eight-kuta result', () => {
+    expect(
+      formatVedAstroStdTime({
+        dateOfBirth: '1990-01-15',
+        birthTime: '14:20',
+        birthPlace: 'Jaipur',
+      }),
+    ).toBe('14:20 15/01/1990 +05:30');
+    const result = mapVedAstroMatchReport(matchReportFixture);
+    expect(result).toMatchObject({
+      total: 20,
+      max: 36,
+      tone: 'mixed',
+      summary: 'Problematic relationship',
+    });
+    expect(result.kutas).toHaveLength(8);
+    expect(result.kutas.map((entry) => entry.key)).toEqual([
+      'varna',
+      'vasya',
+      'dina',
+      'yoni',
+      'graha-maitri',
+      'gana',
+      'rasi',
+      'nadi',
+    ]);
+    expect(result.kutas[4]).toMatchObject({ points: 0, maxPoints: 5, nature: 'Bad' });
+    expect(result.kutas.every((entry) => entry.verdict.length <= 140)).toBe(true);
   });
 });
 
@@ -467,5 +509,126 @@ describe('createVedAstroClient', () => {
         birthPlace: 'Pune',
       }),
     ).resolves.toEqual({ label: 'Venus – Mercury', levels: ['Venus', 'Mercury'] });
+  });
+
+  it('geocodes both places and POSTs MatchReport with real coordinates', async () => {
+    let posted: Record<string, unknown> | undefined;
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        const isJaipur = href.includes('Jaipur');
+        return new Response(
+          JSON.stringify({
+            results: [
+              {
+                name: isJaipur ? 'Jaipur' : 'Delhi',
+                admin1: isJaipur ? 'Rajasthan' : 'Delhi',
+                country: 'India',
+                latitude: isJaipur ? 26.91 : 28.65,
+                longitude: isJaipur ? 75.78 : 77.23,
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      expect(href).toBe('https://api.vedastro.org/api/Calculate/MatchReport');
+      expect(init?.method).toBe('POST');
+      posted = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          Status: 'Pass',
+          Payload: {
+            MatchReport: {
+              KutaScore: 25,
+              Summary: { ScoreSummary: 'Strong compatibility' },
+              PredictionList: [],
+            },
+          },
+        }),
+        { status: 200 },
+      );
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const result = await client.getMatchReport(
+      {
+        dateOfBirth: '1990-01-15',
+        birthTime: '14:20',
+        birthPlace: 'Jaipur, Rajasthan',
+      },
+      {
+        dateOfBirth: '1992-06-20',
+        birthTime: '10:30',
+        birthPlace: 'Delhi, India',
+      },
+    );
+
+    expect(result).toMatchObject({ total: 25, max: 36, tone: 'good' });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(posted).toMatchObject({
+      Ayanamsa: 'RAMAN',
+      MaleBirthTime: {
+        StdTime: '14:20 15/01/1990 +05:30',
+        Location: { Latitude: 26.91, Longitude: 75.78 },
+      },
+      FemaleBirthTime: {
+        StdTime: '10:30 20/06/1992 +05:30',
+        Location: { Latitude: 28.65, Longitude: 77.23 },
+      },
+    });
+  });
+
+  it('surfaces a MatchReport Fail status', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('geocoding-api.open-meteo.com')) {
+        return new Response(
+          JSON.stringify({ results: [{ name: 'Pune', latitude: 18.52, longitude: 73.85 }] }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ Status: 'Fail', Payload: 'Calculator method not found!' }), {
+        status: 200,
+      });
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const birth = {
+      dateOfBirth: '1991-06-02',
+      birthTime: '08:15',
+      birthPlace: 'Pune',
+    };
+    await expect(client.getMatchReport(birth, birth)).rejects.toMatchObject({
+      code: 'vedastro_failed',
+    });
+  });
+
+  it('rejects an unresolved birth place before MatchReport POST', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('geocoding-api.open-meteo.com')) {
+        return new Response(JSON.stringify({ results: [] }), { status: 200 });
+      }
+      throw new Error('MatchReport should not be called');
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const birth = {
+      dateOfBirth: '1991-06-02',
+      birthTime: '08:15',
+      birthPlace: 'Unknownville',
+    };
+    await expect(client.getMatchReport(birth, birth)).rejects.toMatchObject({
+      code: 'validation_error',
+    });
   });
 });

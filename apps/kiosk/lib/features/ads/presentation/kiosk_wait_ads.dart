@@ -51,7 +51,18 @@ class _KioskWaitAdsState extends ConsumerState<KioskWaitAds> {
   @override
   void dispose() {
     _revealTimer?.cancel();
-    _hold?.set(waiting: false);
+    final hold = _hold;
+    if (hold != null) {
+      // The wait view is commonly removed while its result route is building.
+      // Riverpod state cannot be changed synchronously during that build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          hold.set(waiting: false);
+        } catch (_) {
+          // The provider scope can already be gone during app/test teardown.
+        }
+      });
+    }
     super.dispose();
   }
 
@@ -61,16 +72,17 @@ class _KioskWaitAdsState extends ConsumerState<KioskWaitAds> {
     if (idle.isEmpty || !_reveal) {
       return KioskLoading(message: widget.message);
     }
-    return _WaitAdSurface(message: widget.message);
+    return _WaitAdSurface(message: widget.message, items: idle);
   }
 }
 
 enum _WaitRenderMode { loading, video, image }
 
 class _WaitAdSurface extends ConsumerStatefulWidget {
-  const _WaitAdSurface({required this.message});
+  const _WaitAdSurface({required this.message, required this.items});
 
   final String message;
+  final List<AdPlaylistItem> items;
 
   @override
   ConsumerState<_WaitAdSurface> createState() => _WaitAdSurfaceState();
@@ -93,13 +105,20 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
   bool _handlingComplete = false;
   int _cycleErrors = 0;
 
-  AdsMediaCache get _cache => ref.read(adsMediaCacheProvider);
+  late final AdsMediaCache _cache;
+  late final AdsController _adsController;
 
   @override
   void initState() {
     super.initState();
+    // Capture provider-backed dependencies while this ConsumerState is valid.
+    // Async playback callbacks must not call ref after the widget unmounts.
+    _cache = ref.read(adsMediaCacheProvider);
+    _adsController = ref.read(adsControllerProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_playCurrent());
+      if (mounted) {
+        unawaited(_playCurrent());
+      }
     });
   }
 
@@ -110,8 +129,7 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
     super.dispose();
   }
 
-  List<AdPlaylistItem> get _idle =>
-      ref.read(adsControllerProvider).playlist.idle;
+  List<AdPlaylistItem> get _idle => widget.items;
 
   bool _declaredVideo(AdPlaylistItem ad) {
     return ad.type == 'video' ||
@@ -231,20 +249,23 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
   }
 
   Future<void> _report(AdPlaylistItem ad, String eventType) async {
-    if (ad.campaignId.isEmpty) {
+    if (!mounted || ad.campaignId.isEmpty) {
       return;
     }
-    await ref.read(adsControllerProvider.notifier).reportEvent(
-          campaignId: ad.campaignId,
-          creativeId: ad.id,
-          eventType: eventType,
-        );
+    await _adsController.reportEvent(
+      campaignId: ad.campaignId,
+      creativeId: ad.id,
+      eventType: eventType,
+    );
   }
 
   Future<void> _playCurrent() async {
     final generation = ++_playGeneration;
+    if (!mounted) {
+      return;
+    }
     final items = _idle;
-    if (items.isEmpty || !mounted) {
+    if (items.isEmpty) {
       return;
     }
     if (_index >= items.length) {
@@ -307,9 +328,11 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
       if (ad.type == 'carousel' && ad.assets.isNotEmpty) {
         for (final asset in ad.assets) {
           if (asset.mediaUrl != null) {
-            photoUrls.add(
-              (id: asset.id, url: asset.mediaUrl!, mime: asset.mimeType),
-            );
+            photoUrls.add((
+              id: asset.id,
+              url: asset.mediaUrl!,
+              mime: asset.mimeType,
+            ));
           }
         }
       } else if (ad.mediaUrl != null) {
@@ -351,7 +374,9 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
         _cycleErrors = 0;
         await _showImage(cached.file, generation);
 
-        final dwell = Duration(seconds: ad.durationSec ?? _photoDwell.inSeconds);
+        final dwell = Duration(
+          seconds: ad.durationSec ?? _photoDwell.inSeconds,
+        );
         await Future<void>.delayed(dwell);
         if (!mounted || generation != _playGeneration) {
           return;
@@ -389,7 +414,7 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
   }
 
   Future<void> _onVideoCompleted() async {
-    if (_handlingComplete || _mode != _WaitRenderMode.video) {
+    if (!mounted || _handlingComplete || _mode != _WaitRenderMode.video) {
       return;
     }
     _handlingComplete = true;
@@ -407,6 +432,9 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
   }
 
   Future<void> _advancePlaylistItem() async {
+    if (!mounted) {
+      return;
+    }
     _assetIndex = 0;
     _index = (_index + 1) % (_idle.isEmpty ? 1 : _idle.length);
     await _playCurrent();
@@ -459,9 +487,8 @@ class _WaitAdSurfaceState extends ConsumerState<_WaitAdSurface> {
                       child: Text(
                         widget.message,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: SkpColors.text,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(color: SkpColors.text),
                       ),
                     ),
                   ),

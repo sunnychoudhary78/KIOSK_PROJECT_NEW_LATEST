@@ -659,6 +659,39 @@ paths:
         '502':
           description: VedAstro failed
 
+  /astrology/match:
+    post:
+      tags: [Astrology]
+      summary: Generate a Gun Milan compatibility report for a groom and bride
+      operationId: createAstrologyMatch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [groom, bride]
+              properties:
+                groom:
+                  $ref: '#/components/schemas/AstrologyMatchPerson'
+                bride:
+                  $ref: '#/components/schemas/AstrologyMatchPerson'
+      responses:
+        '200':
+          description: Compact compatibility score and eight-kuta breakdown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AstrologyMatchResponse'
+        '400':
+          description: Validation failed or birth place could not be resolved
+        '403':
+          description: Service disabled for this device
+        '502':
+          description: VedAstro or geocoding failed
+
   /otp-challenges:
     get:
       tags: [OtpPrint]
@@ -2805,3 +2838,70 @@ components:
         subtitle:
           type: string
           example: Navamsha
+
+    AstrologyMatchPerson:
+      type: object
+      required: [name, dateOfBirth, birthTime, birthPlace]
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        dateOfBirth:
+          type: string
+          format: date
+        birthTime:
+          type: string
+          description: HH:mm, 24-hour. Use 12:00 when unknown.
+        birthPlace:
+          type: string
+        birthTimeUnknown:
+          type: boolean
+
+    AstrologyMatchResponse:
+      type: object
+      required: [disclaimer, groom, bride, score, kutas]
+      properties:
+        disclaimer:
+          type: string
+        accuracyNote:
+          type: string
+        groom:
+          type: object
+          additionalProperties: true
+        bride:
+          type: object
+          additionalProperties: true
+        score:
+          type: object
+          required: [total, max, summary, tone]
+          properties:
+            total:
+              type: number
+            max:
+              type: number
+              enum: [36]
+            summary:
+              type: string
+            tone:
+              type: string
+              enum: [good, mixed, poor]
+        kutas:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items:
+            type: object
+            required: [key, name, maxPoints, nature, verdict]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+              maxPoints:
+                type: number
+              points:
+                type: number
+              nature:
+                type: string
+              verdict:
+                type: string

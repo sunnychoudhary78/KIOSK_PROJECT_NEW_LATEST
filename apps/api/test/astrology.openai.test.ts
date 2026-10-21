@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ASTROLOGY_DISCLAIMER,
+  createMatchBodySchema,
   createReadingFieldsSchema,
   llmReadingSchema,
   parseLlmJson,
@@ -48,6 +49,35 @@ describe('astrology schemas', () => {
       birthPlace: 'Jaipur',
     });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts nested groom and bride without gender', () => {
+    const parsed = createMatchBodySchema.parse({
+      groom: {
+        name: 'Arjun',
+        dateOfBirth: '1990-01-15',
+        birthTime: '14:20',
+        birthPlace: 'Jaipur',
+      },
+      bride: {
+        name: 'Asha',
+        dateOfBirth: '1992-06-20',
+        birthTime: '10:30',
+        birthPlace: 'Delhi',
+      },
+    });
+    expect(parsed.groom).not.toHaveProperty('gender');
+    expect(parsed.bride).not.toHaveProperty('gender');
+    expect(parsed.groom.birthTimeUnknown).toBe(false);
+  });
+
+  it('rejects incomplete match payloads', () => {
+    expect(
+      createMatchBodySchema.safeParse({
+        groom: { name: 'Arjun' },
+        bride: {},
+      }).success,
+    ).toBe(false);
   });
 
   it('strips markdown fences from LLM JSON', () => {

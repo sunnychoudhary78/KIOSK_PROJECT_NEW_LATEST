@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
+import 'package:skp_kiosk/features/astrology/application/match_kundali_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/my_kundali_controller.dart';
 import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
@@ -17,14 +18,12 @@ import 'package:skp_kiosk/features/well_being/application/well_being_controller.
 typedef VisitorSessionResetFn = Future<void> Function({required bool attract});
 
 final visitorSessionResetProvider = Provider<VisitorSessionResetFn>((ref) {
-  return ({required bool attract}) => resetVisitorSession(ref, attract: attract);
+  return ({required bool attract}) =>
+      resetVisitorSession(ref, attract: attract);
 });
 
 /// Wipe visitor PII and return to the catalog. Does not touch device auth.
-Future<void> resetVisitorSession(
-  Ref ref, {
-  required bool attract,
-}) async {
+Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
   if (ref.exists(digilockerControllerProvider)) {
     try {
       await ref.read(digilockerControllerProvider.notifier).endSession();
@@ -57,6 +56,7 @@ Future<void> resetVisitorSession(
   ref.invalidate(quickPrintControllerProvider);
   ref.invalidate(astrologyControllerProvider);
   ref.invalidate(myKundaliControllerProvider);
+  ref.invalidate(matchKundaliControllerProvider);
   ref.invalidate(wellBeingControllerProvider);
   ref.invalidate(chargingControllerProvider);
   ref.invalidate(fuelStationsControllerProvider);

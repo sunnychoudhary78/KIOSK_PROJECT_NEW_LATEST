@@ -27,6 +27,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
     this.subtitle = 'Tell the stars a little about you',
     this.leading,
     this.footer,
+    this.showGender = true,
   });
 
   final TextEditingController nameController;
@@ -48,6 +49,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
   final String subtitle;
   final Widget? leading;
   final Widget? footer;
+  final bool showGender;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +78,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
           focused: focus == 1,
           onTap: () => onFocus(1),
         ),
-        if (footer != null) footer!,
+        ?footer,
       ],
     );
 
@@ -84,13 +86,11 @@ class AstrologyBirthFormPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        Semantics(
-          label: 'Gender',
-          child: AstrologyGenderSegment(
-            gender: gender,
-            onGender: onGender,
+        if (showGender)
+          Semantics(
+            label: 'Gender',
+            child: AstrologyGenderSegment(gender: gender, onGender: onGender),
           ),
-        ),
         AstrologyCosmicTextField(
           label: 'Date of birth',
           value: dob.toIso8601String().split('T').first,
@@ -182,10 +182,7 @@ class AstrologyBirthFormPanel extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (leading != null) ...[
-                  leading!,
-                  const SizedBox(width: 16),
-                ],
+                if (leading != null) ...[leading!, const SizedBox(width: 16)],
                 Expanded(
                   child: GlassPanel(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -198,13 +195,15 @@ class AstrologyBirthFormPanel extends StatelessWidget {
         ),
         if (showKeyboard)
           SizedBox(
-            height: 220,
+            // Keep enough room for all form rows plus a validation banner in
+            // the 720p kiosk viewport.
+            height: 190,
             child: Theme(
               data: Theme.of(context).copyWith(
                 colorScheme: Theme.of(context).colorScheme.copyWith(
-                      surface: AstrologyColors.panelSolid,
-                      onSurface: AstrologyColors.text,
-                    ),
+                  surface: AstrologyColors.panelSolid,
+                  onSurface: AstrologyColors.text,
+                ),
               ),
               child: KioskKeyboard(onKey: onKey, onBackspace: onBackspace),
             ),
@@ -291,8 +290,9 @@ class AstrologyCosmicTextField extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleMedium?.copyWith(
-                color:
-                    value.isEmpty ? AstrologyColors.muted : AstrologyColors.text,
+                color: value.isEmpty
+                    ? AstrologyColors.muted
+                    : AstrologyColors.text,
                 height: 1.15,
               ),
             ),
@@ -351,13 +351,13 @@ class AstrologyGenderSegment extends StatelessWidget {
                   child: Text(
                     option.$2,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: gender == option.$1
-                              ? AstrologyColors.gold
-                              : AstrologyColors.muted,
-                          fontWeight: gender == option.$1
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                        ),
+                      color: gender == option.$1
+                          ? AstrologyColors.gold
+                          : AstrologyColors.muted,
+                      fontWeight: gender == option.$1
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
                   ),
                 ),
               ),
@@ -410,10 +410,10 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
                 child: Text(
                   'Birth time unknown',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: selected
-                            ? AstrologyColors.gold
-                            : AstrologyColors.text,
-                      ),
+                    color: selected
+                        ? AstrologyColors.gold
+                        : AstrologyColors.text,
+                  ),
                 ),
               ),
             ],
@@ -438,10 +438,7 @@ class AstrologyStyleSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const options = [
-      ('north', 'North Indian'),
-      ('south', 'South Indian'),
-    ];
+    const options = [('north', 'North Indian'), ('south', 'South Indian')];
     return Semantics(
       label: 'Chart style',
       child: Container(
@@ -473,13 +470,13 @@ class AstrologyStyleSegment extends StatelessWidget {
                     child: Text(
                       option.$2,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: style == option.$1
-                                ? AstrologyColors.gold
-                                : AstrologyColors.muted,
-                            fontWeight: style == option.$1
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
+                        color: style == option.$1
+                            ? AstrologyColors.gold
+                            : AstrologyColors.muted,
+                        fontWeight: style == option.$1
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),

@@ -80,6 +80,15 @@ export const createKundaliBodySchema = createReadingFieldsSchema.extend({
 export type CreateKundaliBody = z.infer<typeof createKundaliBodySchema>;
 export type KundaliChartTypeName = z.infer<typeof kundaliChartTypeSchema>;
 
+const matchPersonSchema = createReadingFieldsSchema.omit({ gender: true });
+
+export const createMatchBodySchema = z.object({
+  groom: matchPersonSchema,
+  bride: matchPersonSchema,
+});
+
+export type CreateMatchBody = z.infer<typeof createMatchBodySchema>;
+
 export const kundaliChartEntrySchema = z.object({
   svg: z.string().min(1),
   title: z.enum(['Birth', 'Marriage', 'Career']),

@@ -49,6 +49,13 @@ describe('AstrologyService.createReading', () => {
         svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
       })),
       getDasaForNow: vi.fn(async () => ({ label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] })),
+      getMatchReport: vi.fn(async () => ({
+        total: 25,
+        max: 36 as const,
+        summary: 'Strong compatibility',
+        tone: 'good' as const,
+        kutas: [],
+      })),
     };
     const llm: AstrologyLlmClient = {
       generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
@@ -174,6 +181,13 @@ describe('AstrologyService.createKundali', () => {
         svg: `<svg xmlns="http://www.w3.org/2000/svg"><title>${input.chartType ?? 'RasiD1'}</title></svg>`,
       })),
       getDasaForNow: vi.fn(async () => ({ label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] })),
+      getMatchReport: vi.fn(async () => ({
+        total: 25,
+        max: 36 as const,
+        summary: 'Strong compatibility',
+        tone: 'good' as const,
+        kutas: [],
+      })),
     };
     const llm: AstrologyLlmClient = {
       generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
@@ -268,5 +282,107 @@ describe('AstrologyService.createKundali', () => {
     expect(vedastro.getKundaliSvg).not.toHaveBeenCalled();
     expect(vedastro.getChart).not.toHaveBeenCalled();
     expect(vedastro.getDasaForNow).not.toHaveBeenCalled();
+  });
+});
+
+describe('AstrologyService.createMatch', () => {
+  const fields = {
+    groom: {
+      name: 'Arjun',
+      dateOfBirth: '1990-01-15',
+      birthTime: '14:20',
+      birthPlace: 'Jaipur',
+      birthTimeUnknown: false,
+    },
+    bride: {
+      name: 'Asha',
+      dateOfBirth: '1992-06-20',
+      birthTime: '12:00',
+      birthPlace: 'Delhi',
+      birthTimeUnknown: true,
+    },
+  };
+
+  it('returns an ephemeral match result with fixed roles and audit metadata', async () => {
+    const vedastro = {
+      getChart: vi.fn(),
+      getKundaliSvg: vi.fn(),
+      getDasaForNow: vi.fn(),
+      getMatchReport: vi.fn(async () => ({
+        total: 25,
+        max: 36 as const,
+        summary: 'Strong compatibility',
+        tone: 'good' as const,
+        kutas: [
+          {
+            key: 'varna',
+            name: 'Varna',
+            maxPoints: 1,
+            points: 1,
+            nature: 'Good',
+            verdict: 'compatible values',
+          },
+        ],
+      })),
+    };
+    const db = {
+      astrologyReading: {
+        create: vi.fn(async () => {
+          throw new Error('match must not persist readings');
+        }),
+      },
+    };
+    const audit = { record: vi.fn(async () => undefined) };
+    const services = { assertEnabled: vi.fn(async () => undefined) };
+    const llm = { generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING) };
+    const service = new AstrologyService(
+      db as unknown as DbClient,
+      vedastro as unknown as VedAstroClient,
+      llm,
+      audit as unknown as AuditService,
+      services as unknown as ServicesCatalogService,
+      silentLogger,
+    );
+
+    const result = await service.createMatch('device-1', fields, 'corr-match');
+
+    expect(result.score).toMatchObject({ total: 25, max: 36, tone: 'good' });
+    expect(result.groom.gender).toBe('male');
+    expect(result.bride.gender).toBe('female');
+    expect(result.accuracyNote).toContain('12:00');
+    expect(vedastro.getMatchReport).toHaveBeenCalledOnce();
+    expect(db.astrologyReading.create).not.toHaveBeenCalled();
+    expect(llm.generateReading).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'astrology.match_generated',
+        metadata: expect.objectContaining({ score: 25, birthTimeUnknown: true }),
+      }),
+    );
+  });
+
+  it('does not call VedAstro when the service is disabled', async () => {
+    const vedastro = {
+      getChart: vi.fn(),
+      getKundaliSvg: vi.fn(),
+      getDasaForNow: vi.fn(),
+      getMatchReport: vi.fn(),
+    };
+    const service = new AstrologyService(
+      { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
+      vedastro as unknown as VedAstroClient,
+      { generateReading: vi.fn() },
+      { record: vi.fn() } as unknown as AuditService,
+      {
+        assertEnabled: vi.fn(async () => {
+          throw new AppError('service_disabled', 'Service astrology is disabled for this device', 403);
+        }),
+      } as unknown as ServicesCatalogService,
+      silentLogger,
+    );
+    await expect(service.createMatch('device-1', fields)).rejects.toMatchObject({
+      code: 'service_disabled',
+    });
+    expect(vedastro.getMatchReport).not.toHaveBeenCalled();
   });
 });
