@@ -172,6 +172,7 @@ export function buildVedAstroCalculateUrl(input: {
   baseUrl: string;
   calculator: string;
   extraPath?: string;
+  trailingPath?: string;
   location: string;
   birthTime: string;
   dateOfBirth: string;
@@ -180,13 +181,16 @@ export function buildVedAstroCalculateUrl(input: {
   const { year, month, day } = splitIsoDate(input.dateOfBirth);
   const offset = input.utcOffset ?? VEDASTRO_DEFAULT_OFFSET;
   const extra = input.extraPath ? `/${input.extraPath.replace(/^\/|\/$/g, '')}` : '';
+  const trailing = input.trailingPath
+    ? `/${input.trailingPath.replace(/^\/|\/$/g, '')}`
+    : '';
   const location = input.location
     .split('/')
     .map((segment) => encodeURIComponent(segment))
     .join('/');
   return (
     `${normalizeVedAstroBaseUrl(input.baseUrl)}/Calculate/${input.calculator}${extra}` +
-    `/Location/${location}/Time/${input.birthTime}/${day}/${month}/${year}/${offset}`
+    `/Location/${location}/Time/${input.birthTime}/${day}/${month}/${year}/${offset}${trailing}`
   );
 }
 
@@ -547,7 +551,9 @@ export function createVedAstroClient(options: {
       const url = buildVedAstroCalculateUrl({
         baseUrl,
         calculator,
-        extraPath: `ChartType/${chartType}`,
+        // VedAstro binds optional parameters only after the required Time
+        // path. Putting ChartType before Location silently returns RasiD1.
+        trailingPath: `ChartType/${chartType}`,
         location,
         birthTime: input.birthTime,
         dateOfBirth: input.dateOfBirth,

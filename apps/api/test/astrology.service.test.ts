@@ -208,6 +208,9 @@ describe('AstrologyService.createKundali', () => {
     expect(result.charts.RasiD1?.title).toBe('Birth');
     expect(result.charts.NavamshaD9?.title).toBe('Marriage');
     expect(result.charts.DashamamshaD10?.title).toBe('Career');
+    expect(
+      new Set(Object.values(result.charts).map((entry) => entry?.svg)).size,
+    ).toBe(3);
     expect(result.disclaimer).toBe(ASTROLOGY_DISCLAIMER);
     expect(vedastro.getKundaliSvg).toHaveBeenCalledTimes(3);
     expect(vedastro.getDasaForNow).toHaveBeenCalledOnce();

@@ -124,23 +124,25 @@ describe('VedAstro URL builder', () => {
     const north = buildVedAstroCalculateUrl({
       baseUrl: 'https://api.vedastro.org',
       calculator: kundaliCalculatorForStyle('north'),
-      extraPath: 'ChartType/RasiD1',
+      trailingPath: 'ChartType/RasiD1',
       location: 'Jaipur/Rajasthan',
       birthTime: '14:20',
       dateOfBirth: '1990-01-15',
     });
     expect(north).toBe(
-      'https://api.vedastro.org/api/Calculate/NorthIndianChart/ChartType/RasiD1/Location/Jaipur/Rajasthan/Time/14:20/15/01/1990/+05:30',
+      'https://api.vedastro.org/api/Calculate/NorthIndianChart/Location/Jaipur/Rajasthan/Time/14:20/15/01/1990/+05:30/ChartType/RasiD1',
     );
     const south = buildVedAstroCalculateUrl({
       baseUrl: 'https://api.vedastro.org/api',
       calculator: kundaliCalculatorForStyle('south'),
-      extraPath: 'ChartType/RasiD1',
+      trailingPath: 'ChartType/RasiD1',
       location: 'NewDelhi',
       birthTime: '12:00',
       dateOfBirth: '2000-12-01',
     });
-    expect(south).toContain('/Calculate/SouthIndianChart/ChartType/RasiD1/Location/NewDelhi/');
+    expect(south).toContain(
+      '/Calculate/SouthIndianChart/Location/NewDelhi/Time/12:00/01/12/2000/+05:30/ChartType/RasiD1',
+    );
   });
 });
 
@@ -349,7 +351,9 @@ describe('createVedAstroClient', () => {
     const sampleSvg = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>';
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
-      expect(href).toContain('/Calculate/NorthIndianChart/ChartType/RasiD1/');
+      expect(href).toContain(
+        '/Calculate/NorthIndianChart/Location/Pune/Time/08:15/02/06/1991/+05:30/ChartType/RasiD1',
+      );
       return new Response(JSON.stringify({ Status: 'Pass', Payload: sampleSvg }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -371,6 +375,46 @@ describe('createVedAstroClient', () => {
       chartType: 'RasiD1',
       svg: sampleSvg,
     });
+  });
+
+  it('places each divisional ChartType after Time and preserves its SVG', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+      const chartType = href.match(/\/ChartType\/([^/]+)$/)?.[1];
+      return new Response(`<svg aria-label="${chartType}">${chartType}</svg>`, {
+        status: 200,
+        headers: { 'Content-Type': 'image/svg+xml' },
+      });
+    });
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const results = await Promise.all(
+      (['RasiD1', 'NavamshaD9', 'DashamamshaD10'] as const).map((chartType) =>
+        client.getKundaliSvg({
+          dateOfBirth: '1991-06-02',
+          birthTime: '08:15',
+          birthPlace: 'Pune',
+          style: 'north',
+          chartType,
+        }),
+      ),
+    );
+
+    expect(results.map((result) => result.chartType)).toEqual([
+      'RasiD1',
+      'NavamshaD9',
+      'DashamamshaD10',
+    ]);
+    expect(new Set(results.map((result) => result.svg)).size).toBe(3);
+    for (const call of fetchImpl.mock.calls) {
+      expect(String(call[0])).toMatch(
+        /\/Location\/Pune\/Time\/08:15\/02\/06\/1991\/\+05:30\/ChartType\/(RasiD1|NavamshaD9|DashamamshaD10)$/,
+      );
+    }
   });
 
   it('throws when kundali response has no SVG', async () => {

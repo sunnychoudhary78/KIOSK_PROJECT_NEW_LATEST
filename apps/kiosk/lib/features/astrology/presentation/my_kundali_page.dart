@@ -61,7 +61,9 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
   }
 
   void _submit() {
-    ref.read(myKundaliControllerProvider.notifier).submit(
+    ref
+        .read(myKundaliControllerProvider.notifier)
+        .submit(
           name: _name.text,
           gender: _gender,
           dateOfBirth: _formatDob(_dob),
@@ -86,7 +88,9 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
   void _cycleFocus({required bool reverse}) {
     final max = _timeUnknown ? 2 : 3;
     setState(() {
-      _focus = reverse ? (_focus == 0 ? max : _focus - 1) : (_focus == max ? 0 : _focus + 1);
+      _focus = reverse
+          ? (_focus == 0 ? max : _focus - 1)
+          : (_focus == max ? 0 : _focus + 1);
       _clampStepperColumn();
     });
   }
@@ -104,7 +108,11 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
         if (moveColumn) {
           _stepperColumn = nextStepperColumn(_stepperColumn, 3, delta);
         } else {
-          _dob = KioskDateStepper.stepColumn(_dob, column: _stepperColumn, delta: delta);
+          _dob = KioskDateStepper.stepColumn(
+            _dob,
+            column: _stepperColumn,
+            delta: delta,
+          );
         }
       });
       return;
@@ -209,54 +217,55 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
           duration: const Duration(milliseconds: 280),
           child: switch (state.phase) {
             KundaliPhase.form => Stack(
-                key: const ValueKey('kundali-form'),
-                fit: StackFit.expand,
-                children: [
-                  const CosmicBackdrop(),
-                  AstrologyBirthFormPanel(
-                    nameController: _name,
-                    placeController: _place,
-                    dob: _dob,
-                    birthTime: _birthTime,
-                    timeUnknown: _timeUnknown,
-                    gender: _gender,
-                    focus: _focus,
-                    error: state.error,
-                    title: 'Birth details',
-                    subtitle: 'Accurate birth time · pick chart style',
-                    onFocus: (value) => setState(() {
-                      _focus = value;
-                      _clampStepperColumn();
-                    }),
-                    onDob: (value) => setState(() => _dob = value),
-                    onTime: (value) => setState(() => _birthTime = value),
-                    onTimeUnknown: (value) => setState(() => _timeUnknown = value),
-                    onGender: (value) => setState(() => _gender = value),
-                    onKey: _type,
-                    onBackspace: _backspace,
-                    footer: AstrologyStyleSegment(
-                      style: _style,
-                      onStyle: (value) => setState(() => _style = value),
-                    ),
+              key: const ValueKey('kundali-form'),
+              fit: StackFit.expand,
+              children: [
+                const CosmicBackdrop(),
+                AstrologyBirthFormPanel(
+                  nameController: _name,
+                  placeController: _place,
+                  dob: _dob,
+                  birthTime: _birthTime,
+                  timeUnknown: _timeUnknown,
+                  gender: _gender,
+                  focus: _focus,
+                  error: state.error,
+                  title: 'Birth details',
+                  subtitle: 'Accurate birth time · pick chart style',
+                  onFocus: (value) => setState(() {
+                    _focus = value;
+                    _clampStepperColumn();
+                  }),
+                  onDob: (value) => setState(() => _dob = value),
+                  onTime: (value) => setState(() => _birthTime = value),
+                  onTimeUnknown: (value) =>
+                      setState(() => _timeUnknown = value),
+                  onGender: (value) => setState(() => _gender = value),
+                  onKey: _type,
+                  onBackspace: _backspace,
+                  footer: AstrologyStyleSegment(
+                    style: _style,
+                    onStyle: (value) => setState(() => _style = value),
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
             KundaliPhase.loading => const AstrologyCastingView(
-                key: ValueKey('kundali-loading'),
-                lines: [
-                  'Drawing your kundali…',
-                  'Mapping houses & signs…',
-                  'Preparing your chart…',
-                ],
-              ),
-            KundaliPhase.result when state.result != null => _KundaliResultView(
-                key: const ValueKey('kundali-result'),
-                result: state.result!,
-              ),
+              key: ValueKey('kundali-loading'),
+              lines: [
+                'Drawing your kundali…',
+                'Mapping houses & signs…',
+                'Preparing your chart…',
+              ],
+            ),
+            KundaliPhase.result when state.result != null => KundaliResultView(
+              key: const ValueKey('kundali-result'),
+              result: state.result!,
+            ),
             KundaliPhase.result => const AstrologyCastingView(
-                key: ValueKey('kundali-result-empty'),
-                lines: ['Preparing your chart…'],
-              ),
+              key: ValueKey('kundali-result-empty'),
+              lines: ['Preparing your chart…'],
+            ),
           },
         ),
       ),
@@ -265,23 +274,21 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
     if (state.phase != KundaliPhase.form) {
       return page;
     }
-    return KioskHardwareKeys(
-      onKeyEvent: _handleFormKey,
-      child: page,
-    );
+    return KioskHardwareKeys(onKeyEvent: _handleFormKey, child: page);
   }
 }
 
-class _KundaliResultView extends StatefulWidget {
-  const _KundaliResultView({super.key, required this.result});
+@visibleForTesting
+class KundaliResultView extends StatefulWidget {
+  const KundaliResultView({super.key, required this.result});
 
   final KundaliResult result;
 
   @override
-  State<_KundaliResultView> createState() => _KundaliResultViewState();
+  State<KundaliResultView> createState() => _KundaliResultViewState();
 }
 
-class _KundaliResultViewState extends State<_KundaliResultView>
+class _KundaliResultViewState extends State<KundaliResultView>
     with SingleTickerProviderStateMixin {
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -317,7 +324,8 @@ class _KundaliResultViewState extends State<_KundaliResultView>
     final result = widget.result;
     final chart = result.chart;
     final tabs = result.availableTabs;
-    final selectedEntry = result.charts[_selectedTab] ??
+    final selectedEntry =
+        result.charts[_selectedTab] ??
         (tabs.isNotEmpty ? tabs.first.value : null);
     final selectedSvg = selectedEntry?.svg ?? result.svg;
     final tiles = <({String label, String value, String? art})>[
@@ -337,7 +345,10 @@ class _KundaliResultViewState extends State<_KundaliResultView>
         (
           label: 'Moon',
           value: chart.moonSign!,
-          art: AstrologyAssets.chartArtFor(label: 'Moon', value: chart.moonSign!),
+          art: AstrologyAssets.chartArtFor(
+            label: 'Moon',
+            value: chart.moonSign!,
+          ),
         ),
       if (chart.nakshatra != null)
         (
@@ -359,10 +370,12 @@ class _KundaliResultViewState extends State<_KundaliResultView>
         ),
     ];
 
-    final styleLabel =
-        result.style == 'south' ? 'South Indian' : 'North Indian';
-    final title =
-        result.name.isEmpty ? 'Your kundali' : "${result.name}'s kundali";
+    final styleLabel = result.style == 'south'
+        ? 'South Indian'
+        : 'North Indian';
+    final title = result.name.isEmpty
+        ? 'Your kundali'
+        : "${result.name}'s kundali";
     final subtitle = selectedEntry == null
         ? null
         : '${selectedEntry.subtitle} · ${selectedEntry.title}';
@@ -400,20 +413,23 @@ class _KundaliResultViewState extends State<_KundaliResultView>
                           flex: 3,
                           child: GlassPanel(
                             padding: const EdgeInsets.all(12),
-                            borderColor:
-                                AstrologyColors.gold.withValues(alpha: 0.55),
+                            borderColor: AstrologyColors.gold.withValues(
+                              alpha: 0.55,
+                            ),
                             child: DecoratedBox(
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: AstrologyColors.gold
-                                      .withValues(alpha: 0.35),
+                                  color: AstrologyColors.gold.withValues(
+                                    alpha: 0.35,
+                                  ),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AstrologyColors.gold
-                                        .withValues(alpha: 0.12),
+                                    color: AstrologyColors.gold.withValues(
+                                      alpha: 0.12,
+                                    ),
                                     blurRadius: 18,
                                   ),
                                 ],
@@ -428,7 +444,9 @@ class _KundaliResultViewState extends State<_KundaliResultView>
                                     switchOutCurve: Curves.easeIn,
                                     child: SvgPicture.string(
                                       selectedSvg,
-                                      key: ValueKey(_selectedTab),
+                                      key: ValueKey(
+                                        'kundali-chart-$_selectedTab',
+                                      ),
                                       fit: BoxFit.contain,
                                       placeholderBuilder: (_) => const Center(
                                         child: CircularProgressIndicator(
@@ -571,9 +589,7 @@ class _ChartTabBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AstrologyColors.raised.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AstrologyColors.gold.withValues(alpha: 0.28),
-        ),
+        border: Border.all(color: AstrologyColors.gold.withValues(alpha: 0.28)),
       ),
       child: Row(
         children: [
@@ -627,11 +643,11 @@ class _ChartTabButton extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected
-                      ? AstrologyColors.goldSoft
-                      : AstrologyColors.muted,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                ),
+              color: selected
+                  ? AstrologyColors.goldSoft
+                  : AstrologyColors.muted,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            ),
           ),
         ),
       ),
@@ -651,16 +667,14 @@ class _MetaChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: AstrologyColors.gold.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: AstrologyColors.gold.withValues(alpha: 0.45),
-        ),
+        border: Border.all(color: AstrologyColors.gold.withValues(alpha: 0.45)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AstrologyColors.goldSoft,
-              fontWeight: FontWeight.w600,
-            ),
+          color: AstrologyColors.goldSoft,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
