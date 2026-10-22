@@ -127,7 +127,8 @@ class FakePrinterNative implements PrinterNative {
 
   PrinterHealth health;
   int? pageCounter;
-  List<int>? pageCounterSequence;
+  /// Optional sequence of counter reads (null entries = SNMP miss).
+  List<int?>? pageCounterSequence;
   int _counterIndex = 0;
 
   @override

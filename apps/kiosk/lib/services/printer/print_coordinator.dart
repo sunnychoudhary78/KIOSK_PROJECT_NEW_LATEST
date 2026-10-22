@@ -19,6 +19,9 @@ class PrintCoordinator {
     required PrintSpooler spooler,
     required PrinterMonitor monitor,
     this.pollInterval = const Duration(seconds: 2),
+    this.counterRetryAttempts = 5,
+    this.counterRetryDelay = const Duration(seconds: 1),
+    this.noSnmpGrace = const Duration(seconds: 20),
     Duration? reconcileTimeout,
   })  : _spooler = spooler,
         _monitor = monitor,
@@ -27,6 +30,9 @@ class PrintCoordinator {
   final PrintSpooler _spooler;
   final PrinterMonitor _monitor;
   final Duration pollInterval;
+  final int counterRetryAttempts;
+  final Duration counterRetryDelay;
+  final Duration noSnmpGrace;
   final Duration? _reconcileTimeout;
 
   bool _locked = false;
@@ -68,6 +74,23 @@ class PrintCoordinator {
     }
   }
 
+  Future<int?> _readPageCounterWithRetries({
+    void Function(String message)? onProgress,
+  }) async {
+    int? last;
+    for (var i = 0; i < counterRetryAttempts; i++) {
+      last = await _monitor.getPageCounter();
+      if (last != null) {
+        return last;
+      }
+      if (i < counterRetryAttempts - 1) {
+        onProgress?.call('Checking printer…');
+        await Future<void>.delayed(counterRetryDelay);
+      }
+    }
+    return last;
+  }
+
   Future<PrintReconcileResult> _run({
     required String jobId,
     required String title,
@@ -101,7 +124,7 @@ class PrintCoordinator {
     }
 
     if (snmp) {
-      counterBefore = await _monitor.getPageCounter();
+      counterBefore = await _readPageCounterWithRetries(onProgress: onProgress);
     }
 
     onProgress?.call('Sending to printer…');
@@ -139,48 +162,117 @@ class PrintCoordinator {
       );
     }
 
-    if (!snmp || counterBefore == null) {
-      onProgress?.call('Could not confirm print on the printer…');
-      await reportStatus(
+    if (!snmp) {
+      return _waitWithoutSnmp(
         jobId: jobId,
-        status: 'printing',
-        pageCounterBefore: counterBefore,
-        reconcileStatus: 'unknown',
-        reconcileDetail: snmp
-            ? 'snmp_page_counter_unavailable'
-            : 'snmp_not_configured',
-        needsAdminReview: true,
-      );
-      return PrintReconcileResult(
-        outcome: PrintReconcileOutcome.unknown,
-        userMessage:
-            'Print was sent, but physical completion could not be confirmed. Staff will review.',
-        pageCounterBefore: counterBefore,
-        reconcileDetail:
-            snmp ? 'snmp_page_counter_unavailable' : 'snmp_not_configured',
+        reportStatus: reportStatus,
+        onProgress: onProgress,
       );
     }
 
-    onProgress?.call('Confirming print…');
+    return _reconcileWithSnmp(
+      jobId: jobId,
+      expected: expected,
+      counterBefore: counterBefore,
+      reportStatus: reportStatus,
+      onProgress: onProgress,
+    );
+  }
+
+  Future<PrintReconcileResult> _waitWithoutSnmp({
+    required String jobId,
+    required PrintJobStatusReporter reportStatus,
+    void Function(String message)? onProgress,
+  }) async {
+    onProgress?.call('Printer processing…');
+    final deadline = DateTime.now().add(noSnmpGrace);
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(pollInterval);
+      final health = await _monitor.getHealth();
+      if (health.isFatal) {
+        await reportStatus(
+          jobId: jobId,
+          status: 'failed',
+          errorMessage: health.userMessage,
+          pagesReported: 0,
+          reconcileStatus: 'pending',
+          reconcileDetail: health.lastErrorCode ?? health.state,
+        );
+        return PrintReconcileResult(
+          outcome: PrintReconcileOutcome.failed,
+          userMessage: health.userMessage,
+          pagesReported: 0,
+          reconcileDetail: health.lastErrorCode ?? health.state,
+        );
+      }
+    }
+    await reportStatus(
+      jobId: jobId,
+      status: 'printing',
+      pagesReported: 0,
+      reconcileStatus: 'unknown',
+      reconcileDetail: 'snmp_not_configured',
+      needsAdminReview: true,
+    );
+    return const PrintReconcileResult(
+      outcome: PrintReconcileOutcome.unknown,
+      userMessage:
+          'Print was sent, but physical completion could not be confirmed. Staff will review.',
+      pagesReported: 0,
+      reconcileDetail: 'snmp_not_configured',
+    );
+  }
+
+  Future<PrintReconcileResult> _reconcileWithSnmp({
+    required String jobId,
+    required int expected,
+    required int? counterBefore,
+    required PrintJobStatusReporter reportStatus,
+    void Function(String message)? onProgress,
+  }) async {
+    onProgress?.call('Printer processing…');
     final deadline = DateTime.now().add(reconcileTimeout);
+    int? baseline = counterBefore;
     int? counterAfter = counterBefore;
-    int pagesReported = 0;
+    var pagesReported = 0;
+    var sawAnyCounter = counterBefore != null;
+    var confirmingAnnounced = false;
+    if (baseline != null) {
+      onProgress?.call('Confirming print…');
+      confirmingAnnounced = true;
+    }
 
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(pollInterval);
       final health = await _monitor.getHealth();
       final after = await _monitor.getPageCounter();
+
       if (after != null) {
-        counterAfter = after;
-        pagesReported = (after - counterBefore).clamp(0, 100000);
+        sawAnyCounter = true;
+        if (baseline == null) {
+          // Mid-flight baseline: do not complete yet; wait for further increase.
+          baseline = after;
+          counterAfter = after;
+          if (!confirmingAnnounced) {
+            onProgress?.call('Confirming print…');
+            confirmingAnnounced = true;
+          }
+        } else {
+          counterAfter = after;
+          pagesReported = (after - baseline).clamp(0, 100000);
+          if (!confirmingAnnounced) {
+            onProgress?.call('Confirming print…');
+            confirmingAnnounced = true;
+          }
+        }
       }
 
-      if (pagesReported >= expected) {
+      if (baseline != null && pagesReported >= expected) {
         await reportStatus(
           jobId: jobId,
           status: 'completed',
           pagesReported: pagesReported,
-          pageCounterBefore: counterBefore,
+          pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
           reconcileStatus: 'verified',
           reconcileDetail: 'snmp_page_delta',
@@ -189,7 +281,7 @@ class PrintCoordinator {
           outcome: PrintReconcileOutcome.verified,
           userMessage: 'Printed successfully',
           pagesReported: pagesReported,
-          pageCounterBefore: counterBefore,
+          pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
           reconcileDetail: 'snmp_page_delta',
         );
@@ -202,7 +294,7 @@ class PrintCoordinator {
             status: 'failed',
             errorMessage: health.userMessage,
             pagesReported: pagesReported,
-            pageCounterBefore: counterBefore,
+            pageCounterBefore: baseline,
             pageCounterAfter: counterAfter,
             reconcileStatus: 'partial',
             reconcileDetail: health.lastErrorCode ?? health.state,
@@ -212,7 +304,7 @@ class PrintCoordinator {
             outcome: PrintReconcileOutcome.failed,
             userMessage: health.userMessage,
             pagesReported: pagesReported,
-            pageCounterBefore: counterBefore,
+            pageCounterBefore: baseline,
             pageCounterAfter: counterAfter,
             reconcileDetail: health.lastErrorCode ?? health.state,
           );
@@ -222,7 +314,7 @@ class PrintCoordinator {
           status: 'failed',
           errorMessage: health.userMessage,
           pagesReported: 0,
-          pageCounterBefore: counterBefore,
+          pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
           reconcileStatus: 'pending',
           reconcileDetail: health.lastErrorCode ?? health.state,
@@ -231,18 +323,40 @@ class PrintCoordinator {
           outcome: PrintReconcileOutcome.failed,
           userMessage: health.userMessage,
           pagesReported: 0,
-          pageCounterBefore: counterBefore,
+          pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
           reconcileDetail: health.lastErrorCode ?? health.state,
         );
       }
     }
 
+    if (!sawAnyCounter) {
+      await reportStatus(
+        jobId: jobId,
+        status: 'printing',
+        pagesReported: 0,
+        pageCounterBefore: baseline,
+        pageCounterAfter: counterAfter,
+        reconcileStatus: 'unknown',
+        reconcileDetail: 'snmp_page_counter_unavailable',
+        needsAdminReview: true,
+      );
+      return PrintReconcileResult(
+        outcome: PrintReconcileOutcome.unknown,
+        userMessage:
+            'Print was sent, but physical completion could not be confirmed. Staff will review.',
+        pagesReported: 0,
+        pageCounterBefore: baseline,
+        pageCounterAfter: counterAfter,
+        reconcileDetail: 'snmp_page_counter_unavailable',
+      );
+    }
+
     await reportStatus(
       jobId: jobId,
       status: 'printing',
       pagesReported: pagesReported,
-      pageCounterBefore: counterBefore,
+      pageCounterBefore: baseline,
       pageCounterAfter: counterAfter,
       reconcileStatus: 'reconciliation_required',
       reconcileDetail:
@@ -254,7 +368,7 @@ class PrintCoordinator {
       userMessage:
           'Print could not be confirmed within ${reconcileTimeout.inMinutes} minutes. Staff will review.',
       pagesReported: pagesReported,
-      pageCounterBefore: counterBefore,
+      pageCounterBefore: baseline,
       pageCounterAfter: counterAfter,
       reconcileDetail: 'timeout',
     );

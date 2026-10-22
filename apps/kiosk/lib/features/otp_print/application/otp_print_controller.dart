@@ -201,10 +201,9 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       if (outcome.isSuccess || outcome.isUncertain) {
         state = state.copyWith(
           phase: OtpPrintPhase.previewing,
-          printed: outcome.isSuccess || outcome.isUncertain,
+          printed: true,
           message: outcome.userMessage,
-          error: outcome.isUncertain ? outcome.userMessage : null,
-          clearError: outcome.isSuccess,
+          clearError: true,
         );
       } else {
         state = state.copyWith(

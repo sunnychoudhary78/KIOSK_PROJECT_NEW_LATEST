@@ -395,7 +395,6 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           sessionId: sessionId,
           documents: documents,
           message: outcome.userMessage,
-          error: outcome.isUncertain ? outcome.userMessage : null,
         );
       } else {
         state = DigilockerUiState(

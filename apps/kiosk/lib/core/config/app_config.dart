@@ -79,16 +79,18 @@ class AppConfig {
     );
     const printerName = String.fromEnvironment(
       'SKP_PRINTER_NAME',
-      defaultValue: '',
+      defaultValue: 'Brother',
     );
     const reverseRaw = String.fromEnvironment(
       'SKP_PRINT_REVERSE_PAGES',
       defaultValue: 'true',
     );
     final printReversePages = reverseRaw.toLowerCase() != 'false';
+    // Lab defaults for Brother HL-L3280CDW on LAN. Override with dart-defines
+    // in other environments; do not use a non-public community in committed defaults.
     const snmpHost = String.fromEnvironment(
       'SKP_PRINTER_SNMP_HOST',
-      defaultValue: '',
+      defaultValue: '192.168.1.13',
     );
     const snmpVersion = String.fromEnvironment(
       'SKP_PRINTER_SNMP_VERSION',
@@ -96,7 +98,7 @@ class AppConfig {
     );
     const snmpCommunity = String.fromEnvironment(
       'SKP_PRINTER_SNMP_COMMUNITY',
-      defaultValue: '',
+      defaultValue: 'public',
     );
     const reconcileTimeoutMs = int.fromEnvironment(
       'SKP_PRINT_RECONCILE_TIMEOUT_MS',

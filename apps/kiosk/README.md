@@ -25,23 +25,17 @@ Face-up trays: by default pages print last→first (`SKP_PRINT_REVERSE_PAGES=tru
 
 | Define | Default | Purpose |
 |--------|---------|---------|
-| `SKP_PRINTER_NAME` | empty | Windows printer name substring |
-| `SKP_PRINTER_SNMP_HOST` | empty | Printer LAN IP (e.g. `192.168.1.13`) |
+| `SKP_PRINTER_NAME` | `Brother` | Windows printer name substring |
+| `SKP_PRINTER_SNMP_HOST` | `192.168.1.13` | Printer LAN IP (lab default) |
 | `SKP_PRINTER_SNMP_VERSION` | `2c` | Only v2c supported |
-| `SKP_PRINTER_SNMP_COMMUNITY` | empty | Community string (lab: `public`) |
+| `SKP_PRINTER_SNMP_COMMUNITY` | `public` | Lab community only — override in prod |
 | `SKP_PRINT_RECONCILE_TIMEOUT_MS` | `180000` | Max wait for page-counter proof |
 | `SKP_PRINTER_MODEL` | `Brother HL-L3280CDW` | Profile selector |
 
-Empty host/community disables SNMP; jobs end as `unknown` / `reconciliation_required` (never fake verified).
-
-Example lab run:
+Lab defaults are baked into `AppConfig` (Brother @ `192.168.1.13`, community `public`). Override with dart-defines when needed. Empty host/community via override disables SNMP; jobs end as `unknown` / `reconciliation_required` (never fake verified).
 
 ```powershell
-flutter run -d windows `
-  --dart-define=SKP_API_BASE_URL=https://uat-kiosk-api.immortaltechnovation.com/v1 `
-  --dart-define=SKP_PRINTER_NAME=Brother `
-  --dart-define=SKP_PRINTER_SNMP_HOST=192.168.1.13 `
-  --dart-define=SKP_PRINTER_SNMP_COMMUNITY=public
+flutter run -d windows
 ```
 
 ### Manual checklist (physical Brother)

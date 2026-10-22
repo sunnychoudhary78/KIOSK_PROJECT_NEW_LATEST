@@ -256,8 +256,7 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
           phase: QuickPrintPhase.previewing,
           printed: true,
           message: outcome.userMessage,
-          error: outcome.isUncertain ? outcome.userMessage : null,
-          clearError: outcome.isSuccess,
+          clearError: true,
         );
       } else {
         state = state.copyWith(
