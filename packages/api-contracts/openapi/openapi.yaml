@@ -1891,6 +1891,44 @@ components:
         snmpOk:
           type: boolean
           nullable: true
+        snmpReachable:
+          type: boolean
+          nullable: true
+          description: False only after consecutiveFailures threshold (not a single timeout)
+        consecutiveFailures:
+          type: integer
+          nullable: true
+        lastSuccessAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastPollError:
+          type: string
+          nullable: true
+        hrPrinterStatus:
+          type: integer
+          nullable: true
+          description: HOST-RESOURCES hrPrinterStatus (3=idle, 4=printing, 5=warmup)
+        hrPrinterStatusLabel:
+          type: string
+          nullable: true
+        errorFlagsHex:
+          type: string
+          nullable: true
+          description: Raw hrPrinterDetectedErrorState octets as hex (e.g. 40, 42)
+        noPaper:
+          type: boolean
+        jammed:
+          type: boolean
+        offlineBit:
+          type: boolean
+          description: RFC offline bit only; does not alone mean SNMP unreachable
+        spoolerJobsQueued:
+          type: integer
+          nullable: true
+        spoolerJobsPrinting:
+          type: integer
+          nullable: true
         lastErrorCode:
           type: string
           nullable: true

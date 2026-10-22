@@ -16,6 +16,7 @@ add_executable(${BINARY_NAME} WIN32
   "../printer/printer_plugin.cpp"
   "../printer/snmp_v2c_client.cpp"
   "../printer/brother_hl_l3280cdw.cpp"
+  "../printer/snmp_poll_cache.cpp"
   "../printer/spooler_status.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "Runner.rc"

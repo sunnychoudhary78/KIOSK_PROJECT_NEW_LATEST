@@ -34,17 +34,59 @@ Face-up trays: by default pages print last→first (`SKP_PRINT_REVERSE_PAGES=tru
 
 Lab defaults are baked into `AppConfig` (Brother @ `192.168.1.13`, community `public`). Override with dart-defines when needed. Empty host/community via override disables SNMP; jobs end as `unknown` / `reconciliation_required` (never fake verified).
 
+Community is never logged or included in heartbeat / MethodChannel responses.
+
+### SNMP poller (native)
+
+| Setting | Value | Notes |
+|---------|-------|--------|
+| Poll interval | 2000 ms | Background `SnmpPollCache` worker |
+| SNMP timeout | 3000 ms | Per-request |
+| Reachable threshold | 3 consecutive failures | One timeout does **not** mark offline |
+
+`getHealth` / `getPageCounter` read the cache (non-blocking) plus a fast Winspool snapshot.
+
+### OIDs (Brother HL-L3280CDW lab)
+
+| OID | Meaning | Lab notes |
+|-----|---------|-----------|
+| `1.3.6.1.2.1.25.3.5.1.1.1` | `hrPrinterStatus` | `3` idle, `4` printing, `5` warmup |
+| `1.3.6.1.2.1.25.3.5.1.2.1` | `hrPrinterDetectedErrorState` | Raw hex e.g. `00` / `02` / `40` / `42` |
+| `1.3.6.1.2.1.43.10.2.1.4.1.1` | `prtMarkerLifeCount` | Lifetime pages; rises during print |
+
+### Error-state bits (RFC 2790, first octet)
+
+Bit 0 = MSB. Verified naming for this device: **`noPaper` (`0x40`) → UI `paper_out`**.
+
+| Hex | Flag | UI / reconcile |
+|-----|------|----------------|
+| `0x40` | `noPaper` | `paper_out` (fatal) |
+| `0x04` | `jammed` | `jam` (fatal) |
+| `0x02` | `offline` bit | Exposed as `offlineBit` only — **does not** alone mean SNMP unreachable |
+| `0x80` / `0x20` / `0x10` / `0x08` | lowPaper / lowToner / noToner / doorOpen | Flags / toner messaging |
+
+Raw `errorFlagsHex` is always returned when octets are read.
+
+### Reconcile rules
+
+- Progress may use `hrPrinterStatus` (`printing` / `warmup`).
+- **Verified only** when lifetime page Δ ≥ expected under exclusive lock.
+- Do **not** verify from spooler job gone/idle, `directPrintPdf` ok, or status back to idle alone.
+- Spooler `EnumJobs` fields are correlation-only.
+
 ```powershell
 flutter run -d windows
 ```
 
 ### Manual checklist (physical Brother)
 
+Run only after a Windows rebuild against a live HL-L3280CDW; do not claim these passed from unit tests alone.
+
 1. Rebuild/restart the Windows kiosk with SNMP dart-defines above.
 2. Quick Print a **1-page** PDF.
 3. UI should show “Confirming print…” then success (no `completed requires reconcileStatus=verified` error).
 4. Admin/API print job: `status=completed`, `reconcileStatus=verified`, `pagesReported >= 1`.
-5. Optional: pull paper mid-job — expect jam messaging and `needsAdminReview` when partial/uncertain.
+5. Optional: pull paper mid-job — expect paper-out messaging (`errorFlagsHex` `40`/`42`) and `needsAdminReview` when partial/uncertain.
 
 ## Surveillance (Windows)
 

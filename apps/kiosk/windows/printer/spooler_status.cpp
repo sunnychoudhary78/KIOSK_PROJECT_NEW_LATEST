@@ -141,6 +141,41 @@ SpoolerPrinterInfo QuerySpoolerStatus(const std::string& preferred_name_substrin
         MapStatus(live->Status, &info);
       }
     }
+
+    DWORD jobs_needed = 0;
+    DWORD jobs_returned = 0;
+    EnumJobsW(handle, 0, 0xFFFFFFFF, 1, nullptr, 0, &jobs_needed, &jobs_returned);
+    if (jobs_needed > 0) {
+      std::vector<BYTE> jobs_buf(jobs_needed);
+      if (EnumJobsW(handle, 0, 0xFFFFFFFF, 1, jobs_buf.data(), jobs_needed, &jobs_needed,
+                    &jobs_returned)) {
+        auto* jobs = reinterpret_cast<JOB_INFO_1W*>(jobs_buf.data());
+        for (DWORD i = 0; i < jobs_returned; ++i) {
+          const DWORD st = jobs[i].Status;
+          if (st & (JOB_STATUS_PRINTING | JOB_STATUS_SPOOLING | JOB_STATUS_BUSY)) {
+            info.jobs_printing += 1;
+          } else {
+            info.jobs_queued += 1;
+          }
+          if (i + 1 == jobs_returned || info.latest_job_id == 0) {
+            info.latest_job_id = jobs[i].JobId;
+            if (st & JOB_STATUS_ERROR) {
+              info.latest_job_status = "error";
+            } else if (st & JOB_STATUS_PAUSED) {
+              info.latest_job_status = "paused";
+            } else if (st & JOB_STATUS_PRINTING) {
+              info.latest_job_status = "printing";
+            } else if (st & JOB_STATUS_SPOOLING) {
+              info.latest_job_status = "spooling";
+            } else if (st & JOB_STATUS_PRINTED) {
+              info.latest_job_status = "printed";
+            } else {
+              info.latest_job_status = "queued";
+            }
+          }
+        }
+      }
+    }
     ClosePrinter(handle);
   }
   return info;

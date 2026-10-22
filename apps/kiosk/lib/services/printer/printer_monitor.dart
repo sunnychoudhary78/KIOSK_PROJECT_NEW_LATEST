@@ -28,6 +28,21 @@ class PrinterMonitor {
 
   int get reconcileTimeoutMs => _config.printReconcileTimeoutMs;
 
+  /// Starts the native SNMP poll cache. Never logs community.
+  Future<bool> startSnmpPolling() {
+    if (!_config.snmpConfigured) {
+      return Future.value(false);
+    }
+    return _native.configureSnmpPolling(
+      host: _config.printerSnmpHost,
+      community: _config.printerSnmpCommunity,
+      intervalMs: 2000,
+      timeoutMs: 3000,
+    );
+  }
+
+  Future<void> stopSnmpPolling() => _native.stopSnmpPolling();
+
   Future<PrinterHealth> getHealth() {
     return _native.getHealth(
       printerName: _config.printerName,

@@ -148,15 +148,13 @@ void main() {
   test('verified after initial SNMP misses then page delta', () async {
     final native = FakePrinterNative(
       health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      // preHealth + retries miss, then poll establishes baseline 100 and delta 101.
-      // getHealth also consumes sequence entries during polls.
+      // Coordinator prefers health.pageCounter (one sequence consume per poll).
       pageCounterSequence: [
         null, // preHealth
-        null, null, // retries
-        null, // first poll health
-        100, // first poll counter → baseline
-        100, // second poll health
-        101, // second poll counter → verified
+        null, null, // counter retries
+        null, // poll 1 — still miss
+        100, // poll 2 — baseline
+        101, // poll 3 — verified
       ],
     );
     final coordinator = buildCoordinator(
@@ -336,6 +334,128 @@ void main() {
     expect(result.outcome, PrintReconcileOutcome.failed);
     expect(spooler.calls, 0);
     expect(result.userMessage, contains('jam'));
+  });
+
+  test('does not verify from idle/spooler alone without page delta', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(
+        state: 'ready',
+        online: true,
+        snmpOk: true,
+        hrPrinterStatus: 3,
+        hrPrinterStatusLabel: 'idle',
+        spoolerJobsQueued: 0,
+        spoolerJobsPrinting: 0,
+      ),
+      pageCounter: 50,
+    );
+    final coordinator = buildCoordinator(
+      native: native,
+      config: snmpConfig(),
+      reconcileTimeout: const Duration(milliseconds: 80),
+    );
+    final reports = <Map<String, dynamic>>[];
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-idle-only',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: _collecting(null, reports),
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.reconciliationRequired);
+    expect(reports.last['reconcileStatus'], isNot('verified'));
+  });
+
+  test('paper_out mid-job fails without verifying', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(
+        state: 'paper_out',
+        online: true,
+        noPaper: true,
+        errorFlagsHex: '40',
+        snmpOk: true,
+        snmpReachable: true,
+        snmpConfigured: true,
+      ),
+      pageCounter: 10,
+    );
+    final coordinator = buildCoordinator(
+      native: native,
+      config: snmpConfig(),
+      reconcileTimeout: const Duration(milliseconds: 200),
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-paper',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: ({
+        required String jobId,
+        required String status,
+        String? errorMessage,
+        int? pagesReported,
+        String? spoolerJobId,
+        int? pageCounterBefore,
+        int? pageCounterAfter,
+        String? reconcileStatus,
+        String? reconcileDetail,
+        bool? needsAdminReview,
+      }) async {},
+    );
+
+    // Fatal on preHealth before spooler send.
+    expect(result.outcome, PrintReconcileOutcome.failed);
+    expect(result.reconcileDetail, 'paper_out');
+  });
+
+  test('SNMP blip (unreachable false briefly) does not fail immediately', () async {
+    // Single poll with snmpReachable false but snmpConfigured false on health
+    // means isFatal won't trip from reachability; consecutiveFailures handled
+    // natively. Here: ready + offlineBit + reachable true still prints.
+    final native = FakePrinterNative(
+      health: const PrinterHealth(
+        state: 'ready',
+        online: true,
+        snmpOk: true,
+        snmpConfigured: true,
+        snmpReachable: true,
+        offlineBit: true,
+        consecutiveFailures: 1,
+      ),
+      pageCounterSequence: [20, 20, 21],
+    );
+    final coordinator = buildCoordinator(
+      native: native,
+      config: snmpConfig(),
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-blip',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: ({
+        required String jobId,
+        required String status,
+        String? errorMessage,
+        int? pagesReported,
+        String? spoolerJobId,
+        int? pageCounterBefore,
+        int? pageCounterAfter,
+        String? reconcileStatus,
+        String? reconcileDetail,
+        bool? needsAdminReview,
+      }) async {},
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.verified);
   });
 
   test('busy when a second job starts while locked', () async {

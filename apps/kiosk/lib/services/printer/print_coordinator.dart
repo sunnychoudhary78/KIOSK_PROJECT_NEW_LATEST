@@ -107,19 +107,24 @@ class PrintCoordinator {
     onProgress?.call('Checking printer…');
     final preHealth = await _monitor.getHealth();
     if (preHealth.isFatal) {
+      final preDetail = preHealth.noPaper
+          ? 'paper_out'
+          : (preHealth.jammed
+              ? 'jam'
+              : (preHealth.lastErrorCode ?? preHealth.state));
       await reportStatus(
         jobId: jobId,
         status: 'failed',
         errorMessage: preHealth.userMessage,
         pagesReported: 0,
         reconcileStatus: 'pending',
-        reconcileDetail: preHealth.lastErrorCode ?? preHealth.state,
+        reconcileDetail: preDetail,
       );
       return PrintReconcileResult(
         outcome: PrintReconcileOutcome.failed,
         userMessage: preHealth.userMessage,
         pagesReported: 0,
-        reconcileDetail: preHealth.lastErrorCode,
+        reconcileDetail: preDetail,
       );
     }
 
@@ -245,7 +250,16 @@ class PrintCoordinator {
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(pollInterval);
       final health = await _monitor.getHealth();
-      final after = await _monitor.getPageCounter();
+      // Prefer cached pageCounter from health; fall back to dedicated read.
+      final after = health.pageCounter ?? await _monitor.getPageCounter();
+
+      // Progress from hrPrinterStatus only — never verify from idle/spooler alone.
+      if (!confirmingAnnounced) {
+        final label = health.hrPrinterStatusLabel;
+        if (label == 'printing' || label == 'warmup' || health.isBusy) {
+          onProgress?.call('Printer processing…');
+        }
+      }
 
       if (after != null) {
         sawAnyCounter = true;
@@ -267,6 +281,7 @@ class PrintCoordinator {
         }
       }
 
+      // Verified ONLY on lifetime page Δ under exclusive lock.
       if (baseline != null && pagesReported >= expected) {
         await reportStatus(
           jobId: jobId,
@@ -287,7 +302,15 @@ class PrintCoordinator {
         );
       }
 
+      // Paper-out / jam / spooler offline: fail or partial. SNMP blips
+      // (snmpReachable false briefly) are NOT fatal until consecutiveFailures
+      // threshold — isFatal already encodes that.
       if (health.isFatal) {
+        final detail = health.noPaper
+            ? 'paper_out'
+            : (health.jammed
+                ? 'jam'
+                : (health.lastErrorCode ?? health.state));
         if (pagesReported > 0) {
           await reportStatus(
             jobId: jobId,
@@ -297,7 +320,7 @@ class PrintCoordinator {
             pageCounterBefore: baseline,
             pageCounterAfter: counterAfter,
             reconcileStatus: 'partial',
-            reconcileDetail: health.lastErrorCode ?? health.state,
+            reconcileDetail: detail,
             needsAdminReview: true,
           );
           return PrintReconcileResult(
@@ -306,7 +329,7 @@ class PrintCoordinator {
             pagesReported: pagesReported,
             pageCounterBefore: baseline,
             pageCounterAfter: counterAfter,
-            reconcileDetail: health.lastErrorCode ?? health.state,
+            reconcileDetail: detail,
           );
         }
         await reportStatus(
@@ -317,7 +340,7 @@ class PrintCoordinator {
           pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
           reconcileStatus: 'pending',
-          reconcileDetail: health.lastErrorCode ?? health.state,
+          reconcileDetail: detail,
         );
         return PrintReconcileResult(
           outcome: PrintReconcileOutcome.failed,
@@ -325,9 +348,10 @@ class PrintCoordinator {
           pagesReported: 0,
           pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
-          reconcileDetail: health.lastErrorCode ?? health.state,
+          reconcileDetail: detail,
         );
       }
+      // Non-fatal SNMP miss: keep polling until reconcile timeout.
     }
 
     if (!sawAnyCounter) {

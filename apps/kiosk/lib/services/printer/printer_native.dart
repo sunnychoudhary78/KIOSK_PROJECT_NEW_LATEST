@@ -6,6 +6,15 @@ import 'package:skp_kiosk/services/printer/printer_health.dart';
 const printerMethodChannel = MethodChannel('skp/printer');
 
 abstract class PrinterNative {
+  Future<bool> configureSnmpPolling({
+    required String host,
+    required String community,
+    int intervalMs = 2000,
+    int timeoutMs = 3000,
+  });
+
+  Future<void> stopSnmpPolling();
+
   Future<PrinterHealth> getHealth({
     required String printerName,
     required String snmpHost,
@@ -27,18 +36,43 @@ class MethodChannelPrinterNative implements PrinterNative {
 
   final MethodChannel _methods;
 
-  Map<String, Object?> _snmpArgs({
-    required String printerName,
-    required String snmpHost,
-    required String snmpCommunity,
-    required String model,
-  }) =>
-      {
-        'printerName': printerName,
-        'snmpHost': snmpHost,
-        'snmpCommunity': snmpCommunity,
-        'model': model,
-      };
+  @override
+  Future<bool> configureSnmpPolling({
+    required String host,
+    required String community,
+    int intervalMs = 2000,
+    int timeoutMs = 3000,
+  }) async {
+    try {
+      final raw = await _methods.invokeMethod<dynamic>('configureSnmpPolling', {
+        'host': host,
+        'community': community,
+        'intervalMs': intervalMs,
+        'timeoutMs': timeoutMs,
+      });
+      if (raw is Map) {
+        return raw['ok'] == true;
+      }
+      return false;
+    } on MissingPluginException {
+      AppLogger.error('PRINTER native plugin missing for configureSnmpPolling');
+      return false;
+    } catch (error) {
+      AppLogger.error('PRINTER configureSnmpPolling failed', error);
+      return false;
+    }
+  }
+
+  @override
+  Future<void> stopSnmpPolling() async {
+    try {
+      await _methods.invokeMethod<dynamic>('stopSnmpPolling');
+    } on MissingPluginException {
+      // ignore
+    } catch (error) {
+      AppLogger.error('PRINTER stopSnmpPolling failed', error);
+    }
+  }
 
   @override
   Future<PrinterHealth> getHealth({
@@ -48,15 +82,12 @@ class MethodChannelPrinterNative implements PrinterNative {
     required String model,
   }) async {
     try {
-      final raw = await _methods.invokeMethod<dynamic>(
-        'getHealth',
-        _snmpArgs(
-          printerName: printerName,
-          snmpHost: snmpHost,
-          snmpCommunity: snmpCommunity,
-          model: model,
-        ),
-      );
+      final raw = await _methods.invokeMethod<dynamic>('getHealth', {
+        'printerName': printerName,
+        'snmpHost': snmpHost,
+        'snmpCommunity': snmpCommunity,
+        'model': model,
+      });
       if (raw is Map) {
         return PrinterHealth.fromJson(raw);
       }
@@ -105,6 +136,10 @@ class MethodChannelPrinterNative implements PrinterNative {
           online: raw['online'] as bool? ?? false,
           printerName: raw['name'] as String?,
           lastErrorCode: raw['lastErrorCode'] as String?,
+          spoolerJobsQueued: (raw['jobsQueued'] as num?)?.toInt(),
+          spoolerJobsPrinting: (raw['jobsPrinting'] as num?)?.toInt(),
+          spoolerLatestJobId: (raw['latestJobId'] as num?)?.toInt(),
+          spoolerLatestJobStatus: raw['latestJobStatus'] as String?,
         );
       }
       return PrinterHealth.unknown;
@@ -130,6 +165,23 @@ class FakePrinterNative implements PrinterNative {
   /// Optional sequence of counter reads (null entries = SNMP miss).
   List<int?>? pageCounterSequence;
   int _counterIndex = 0;
+  bool snmpPollingConfigured = false;
+
+  @override
+  Future<bool> configureSnmpPolling({
+    required String host,
+    required String community,
+    int intervalMs = 2000,
+    int timeoutMs = 3000,
+  }) async {
+    snmpPollingConfigured = host.isNotEmpty && community.isNotEmpty;
+    return snmpPollingConfigured;
+  }
+
+  @override
+  Future<void> stopSnmpPolling() async {
+    snmpPollingConfigured = false;
+  }
 
   @override
   Future<PrinterHealth> getHealth({
@@ -151,6 +203,23 @@ class FakePrinterNative implements PrinterNative {
       supplies: health.supplies,
       pageCounter: counter ?? health.pageCounter,
       snmpOk: counter != null || health.snmpOk == true,
+      snmpReachable: health.snmpReachable ?? (counter != null),
+      snmpConfigured: health.snmpConfigured ?? snmpPollingConfigured,
+      consecutiveFailures: health.consecutiveFailures,
+      lastSuccessAtMs: health.lastSuccessAtMs,
+      lastPollError: health.lastPollError,
+      hrPrinterStatus: health.hrPrinterStatus,
+      hrPrinterStatusLabel: health.hrPrinterStatusLabel,
+      errorFlagsHex: health.errorFlagsHex,
+      noPaper: health.noPaper,
+      jammed: health.jammed,
+      offlineBit: health.offlineBit,
+      lowPaper: health.lowPaper,
+      lowToner: health.lowToner,
+      noToner: health.noToner,
+      doorOpen: health.doorOpen,
+      spoolerJobsQueued: health.spoolerJobsQueued,
+      spoolerJobsPrinting: health.spoolerJobsPrinting,
       lastErrorCode: health.lastErrorCode,
     );
   }
