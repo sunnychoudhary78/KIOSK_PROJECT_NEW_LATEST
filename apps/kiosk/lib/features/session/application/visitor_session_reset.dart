@@ -15,6 +15,7 @@ import 'package:skp_kiosk/features/fuel_stations/application/fuel_stations_contr
 import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_kiosk/features/quick_print/application/quick_print_controller.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_controller.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 typedef VisitorSessionResetFn = Future<void> Function({required bool attract});
 
@@ -25,6 +26,11 @@ final visitorSessionResetProvider = Provider<VisitorSessionResetFn>((ref) {
 
 /// Wipe visitor PII and return to the catalog. Does not touch device auth.
 Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
+  // Unlock print immediately so Home never leaves "already running".
+  try {
+    ref.read(printCoordinatorProvider).abortAndReset();
+  } catch (_) {}
+
   if (ref.exists(digilockerControllerProvider)) {
     try {
       await ref.read(digilockerControllerProvider.notifier).endSession();

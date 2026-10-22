@@ -148,13 +148,12 @@ void main() {
   test('verified after initial SNMP misses then page delta', () async {
     final native = FakePrinterNative(
       health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      // Coordinator prefers health.pageCounter (one sequence consume per poll).
+      // getHealth does not consume sequence; only getPageCounter does.
       pageCounterSequence: [
-        null, // preHealth
-        null, null, // counter retries
+        null, null, // counter retries (attempts=2)
         null, // poll 1 — still miss
-        100, // poll 2 — baseline
-        101, // poll 3 — verified
+        100, // poll 2 — provisional watermark
+        101, // poll 3 — rise → verified
       ],
     );
     final coordinator = buildCoordinator(
@@ -413,10 +412,8 @@ void main() {
     expect(result.reconcileDetail, 'paper_out');
   });
 
-  test('SNMP blip (unreachable false briefly) does not fail immediately', () async {
-    // Single poll with snmpReachable false but snmpConfigured false on health
-    // means isFatal won't trip from reachability; consecutiveFailures handled
-    // natively. Here: ready + offlineBit + reachable true still prints.
+  test('SNMP unreachable mid-reconcile does not fail; page delta still verifies',
+      () async {
     final native = FakePrinterNative(
       health: const PrinterHealth(
         state: 'ready',
@@ -424,8 +421,16 @@ void main() {
         snmpOk: true,
         snmpConfigured: true,
         snmpReachable: true,
+      ),
+      // After preHealth, simulate lab timeouts (reachable false) mid-wait.
+      healthAfterFirst: const PrinterHealth(
+        state: 'ready',
+        online: true,
+        snmpOk: false,
+        snmpConfigured: true,
+        snmpReachable: false,
+        consecutiveFailures: 5,
         offlineBit: true,
-        consecutiveFailures: 1,
       ),
       pageCounterSequence: [20, 20, 21],
     );
@@ -456,6 +461,102 @@ void main() {
     );
 
     expect(result.outcome, PrintReconcileOutcome.verified);
+  });
+
+  test('mid-flight single post-print reading does not false-verify', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
+      // No pre-print baseline; only ever see 101 after send → uncertain.
+      pageCounterSequence: [
+        null, null, // retries
+        101, 101, 101, 101, 101,
+      ],
+    );
+    final coordinator = buildCoordinator(
+      native: native,
+      config: snmpConfig(),
+      counterRetryAttempts: 2,
+      reconcileTimeout: const Duration(milliseconds: 120),
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-mid-stuck',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: ({
+        required String jobId,
+        required String status,
+        String? errorMessage,
+        int? pagesReported,
+        String? spoolerJobId,
+        int? pageCounterBefore,
+        int? pageCounterAfter,
+        String? reconcileStatus,
+        String? reconcileDetail,
+        bool? needsAdminReview,
+      }) async {},
+    );
+
+    expect(result.outcome, isNot(PrintReconcileOutcome.verified));
+    expect(
+      result.outcome == PrintReconcileOutcome.reconciliationRequired ||
+          result.outcome == PrintReconcileOutcome.unknown,
+      isTrue,
+    );
+  });
+
+  test('abortAndReset unlocks so next print is not busy', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
+      pageCounter: 10,
+    );
+    final coordinator = buildCoordinator(
+      native: native,
+      config: snmpConfig(),
+      pollInterval: const Duration(milliseconds: 40),
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+
+    Future<void> noopReport({
+      required String jobId,
+      required String status,
+      String? errorMessage,
+      int? pagesReported,
+      String? spoolerJobId,
+      int? pageCounterBefore,
+      int? pageCounterAfter,
+      String? reconcileStatus,
+      String? reconcileDetail,
+      bool? needsAdminReview,
+    }) async {}
+
+    final first = coordinator.printAndReconcile(
+      jobId: 'job-abort-a',
+      title: 'a.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 5,
+      colorMode: 'bw',
+      reportStatus: noopReport,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(coordinator.isLocked, isTrue);
+    coordinator.abortAndReset();
+    expect(coordinator.isLocked, isFalse);
+
+    final second = await coordinator.printAndReconcile(
+      jobId: 'job-abort-b',
+      title: 'b.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: noopReport,
+      // Counter stuck at 10 → will timeout; outcome irrelevant vs busy.
+    );
+    expect(second.outcome, isNot(PrintReconcileOutcome.busy));
+    final firstResult = await first;
+    expect(firstResult.reconcileDetail, 'aborted');
   });
 
   test('busy when a second job starts while locked', () async {

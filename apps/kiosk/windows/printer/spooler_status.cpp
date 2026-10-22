@@ -152,7 +152,7 @@ SpoolerPrinterInfo QuerySpoolerStatus(const std::string& preferred_name_substrin
         auto* jobs = reinterpret_cast<JOB_INFO_1W*>(jobs_buf.data());
         for (DWORD i = 0; i < jobs_returned; ++i) {
           const DWORD st = jobs[i].Status;
-          if (st & (JOB_STATUS_PRINTING | JOB_STATUS_SPOOLING | JOB_STATUS_BUSY)) {
+          if (st & (JOB_STATUS_PRINTING | JOB_STATUS_SPOOLING)) {
             info.jobs_printing += 1;
           } else {
             info.jobs_queued += 1;

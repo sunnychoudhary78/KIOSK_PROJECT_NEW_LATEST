@@ -36,10 +36,23 @@ class PrintCoordinator {
   final Duration? _reconcileTimeout;
 
   bool _locked = false;
+  int _runId = 0;
+  bool _abortRequested = false;
+
+  bool get isLocked => _locked;
 
   Duration get reconcileTimeout =>
       _reconcileTimeout ??
       Duration(milliseconds: _monitor.reconcileTimeoutMs);
+
+  /// Abort in-flight reconcile and clear the exclusive lock (home / visitor reset).
+  void abortAndReset() {
+    _abortRequested = true;
+    _runId++;
+    _locked = false;
+  }
+
+  bool _isAborted(int runId) => _abortRequested || runId != _runId;
 
   /// Exclusive print+reconcile for OTP / Quick Print / DigiLocker.
   Future<PrintReconcileResult> printAndReconcile({
@@ -59,8 +72,11 @@ class PrintCoordinator {
       );
     }
     _locked = true;
+    _abortRequested = false;
+    final runId = ++_runId;
     try {
       return await _run(
+        runId: runId,
         jobId: jobId,
         title: title,
         pdfBytes: pdfBytes,
@@ -70,7 +86,9 @@ class PrintCoordinator {
         onProgress: onProgress,
       );
     } finally {
-      _locked = false;
+      if (runId == _runId) {
+        _locked = false;
+      }
     }
   }
 
@@ -79,7 +97,7 @@ class PrintCoordinator {
   }) async {
     int? last;
     for (var i = 0; i < counterRetryAttempts; i++) {
-      last = await _monitor.getPageCounter();
+      last = await _monitor.getPageCounter(forceRefresh: true);
       if (last != null) {
         return last;
       }
@@ -91,7 +109,35 @@ class PrintCoordinator {
     return last;
   }
 
+  Future<PrintReconcileResult> _abortedResult({
+    required String jobId,
+    required PrintJobStatusReporter reportStatus,
+    int? pageCounterBefore,
+    int? pageCounterAfter,
+    int pagesReported = 0,
+  }) async {
+    await reportStatus(
+      jobId: jobId,
+      status: 'printing',
+      pagesReported: pagesReported,
+      pageCounterBefore: pageCounterBefore,
+      pageCounterAfter: pageCounterAfter,
+      reconcileStatus: 'unknown',
+      reconcileDetail: 'aborted',
+      needsAdminReview: true,
+    );
+    return PrintReconcileResult(
+      outcome: PrintReconcileOutcome.unknown,
+      userMessage: 'Print was cancelled.',
+      pagesReported: pagesReported,
+      pageCounterBefore: pageCounterBefore,
+      pageCounterAfter: pageCounterAfter,
+      reconcileDetail: 'aborted',
+    );
+  }
+
   Future<PrintReconcileResult> _run({
+    required int runId,
     required String jobId,
     required String title,
     required Uint8List pdfBytes,
@@ -106,6 +152,10 @@ class PrintCoordinator {
 
     onProgress?.call('Checking printer…');
     final preHealth = await _monitor.getHealth();
+    if (_isAborted(runId)) {
+      return _abortedResult(jobId: jobId, reportStatus: reportStatus);
+    }
+    // Starting a job: full isFatal (incl. sustained SNMP unreachable).
     if (preHealth.isFatal) {
       final preDetail = preHealth.noPaper
           ? 'paper_out'
@@ -130,6 +180,13 @@ class PrintCoordinator {
 
     if (snmp) {
       counterBefore = await _readPageCounterWithRetries(onProgress: onProgress);
+    }
+    if (_isAborted(runId)) {
+      return _abortedResult(
+        jobId: jobId,
+        reportStatus: reportStatus,
+        pageCounterBefore: counterBefore,
+      );
     }
 
     onProgress?.call('Sending to printer…');
@@ -167,8 +224,17 @@ class PrintCoordinator {
       );
     }
 
+    if (_isAborted(runId)) {
+      return _abortedResult(
+        jobId: jobId,
+        reportStatus: reportStatus,
+        pageCounterBefore: counterBefore,
+      );
+    }
+
     if (!snmp) {
       return _waitWithoutSnmp(
+        runId: runId,
         jobId: jobId,
         reportStatus: reportStatus,
         onProgress: onProgress,
@@ -176,6 +242,7 @@ class PrintCoordinator {
     }
 
     return _reconcileWithSnmp(
+      runId: runId,
       jobId: jobId,
       expected: expected,
       counterBefore: counterBefore,
@@ -185,6 +252,7 @@ class PrintCoordinator {
   }
 
   Future<PrintReconcileResult> _waitWithoutSnmp({
+    required int runId,
     required String jobId,
     required PrintJobStatusReporter reportStatus,
     void Function(String message)? onProgress,
@@ -192,9 +260,13 @@ class PrintCoordinator {
     onProgress?.call('Printer processing…');
     final deadline = DateTime.now().add(noSnmpGrace);
     while (DateTime.now().isBefore(deadline)) {
+      if (_isAborted(runId)) {
+        return _abortedResult(jobId: jobId, reportStatus: reportStatus);
+      }
       await Future<void>.delayed(pollInterval);
       final health = await _monitor.getHealth();
-      if (health.isFatal) {
+      // Mid-wait without SNMP: physical fatals only.
+      if (health.isPhysicalFatal) {
         await reportStatus(
           jobId: jobId,
           status: 'failed',
@@ -229,6 +301,7 @@ class PrintCoordinator {
   }
 
   Future<PrintReconcileResult> _reconcileWithSnmp({
+    required int runId,
     required String jobId,
     required int expected,
     required int? counterBefore,
@@ -237,7 +310,11 @@ class PrintCoordinator {
   }) async {
     onProgress?.call('Printer processing…');
     final deadline = DateTime.now().add(reconcileTimeout);
+    // Pre-print baseline when known. Mid-flight: first post-send reading is a
+    // provisional watermark only — verify only after a later reading rises.
     int? baseline = counterBefore;
+    final hadPrePrintBaseline = counterBefore != null;
+    int? provisionalWatermark;
     int? counterAfter = counterBefore;
     var pagesReported = 0;
     var sawAnyCounter = counterBefore != null;
@@ -248,12 +325,30 @@ class PrintCoordinator {
     }
 
     while (DateTime.now().isBefore(deadline)) {
+      if (_isAborted(runId)) {
+        return _abortedResult(
+          jobId: jobId,
+          reportStatus: reportStatus,
+          pageCounterBefore: baseline ?? provisionalWatermark,
+          pageCounterAfter: counterAfter,
+          pagesReported: pagesReported,
+        );
+      }
       await Future<void>.delayed(pollInterval);
-      final health = await _monitor.getHealth();
-      // Prefer cached pageCounter from health; fall back to dedicated read.
-      final after = health.pageCounter ?? await _monitor.getPageCounter();
+      if (_isAborted(runId)) {
+        return _abortedResult(
+          jobId: jobId,
+          reportStatus: reportStatus,
+          pageCounterBefore: baseline ?? provisionalWatermark,
+          pageCounterAfter: counterAfter,
+          pagesReported: pagesReported,
+        );
+      }
 
-      // Progress from hrPrinterStatus only — never verify from idle/spooler alone.
+      final health = await _monitor.getHealth();
+      // Always force-refresh during reconcile (lab: timeouts leave stale cache).
+      final after = await _monitor.getPageCounter(forceRefresh: true);
+
       if (!confirmingAnnounced) {
         final label = health.hrPrinterStatusLabel;
         if (label == 'printing' || label == 'warmup' || health.isBusy) {
@@ -263,16 +358,19 @@ class PrintCoordinator {
 
       if (after != null) {
         sawAnyCounter = true;
-        if (baseline == null) {
-          // Mid-flight baseline: do not complete yet; wait for further increase.
-          baseline = after;
-          counterAfter = after;
-          if (!confirmingAnnounced) {
-            onProgress?.call('Confirming print…');
-            confirmingAnnounced = true;
+        counterAfter = after;
+        if (!hadPrePrintBaseline && baseline == null) {
+          if (provisionalWatermark == null) {
+            provisionalWatermark = after;
+            if (!confirmingAnnounced) {
+              onProgress?.call('Confirming print…');
+              confirmingAnnounced = true;
+            }
+          } else if (after > provisionalWatermark) {
+            baseline = provisionalWatermark;
+            pagesReported = (after - provisionalWatermark).clamp(0, 100000);
           }
-        } else {
-          counterAfter = after;
+        } else if (baseline != null) {
           pagesReported = (after - baseline).clamp(0, 100000);
           if (!confirmingAnnounced) {
             onProgress?.call('Confirming print…');
@@ -302,10 +400,8 @@ class PrintCoordinator {
         );
       }
 
-      // Paper-out / jam / spooler offline: fail or partial. SNMP blips
-      // (snmpReachable false briefly) are NOT fatal until consecutiveFailures
-      // threshold — isFatal already encodes that.
-      if (health.isFatal) {
+      // Physical fatals only — SNMP blips are expected during Brother print.
+      if (health.isPhysicalFatal) {
         final detail = health.noPaper
             ? 'paper_out'
             : (health.jammed
@@ -351,7 +447,6 @@ class PrintCoordinator {
           reconcileDetail: detail,
         );
       }
-      // Non-fatal SNMP miss: keep polling until reconcile timeout.
     }
 
     if (!sawAnyCounter) {
@@ -380,7 +475,7 @@ class PrintCoordinator {
       jobId: jobId,
       status: 'printing',
       pagesReported: pagesReported,
-      pageCounterBefore: baseline,
+      pageCounterBefore: baseline ?? provisionalWatermark,
       pageCounterAfter: counterAfter,
       reconcileStatus: 'reconciliation_required',
       reconcileDetail:
@@ -392,7 +487,7 @@ class PrintCoordinator {
       userMessage:
           'Print could not be confirmed within ${reconcileTimeout.inMinutes} minutes. Staff will review.',
       pagesReported: pagesReported,
-      pageCounterBefore: baseline,
+      pageCounterBefore: baseline ?? provisionalWatermark,
       pageCounterAfter: counterAfter,
       reconcileDetail: 'timeout',
     );

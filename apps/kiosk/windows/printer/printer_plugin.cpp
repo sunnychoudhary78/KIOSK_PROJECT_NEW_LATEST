@@ -44,6 +44,17 @@ int IntArg(const EncodableMap& map, const char* key, int fallback) {
   return fallback;
 }
 
+bool BoolArg(const EncodableMap& map, const char* key, bool fallback) {
+  const auto it = map.find(EncodableValue(key));
+  if (it == map.end()) {
+    return fallback;
+  }
+  if (const auto* v = std::get_if<bool>(&it->second)) {
+    return *v;
+  }
+  return fallback;
+}
+
 EncodableValue NullOrInt(const std::optional<int>& value) {
   if (!value) {
     return EncodableValue();
@@ -217,25 +228,23 @@ class PrinterPlugin : public flutter::Plugin {
 
   EncodableValue BuildPageCounter(const EncodableMap& args) {
     EncodableMap out;
+    const bool force_refresh = BoolArg(args, "forceRefresh", false);
     auto telem = skp_printer::SnmpPollCache::Instance().Get();
     if (!telem.configured) {
       out[EncodableValue("ok")] = EncodableValue(false);
       out[EncodableValue("error")] = EncodableValue("snmp_not_configured");
       return EncodableValue(out);
     }
+    // Reconcile path: always RefreshNow so timeouts during print do not leave
+    // a stale lifetime counter cached for the whole wait loop.
+    if (force_refresh || !telem.snapshot.page_counter) {
+      telem = skp_printer::SnmpPollCache::Instance().RefreshNow();
+    }
     if (telem.snapshot.page_counter) {
       out[EncodableValue("ok")] = EncodableValue(true);
       out[EncodableValue("pageCounter")] =
           EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
       out[EncodableValue("stale")] = EncodableValue(!telem.snapshot.snmp_ok);
-      return EncodableValue(out);
-    }
-    // Cache miss: one synchronous refresh (rare).
-    telem = skp_printer::SnmpPollCache::Instance().RefreshNow();
-    if (telem.snapshot.page_counter) {
-      out[EncodableValue("ok")] = EncodableValue(true);
-      out[EncodableValue("pageCounter")] =
-          EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
       return EncodableValue(out);
     }
     out[EncodableValue("ok")] = EncodableValue(false);

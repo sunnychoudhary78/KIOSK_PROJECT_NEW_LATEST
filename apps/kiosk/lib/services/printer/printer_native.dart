@@ -25,6 +25,7 @@ abstract class PrinterNative {
   Future<int?> getPageCounter({
     required String snmpHost,
     required String snmpCommunity,
+    bool forceRefresh = false,
   });
 
   Future<PrinterHealth> getPrinterStatus({required String printerName});
@@ -105,11 +106,13 @@ class MethodChannelPrinterNative implements PrinterNative {
   Future<int?> getPageCounter({
     required String snmpHost,
     required String snmpCommunity,
+    bool forceRefresh = false,
   }) async {
     try {
       final raw = await _methods.invokeMethod<dynamic>('getPageCounter', {
         'snmpHost': snmpHost,
         'snmpCommunity': snmpCommunity,
+        'forceRefresh': forceRefresh,
       });
       if (raw is Map && raw['ok'] == true) {
         return (raw['pageCounter'] as num?)?.toInt();
@@ -158,13 +161,17 @@ class FakePrinterNative implements PrinterNative {
     this.health = PrinterHealth.unknown,
     this.pageCounter,
     this.pageCounterSequence,
+    this.healthAfterFirst,
   });
 
   PrinterHealth health;
+  /// Returned from the 2nd getHealth call onward (mid-reconcile blips).
+  PrinterHealth? healthAfterFirst;
   int? pageCounter;
   /// Optional sequence of counter reads (null entries = SNMP miss).
   List<int?>? pageCounterSequence;
   int _counterIndex = 0;
+  int _healthReads = 0;
   bool snmpPollingConfigured = false;
 
   @override
@@ -190,37 +197,38 @@ class FakePrinterNative implements PrinterNative {
     required String snmpCommunity,
     required String model,
   }) async {
-    final counter = await getPageCounter(
-      snmpHost: snmpHost,
-      snmpCommunity: snmpCommunity,
-    );
+    _healthReads++;
+    final source = (_healthReads > 1 && healthAfterFirst != null)
+        ? healthAfterFirst!
+        : health;
+    // Do not consume pageCounterSequence — reconcile uses getPageCounter.
     return PrinterHealth(
-      state: health.state,
-      online: health.online,
-      printerName: health.printerName ?? printerName,
+      state: source.state,
+      online: source.online,
+      printerName: source.printerName ?? printerName,
       model: model,
-      trays: health.trays,
-      supplies: health.supplies,
-      pageCounter: counter ?? health.pageCounter,
-      snmpOk: counter != null || health.snmpOk == true,
-      snmpReachable: health.snmpReachable ?? (counter != null),
-      snmpConfigured: health.snmpConfigured ?? snmpPollingConfigured,
-      consecutiveFailures: health.consecutiveFailures,
-      lastSuccessAtMs: health.lastSuccessAtMs,
-      lastPollError: health.lastPollError,
-      hrPrinterStatus: health.hrPrinterStatus,
-      hrPrinterStatusLabel: health.hrPrinterStatusLabel,
-      errorFlagsHex: health.errorFlagsHex,
-      noPaper: health.noPaper,
-      jammed: health.jammed,
-      offlineBit: health.offlineBit,
-      lowPaper: health.lowPaper,
-      lowToner: health.lowToner,
-      noToner: health.noToner,
-      doorOpen: health.doorOpen,
-      spoolerJobsQueued: health.spoolerJobsQueued,
-      spoolerJobsPrinting: health.spoolerJobsPrinting,
-      lastErrorCode: health.lastErrorCode,
+      trays: source.trays,
+      supplies: source.supplies,
+      pageCounter: source.pageCounter ?? pageCounter,
+      snmpOk: source.snmpOk ?? (pageCounter != null),
+      snmpReachable: source.snmpReachable ?? true,
+      snmpConfigured: source.snmpConfigured ?? snmpPollingConfigured,
+      consecutiveFailures: source.consecutiveFailures,
+      lastSuccessAtMs: source.lastSuccessAtMs,
+      lastPollError: source.lastPollError,
+      hrPrinterStatus: source.hrPrinterStatus,
+      hrPrinterStatusLabel: source.hrPrinterStatusLabel,
+      errorFlagsHex: source.errorFlagsHex,
+      noPaper: source.noPaper,
+      jammed: source.jammed,
+      offlineBit: source.offlineBit,
+      lowPaper: source.lowPaper,
+      lowToner: source.lowToner,
+      noToner: source.noToner,
+      doorOpen: source.doorOpen,
+      spoolerJobsQueued: source.spoolerJobsQueued,
+      spoolerJobsPrinting: source.spoolerJobsPrinting,
+      lastErrorCode: source.lastErrorCode,
     );
   }
 
@@ -228,6 +236,7 @@ class FakePrinterNative implements PrinterNative {
   Future<int?> getPageCounter({
     required String snmpHost,
     required String snmpCommunity,
+    bool forceRefresh = false,
   }) async {
     final seq = pageCounterSequence;
     if (seq != null && seq.isNotEmpty) {

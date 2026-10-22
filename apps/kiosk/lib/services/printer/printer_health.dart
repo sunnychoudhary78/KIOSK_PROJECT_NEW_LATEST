@@ -122,11 +122,18 @@ class PrinterHealth {
 
   /// Fatal for blocking a new print. Offline bit alone is NOT fatal.
   bool get isFatal {
+    if (isPhysicalFatal) return true;
+    if (snmpConfigured == true && snmpReachable == false) return true;
+    return false;
+  }
+
+  /// Jam / paper-out / spooler offline / hard error — safe to fail mid-reconcile.
+  /// Does NOT include SNMP reachability blips (normal during Brother print).
+  bool get isPhysicalFatal {
     if (state == 'jam' || jammed) return true;
     if (state == 'paper_out' || noPaper) return true;
     if (state == 'error') return true;
     if (state == 'offline' && online == false) return true;
-    if (snmpConfigured == true && snmpReachable == false) return true;
     return false;
   }
 

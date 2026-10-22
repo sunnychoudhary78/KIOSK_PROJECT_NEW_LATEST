@@ -5,6 +5,7 @@ import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/application/visitor_session_reset.dart';
 import 'package:skp_kiosk/features/session/domain/kiosk_session_policy.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 enum KioskSessionPhase { catalog, inService, warning, resetting }
 
@@ -106,6 +107,10 @@ class KioskSessionController extends Notifier<KioskSessionState> {
     if (onHome) {
       _cancelTimers();
       ref.read(kioskSessionHoldProvider.notifier).clear();
+      // Landing on catalog must always clear exclusive print lock.
+      try {
+        ref.read(printCoordinatorProvider).abortAndReset();
+      } catch (_) {}
       state = state.copyWith(
         phase: KioskSessionPhase.catalog,
         onHome: true,

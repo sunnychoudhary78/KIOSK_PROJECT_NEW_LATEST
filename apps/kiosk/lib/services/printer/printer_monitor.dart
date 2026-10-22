@@ -52,13 +52,14 @@ class PrinterMonitor {
     );
   }
 
-  Future<int?> getPageCounter() {
+  Future<int?> getPageCounter({bool forceRefresh = false}) {
     if (!_config.snmpConfigured) {
       return Future.value(null);
     }
     return _native.getPageCounter(
       snmpHost: _config.printerSnmpHost,
       snmpCommunity: _config.printerSnmpCommunity,
+      forceRefresh: forceRefresh,
     );
   }
 

@@ -67,6 +67,7 @@ void main() {
         consecutiveFailures: 3,
       );
       expect(health.isFatal, isTrue);
+      expect(health.isPhysicalFatal, isFalse);
     });
 
     test('toJson omits community and includes telemetry fields', () {
