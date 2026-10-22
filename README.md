@@ -72,6 +72,8 @@ Service = API module + catalog entry (platform_services)
         + optional admin monitoring page
 ```
 
+.....
+
 Shared orchestration for printing lives in the `printing` module. Enablement is per device via `service_enablements`. See [`packages/docs/NEW_SERVICE_CHECKLIST.md`](packages/docs/NEW_SERVICE_CHECKLIST.md).
 
 ### Design principles (as implemented)
@@ -87,8 +89,8 @@ Shared orchestration for printing lives in the `printing` module. Enablement is 
 
 ## 2. Applications and stack
 
-| App        | Path                         | Stack                                                  | Role                     |
-| ---------- | ---------------------------- | ------------------------------------------------------ | ------------------------ |
+| App           | Path                               | Stack                                                  | Role                     |
+| ------------- | ---------------------------------- | ------------------------------------------------------ | ------------------------ |
 | **API**       | [`apps/api`](apps/api)             | Node.js, Express, Prisma, PostgreSQL, Zod, JWT, Vitest | Platform backend (`/v1`) |
 | **Admin**     | [`apps/admin`](apps/admin)         | React 19, Vite 6, TypeScript, React Router             | Operator console         |
 | **Print web** | [`apps/print-web`](apps/print-web) | React 19, Vite 6, TypeScript, React Router             | Guest Quick Print site   |
