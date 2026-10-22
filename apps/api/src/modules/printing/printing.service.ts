@@ -1,4 +1,9 @@
-import { PrintColorMode, PrintJobSource, PrintJobStatus } from '@prisma/client';
+import {
+  PrintColorMode,
+  PrintJobReconcileStatus,
+  PrintJobSource,
+  PrintJobStatus,
+} from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
@@ -11,6 +16,15 @@ function mapJob(job: {
   source: PrintJobSource;
   title: string;
   pageCount: number;
+  pagesExpected: number;
+  pagesReported: number | null;
+  spoolerJobId: string | null;
+  pageCounterBefore: number | null;
+  pageCounterAfter: number | null;
+  reconcileStatus: PrintJobReconcileStatus;
+  needsAdminReview: boolean;
+  reconcileDetail: string | null;
+  reconciledAt: Date | null;
   printColorMode?: PrintColorMode | null;
   deviceId: string | null;
   payloadUrl: string | null;
@@ -24,6 +38,15 @@ function mapJob(job: {
     source: job.source,
     title: job.title,
     pageCount: job.pageCount,
+    pagesExpected: job.pagesExpected,
+    pagesReported: job.pagesReported,
+    spoolerJobId: job.spoolerJobId,
+    pageCounterBefore: job.pageCounterBefore,
+    pageCounterAfter: job.pageCounterAfter,
+    reconcileStatus: job.reconcileStatus,
+    needsAdminReview: job.needsAdminReview,
+    reconcileDetail: job.reconcileDetail,
+    reconciledAt: job.reconciledAt?.toISOString() ?? null,
     printColorMode: job.printColorMode === PrintColorMode.color ? 'color' : 'bw',
     deviceId: job.deviceId,
     payloadUrl: job.payloadUrl,
@@ -36,6 +59,7 @@ export type CreatePrintJobInput = {
   source: PrintJobSource;
   title: string;
   pageCount?: number;
+  pagesExpected?: number;
   freePagesGranted?: number;
   printColorMode?: PrintColorMode;
   deviceId?: string;
@@ -44,6 +68,19 @@ export type CreatePrintJobInput = {
   idempotencyKey?: string;
   digiLockerSessionId?: string;
 };
+
+const HOLD_RECONCILE = new Set<PrintJobReconcileStatus>([
+  PrintJobReconcileStatus.partial,
+  PrintJobReconcileStatus.reconciliation_required,
+  PrintJobReconcileStatus.unknown,
+]);
+
+function toReconcileStatus(
+  value: string | undefined,
+): PrintJobReconcileStatus | undefined {
+  if (!value) return undefined;
+  return value as PrintJobReconcileStatus;
+}
 
 export class PrintingService {
   private readonly quota: PrintQuotaService;
@@ -65,11 +102,15 @@ export class PrintingService {
       }
     }
 
+    const pageCount = input.pageCount ?? 1;
+    const pagesExpected = input.pagesExpected ?? pageCount;
+
     const job = await this.db.printJob.create({
       data: {
         source: input.source,
         title: input.title,
-        pageCount: input.pageCount ?? 1,
+        pageCount,
+        pagesExpected,
         freePagesGranted: input.freePagesGranted ?? 0,
         printColorMode: input.printColorMode ?? PrintColorMode.bw,
         deviceId: input.deviceId,
@@ -78,6 +119,7 @@ export class PrintingService {
         idempotencyKey: input.idempotencyKey,
         digiLockerSessionId: input.digiLockerSessionId,
         status: PrintJobStatus.ready,
+        reconcileStatus: PrintJobReconcileStatus.pending,
       },
     });
 
@@ -150,20 +192,88 @@ export class PrintingService {
     }
 
     const status = input.status as PrintJobStatus;
+    const reconcileStatus =
+      toReconcileStatus(input.reconcileStatus) ?? job.reconcileStatus;
+    const pagesExpected = job.pagesExpected > 0 ? job.pagesExpected : job.pageCount;
+    const pagesReported =
+      input.pagesReported !== undefined ? input.pagesReported : job.pagesReported;
+
+    // Idempotent: already completed — return current row without flipping ledger again.
+    if (job.status === PrintJobStatus.completed) {
+      return mapJob(job);
+    }
+
+    if (status === PrintJobStatus.completed) {
+      if (reconcileStatus !== PrintJobReconcileStatus.verified) {
+        throw new AppError(
+          'invalid_reconcile',
+          'completed requires reconcileStatus=verified',
+          400,
+        );
+      }
+      if (pagesReported == null || pagesReported < pagesExpected) {
+        throw new AppError(
+          'invalid_reconcile',
+          'completed requires pagesReported >= pagesExpected',
+          400,
+        );
+      }
+    }
+
+    if (
+      reconcileStatus === PrintJobReconcileStatus.verified &&
+      status !== PrintJobStatus.completed
+    ) {
+      throw new AppError(
+        'invalid_reconcile',
+        'reconcileStatus=verified requires status=completed',
+        400,
+      );
+    }
+
+    const holdReconcile = HOLD_RECONCILE.has(reconcileStatus);
+    const failedWithPages =
+      status === PrintJobStatus.failed && pagesReported != null && pagesReported > 0;
+    const needsAdminReview =
+      input.needsAdminReview === true ||
+      holdReconcile ||
+      failedWithPages ||
+      job.needsAdminReview;
+
     const updated = await this.db.printJob.update({
       where: { id: jobId },
       data: {
         status,
         deviceId: job.deviceId ?? deviceId,
         errorMessage: input.errorMessage,
+        pagesReported: input.pagesReported !== undefined ? input.pagesReported : undefined,
+        spoolerJobId: input.spoolerJobId !== undefined ? input.spoolerJobId : undefined,
+        pageCounterBefore:
+          input.pageCounterBefore !== undefined ? input.pageCounterBefore : undefined,
+        pageCounterAfter:
+          input.pageCounterAfter !== undefined ? input.pageCounterAfter : undefined,
+        reconcileStatus:
+          input.reconcileStatus !== undefined ? reconcileStatus : undefined,
+        reconcileDetail:
+          input.reconcileDetail !== undefined ? input.reconcileDetail : undefined,
+        needsAdminReview,
+        ...(input.reconcileStatus !== undefined
+          ? {
+              reconciledAt:
+                reconcileStatus === PrintJobReconcileStatus.pending
+                  ? null
+                  : (job.reconciledAt ?? new Date()),
+            }
+          : {}),
       },
     });
 
-    if (status === PrintJobStatus.completed) {
+    if (status === PrintJobStatus.completed && reconcileStatus === PrintJobReconcileStatus.verified) {
       await this.quota.consumeForPrintJob(jobId).catch(() => undefined);
-    } else if (status === PrintJobStatus.failed) {
+    } else if (status === PrintJobStatus.failed && (pagesReported == null || pagesReported === 0)) {
       await this.quota.releaseForPrintJob(jobId).catch(() => undefined);
     }
+    // partial / reconciliation_required / unknown / failed-with-pages: leave ledger reserved
 
     await this.audit.record({
       action: `print_job.${status}`,
@@ -172,7 +282,12 @@ export class PrintingService {
       resourceType: 'print_job',
       resourceId: jobId,
       correlationId,
-      metadata: input.errorMessage ? { errorMessage: input.errorMessage } : undefined,
+      metadata: {
+        ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
+        reconcileStatus,
+        pagesReported: pagesReported ?? undefined,
+        needsAdminReview,
+      },
     });
 
     return mapJob(updated);

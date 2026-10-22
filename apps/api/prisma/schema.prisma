@@ -36,6 +36,15 @@ enum PrintJobStatus {
   expired
 }
 
+/// Physical completion evidence relative to Windows spooler acceptance.
+enum PrintJobReconcileStatus {
+  pending
+  verified
+  partial
+  reconciliation_required
+  unknown
+}
+
 enum PrintJobSource {
   otp_print
   digilocker_print
@@ -205,6 +214,9 @@ model Device {
   /// Latest surveillance health snapshot from the kiosk heartbeat.
   surveillanceHealth   Json?        @map("surveillance_health")
   surveillanceHealthAt DateTime?    @map("surveillance_health_at")
+  /// Latest printer health snapshot from the kiosk heartbeat (SNMP + spooler).
+  printerHealth        Json?        @map("printer_health")
+  printerHealthAt      DateTime?    @map("printer_health_at")
   maxPagesPerSession         Int @default(10) @map("max_pages_per_session")
   freePagesPerSession        Int @default(5) @map("free_pages_per_session")
   extraPageChargeRupees      Int @default(10) @map("extra_page_charge_rupees")
@@ -539,6 +551,17 @@ model PrintJob {
   status           PrintJobStatus @default(created)
   title            String
   pageCount        Int            @default(1) @map("page_count")
+  /// Expected physical pages; defaults to pageCount on create.
+  pagesExpected    Int            @default(1) @map("pages_expected")
+  /// Observed physical pages (SNMP delta / spooler), when known.
+  pagesReported    Int?           @map("pages_reported")
+  spoolerJobId     String?        @map("spooler_job_id")
+  pageCounterBefore Int?          @map("page_counter_before")
+  pageCounterAfter  Int?          @map("page_counter_after")
+  reconcileStatus  PrintJobReconcileStatus @default(pending) @map("reconcile_status")
+  needsAdminReview Boolean        @default(false) @map("needs_admin_review")
+  reconcileDetail  String?        @map("reconcile_detail")
+  reconciledAt     DateTime?      @map("reconciled_at")
   freePagesGranted Int            @default(0) @map("free_pages_granted")
   printColorMode   PrintColorMode @default(bw) @map("print_color_mode")
   payloadUrl       String?        @map("payload_url")
@@ -556,6 +579,7 @@ model PrintJob {
   freePageLedgerEntries PhoneFreePageLedger[]
 
   @@index([status, createdAt])
+  @@index([needsAdminReview, createdAt])
   @@map("print_jobs")
 }
 

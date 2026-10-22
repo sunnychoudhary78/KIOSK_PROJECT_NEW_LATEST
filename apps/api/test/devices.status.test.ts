@@ -227,6 +227,46 @@ describe('DevicesService.heartbeat', () => {
       },
     });
   });
+
+  it('persists printer health from the heartbeat body', async () => {
+    const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...deviceRow(DeviceStatus.active),
+      ...data,
+    }));
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceRow(DeviceStatus.active),
+          surveillanceEnabled: false,
+        })),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    const printer = {
+      state: 'jam' as const,
+      online: true,
+      printerName: 'Brother HL-L3280CDW',
+      model: 'Brother HL-L3280CDW',
+      pageCounter: 12045,
+      snmpOk: true,
+      trays: [{ name: 'Tray 1', levelPercent: 40, status: 'ok' }],
+      supplies: [{ name: 'Black Toner', color: 'black', levelPercent: 55 }],
+      lastErrorCode: 'PAPER_JAM',
+    };
+    await service.heartbeat(deviceId, deviceId, { printer });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: deviceId },
+      data: {
+        lastHeartbeatAt: expect.any(Date),
+        printerHealth: printer,
+        printerHealthAt: expect.any(Date),
+      },
+    });
+  });
 });
 
 describe('assertActiveDevice', () => {

@@ -8,6 +8,7 @@ import type { AuditService } from '../audit/audit.service.js';
 import type {
   DeviceHeartbeatBody,
   NearbyDevicesQuery,
+  PrinterHealthInput,
   RegisterDeviceInput,
   SetDevicePrintLimitsInput,
   SurveillanceHealthInput,
@@ -22,6 +23,13 @@ function mapSurveillanceHealth(value: unknown): SurveillanceHealthInput | null {
   return value as SurveillanceHealthInput;
 }
 
+function mapPrinterHealth(value: unknown): PrinterHealthInput | null {
+  if (value == null || typeof value !== 'object') {
+    return null;
+  }
+  return value as PrinterHealthInput;
+}
+
 function mapDevice(device: {
   id: string;
   name: string;
@@ -34,6 +42,8 @@ function mapDevice(device: {
   surveillanceEnabled: boolean;
   surveillanceHealth?: unknown;
   surveillanceHealthAt?: Date | null;
+  printerHealth?: unknown;
+  printerHealthAt?: Date | null;
   maxPagesPerSession?: number;
   freePagesPerSession?: number;
   extraPageChargeRupees?: number;
@@ -58,6 +68,8 @@ function mapDevice(device: {
     surveillanceEnabled: device.surveillanceEnabled,
     surveillanceHealth: mapSurveillanceHealth(device.surveillanceHealth),
     surveillanceHealthAt: device.surveillanceHealthAt?.toISOString() ?? null,
+    printerHealth: mapPrinterHealth(device.printerHealth),
+    printerHealthAt: device.printerHealthAt?.toISOString() ?? null,
     bannerHorizontalEnabled: device.bannerHorizontalEnabled !== false,
     bannerVerticalEnabled: device.bannerVerticalEnabled !== false,
     ...printLimitsFromDevice(device),
@@ -335,6 +347,12 @@ export class DevicesService {
           ? {
               surveillanceHealth: body.surveillance,
               surveillanceHealthAt: now,
+            }
+          : {}),
+        ...(body.printer
+          ? {
+              printerHealth: body.printer,
+              printerHealthAt: now,
             }
           : {}),
         ...(device.status === DeviceStatus.provisioning

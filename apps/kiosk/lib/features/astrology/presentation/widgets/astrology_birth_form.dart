@@ -208,9 +208,9 @@ class _AstrologyBirthFormPanelState
     final leading = widget.leading;
     final footer = widget.footer;
     final showGender = widget.showGender;
+    // Keep intrinsic heights under the 720p form budget (keyboard is fixed).
     final leftColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         AstrologyCosmicTextField(
           label: 'Name',
@@ -219,6 +219,7 @@ class _AstrologyBirthFormPanelState
           focused: focus == 0,
           onTap: () => onFocus(0),
         ),
+        const SizedBox(height: 8),
         AstrologyCosmicTextField(
           label: 'Place of birth',
           hint: 'City, State',
@@ -226,32 +227,36 @@ class _AstrologyBirthFormPanelState
           focused: focus == 1,
           onTap: () => onFocus(1),
         ),
-        ?footer,
+        if (footer != null) ...[const SizedBox(height: 8), footer],
       ],
     );
 
     final rightColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        if (showGender)
+        if (showGender) ...[
           Semantics(
             label: 'Gender',
             child: AstrologyGenderSegment(gender: gender, onGender: onGender),
           ),
+          const SizedBox(height: 8),
+        ],
         AstrologyCosmicTextField(
           label: 'Date of birth',
           value: dob.toIso8601String().split('T').first,
           focused: focus == 2,
           onTap: () => onFocus(2),
         ),
-        if (!timeUnknown)
+        if (!timeUnknown) ...[
+          const SizedBox(height: 8),
           AstrologyCosmicTextField(
             label: 'Birth time',
             value: timeValue,
             focused: focus == 3,
             onTap: () => onFocus(3),
           ),
+        ],
+        const SizedBox(height: 8),
         AstrologyUnknownTimeRow(
           selected: timeUnknown,
           onTap: () => onTimeUnknown(!timeUnknown),
@@ -267,6 +272,7 @@ class _AstrologyBirthFormPanelState
           style: theme.textTheme.titleMedium?.copyWith(
             color: AstrologyColors.gold,
             fontWeight: FontWeight.w700,
+            height: 1.1,
           ),
         ),
         if (subtitle.trim().isNotEmpty) ...[
@@ -277,10 +283,11 @@ class _AstrologyBirthFormPanelState
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
               color: AstrologyColors.muted,
+              height: 1.1,
             ),
           ),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -292,9 +299,9 @@ class _AstrologyBirthFormPanelState
           ),
         ),
         if (error != null) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           GlassPanel(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             borderColor: AstrologyColors.danger.withValues(alpha: 0.55),
             color: AstrologyColors.danger.withValues(alpha: 0.18),
             child: Row(
@@ -302,16 +309,17 @@ class _AstrologyBirthFormPanelState
                 const Icon(
                   Icons.error_outline,
                   color: AstrologyColors.danger,
-                  size: 20,
+                  size: 18,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     error,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: AstrologyColors.text,
+                      height: 1.15,
                     ),
                   ),
                 ),
@@ -322,18 +330,28 @@ class _AstrologyBirthFormPanelState
       ],
     );
 
+    final keyboardTheme = Theme(
+      data: Theme.of(context).copyWith(
+        colorScheme: Theme.of(context).colorScheme.copyWith(
+          surface: AstrologyColors.panelSolid,
+          onSurface: AstrologyColors.text,
+        ),
+      ),
+      child: KioskKeyboard(onKey: _type, onBackspace: onBackspace),
+    );
+
     return Column(
       children: [
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(32, 8, 32, 8),
+            padding: const EdgeInsets.fromLTRB(32, 6, 32, 6),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (leading != null) ...[leading, const SizedBox(width: 16)],
                 Expanded(
                   child: GlassPanel(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
                     child: SizedBox.expand(child: fields),
                   ),
                 ),
@@ -344,7 +362,7 @@ class _AstrologyBirthFormPanelState
         if (showSuggestions)
           SizedBox(
             key: const ValueKey('place-suggestions'),
-            height: 104,
+            height: 78,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(32, 0, 32, 4),
               child: GlassPanel(
@@ -370,7 +388,7 @@ class _AstrologyBirthFormPanelState
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
-                                vertical: 5,
+                                vertical: 4,
                               ),
                               child: Row(
                                 children: [
@@ -418,19 +436,10 @@ class _AstrologyBirthFormPanelState
             ),
           ),
         if (showKeyboard)
+          // Keep a usable keyboard; only trim a little when suggestions show.
           SizedBox(
-            // Keep enough room for all form rows plus a validation banner in
-            // the 720p kiosk viewport.
-            height: showSuggestions ? 132 : 190,
-            child: Theme(
-              data: Theme.of(context).copyWith(
-                colorScheme: Theme.of(context).colorScheme.copyWith(
-                  surface: AstrologyColors.panelSolid,
-                  onSurface: AstrologyColors.text,
-                ),
-              ),
-              child: KioskKeyboard(onKey: _type, onBackspace: onBackspace),
-            ),
+            height: showSuggestions ? 148 : 180,
+            child: keyboardTheme,
           )
         else if (showDate)
           Padding(
@@ -469,7 +478,7 @@ class AstrologyCosmicTextField extends StatelessWidget {
   final VoidCallback onTap;
   final String? hint;
 
-  static const double height = 52;
+  static const double height = 50;
 
   @override
   Widget build(BuildContext context) {
@@ -480,7 +489,7 @@ class AstrologyCosmicTextField extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         width: double.infinity,
         height: height,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: AstrologyColors.raised,
           borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
@@ -500,15 +509,18 @@ class AstrologyCosmicTextField extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
                 color: focused ? AstrologyColors.gold : AstrologyColors.muted,
-                height: 1.1,
+                height: 1.0,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 1),
             Text(
               value.isEmpty ? (hint ?? '') : value,
               maxLines: 1,
@@ -517,7 +529,7 @@ class AstrologyCosmicTextField extends StatelessWidget {
                 color: value.isEmpty
                     ? AstrologyColors.muted
                     : AstrologyColors.text,
-                height: 1.15,
+                height: 1.05,
               ),
             ),
           ],
@@ -537,7 +549,7 @@ class AstrologyGenderSegment extends StatelessWidget {
   final String gender;
   final ValueChanged<String> onGender;
 
-  static const double height = 48;
+  static const double height = 42;
 
   @override
   Widget build(BuildContext context) {
@@ -614,7 +626,7 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
         child: Container(
-          height: 42,
+          height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
@@ -626,7 +638,7 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
             children: [
               Icon(
                 selected ? Icons.check_box : Icons.check_box_outline_blank,
-                size: 22,
+                size: 20,
                 color: selected ? AstrologyColors.gold : AstrologyColors.muted,
               ),
               const SizedBox(width: 8),
@@ -658,7 +670,7 @@ class AstrologyStyleSegment extends StatelessWidget {
   final String style;
   final ValueChanged<String> onStyle;
 
-  static const double height = 48;
+  static const double height = 42;
 
   @override
   Widget build(BuildContext context) {

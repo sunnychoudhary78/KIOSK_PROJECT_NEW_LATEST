@@ -57,9 +57,49 @@ export const surveillanceHealthSchema = z.object({
 
 export type SurveillanceHealthInput = z.infer<typeof surveillanceHealthSchema>;
 
+export const printerHealthStates = [
+  'ready',
+  'printing',
+  'jam',
+  'paper_out',
+  'toner_low',
+  'offline',
+  'error',
+  'unknown',
+] as const;
+
+export const printerTraySchema = z.object({
+  name: z.string().min(1).max(80),
+  levelPercent: z.number().int().min(0).max(100).nullable().optional(),
+  status: z.string().max(80).nullable().optional(),
+});
+
+export const printerSupplySchema = z.object({
+  name: z.string().min(1).max(80),
+  color: z.string().min(1).max(40),
+  levelPercent: z.number().int().min(0).max(100).nullable().optional(),
+  status: z.string().max(80).nullable().optional(),
+});
+
+export const printerHealthSchema = z.object({
+  state: z.enum(printerHealthStates),
+  online: z.boolean(),
+  printerName: z.string().max(160).nullable().optional(),
+  model: z.string().max(120).nullable().optional(),
+  trays: z.array(printerTraySchema).max(16).optional(),
+  supplies: z.array(printerSupplySchema).max(16).optional(),
+  pageCounter: z.number().int().nonnegative().nullable().optional(),
+  snmpOk: z.boolean().nullable().optional(),
+  lastErrorCode: z.string().max(64).nullable().optional(),
+  lastErrorAt: z.string().min(1).nullable().optional(),
+});
+
+export type PrinterHealthInput = z.infer<typeof printerHealthSchema>;
+
 export const deviceHeartbeatBodySchema = z
   .object({
     surveillance: surveillanceHealthSchema.optional(),
+    printer: printerHealthSchema.optional(),
   })
   .default({});
 

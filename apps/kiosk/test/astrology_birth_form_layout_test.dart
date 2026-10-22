@@ -53,6 +53,7 @@ void main() {
             title: 'My Kundali',
             cosmic: true,
             stepLabel: 'Details',
+            footerLeading: const SizedBox(width: 120, height: 56),
             footerTrailing: const SizedBox(width: 180, height: 56),
             body: AstrologyBirthFormPanel(
               nameController: name,
@@ -63,6 +64,8 @@ void main() {
               gender: 'female',
               focus: 0,
               error: 'Name and birth place are required',
+              title: 'Birth details',
+              subtitle: 'Accurate birth time · pick chart style',
               onFocus: (_) {},
               onDob: (_) {},
               onTime: (_) {},
@@ -80,6 +83,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Name and birth place are required'), findsOneWidget);
+    expect(find.text('North Indian'), findsOneWidget);
     expect(find.byType(Material), findsWidgets);
   });
 

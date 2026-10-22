@@ -1781,6 +1781,13 @@ components:
           type: string
           format: date-time
           nullable: true
+        printerHealth:
+          $ref: '#/components/schemas/PrinterHealth'
+          nullable: true
+        printerHealthAt:
+          type: string
+          format: date-time
+          nullable: true
         bannerHorizontalEnabled:
           type: boolean
           description: When false, playlist omits top/bottom home banners for this kiosk
@@ -1825,11 +1832,80 @@ components:
           type: string
           nullable: true
 
+    PrinterTray:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        levelPercent:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          nullable: true
+
+    PrinterSupply:
+      type: object
+      required: [name, color]
+      properties:
+        name:
+          type: string
+        color:
+          type: string
+          description: e.g. black, cyan, magenta, yellow
+        levelPercent:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          nullable: true
+
+    PrinterHealth:
+      type: object
+      required: [state, online]
+      properties:
+        state:
+          type: string
+          enum: [ready, printing, jam, paper_out, toner_low, offline, error, unknown]
+        online:
+          type: boolean
+        printerName:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+          description: e.g. Brother HL-L3280CDW
+        trays:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrinterTray'
+        supplies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrinterSupply'
+        pageCounter:
+          type: integer
+          nullable: true
+        snmpOk:
+          type: boolean
+          nullable: true
+        lastErrorCode:
+          type: string
+          nullable: true
+        lastErrorAt:
+          type: string
+          format: date-time
+          nullable: true
+
     DeviceHeartbeatRequest:
       type: object
       properties:
         surveillance:
           $ref: '#/components/schemas/SurveillanceHealth'
+        printer:
+          $ref: '#/components/schemas/PrinterHealth'
 
     SurveillanceUploadUrlRequest:
       type: object
@@ -2714,7 +2790,7 @@ components:
 
     PrintJob:
       type: object
-      required: [id, status, source, title, createdAt]
+      required: [id, status, source, title, createdAt, pagesExpected, reconcileStatus, needsAdminReview]
       properties:
         id:
           type: string
@@ -2729,6 +2805,35 @@ components:
           type: string
         pageCount:
           type: integer
+        pagesExpected:
+          type: integer
+        pagesReported:
+          type: integer
+          nullable: true
+        spoolerJobId:
+          type: string
+          nullable: true
+        pageCounterBefore:
+          type: integer
+          nullable: true
+        pageCounterAfter:
+          type: integer
+          nullable: true
+        reconcileStatus:
+          type: string
+          enum: [pending, verified, partial, reconciliation_required, unknown]
+        needsAdminReview:
+          type: boolean
+        reconcileDetail:
+          type: string
+          nullable: true
+        reconciledAt:
+          type: string
+          format: date-time
+          nullable: true
+        printColorMode:
+          type: string
+          enum: [bw, color]
         deviceId:
           type: string
           format: uuid
@@ -2752,6 +2857,26 @@ components:
           enum: [printing, completed, failed]
         errorMessage:
           type: string
+        pagesReported:
+          type: integer
+          minimum: 0
+        spoolerJobId:
+          type: string
+          maxLength: 120
+        pageCounterBefore:
+          type: integer
+          minimum: 0
+        pageCounterAfter:
+          type: integer
+          minimum: 0
+        reconcileStatus:
+          type: string
+          enum: [pending, verified, partial, reconciliation_required, unknown]
+        reconcileDetail:
+          type: string
+          maxLength: 500
+        needsAdminReview:
+          type: boolean
 
     AuditLog:
       type: object
