@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/features/quick_print/domain/quick_print_session.dart';
+import 'package:skp_kiosk/services/printer/print_status_body.dart';
 
 class QuickPrintRepository {
   QuickPrintRepository(this._api);
@@ -52,13 +53,27 @@ class QuickPrintRepository {
     required String jobId,
     required String status,
     String? errorMessage,
+    int? pagesReported,
+    String? spoolerJobId,
+    int? pageCounterBefore,
+    int? pageCounterAfter,
+    String? reconcileStatus,
+    String? reconcileDetail,
+    bool? needsAdminReview,
   }) async {
     await _api.patch(
       '/print-jobs/$jobId/status',
-      body: {
-        'status': status,
-        'errorMessage': ?errorMessage,
-      },
+      body: printStatusBody(
+        status: status,
+        errorMessage: errorMessage,
+        pagesReported: pagesReported,
+        spoolerJobId: spoolerJobId,
+        pageCounterBefore: pageCounterBefore,
+        pageCounterAfter: pageCounterAfter,
+        reconcileStatus: reconcileStatus,
+        reconcileDetail: reconcileDetail,
+        needsAdminReview: needsAdminReview,
+      ),
     );
   }
 

@@ -7,6 +7,7 @@ import 'package:skp_kiosk/features/session/application/kiosk_session_controller.
 import 'package:skp_kiosk/features/session/presentation/kiosk_activity_scope.dart';
 import 'package:skp_kiosk/features/session/presentation/kiosk_session_route_observer.dart';
 import 'package:skp_kiosk/features/session/presentation/session_timeout_overlay.dart';
+import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
 import 'package:skp_kiosk/features/surveillance/application/surveillance_controller.dart';
 
 class SkpKioskApp extends ConsumerStatefulWidget {
@@ -23,6 +24,7 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
   void initState() {
     super.initState();
     ref.read(surveillanceControllerProvider);
+    ref.read(printerHealthControllerProvider);
     _routeObserver = KioskSessionRouteObserver(
       onHomeChanged: (onHome) {
         ref.read(kioskSessionControllerProvider.notifier).setOnHome(onHome);

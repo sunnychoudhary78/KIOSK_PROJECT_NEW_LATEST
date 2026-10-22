@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:skp_kiosk/core/network/api_client.dart';
+import 'package:skp_kiosk/services/printer/print_status_body.dart';
 
 class DigilockerSession {
   const DigilockerSession({
@@ -119,10 +120,28 @@ class DigilockerPrintRepository {
   Future<void> reportStatus({
     required String jobId,
     required String status,
+    String? errorMessage,
+    int? pagesReported,
+    String? spoolerJobId,
+    int? pageCounterBefore,
+    int? pageCounterAfter,
+    String? reconcileStatus,
+    String? reconcileDetail,
+    bool? needsAdminReview,
   }) async {
     await _api.patch(
       '/print-jobs/$jobId/status',
-      body: {'status': status},
+      body: printStatusBody(
+        status: status,
+        errorMessage: errorMessage,
+        pagesReported: pagesReported,
+        spoolerJobId: spoolerJobId,
+        pageCounterBefore: pageCounterBefore,
+        pageCounterAfter: pageCounterAfter,
+        reconcileStatus: reconcileStatus,
+        reconcileDetail: reconcileDetail,
+        needsAdminReview: needsAdminReview,
+      ),
     );
   }
 

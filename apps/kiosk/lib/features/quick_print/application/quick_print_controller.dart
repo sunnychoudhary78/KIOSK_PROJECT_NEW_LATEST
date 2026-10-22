@@ -7,7 +7,7 @@ import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/quick_print/data/quick_print_repository.dart';
 import 'package:skp_kiosk/features/quick_print/domain/quick_print_session.dart';
-import 'package:skp_kiosk/services/print_spooler.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 final quickPrintRepositoryProvider = Provider<QuickPrintRepository>((ref) {
   return QuickPrintRepository(ref.watch(apiClientProvider));
@@ -95,7 +95,7 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
   }
 
   QuickPrintRepository get _repository => ref.read(quickPrintRepositoryProvider);
-  PrintSpooler get _spooler => ref.read(printSpoolerProvider);
+  PrintCoordinator get _coordinator => ref.read(printCoordinatorProvider);
 
   Future<void> start() async {
     _poll?.cancel();
@@ -236,28 +236,37 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
       message: 'Printing…',
     );
     try {
-      await _repository.reportStatus(jobId: claim.printJobId, status: 'printing');
-      await _spooler.printDocument(
+      final outcome = await _coordinator.printAndReconcile(
         jobId: claim.printJobId,
         title: doc.fileName,
         pdfBytes: bytes,
+        pagesExpected: doc.pageCount,
         colorMode: claim.printColorMode,
+        reportStatus: _repository.reportStatus,
+        onProgress: (message) {
+          state = state.copyWith(
+            phase: QuickPrintPhase.printing,
+            message: message,
+            clearError: true,
+          );
+        },
       );
-      await _repository.reportStatus(jobId: claim.printJobId, status: 'completed');
-      state = state.copyWith(
-        phase: QuickPrintPhase.previewing,
-        printed: true,
-        message: 'Print sent for ${doc.fileName}',
-        clearError: true,
-      );
-    } catch (error) {
-      try {
-        await _repository.reportStatus(
-          jobId: claim.printJobId,
-          status: 'failed',
-          errorMessage: error.toString(),
+      if (outcome.isSuccess || outcome.isUncertain) {
+        state = state.copyWith(
+          phase: QuickPrintPhase.previewing,
+          printed: true,
+          message: outcome.userMessage,
+          error: outcome.isUncertain ? outcome.userMessage : null,
+          clearError: outcome.isSuccess,
         );
-      } catch (_) {}
+      } else {
+        state = state.copyWith(
+          phase: QuickPrintPhase.previewing,
+          error: outcome.userMessage,
+          clearMessage: true,
+        );
+      }
+    } catch (error) {
       state = state.copyWith(
         phase: QuickPrintPhase.previewing,
         error: userFacingError(error),

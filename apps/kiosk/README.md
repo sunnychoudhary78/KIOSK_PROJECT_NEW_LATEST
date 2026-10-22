@@ -4,13 +4,14 @@ Windows Flutter client for the Smart Kiosk Platform (OTP print, DigiLocker, well
 
 ## Printing (Windows)
 
-The kiosk sends PDFs to a **Windows-installed printer** (USB, Wi‑Fi Canon, etc.). Install the manufacturer driver, print a Windows test page, then preferably set that printer as the **default**.
+The kiosk sends PDFs to a **Windows-installed printer** via silent `directPrintPdf`, then **reconciles** physical completion using SNMP page counters (Brother HL-L3280CDW) and Windows spooler status. Bare `completed` is never reported without `reconcileStatus=verified`.
 
-Print jobs request **A4 / plain paper** (not the driver’s leftover Letter/Legal prefs). To avoid Canon **Support Code 2113** (paper setting mismatch):
+### Brother HL-L3280CDW (current fleet)
 
-1. Load **A4** plain paper in the cassette/rear tray.
-2. On the printer panel, register cassette paper size as **A4**, media **Plain paper**.
-3. In Windows **Printers & scanners → [your Canon] → Printing preferences**, set paper size **A4** as well (for manual/test prints).
+1. Install the Brother driver; prefer that printer as Windows **default** (or set `SKP_PRINTER_NAME`).
+2. Load **A4** plain paper; register cassette size as A4 on the printer panel.
+3. Enable **SNMP v2c** on the printer (community for lab only — do not commit secrets).
+4. Use a **DHCP reservation** so the printer IP stays stable.
 
 Print resolution order:
 
@@ -18,15 +19,38 @@ Print resolution order:
 2. Windows default printer
 3. The only installed printer (if there is exactly one)
 
-Face-up trays (typical Canon rear/face-up output) land the last printed page on top. By default the kiosk reverses page order at print time (`SKP_PRINT_REVERSE_PAGES=true`) so the physical stack has page 1 on top. Preview stays in normal order. Use `--dart-define=SKP_PRINT_REVERSE_PAGES=false` for face-down printers.
+Face-up trays: by default pages print last→first (`SKP_PRINT_REVERSE_PAGES=true`) so page 1 lands on top. Use `SKP_PRINT_REVERSE_PAGES=false` for face-down output.
 
-Example run with an explicit printer:
+### Dart-defines (SNMP — never hardcode in source)
+
+| Define | Default | Purpose |
+|--------|---------|---------|
+| `SKP_PRINTER_NAME` | empty | Windows printer name substring |
+| `SKP_PRINTER_SNMP_HOST` | empty | Printer LAN IP (e.g. `192.168.1.13`) |
+| `SKP_PRINTER_SNMP_VERSION` | `2c` | Only v2c supported |
+| `SKP_PRINTER_SNMP_COMMUNITY` | empty | Community string (lab: `public`) |
+| `SKP_PRINT_RECONCILE_TIMEOUT_MS` | `180000` | Max wait for page-counter proof |
+| `SKP_PRINTER_MODEL` | `Brother HL-L3280CDW` | Profile selector |
+
+Empty host/community disables SNMP; jobs end as `unknown` / `reconciliation_required` (never fake verified).
+
+Example lab run:
 
 ```powershell
-flutter run -d windows --dart-define=SKP_API_BASE_URL=https://uat-kiosk-api.immortaltechnovation.com/v1 --dart-define=SKP_PRINTER_NAME=Canon
+flutter run -d windows `
+  --dart-define=SKP_API_BASE_URL=https://uat-kiosk-api.immortaltechnovation.com/v1 `
+  --dart-define=SKP_PRINTER_NAME=Brother `
+  --dart-define=SKP_PRINTER_SNMP_HOST=192.168.1.13 `
+  --dart-define=SKP_PRINTER_SNMP_COMMUNITY=public
 ```
 
-OTP Print and DigiLocker both use silent `directPrintPdf` (no Windows print dialog).
+### Manual checklist (physical Brother)
+
+1. Rebuild/restart the Windows kiosk with SNMP dart-defines above.
+2. Quick Print a **1-page** PDF.
+3. UI should show “Confirming print…” then success (no `completed requires reconcileStatus=verified` error).
+4. Admin/API print job: `status=completed`, `reconcileStatus=verified`, `pagesReported >= 1`.
+5. Optional: pull paper mid-job — expect jam messaging and `needsAdminReview` when partial/uncertain.
 
 ## Surveillance (Windows)
 

@@ -19,33 +19,14 @@ class QuickPrintPage extends ConsumerStatefulWidget {
 }
 
 class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
-  Timer? _clock;
-
   @override
   void initState() {
     super.initState();
     Future.microtask(() => ref.read(quickPrintControllerProvider.notifier).start());
-    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _clock?.cancel();
-    super.dispose();
   }
 
   Future<void> _endSession() {
     return ref.read(kioskSessionControllerProvider.notifier).endVisitorSession(attract: false);
-  }
-
-  String _remaining(DateTime expiresAt) {
-    final delta = expiresAt.difference(DateTime.now());
-    if (delta.isNegative) return 'Expired';
-    final minutes = delta.inMinutes;
-    final seconds = delta.inSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -172,9 +153,7 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
             ),
           _ => _QrWait(
               publicUrl: state.session?.publicUrl,
-              remaining: state.session == null
-                  ? ''
-                  : _remaining(state.session!.expiresAt),
+              expiresAt: state.session?.expiresAt,
               error: state.error,
               message: state.message,
             ),
@@ -187,13 +166,13 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
 class _QrWait extends StatelessWidget {
   const _QrWait({
     required this.publicUrl,
-    required this.remaining,
+    required this.expiresAt,
     this.error,
     this.message,
   });
 
   final String? publicUrl;
-  final String remaining;
+  final DateTime? expiresAt;
   final String? error;
   final String? message;
 
@@ -215,11 +194,8 @@ class _QrWait extends StatelessWidget {
                   style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
                 ),
                 const Spacer(),
-                if (remaining.isNotEmpty)
-                  Text(
-                    'Expires in $remaining',
-                    style: theme.textTheme.titleLarge?.copyWith(color: SkpColors.gold),
-                  ),
+                if (expiresAt != null)
+                  _SessionCountdown(expiresAt: expiresAt!),
                 if (message != null) ...[
                   const SizedBox(height: 12),
                   Text(message!, style: theme.textTheme.titleMedium),
@@ -255,6 +231,50 @@ class _QrWait extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Owns the 1s timer so PDF preview is not rebuilt every second.
+class _SessionCountdown extends StatefulWidget {
+  const _SessionCountdown({required this.expiresAt});
+
+  final DateTime expiresAt;
+
+  @override
+  State<_SessionCountdown> createState() => _SessionCountdownState();
+}
+
+class _SessionCountdownState extends State<_SessionCountdown> {
+  Timer? _clock;
+
+  @override
+  void initState() {
+    super.initState();
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  String get _remaining {
+    final delta = widget.expiresAt.difference(DateTime.now());
+    if (delta.isNegative) return 'Expired';
+    final minutes = delta.inMinutes;
+    final seconds = delta.inSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Expires in $_remaining',
+      style: Theme.of(context).textTheme.titleLarge?.copyWith(color: SkpColors.gold),
     );
   }
 }

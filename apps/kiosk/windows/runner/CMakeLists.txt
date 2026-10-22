@@ -13,6 +13,10 @@ add_executable(${BINARY_NAME} WIN32
   "win32_window.cpp"
   "../surveillance/surveillance_plugin.cpp"
   "../surveillance/surveillance_recorder.cpp"
+  "../printer/printer_plugin.cpp"
+  "../printer/snmp_v2c_client.cpp"
+  "../printer/brother_hl_l3280cdw.cpp"
+  "../printer/spooler_status.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "Runner.rc"
   "runner.exe.manifest"
@@ -35,8 +39,12 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app flutter_wrapper_plugin)
-target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "mf.lib" "mfplat.lib" "mfuuid.lib" "ole32.lib" "shlwapi.lib")
-target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../surveillance")
+target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "mf.lib" "mfplat.lib" "mfuuid.lib" "ole32.lib" "shlwapi.lib" "winspool.lib" "ws2_32.lib")
+target_include_directories(${BINARY_NAME} PRIVATE
+  "${CMAKE_SOURCE_DIR}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../surveillance"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../printer"
+)
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)

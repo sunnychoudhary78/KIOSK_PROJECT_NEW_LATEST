@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/digilocker_print/data/digilocker_print_repository.dart';
-import 'package:skp_kiosk/services/print_spooler.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 final digilockerRepositoryProvider = Provider<DigilockerPrintRepository>((ref) {
   return DigilockerPrintRepository(ref.watch(apiClientProvider));
@@ -86,7 +86,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
   }
 
   DigilockerPrintRepository get _repository => ref.read(digilockerRepositoryProvider);
-  PrintSpooler get _spooler => ref.read(printSpoolerProvider);
+  PrintCoordinator get _coordinator => ref.read(printCoordinatorProvider);
 
   /// Cancel the current DigiLocker flow and clear local session data.
   /// Caller should navigate away (e.g. back to home) after this returns.
@@ -369,28 +369,47 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     );
 
     try {
-      await _repository.reportStatus(jobId: jobId, status: 'printing');
-      await _spooler.printDocument(
+      final outcome = await _coordinator.printAndReconcile(
         jobId: jobId,
         title: title,
-        filePath: filePath,
         pdfBytes: bytes,
+        pagesExpected: 1,
+        colorMode: 'color',
+        reportStatus: _repository.reportStatus,
+        onProgress: (message) {
+          state = DigilockerUiState(
+            phase: DigilockerPhase.printing,
+            sessionId: sessionId,
+            documents: documents,
+            previewTitle: title,
+            previewBytes: bytes,
+            previewFilePath: filePath,
+            previewJobId: jobId,
+            message: message,
+          );
+        },
       );
-      await _repository.reportStatus(jobId: jobId, status: 'completed');
-      state = DigilockerUiState(
-        phase: DigilockerPhase.done,
-        sessionId: sessionId,
-        documents: documents,
-        message: 'Printed $title',
-      );
-    } catch (error) {
-      try {
-        await _repository.reportStatus(
-          jobId: jobId,
-          status: 'failed',
+      if (outcome.isSuccess || outcome.isUncertain) {
+        state = DigilockerUiState(
+          phase: DigilockerPhase.done,
+          sessionId: sessionId,
+          documents: documents,
+          message: outcome.userMessage,
+          error: outcome.isUncertain ? outcome.userMessage : null,
         );
-      } catch (_) {}
-      // Stay on preview with an actionable error (e.g. no printer).
+      } else {
+        state = DigilockerUiState(
+          phase: DigilockerPhase.previewing,
+          sessionId: sessionId,
+          documents: documents,
+          previewTitle: title,
+          previewBytes: bytes,
+          previewFilePath: filePath,
+          previewJobId: jobId,
+          error: outcome.userMessage,
+        );
+      }
+    } catch (error) {
       state = DigilockerUiState(
         phase: DigilockerPhase.previewing,
         sessionId: sessionId,

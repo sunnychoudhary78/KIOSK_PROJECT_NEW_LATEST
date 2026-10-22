@@ -4,7 +4,7 @@ import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/otp_print/data/otp_print_repository.dart';
 import 'package:skp_kiosk/features/otp_print/domain/otp_redeem_result.dart';
-import 'package:skp_kiosk/services/print_spooler.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 final otpPrintRepositoryProvider = Provider<OtpPrintRepository>((ref) {
   return OtpPrintRepository(ref.watch(apiClientProvider));
@@ -80,7 +80,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
   OtpPrintUiState build() => const OtpPrintUiState();
 
   OtpPrintRepository get _repository => ref.read(otpPrintRepositoryProvider);
-  PrintSpooler get _spooler => ref.read(printSpoolerProvider);
+  PrintCoordinator get _coordinator => ref.read(printCoordinatorProvider);
 
   Future<void> redeem(String code) async {
     final trimmed = code.trim();
@@ -183,34 +183,37 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
     );
 
     try {
-      await _repository.reportStatus(
-        jobId: result.printJobId,
-        status: 'printing',
-      );
-      await _spooler.printDocument(
+      final outcome = await _coordinator.printAndReconcile(
         jobId: result.printJobId,
         title: doc.fileName,
         pdfBytes: bytes,
+        pagesExpected: doc.pageCount,
         colorMode: result.printColorMode,
+        reportStatus: _repository.reportStatus,
+        onProgress: (message) {
+          state = state.copyWith(
+            phase: OtpPrintPhase.printing,
+            message: message,
+            clearError: true,
+          );
+        },
       );
-      await _repository.reportStatus(
-        jobId: result.printJobId,
-        status: 'completed',
-      );
-      state = state.copyWith(
-        phase: OtpPrintPhase.previewing,
-        printed: true,
-        message: 'Print sent for ${doc.fileName}',
-        clearError: true,
-      );
-    } catch (error) {
-      try {
-        await _repository.reportStatus(
-          jobId: result.printJobId,
-          status: 'failed',
-          errorMessage: error.toString(),
+      if (outcome.isSuccess || outcome.isUncertain) {
+        state = state.copyWith(
+          phase: OtpPrintPhase.previewing,
+          printed: outcome.isSuccess || outcome.isUncertain,
+          message: outcome.userMessage,
+          error: outcome.isUncertain ? outcome.userMessage : null,
+          clearError: outcome.isSuccess,
         );
-      } catch (_) {}
+      } else {
+        state = state.copyWith(
+          phase: OtpPrintPhase.previewing,
+          error: outcome.userMessage,
+          clearMessage: true,
+        );
+      }
+    } catch (error) {
       state = state.copyWith(
         phase: OtpPrintPhase.previewing,
         error: userFacingError(error),

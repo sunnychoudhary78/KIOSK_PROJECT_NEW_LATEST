@@ -12,6 +12,9 @@ final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 /// circular import between auth and surveillance modules.
 Map<String, dynamic> Function()? surveillanceHeartbeatBodyBuilder;
 
+/// Set by [PrinterHealthController] for printer SNMP/spooler health on heartbeat.
+Map<String, dynamic> Function()? printerHeartbeatBodyBuilder;
+
 final deviceCredentialStoreProvider = Provider<DeviceCredentialStore>((ref) {
   return DeviceCredentialStore();
 });
@@ -278,20 +281,32 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
   String _messageFor(Object error) => userFacingError(error);
 
   Map<String, dynamic> _surveillanceHeartbeatBody() {
-    final builder = surveillanceHeartbeatBodyBuilder;
-    if (builder != null) {
+    final body = <String, dynamic>{};
+    final surveillanceBuilder = surveillanceHeartbeatBodyBuilder;
+    if (surveillanceBuilder != null) {
       try {
-        return {'surveillance': builder()};
+        body['surveillance'] = surveillanceBuilder();
       } catch (_) {
-        // fall through
+        body['surveillance'] = {
+          'state': state.surveillanceEnabled ? 'stale' : 'off',
+          'recording': false,
+        };
       }
-    }
-    return {
-      'surveillance': {
+    } else {
+      body['surveillance'] = {
         'state': state.surveillanceEnabled ? 'stale' : 'off',
         'recording': false,
-      },
-    };
+      };
+    }
+    final printerBuilder = printerHeartbeatBodyBuilder;
+    if (printerBuilder != null) {
+      try {
+        body['printer'] = printerBuilder();
+      } catch (_) {
+        // omit printer on builder failure
+      }
+    }
+    return body;
   }
 }
 

@@ -4,6 +4,11 @@ class AppConfig {
     required this.environment,
     this.printerName = '',
     this.printReversePages = true,
+    this.printerSnmpHost = '',
+    this.printerSnmpVersion = '2c',
+    this.printerSnmpCommunity = '',
+    this.printReconcileTimeoutMs = 180000,
+    this.printerModel = 'Brother HL-L3280CDW',
     this.surveillanceSegmentSeconds = 600,
     this.surveillanceWidth = 1280,
     this.surveillanceHeight = 720,
@@ -23,6 +28,25 @@ class AppConfig {
   /// When true, PDF pages are printed last→first so face-up trays stack
   /// with page 1 on top. Set `SKP_PRINT_REVERSE_PAGES=false` for face-down.
   final bool printReversePages;
+
+  /// SNMP host (e.g. `192.168.1.13`). Empty disables SNMP reconciliation.
+  final String printerSnmpHost;
+
+  /// Only `2c` is supported in Phase 2.
+  final String printerSnmpVersion;
+
+  /// SNMP v2c community. Empty disables SNMP (never commit real secrets).
+  final String printerSnmpCommunity;
+
+  /// Max wait for physical page-counter proof before reconciliation_required.
+  final int printReconcileTimeoutMs;
+
+  /// Printer profile selector. Only Brother HL-L3280CDW is implemented.
+  final String printerModel;
+
+  /// True when host + community are set for SNMP polling.
+  bool get snmpConfigured =>
+      printerSnmpHost.trim().isNotEmpty && printerSnmpCommunity.trim().isNotEmpty;
 
   final int surveillanceSegmentSeconds;
   final int surveillanceWidth;
@@ -62,6 +86,26 @@ class AppConfig {
       defaultValue: 'true',
     );
     final printReversePages = reverseRaw.toLowerCase() != 'false';
+    const snmpHost = String.fromEnvironment(
+      'SKP_PRINTER_SNMP_HOST',
+      defaultValue: '',
+    );
+    const snmpVersion = String.fromEnvironment(
+      'SKP_PRINTER_SNMP_VERSION',
+      defaultValue: '2c',
+    );
+    const snmpCommunity = String.fromEnvironment(
+      'SKP_PRINTER_SNMP_COMMUNITY',
+      defaultValue: '',
+    );
+    const reconcileTimeoutMs = int.fromEnvironment(
+      'SKP_PRINT_RECONCILE_TIMEOUT_MS',
+      defaultValue: 180000,
+    );
+    const printerModel = String.fromEnvironment(
+      'SKP_PRINTER_MODEL',
+      defaultValue: 'Brother HL-L3280CDW',
+    );
     const segmentSeconds = int.fromEnvironment(
       'SKP_SURVEILLANCE_SEGMENT_SECONDS',
       defaultValue: 600,
@@ -92,6 +136,11 @@ class AppConfig {
       environment: env,
       printerName: printerName,
       printReversePages: printReversePages,
+      printerSnmpHost: snmpHost,
+      printerSnmpVersion: snmpVersion,
+      printerSnmpCommunity: snmpCommunity,
+      printReconcileTimeoutMs: reconcileTimeoutMs,
+      printerModel: printerModel,
       surveillanceSegmentSeconds: segmentSeconds,
       surveillanceWidth: width,
       surveillanceHeight: height,
