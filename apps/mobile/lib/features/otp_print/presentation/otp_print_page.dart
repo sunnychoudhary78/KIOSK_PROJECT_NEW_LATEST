@@ -82,6 +82,50 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
 
   String _fileName(File file) => file.path.split(RegExp(r'[\\/]')).last;
 
+  Widget _fileCard(ThemeData theme, int index, bool loading) {
+    final file = _files[index];
+    final bytes = file.existsSync() ? file.lengthSync() : 0;
+    return SkpPanelCard(
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      radius: 14,
+      child: Row(
+        children: [
+          const Icon(
+            Icons.picture_as_pdf_rounded,
+            color: SkpColors.accent,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _fileName(file),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (bytes > 0)
+                  Text(
+                    formatBytes(bytes),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: SkpColors.muted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded),
+            onPressed: loading ? null : () => setState(() => _files.removeAt(index)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(otpPrintControllerProvider);
@@ -116,8 +160,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           ),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: ListView(
         children: [
           SkpPageHeader(
             title: l10n.uploadTitle,
@@ -158,11 +201,32 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           if (nearby.loading) ...[
             const SizedBox(height: 8),
             const LinearProgressIndicator(minHeight: 2),
-          ] else if (nearby.error != null) ...[
+          ] else if (nearby.locationServicesDisabled ||
+              nearby.permissionDenied ||
+              nearby.error != null) ...[
             const SizedBox(height: 8),
             Text(
-              nearby.error!,
+              nearby.locationServicesDisabled
+                  ? l10n.locationServicesOff
+                  : nearby.permissionDenied
+                      ? l10n.locationRequired
+                      : nearby.error!,
               style: theme.textTheme.bodySmall?.copyWith(color: SkpColors.danger),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SkpTextLink(
+                label: nearby.needsSystemSettings ? l10n.openSettings : l10n.tryAgain,
+                onPressed: loading
+                    ? null
+                    : () {
+                        if (nearby.needsSystemSettings) {
+                          ref.read(nearbyKiosksProvider.notifier).openLocationRecovery();
+                        } else {
+                          ref.read(nearbyKiosksProvider.notifier).load();
+                        }
+                      },
+              ),
             ),
           ],
           const SizedBox(height: 16),
@@ -248,64 +312,15 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           ),
           const SizedBox(height: 16),
           if (_files.isNotEmpty)
-            Expanded(
-              child: ListView.separated(
-                itemCount: _files.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final file = _files[index];
-                  final bytes = file.existsSync() ? file.lengthSync() : 0;
-                  return SkpPanelCard(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-                    radius: 14,
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.picture_as_pdf_rounded,
-                          color: SkpColors.accent,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _fileName(file),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (bytes > 0)
-                                Text(
-                                  formatBytes(bytes),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: SkpColors.muted,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: loading
-                              ? null
-                              : () => setState(() => _files.removeAt(index)),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            )
+            for (var index = 0; index < _files.length; index++) ...[
+              _fileCard(theme, index, loading),
+              const SizedBox(height: 10),
+            ]
           else
-            Expanded(
-              child: SkpEmptyState(
-                icon: Icons.picture_as_pdf_outlined,
-                title: l10n.addPdfsToContinue,
-                message: l10n.pdfOnlyHint,
-              ),
+            SkpEmptyState(
+              icon: Icons.picture_as_pdf_outlined,
+              title: l10n.addPdfsToContinue,
+              message: l10n.pdfOnlyHint,
             ),
           const SizedBox(height: 12),
         ],

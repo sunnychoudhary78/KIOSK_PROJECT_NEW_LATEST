@@ -1,3 +1,5 @@
+import { rm, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
 import bcrypt from 'bcryptjs';
 import { DeviceStatus, UserRole } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
@@ -21,6 +23,7 @@ import type {
 } from './identity.schemas.js';
 
 const requestCooldownUntil = new Map<string, number>();
+const OTP_UPLOAD_DIR = join(process.cwd(), 'uploads', 'otp-print');
 
 export class IdentityService {
   private readonly settings: PlatformSettingsService;
@@ -161,6 +164,80 @@ export class IdentityService {
       expiresIn: token.expiresIn,
       principalType: 'citizen' as const,
     };
+  }
+
+  async deleteCitizenAccount(userId: string, correlationId?: string) {
+    const user = await this.db.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== UserRole.citizen) {
+      throw new AppError('forbidden', 'Account cannot be deleted', 403);
+    }
+
+    const challenges = await this.db.otpChallenge.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        printJob: { select: { id: true, payloadPath: true } },
+      },
+    });
+    const challengeIds = challenges.map((challenge) => challenge.id);
+    const printJobIds = challenges.flatMap((challenge) =>
+      challenge.printJob ? [challenge.printJob.id] : [],
+    );
+    const payloadPaths = challenges.flatMap((challenge) =>
+      challenge.printJob?.payloadPath ? [challenge.printJob.payloadPath] : [],
+    );
+    const phone = user.phone;
+
+    await this.db.$transaction(async (tx) => {
+      await tx.payment.updateMany({
+        where:
+          challengeIds.length > 0
+            ? { OR: [{ userId }, { challengeId: { in: challengeIds } }] }
+            : { userId },
+        data: { userId: null, challengeId: null },
+      });
+
+      if (printJobIds.length > 0) {
+        await tx.printJob.updateMany({
+          where: { id: { in: printJobIds } },
+          data: { payloadPath: null, payloadUrl: null },
+        });
+      }
+
+      if (phone) {
+        await tx.phoneFreePageLedger.deleteMany({ where: { phone } });
+        await tx.phoneOtpSession.deleteMany({ where: { phone } });
+      }
+
+      await tx.otpChallenge.deleteMany({ where: { userId } });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          phone: null,
+          isActive: false,
+          displayName: 'Deleted account',
+        },
+      });
+    });
+
+    await Promise.all(
+      challengeIds.map((id) =>
+        rm(join(OTP_UPLOAD_DIR, id), { recursive: true, force: true }).catch(() => undefined),
+      ),
+    );
+    await Promise.all(payloadPaths.map((path) => unlink(path).catch(() => undefined)));
+
+    await this.audit.record({
+      action: 'auth.citizen_account_deleted',
+      principalType: 'citizen',
+      principalId: userId,
+      resourceType: 'user',
+      resourceId: userId,
+      correlationId,
+    });
+
+    return { deleted: true as const };
   }
 
   async adminLogin(input: AdminLoginInput, correlationId?: string) {

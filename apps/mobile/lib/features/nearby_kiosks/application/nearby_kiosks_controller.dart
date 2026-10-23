@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
@@ -82,12 +83,19 @@ class NearbyKiosksState {
     this.loading = false,
     this.error,
     this.permissionDenied = false,
+    this.permissionDeniedForever = false,
+    this.locationServicesDisabled = false,
   });
 
   final List<NearbyKiosk> items;
   final bool loading;
   final String? error;
   final bool permissionDenied;
+  final bool permissionDeniedForever;
+  final bool locationServicesDisabled;
+
+  bool get needsSystemSettings =>
+      locationServicesDisabled || permissionDeniedForever;
 }
 
 class NearbyKiosksNotifier extends Notifier<NearbyKiosksState> {
@@ -112,29 +120,41 @@ class NearbyKiosksNotifier extends Notifier<NearbyKiosksState> {
           .map(NearbyKiosk.fromJson)
           .toList();
       state = NearbyKiosksState(items: items);
-    } on _LocationDeniedException {
-      state = const NearbyKiosksState(
+    } on _LocationDeniedException catch (error) {
+      state = NearbyKiosksState(
         permissionDenied: true,
-        error: 'Location permission is required to find nearby kiosks.',
+        permissionDeniedForever: error.forever,
       );
+    } on _LocationServicesException {
+      state = const NearbyKiosksState(locationServicesDisabled: true);
     } catch (error) {
       state = NearbyKiosksState(error: error.toString());
     }
   }
 
+  Future<void> openLocationRecovery() {
+    if (state.locationServicesDisabled) {
+      return Geolocator.openLocationSettings();
+    }
+    return Geolocator.openAppSettings();
+  }
+
   Future<Position> _resolvePosition() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      throw Exception('Location services are turned off. Enable GPS and try again.');
+      throw const _LocationServicesException();
     }
 
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
+    if (permission == LocationPermission.deniedForever) {
+      throw const _LocationDeniedException(forever: true);
+    }
     if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      throw const _LocationDeniedException();
+        permission == LocationPermission.unableToDetermine) {
+      throw const _LocationDeniedException(forever: false);
     }
 
     return Geolocator.getCurrentPosition(
@@ -147,7 +167,25 @@ class NearbyKiosksNotifier extends Notifier<NearbyKiosksState> {
 }
 
 class _LocationDeniedException implements Exception {
-  const _LocationDeniedException();
+  const _LocationDeniedException({required this.forever});
+
+  final bool forever;
+}
+
+class _LocationServicesException implements Exception {
+  const _LocationServicesException();
+}
+
+/// Apple Maps on iOS. Google Maps directions on Android.
+Uri kioskDirectionsUri({required double latitude, required double longitude}) {
+  final destination = '$latitude,$longitude';
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+    return Uri.https('maps.apple.com', '/', {'daddr': destination});
+  }
+  return Uri.https('www.google.com', '/maps/dir/', {
+    'api': '1',
+    'destination': destination,
+  });
 }
 
 final nearbyKiosksProvider =

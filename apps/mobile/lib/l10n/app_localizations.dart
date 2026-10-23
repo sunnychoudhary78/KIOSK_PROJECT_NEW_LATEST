@@ -545,7 +545,7 @@ abstract class AppLocalizations {
   /// No description provided for @payHelper.
   ///
   /// In en, this message translates to:
-  /// **'The first {count} page(s) are free. OTP is sent only after payment succeeds.'**
+  /// **'This payment is for extra pages printed at the kiosk. The first {count} page(s) are free. OTP is sent only after payment succeeds.'**
   String payHelper(int count);
 
   /// No description provided for @noPaymentDue.
@@ -692,6 +692,18 @@ abstract class AppLocalizations {
   /// **'Location permission is required to find nearby kiosks.'**
   String get locationRequired;
 
+  /// No description provided for @locationServicesOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Location Services are turned off. Turn them on to find nearby kiosks.'**
+  String get locationServicesOff;
+
+  /// No description provided for @openSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Settings'**
+  String get openSettings;
+
   /// No description provided for @directions.
   ///
   /// In en, this message translates to:
@@ -781,6 +793,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'IMT-Print lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.'**
   String get aboutBody;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get privacyPolicy;
+
+  /// No description provided for @couldNotOpenPrivacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the privacy policy.'**
+  String get couldNotOpenPrivacyPolicy;
+
+  /// No description provided for @deleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccount;
+
+  /// No description provided for @deleteAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account?'**
+  String get deleteAccountTitle;
+
+  /// No description provided for @deleteAccountBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploaded PDFs and print history will be removed. Payment records are kept without your phone number. This cannot be undone.'**
+  String get deleteAccountBody;
+
+  /// No description provided for @deleteAccountConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccountConfirm;
+
+  /// No description provided for @deleteAccountFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete the account. Try again.'**
+  String get deleteAccountFailed;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @selectedPaymentApp.
+  ///
+  /// In en, this message translates to:
+  /// **'the selected app'**
+  String get selectedPaymentApp;
+
+  /// No description provided for @finishInWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish payment in {wallet}, then return to this app.'**
+  String finishInWallet(String wallet);
 
   /// No description provided for @howItWorksIntro.
   ///

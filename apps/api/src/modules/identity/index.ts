@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response, Router } from 'express';
 import type { AppDeps } from '../../types/deps.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
+import { authRequired } from '../../shared/auth.js';
 import { AppError } from '../../shared/errors.js';
 import { IdentityService } from './identity.service.js';
 import {
@@ -32,6 +33,24 @@ export function registerIdentityModule(router: Router, deps: AppDeps): void {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const result = await service.citizenOtpVerify(req.body, req.correlationId);
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.delete(
+    '/auth/citizen/account',
+    authRequired(deps.config, ['citizen']),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const userId = req.principal?.id;
+        if (!userId) {
+          next(new AppError('unauthorized', 'Missing bearer token', 401));
+          return;
+        }
+        const result = await service.deleteCitizenAccount(userId, req.correlationId);
         res.json(result);
       } catch (error) {
         next(error);

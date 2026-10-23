@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:skp_mobile/core/config/app_config.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 import 'package:skp_mobile/core/ui/ui.dart';
 import 'package:skp_mobile/l10n/app_localizations.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -25,8 +27,26 @@ class AboutPage extends StatelessWidget {
                   ),
             ),
           ),
+          const SizedBox(height: 16),
+          SkpSecondaryButton(
+            label: l10n.privacyPolicy,
+            onPressed: () => _openPrivacyPolicy(context),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final opened = await launchUrl(
+      Uri.parse(AppConfig.current.privacyPolicyUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.couldNotOpenPrivacyPolicy)),
+      );
+    }
   }
 }

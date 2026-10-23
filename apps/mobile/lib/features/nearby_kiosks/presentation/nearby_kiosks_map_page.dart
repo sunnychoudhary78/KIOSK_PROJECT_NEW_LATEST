@@ -21,8 +21,9 @@ class _NearbyKiosksMapPageState extends State<NearbyKiosksMapPage> {
 
   Future<void> _openDirections(NearbyKiosk kiosk) async {
     final l10n = AppLocalizations.of(context);
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=${kiosk.latitude},${kiosk.longitude}',
+    final uri = kioskDirectionsUri(
+      latitude: kiosk.latitude,
+      longitude: kiosk.longitude,
     );
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {

@@ -257,7 +257,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String payHelper(int count) {
-    return 'The first $count page(s) are free. OTP is sent only after payment succeeds.';
+    return 'This payment is for extra pages printed at the kiosk. The first $count page(s) are free. OTP is sent only after payment succeeds.';
   }
 
   @override
@@ -341,6 +341,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Location permission is required to find nearby kiosks.';
 
   @override
+  String get locationServicesOff =>
+      'Location Services are turned off. Turn them on to find nearby kiosks.';
+
+  @override
+  String get openSettings => 'Open Settings';
+
+  @override
   String get directions => 'Directions';
 
   @override
@@ -388,6 +395,39 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get aboutBody =>
       'IMT-Print lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.';
+
+  @override
+  String get privacyPolicy => 'Privacy policy';
+
+  @override
+  String get couldNotOpenPrivacyPolicy => 'Could not open the privacy policy.';
+
+  @override
+  String get deleteAccount => 'Delete account';
+
+  @override
+  String get deleteAccountTitle => 'Delete your account?';
+
+  @override
+  String get deleteAccountBody =>
+      'Uploaded PDFs and print history will be removed. Payment records are kept without your phone number. This cannot be undone.';
+
+  @override
+  String get deleteAccountConfirm => 'Delete account';
+
+  @override
+  String get deleteAccountFailed => 'Could not delete the account. Try again.';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get selectedPaymentApp => 'the selected app';
+
+  @override
+  String finishInWallet(String wallet) {
+    return 'Finish payment in $wallet, then return to this app.';
+  }
 
   @override
   String get howItWorksIntro =>

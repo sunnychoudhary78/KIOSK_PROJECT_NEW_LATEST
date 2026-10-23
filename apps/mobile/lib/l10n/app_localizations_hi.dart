@@ -254,7 +254,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String payHelper(int count) {
-    return 'पहले $count पन्ने मुफ़्त हैं। भुगतान सफल होने के बाद ही ओटीपी भेजा जाता है।';
+    return 'यह भुगतान कियोस्क पर छपने वाले अतिरिक्त पन्नों के लिए है। पहले $count पन्ने मुफ़्त हैं। भुगतान सफल होने के बाद ही ओटीपी भेजा जाता है।';
   }
 
   @override
@@ -338,6 +338,13 @@ class AppLocalizationsHi extends AppLocalizations {
       'नज़दीकी कियोस्क खोजने के लिए लोकेशन अनुमति चाहिए।';
 
   @override
+  String get locationServicesOff =>
+      'लोकेशन सेवाएँ बंद हैं। नज़दीकी कियोस्क खोजने के लिए उन्हें चालू करें।';
+
+  @override
+  String get openSettings => 'सेटिंग खोलें';
+
+  @override
   String get directions => 'दिशा';
 
   @override
@@ -385,6 +392,39 @@ class AppLocalizationsHi extends AppLocalizations {
   @override
   String get aboutBody =>
       'IMT-Print से आप फ़ोन पर दस्तावेज़ अपलोड कर सकते हैं, केवल अतिरिक्त पन्नों का भुगतान कर सकते हैं, और नज़दीकी कियोस्क पर एसएमएस कोड से प्रिंट ले सकते हैं।\n\nआपका ओटीपी आपके मोबाइल नंबर पर जाता है और इस ऐप में नहीं दिखता।';
+
+  @override
+  String get privacyPolicy => 'गोपनीयता नीति';
+
+  @override
+  String get couldNotOpenPrivacyPolicy => 'गोपनीयता नीति नहीं खुल सकी।';
+
+  @override
+  String get deleteAccount => 'खाता हटाएँ';
+
+  @override
+  String get deleteAccountTitle => 'अपना खाता हटाएँ?';
+
+  @override
+  String get deleteAccountBody =>
+      'अपलोड की गई पीडीएफ और प्रिंट इतिहास हटा दिए जाएँगे। भुगतान रिकॉर्ड आपके फ़ोन नंबर के बिना रखे जाते हैं। इसे वापस नहीं किया जा सकता।';
+
+  @override
+  String get deleteAccountConfirm => 'खाता हटाएँ';
+
+  @override
+  String get deleteAccountFailed => 'खाता नहीं हट सका। फिर कोशिश करें।';
+
+  @override
+  String get cancel => 'रद्द करें';
+
+  @override
+  String get selectedPaymentApp => 'चुने गए ऐप';
+
+  @override
+  String finishInWallet(String wallet) {
+    return 'भुगतान $wallet में पूरा करें, फिर इस ऐप पर लौटें।';
+  }
 
   @override
   String get howItWorksIntro => 'फ़ोन से प्रिंट तक तीन चरण।';

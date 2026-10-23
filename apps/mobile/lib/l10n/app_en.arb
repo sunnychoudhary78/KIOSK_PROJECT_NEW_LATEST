@@ -117,7 +117,7 @@
   "uploadContinue": "Upload & continue",
   "uploading": "Uploading…",
   "payExtraPages": "Pay for extra pages",
-  "payHelper": "The first {count} page(s) are free. OTP is sent only after payment succeeds.",
+  "payHelper": "This payment is for extra pages printed at the kiosk. The first {count} page(s) are free. OTP is sent only after payment succeeds.",
   "@payHelper": {
     "placeholders": {
       "count": { "type": "int" }
@@ -159,6 +159,8 @@
   "noKiosks": "No kiosks nearby right now.",
   "noKiosksHelper": "Pull to refresh, or try again when you are closer to an IMT-Print kiosk.",
   "locationRequired": "Location permission is required to find nearby kiosks.",
+  "locationServicesOff": "Location Services are turned off. Turn them on to find nearby kiosks.",
+  "openSettings": "Open Settings",
   "directions": "Directions",
   "refresh": "Refresh",
   "retry": "Retry",
@@ -180,6 +182,21 @@
   "pastSection": "Earlier",
   "aboutTitle": "About IMT-Print",
   "aboutBody": "IMT-Print lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.",
+  "privacyPolicy": "Privacy policy",
+  "couldNotOpenPrivacyPolicy": "Could not open the privacy policy.",
+  "deleteAccount": "Delete account",
+  "deleteAccountTitle": "Delete your account?",
+  "deleteAccountBody": "Uploaded PDFs and print history will be removed. Payment records are kept without your phone number. This cannot be undone.",
+  "deleteAccountConfirm": "Delete account",
+  "deleteAccountFailed": "Could not delete the account. Try again.",
+  "cancel": "Cancel",
+  "selectedPaymentApp": "the selected app",
+  "finishInWallet": "Finish payment in {wallet}, then return to this app.",
+  "@finishInWallet": {
+    "placeholders": {
+      "wallet": { "type": "String" }
+    }
+  },
   "howItWorksIntro": "Three steps from your phone to a printed copy.",
   "howItWorksStep1Title": "Upload on your phone",
   "howItWorksStep1Body": "Choose one or more PDFs, pick black & white or color, and add an optional label.",

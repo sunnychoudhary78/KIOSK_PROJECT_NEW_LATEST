@@ -7,22 +7,34 @@ import 'package:skp_mobile/features/nearby_kiosks/presentation/nearby_kiosks_pag
 import 'package:skp_mobile/features/profile/presentation/profile_page.dart';
 import 'package:skp_mobile/l10n/app_localizations.dart';
 
-class SkpNavShell extends ConsumerWidget {
+class SkpNavShell extends ConsumerStatefulWidget {
   const SkpNavShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SkpNavShell> createState() => _SkpNavShellState();
+}
+
+class _SkpNavShellState extends ConsumerState<SkpNavShell> {
+  bool _nearbyMounted = false;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final index = ref.watch(navTabProvider);
+    if (index == NavTabs.nearby) {
+      _nearbyMounted = true;
+    }
 
     return Scaffold(
       body: IndexedStack(
         index: index,
-        children: const [
-          HomeTab(),
-          HistoryPage(),
-          NearbyKiosksPage(embedded: true),
-          ProfilePage(embedded: true),
+        children: [
+          const HomeTab(),
+          const HistoryPage(),
+          _nearbyMounted
+              ? const NearbyKiosksPage(embedded: true)
+              : const SizedBox.shrink(),
+          const ProfilePage(embedded: true),
         ],
       ),
       bottomNavigationBar: NavigationBar(

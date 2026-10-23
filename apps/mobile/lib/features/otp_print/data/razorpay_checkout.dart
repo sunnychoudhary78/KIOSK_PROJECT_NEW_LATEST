@@ -33,6 +33,7 @@ class RazorpayCheckout {
     required String currency,
     String? contact,
     String name = 'IMT-Print',
+    void Function(String? walletName)? onExternalWallet,
   }) {
     final completer = Completer<RazorpayCheckoutResult>();
 
@@ -59,11 +60,7 @@ class RazorpayCheckout {
     }
 
     void wallet(ExternalWalletResponse response) {
-      if (!completer.isCompleted) {
-        completer.completeError(
-          Exception('External wallet ${response.walletName ?? ''} is not supported'),
-        );
-      }
+      onExternalWallet?.call(response.walletName);
     }
 
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, success);

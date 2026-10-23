@@ -20,6 +20,7 @@ class OtpPrintPaymentPage extends ConsumerStatefulWidget {
 class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
   bool _busy = false;
   String? _error;
+  String? _walletHint;
 
   Future<void> _pay() async {
     final challenge = ref.read(otpPrintControllerProvider).asData?.value;
@@ -27,6 +28,7 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
     setState(() {
       _busy = true;
       _error = null;
+      _walletHint = null;
     });
     try {
       final notifier = ref.read(otpPrintControllerProvider.notifier);
@@ -45,8 +47,10 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
       if (order.orderId == null || order.orderId!.isEmpty) {
         throw Exception('Could not start payment. Try again.');
       }
+      if (!mounted) return;
 
       final contact = ref.read(citizenAuthProvider).phone;
+      final l10n = AppLocalizations.of(context);
       final checkout = RazorpayCheckout();
       final result = await checkout.open(
         keyId: order.keyId,
@@ -54,6 +58,13 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
         amountPaise: order.amountPaise,
         currency: order.currency,
         contact: contact,
+        onExternalWallet: (walletName) {
+          if (!mounted) return;
+          final name = (walletName == null || walletName.trim().isEmpty)
+              ? l10n.selectedPaymentApp
+              : walletName.trim();
+          setState(() => _walletHint = l10n.finishInWallet(name));
+        },
       );
 
       final otpSent = await notifier.verifyRazorpayPayment(
@@ -116,6 +127,10 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_walletHint != null) ...[
+            SkpStatusBanner(message: _walletHint!),
+            const SizedBox(height: 8),
+          ],
           if (_error != null) ...[
             SkpStatusBanner(message: _error!, tone: SkpBannerTone.danger),
             const SizedBox(height: 8),

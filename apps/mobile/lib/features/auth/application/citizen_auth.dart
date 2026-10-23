@@ -170,12 +170,37 @@ class CitizenAuthNotifier extends Notifier<CitizenAuthState> {
     if (_loggingOut) return;
     _loggingOut = true;
     try {
-      _api.setAccessToken(null);
-      await _persistSession();
-      state = const CitizenAuthState();
+      await _clearLocalSession();
     } finally {
       _loggingOut = false;
     }
+  }
+
+  /// Deletes the account on the server, then clears the session stored on device.
+  /// Returns false when the request fails and the user is still signed in.
+  Future<bool> deleteAccount() async {
+    if (_loggingOut) return false;
+    _loggingOut = true;
+    try {
+      await _api.delete('/auth/citizen/account');
+      await _clearLocalSession();
+      return true;
+    } catch (error) {
+      state = CitizenAuthState(
+        token: state.token,
+        phone: state.phone,
+        error: error.toString(),
+      );
+      return false;
+    } finally {
+      _loggingOut = false;
+    }
+  }
+
+  Future<void> _clearLocalSession() async {
+    _api.setAccessToken(null);
+    await _persistSession();
+    state = const CitizenAuthState();
   }
 }
 

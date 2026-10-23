@@ -45,6 +45,14 @@ class ApiClient {
     return _decode(response);
   }
 
+  Future<Map<String, dynamic>> delete(String path) async {
+    final response = await _http.delete(
+      Uri.parse('${AppConfig.current.apiBaseUrl}$path'),
+      headers: _headers(),
+    );
+    return _decode(response);
+  }
+
   Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? body}) async {
     final response = await _http.post(
       Uri.parse('${AppConfig.current.apiBaseUrl}$path'),

@@ -1,7 +1,7 @@
 # Privacy Policy — IMT-Print
 
 **Effective date:** [23 October 2026]  
-**App:** IMT-Print (Android)  
+**App:** IMT-Print (Android and iOS)  
 **Operator:** [Immortal Technovation]  
 **Contact:** [privacy@yourdomain.com]  
 **Address:** [full postal address]
@@ -14,7 +14,7 @@ IMT-Print lets you sign in with your mobile number, upload PDF documents, pay fo
 
 - Your 10-digit mobile number, used to send a one-time password (OTP) by SMS and to identify your account.
 - The OTP is used only to sign you in. The print OTP is sent to your phone by SMS and is not shown in the app.
-- On Android, the app may use the SMS User Consent API so you can approve filling the login code from that one message. The app does not read your other messages, and it does not request ongoing SMS access.
+- On Android, the app may use the SMS User Consent API so you can approve filling the login code from that one message. The app does not read your other messages, and it does not request ongoing SMS access. On iOS, the login code is typed or filled from the keyboard suggestion. SMS autofill is not used on iOS.
 - A session token is stored on your device so you stay signed in. Signing out removes that token and the stored phone number from the device.
 
 ### Documents and print jobs
@@ -24,9 +24,9 @@ IMT-Print lets you sign in with your mobile number, upload PDF documents, pay fo
 
 ### Location
 
-- If you use nearby kiosks, the app requests precise location (GPS) and sends your latitude and longitude to our servers only to return kiosks sorted by distance and to show them on a map.
-- Location is not required to sign in. If you deny permission, nearby-kiosk search will not work.
-- If you open directions, the app hands the kiosk coordinates to Google Maps (or another maps app you choose). That app's own policy then applies.
+- If you use nearby kiosks, the app requests precise location while the app is in use and sends your latitude and longitude to our servers only to return kiosks sorted by distance and to show them on a map. The prompt appears when you open Nearby kiosks or choose a kiosk for upload, not when you only view the home screen.
+- Location is not required to sign in. If you deny permission, nearby-kiosk search will not work until you turn Location Services back on in system settings.
+- If you open directions, iOS hands the kiosk coordinates to Apple Maps and Android hands them to Google Maps. That app's own policy then applies.
 
 ### Payments
 
@@ -59,7 +59,8 @@ We do not sell your personal information. The app does not include third-party a
 - **SMS providers**, which deliver login and print OTPs.
 - **Razorpay** and the UPI or wallet app you select, for payments. See [Razorpay's privacy policy](https://razorpay.com/privacy/).
 - **OpenStreetMap** tile servers, which receive map-tile requests (including approximate map location) when the kiosk map is shown. See the [OpenStreetMap privacy policy](https://wiki.osmfoundation.org/wiki/Privacy_Policy).
-- **Google Maps**, only if you tap directions.
+- **Google Maps**, only if you tap directions on Android.
+- **Apple Maps**, only if you tap directions on iOS.
 - **Authorities**, if required by law, or when needed to protect users, kiosks, or the service.
 
 Kiosk operators receive the documents and job details required to print what you submitted.
@@ -72,10 +73,10 @@ Kiosk operators receive the documents and job details required to print what you
 
 ## Your choices
 
-- You can deny location permission; nearby search will be unavailable.
-- You can decline the SMS consent prompt and type the OTP yourself.
+- You can deny location permission; nearby search will be unavailable until you allow it again from system settings.
+- You can decline the Android SMS consent prompt and type the OTP yourself. On iOS, type the OTP or accept the keyboard suggestion.
 - You can sign out from the profile screen, which clears the session stored on the device.
-- You can request access, correction, or deletion of your account, phone number, print history, and uploaded documents by emailing [privacy@yourdomain.com]. We may need to confirm that the request comes from the phone number on the account. We will respond within a reasonable time, and in any case as required by applicable law. Some payment records may be kept where the law requires it.
+- You can delete your account from the profile screen. That removes uploaded PDFs and print history from your account and signs you out. Payment records are kept without your phone number where tax rules require them. You can also request access or correction by emailing [privacy@yourdomain.com]. We may need to confirm that the request comes from the phone number on the account. We will respond within a reasonable time, and in any case as required by applicable law.
 
 ## Children
 

@@ -27,8 +27,9 @@ class _NearbyKiosksPageState extends ConsumerState<NearbyKiosksPage> {
 
   Future<void> _openDirections(NearbyKiosk kiosk) async {
     final l10n = AppLocalizations.of(context);
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=${kiosk.latitude},${kiosk.longitude}',
+    final uri = kioskDirectionsUri(
+      latitude: kiosk.latitude,
+      longitude: kiosk.longitude,
     );
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
@@ -75,16 +76,30 @@ class _NearbyKiosksPageState extends ConsumerState<NearbyKiosksPage> {
             const Expanded(
               child: Center(child: CircularProgressIndicator()),
             )
-          else if (state.error != null)
+          else if (state.error != null ||
+              state.permissionDenied ||
+              state.locationServicesDisabled)
             Expanded(
               child: SkpEmptyState(
                 icon: Icons.location_off_outlined,
-                title: state.permissionDenied
-                    ? l10n.locationRequired
-                    : state.error!,
+                title: state.locationServicesDisabled
+                    ? l10n.locationServicesOff
+                    : state.permissionDenied
+                        ? l10n.locationRequired
+                        : state.error!,
                 message: l10n.nearestHelper,
-                actionLabel: state.permissionDenied ? l10n.tryAgain : l10n.retry,
-                onAction: () => ref.read(nearbyKiosksProvider.notifier).load(),
+                actionLabel: state.needsSystemSettings
+                    ? l10n.openSettings
+                    : state.permissionDenied
+                        ? l10n.tryAgain
+                        : l10n.retry,
+                onAction: () {
+                  if (state.needsSystemSettings) {
+                    ref.read(nearbyKiosksProvider.notifier).openLocationRecovery();
+                  } else {
+                    ref.read(nearbyKiosksProvider.notifier).load();
+                  }
+                },
               ),
             )
           else if (state.items.isEmpty)
