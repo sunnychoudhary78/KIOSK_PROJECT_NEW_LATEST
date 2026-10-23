@@ -2,6 +2,7 @@
 #define SKP_PRINTER_SNMP_POLL_CACHE_H_
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -41,8 +42,15 @@ class SnmpPollCache {
   void EnsureThread();
   void Loop();
   void PollOnce();
+  // Caller must hold poll_mu_. Does not lock poll_mu_. Locks mu_ only around cache updates.
+  void PollOnceBody();
 
+  // Telemetry only. Never acquire poll_mu_ while holding mu_.
   mutable std::mutex mu_;
+  // One SNMP walk at a time. Held across the walk so RefreshNow and the worker cannot overlap.
+  std::mutex poll_mu_;
+  std::condition_variable poll_cv_;
+  bool poll_in_progress_ = false;
   std::string host_;
   std::string community_;
   int interval_ms_ = 2000;

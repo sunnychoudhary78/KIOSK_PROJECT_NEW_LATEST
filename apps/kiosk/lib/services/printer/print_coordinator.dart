@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/services/print_spooler.dart';
 import 'package:skp_kiosk/services/printer/print_job_status_reporter.dart';
 import 'package:skp_kiosk/services/printer/print_reconcile_result.dart';
@@ -181,6 +182,9 @@ class PrintCoordinator {
     if (snmp) {
       counterBefore = await _readPageCounterWithRetries(onProgress: onProgress);
     }
+    AppLogger.info(
+      'PRINTER reconcile job=$jobId baseline=$counterBefore expected=$expected',
+    );
     if (_isAborted(runId)) {
       return _abortedResult(
         jobId: jobId,
@@ -348,6 +352,13 @@ class PrintCoordinator {
       final health = await _monitor.getHealth();
       // Always force-refresh during reconcile (lab: timeouts leave stale cache).
       final after = await _monitor.getPageCounter(forceRefresh: true);
+      if (after == null) {
+        AppLogger.info('PRINTER reconcile job=$jobId counter refresh failed');
+      } else {
+        AppLogger.info(
+          'PRINTER reconcile job=$jobId counter=$after baseline=${baseline ?? provisionalWatermark}',
+        );
+      }
 
       if (!confirmingAnnounced) {
         final label = health.hrPrinterStatusLabel;
@@ -381,6 +392,9 @@ class PrintCoordinator {
 
       // Verified ONLY on lifetime page Δ under exclusive lock.
       if (baseline != null && pagesReported >= expected) {
+        AppLogger.info(
+          'PRINTER reconcile job=$jobId verified delta=$pagesReported expected=$expected',
+        );
         await reportStatus(
           jobId: jobId,
           status: 'completed',
@@ -450,6 +464,9 @@ class PrintCoordinator {
     }
 
     if (!sawAnyCounter) {
+      AppLogger.info(
+        'PRINTER reconcile job=$jobId not verified detail=snmp_page_counter_unavailable',
+      );
       await reportStatus(
         jobId: jobId,
         status: 'printing',
@@ -471,6 +488,9 @@ class PrintCoordinator {
       );
     }
 
+    AppLogger.info(
+      'PRINTER reconcile job=$jobId not verified delta=$pagesReported expected=$expected detail=timeout',
+    );
     await reportStatus(
       jobId: jobId,
       status: 'printing',

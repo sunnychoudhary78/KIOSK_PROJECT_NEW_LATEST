@@ -240,16 +240,33 @@ class PrinterPlugin : public flutter::Plugin {
     if (force_refresh || !telem.snapshot.page_counter) {
       telem = skp_printer::SnmpPollCache::Instance().RefreshNow();
     }
-    if (telem.snapshot.page_counter) {
+    // A failed forced refresh must not look like a live read of the cached counter.
+    if (force_refresh && !telem.snapshot.snmp_ok) {
+      out[EncodableValue("ok")] = EncodableValue(false);
+      out[EncodableValue("stale")] = EncodableValue(true);
+      out[EncodableValue("error")] = EncodableValue(
+          telem.last_poll_error.empty() ? "snmp_timeout" : telem.last_poll_error);
+      if (telem.snapshot.page_counter) {
+        out[EncodableValue("stalePageCounter")] =
+            EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
+      }
+      return EncodableValue(out);
+    }
+    if (telem.snapshot.page_counter && telem.snapshot.snmp_ok) {
       out[EncodableValue("ok")] = EncodableValue(true);
       out[EncodableValue("pageCounter")] =
           EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
-      out[EncodableValue("stale")] = EncodableValue(!telem.snapshot.snmp_ok);
+      out[EncodableValue("stale")] = EncodableValue(false);
       return EncodableValue(out);
     }
     out[EncodableValue("ok")] = EncodableValue(false);
+    out[EncodableValue("stale")] = EncodableValue(true);
     out[EncodableValue("error")] = EncodableValue(
         telem.last_poll_error.empty() ? "snmp_timeout" : telem.last_poll_error);
+    if (telem.snapshot.page_counter) {
+      out[EncodableValue("stalePageCounter")] =
+          EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
+    }
     return EncodableValue(out);
   }
 

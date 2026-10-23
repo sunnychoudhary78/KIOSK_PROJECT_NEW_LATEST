@@ -463,6 +463,106 @@ void main() {
     expect(result.outcome, PrintReconcileOutcome.verified);
   });
 
+  test('pageCounterFromNative ignores a stale forced refresh', () {
+    expect(
+      pageCounterFromNative(
+        {'ok': true, 'stale': true, 'pageCounter': 40},
+        forceRefresh: true,
+      ),
+      isNull,
+    );
+    expect(
+      pageCounterFromNative(
+        {'ok': false, 'stalePageCounter': 40, 'error': 'snmp_timeout'},
+        forceRefresh: true,
+      ),
+      isNull,
+    );
+    expect(
+      pageCounterFromNative(
+        {'ok': true, 'stale': false, 'pageCounter': 41},
+        forceRefresh: true,
+      ),
+      41,
+    );
+  });
+
+  test('failed refreshes after baseline do not verify from cached count', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
+      pageCounterSequence: [100, null, null, null, null, null],
+    );
+    final coordinator = buildCoordinator(
+      native: native,
+      config: snmpConfig(),
+      counterRetryAttempts: 2,
+      reconcileTimeout: const Duration(milliseconds: 80),
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-stale',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: ({
+        required String jobId,
+        required String status,
+        String? errorMessage,
+        int? pagesReported,
+        String? spoolerJobId,
+        int? pageCounterBefore,
+        int? pageCounterAfter,
+        String? reconcileStatus,
+        String? reconcileDetail,
+        bool? needsAdminReview,
+      }) async {},
+    );
+
+    expect(result.outcome, isNot(PrintReconcileOutcome.verified));
+    expect(
+      result.outcome == PrintReconcileOutcome.reconciliationRequired ||
+          result.outcome == PrintReconcileOutcome.unknown,
+      isTrue,
+    );
+  });
+
+  test('later fresh counter increase still verifies after failed refreshes', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
+      pageCounterSequence: [100, null, null, 101],
+    );
+    final coordinator = buildCoordinator(
+      native: native,
+      config: snmpConfig(),
+      counterRetryAttempts: 2,
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-recover',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: ({
+        required String jobId,
+        required String status,
+        String? errorMessage,
+        int? pagesReported,
+        String? spoolerJobId,
+        int? pageCounterBefore,
+        int? pageCounterAfter,
+        String? reconcileStatus,
+        String? reconcileDetail,
+        bool? needsAdminReview,
+      }) async {},
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.verified);
+    expect(result.pagesReported, 1);
+  });
+
   test('mid-flight single post-print reading does not false-verify', () async {
     final native = FakePrinterNative(
       health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),

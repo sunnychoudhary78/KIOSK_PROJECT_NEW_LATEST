@@ -5,6 +5,17 @@ import 'package:skp_kiosk/services/printer/printer_health.dart';
 
 const printerMethodChannel = MethodChannel('skp/printer');
 
+/// Live page count from a native `getPageCounter` map.
+/// A failed or stale forced refresh is not a reading, even if a cached count is attached.
+int? pageCounterFromNative(Map<dynamic, dynamic> raw, {required bool forceRefresh}) {
+  final ok = raw['ok'] == true;
+  final stale = raw['stale'] == true;
+  if (!ok || (forceRefresh && stale)) {
+    return null;
+  }
+  return (raw['pageCounter'] as num?)?.toInt();
+}
+
 abstract class PrinterNative {
   Future<bool> configureSnmpPolling({
     required String host,
@@ -114,8 +125,16 @@ class MethodChannelPrinterNative implements PrinterNative {
         'snmpCommunity': snmpCommunity,
         'forceRefresh': forceRefresh,
       });
-      if (raw is Map && raw['ok'] == true) {
-        return (raw['pageCounter'] as num?)?.toInt();
+      if (raw is Map) {
+        final value = pageCounterFromNative(raw, forceRefresh: forceRefresh);
+        if (value == null && forceRefresh) {
+          AppLogger.info(
+            'PRINTER counter refresh failed'
+            ' error=${raw['error'] ?? 'stale'}'
+            ' stalePageCounter=${raw['stalePageCounter']}',
+          );
+        }
+        return value;
       }
       return null;
     } on MissingPluginException {

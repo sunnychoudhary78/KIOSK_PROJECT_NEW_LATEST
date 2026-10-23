@@ -72,6 +72,17 @@ void SnmpPollCache::Loop() {
 }
 
 void SnmpPollCache::PollOnce() {
+  std::unique_lock<std::mutex> poll_lock(poll_mu_);
+  if (poll_in_progress_) {
+    return;
+  }
+  poll_in_progress_ = true;
+  PollOnceBody();
+  poll_in_progress_ = false;
+  poll_cv_.notify_all();
+}
+
+void SnmpPollCache::PollOnceBody() {
   std::string host;
   std::string community;
   int timeout_ms = 3000;
@@ -106,7 +117,7 @@ void SnmpPollCache::PollOnce() {
     telemetry_.consecutive_failures += 1;
     telemetry_.last_poll_error = snap.poll_error.empty() ? "snmp_timeout" : snap.poll_error;
     telemetry_.snmp_reachable = telemetry_.consecutive_failures < failure_threshold;
-    // Keep last successful snapshot for stale reads; mark snmp_ok false on live view.
+    // Keep last successful snapshot for diagnostics. Callers must not treat it as a live read.
     telemetry_.snapshot.snmp_ok = false;
     telemetry_.snapshot.poll_error = telemetry_.last_poll_error;
   }
@@ -118,7 +129,18 @@ SnmpPollTelemetry SnmpPollCache::Get() const {
 }
 
 SnmpPollTelemetry SnmpPollCache::RefreshNow() {
-  PollOnce();
+  {
+    std::unique_lock<std::mutex> poll_lock(poll_mu_);
+    if (poll_in_progress_) {
+      // Reuse the walk already running. Do not start a second one.
+      poll_cv_.wait(poll_lock, [this] { return !poll_in_progress_; });
+    } else {
+      poll_in_progress_ = true;
+      PollOnceBody();
+      poll_in_progress_ = false;
+      poll_cv_.notify_all();
+    }
+  }
   return Get();
 }
 
