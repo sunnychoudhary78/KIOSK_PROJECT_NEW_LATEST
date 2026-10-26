@@ -74,6 +74,13 @@ export type MaintenanceDisplay =
       title?: string;
     } & MaintenanceMetricLines);
 
+export type PrinterRowTone = 'muted' | 'ok' | 'amber' | 'alert';
+
+export type PrinterRowSummary = {
+  label: string;
+  tone: PrinterRowTone;
+};
+
 const MISSING = '—';
 
 function formatPercent(value: number | null | undefined): string {
@@ -173,4 +180,28 @@ export function resolvePrinterErrorHistory(
     return { status: 'empty' };
   }
   return { status: 'current', entries };
+}
+
+export function resolvePrinterRowSummary(
+  health: PrinterHealthView | null | undefined,
+): PrinterRowSummary {
+  const maintenance = resolvePrinterMaintenance(health);
+  const errors = resolvePrinterErrorHistory(health);
+  const stale = maintenance.status === 'stale' || errors.status === 'stale';
+  const recorded =
+    errors.status === 'current' || errors.status === 'stale' ? errors.entries.length : 0;
+
+  if (recorded > 0) {
+    return {
+      label: recorded === 1 ? '1 error' : `${recorded} errors`,
+      tone: stale ? 'amber' : 'alert',
+    };
+  }
+  if (stale) {
+    return { label: 'Stale', tone: 'amber' };
+  }
+  if (maintenance.status === 'current') {
+    return { label: 'OK', tone: 'ok' };
+  }
+  return { label: 'Unavailable', tone: 'muted' };
 }

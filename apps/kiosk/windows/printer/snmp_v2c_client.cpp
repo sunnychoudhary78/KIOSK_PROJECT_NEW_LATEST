@@ -154,12 +154,15 @@ std::optional<std::string> ParseOctetAt(const std::vector<uint8_t>& buf, size_t&
   }
   ++i;
   size_t len = ReadLength(buf, i);
-  if (i + len > buf.size()) {
+  if (len == 0) {
+    return std::string();
+  }
+  if (i >= buf.size() || i + len > buf.size()) {
     return std::nullopt;
   }
-  std::string s(reinterpret_cast<const char*>(&buf[i]), len);
+  auto value = CopySnmpOctetBytes(buf.data() + i, len);
   i += len;
-  return s;
+  return value;
 }
 
 }  // namespace

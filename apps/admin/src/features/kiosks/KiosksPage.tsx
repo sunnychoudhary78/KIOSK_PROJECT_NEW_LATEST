@@ -21,6 +21,7 @@ import {
 import {
   resolvePrinterErrorHistory,
   resolvePrinterMaintenance,
+  resolvePrinterRowSummary,
   type PrinterHealthView,
 } from './printerMaintenance';
 import {
@@ -54,50 +55,115 @@ type Device = {
   bannerVerticalEnabled?: boolean;
 };
 
-function PrinterMaintenanceCell({ device }: { device: Device }) {
-  const display = resolvePrinterMaintenance(device.printerHealth);
-  const errors = resolvePrinterErrorHistory(device.printerHealth);
+const PRINTER_ROW_TONE: Record<string, string> = {
+  muted: 'text-muted-foreground',
+  ok: 'font-medium text-emerald-700',
+  amber: 'font-medium text-amber-700',
+  alert: 'font-medium text-red-700',
+};
+
+function PrinterSummaryCell({
+  device,
+  onDetails,
+}: {
+  device: Device;
+  onDetails: () => void;
+}) {
+  const summary = resolvePrinterRowSummary(device.printerHealth);
   return (
-    <div className="max-w-xs text-sm text-muted-foreground">
-      {display.status === 'unavailable' ? (
-        <div>Unavailable</div>
-      ) : (
-        <div title={display.title}>
-          {display.status === 'stale' ? (
-            <div className="font-medium text-amber-700">Stale</div>
-          ) : null}
-          <div>
-            Black {display.toner.black} · Cyan {display.toner.cyan} · Magenta {display.toner.magenta}{' '}
-            · Yellow {display.toner.yellow}
-          </div>
-          <div>
-            {display.pages.total} total · {display.pages.color} color · {display.pages.blackAndWhite}{' '}
-            black & white
-          </div>
-          <div>
-            Belt {display.parts.belt} · Fuser {display.parts.fuser}
-          </div>
+    <div className="flex items-center gap-2 whitespace-nowrap text-sm">
+      <span className={PRINTER_ROW_TONE[summary.tone]}>{summary.label}</span>
+      <Button type="button" variant="secondary" onClick={onDetails}>
+        Details
+      </Button>
+    </div>
+  );
+}
+
+function PrinterMetricList({ rows }: { rows: { label: string; value: string }[] }) {
+  return (
+    <dl className="grid grid-cols-[9rem_1fr] gap-y-1 text-sm">
+      {rows.map((row) => (
+        <div key={row.label} className="contents">
+          <dt className="text-muted-foreground">{row.label}</dt>
+          <dd>{row.value}</dd>
         </div>
-      )}
-      {errors.status === 'unavailable' ? (
-        <div>Errors: Unavailable</div>
-      ) : errors.status === 'empty' || errors.entries.length === 0 ? (
-        <div title={errors.status === 'stale' ? errors.title : undefined}>
-          {errors.status === 'stale' ? (
-            <div className="font-medium text-amber-700">Errors stale</div>
-          ) : null}
-          <div>No recorded errors</div>
-        </div>
-      ) : (
-        <div title={errors.title}>
-          {errors.status === 'stale' ? (
-            <div className="font-medium text-amber-700">Errors stale</div>
-          ) : null}
-          {errors.entries.map((entry) => (
-            <div key={entry.index}>{entry.description}</div>
-          ))}
-        </div>
-      )}
+      ))}
+    </dl>
+  );
+}
+
+function PrinterDetailsBody({ health }: { health: PrinterHealthView | null | undefined }) {
+  const maintenance = resolvePrinterMaintenance(health);
+  const errors = resolvePrinterErrorHistory(health);
+  const stale = maintenance.status === 'stale' || errors.status === 'stale';
+  const staleTitle =
+    (maintenance.status === 'stale' ? maintenance.title : undefined) ??
+    (errors.status === 'stale' ? errors.title : undefined);
+
+  return (
+    <div className="stack">
+      {stale ? (
+        <p className="font-medium text-amber-700" title={staleTitle}>
+          Stale
+        </p>
+      ) : null}
+      <section className="stack">
+        <h3 className="text-sm font-medium">Toner</h3>
+        {maintenance.status === 'unavailable' ? (
+          <p className="text-sm text-muted-foreground">Unavailable</p>
+        ) : (
+          <PrinterMetricList
+            rows={[
+              { label: 'Black', value: maintenance.toner.black },
+              { label: 'Cyan', value: maintenance.toner.cyan },
+              { label: 'Magenta', value: maintenance.toner.magenta },
+              { label: 'Yellow', value: maintenance.toner.yellow },
+            ]}
+          />
+        )}
+      </section>
+      <section className="stack">
+        <h3 className="text-sm font-medium">Pages</h3>
+        {maintenance.status === 'unavailable' ? (
+          <p className="text-sm text-muted-foreground">Unavailable</p>
+        ) : (
+          <PrinterMetricList
+            rows={[
+              { label: 'Total', value: maintenance.pages.total },
+              { label: 'Color', value: maintenance.pages.color },
+              { label: 'Black and white', value: maintenance.pages.blackAndWhite },
+            ]}
+          />
+        )}
+      </section>
+      <section className="stack">
+        <h3 className="text-sm font-medium">Parts</h3>
+        {maintenance.status === 'unavailable' ? (
+          <p className="text-sm text-muted-foreground">Unavailable</p>
+        ) : (
+          <PrinterMetricList
+            rows={[
+              { label: 'Belt', value: maintenance.parts.belt },
+              { label: 'Fuser', value: maintenance.parts.fuser },
+            ]}
+          />
+        )}
+      </section>
+      <section className="stack">
+        <h3 className="text-sm font-medium">Errors</h3>
+        {errors.status === 'unavailable' ? (
+          <p className="text-sm text-muted-foreground">Unavailable</p>
+        ) : errors.status === 'empty' || errors.entries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No recorded errors</p>
+        ) : (
+          <ul className="text-sm">
+            {errors.entries.map((entry) => (
+              <li key={entry.index}>{entry.description}</li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
@@ -198,6 +264,7 @@ export function KiosksPage() {
   const [printLimits, setPrintLimits] = useState<PrintLimitsForm>(DEFAULT_PRINT_LIMITS);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [printerDeviceId, setPrinterDeviceId] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -388,6 +455,10 @@ export function KiosksPage() {
     }
   }
 
+  const printerDevice = printerDeviceId
+    ? items.find((device) => device.id === printerDeviceId) ?? null
+    : null;
+
   return (
     <div>
       <PageHeader
@@ -483,8 +554,11 @@ export function KiosksPage() {
                       ? new Date(device.lastHeartbeatAt).toLocaleString()
                       : '—'}
                   </td>
-                  <td className="align-top">
-                    <PrinterMaintenanceCell device={device} />
+                  <td>
+                    <PrinterSummaryCell
+                      device={device}
+                      onDetails={() => setPrinterDeviceId(device.id)}
+                    />
                   </td>
                   <td>
                     <RecordingStatusCell device={device} />
@@ -771,6 +845,19 @@ export function KiosksPage() {
           </fieldset>
           {settingsError ? <p className="error md:col-span-2">{settingsError}</p> : null}
         </form>
+      </Modal>
+
+      <Modal
+        open={printerDevice != null}
+        title={printerDevice ? `Printer · ${printerDevice.name}` : 'Printer'}
+        onClose={() => setPrinterDeviceId(null)}
+        footer={
+          <Button type="button" variant="ghost" onClick={() => setPrinterDeviceId(null)}>
+            Close
+          </Button>
+        }
+      >
+        {printerDevice ? <PrinterDetailsBody health={printerDevice.printerHealth} /> : null}
       </Modal>
     </div>
   );

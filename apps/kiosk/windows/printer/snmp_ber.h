@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace skp_printer {
 
@@ -28,6 +29,18 @@ inline std::optional<int64_t> DecodeSnmpInteger(uint8_t tag, const uint8_t* byte
     value = (value << 8) | bytes[i];
   }
   return static_cast<int64_t>(value);
+}
+
+// A zero-length OCTET STRING is a successful empty value. Do not index the
+// buffer for it: the read cursor is already one past the last byte.
+inline std::optional<std::string> CopySnmpOctetBytes(const uint8_t* bytes, size_t len) {
+  if (len == 0) {
+    return std::string();
+  }
+  if (bytes == nullptr) {
+    return std::nullopt;
+  }
+  return std::string(reinterpret_cast<const char*>(bytes), len);
 }
 
 }  // namespace skp_printer

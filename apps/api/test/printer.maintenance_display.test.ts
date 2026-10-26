@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   resolvePrinterErrorHistory,
   resolvePrinterMaintenance,
+  resolvePrinterRowSummary,
 } from '../../admin/src/features/kiosks/printerMaintenance.ts';
 
 const verified = {
@@ -123,5 +124,56 @@ describe('admin printer error history display', () => {
       expect(display.entries).toEqual([{ index: 1, description: 'Cannot Print ZC' }]);
       expect(display.title).toContain('Last successful SNMP poll');
     }
+  });
+});
+
+describe('admin printer row summary', () => {
+  it('shows unavailable when neither block was read', () => {
+    expect(resolvePrinterRowSummary(null)).toEqual({ label: 'Unavailable', tone: 'muted' });
+    expect(resolvePrinterRowSummary({})).toEqual({ label: 'Unavailable', tone: 'muted' });
+  });
+
+  it('shows OK when maintenance is current and there are no recorded errors', () => {
+    expect(
+      resolvePrinterRowSummary({
+        ...verified,
+        errorHistory: { available: true, entries: [] },
+      }),
+    ).toEqual({ label: 'OK', tone: 'ok' });
+  });
+
+  it('shows Stale when SNMP is down and no errors are recorded', () => {
+    expect(
+      resolvePrinterRowSummary({
+        ...verified,
+        snmpOk: false,
+        errorHistory: { available: true, entries: [] },
+      }),
+    ).toEqual({ label: 'Stale', tone: 'amber' });
+  });
+
+  it('counts recorded errors and keeps a stale list amber', () => {
+    expect(
+      resolvePrinterRowSummary({
+        ...verified,
+        errorHistory: {
+          available: true,
+          entries: [{ index: 1, description: 'Cannot Print ZC' }],
+        },
+      }),
+    ).toEqual({ label: '1 error', tone: 'alert' });
+    expect(
+      resolvePrinterRowSummary({
+        ...verified,
+        snmpOk: false,
+        errorHistory: {
+          available: true,
+          entries: [
+            { index: 1, description: 'Cannot Print ZC' },
+            { index: 2, description: 'Paper jam' },
+          ],
+        },
+      }),
+    ).toEqual({ label: '2 errors', tone: 'amber' });
   });
 });

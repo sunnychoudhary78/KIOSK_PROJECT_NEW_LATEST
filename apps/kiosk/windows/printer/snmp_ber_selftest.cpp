@@ -47,6 +47,19 @@ int main() {
     return 1;
   }
 
+  auto empty_octet = skp_printer::CopySnmpOctetBytes(nullptr, 0);
+  if (!empty_octet || !empty_octet->empty()) {
+    std::fprintf(stderr, "empty OCTET STRING should succeed\n");
+    return 1;
+  }
+
+  const uint8_t text[] = {'Z', 'C'};
+  auto copied = skp_printer::CopySnmpOctetBytes(text, 2);
+  if (!copied || *copied != "ZC") {
+    std::fprintf(stderr, "OCTET STRING copy failed\n");
+    return 1;
+  }
+
   std::printf("snmp ber selftest ok\n");
   return 0;
 }
