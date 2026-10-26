@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdio>
 #include <sstream>
+#include <vector>
 
 namespace skp_printer {
 namespace {
@@ -29,6 +30,22 @@ std::optional<int> LevelPercent(int64_t level, int64_t max_capacity) {
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
   return pct;
+}
+
+void ConsumeMaintenanceOid(
+    const SnmpV2cClient& client, const char* oid, bool& any, BrotherMaintenance& maintenance,
+    void (*apply)(BrotherMaintenance&, const std::vector<BrotherMaintenanceRecord>&)) {
+  auto parsed = SnmpOid::Parse(oid);
+  if (!parsed) {
+    return;
+  }
+  auto octets = client.GetOctetString(*parsed);
+  if (!octets) {
+    return;
+  }
+  any = true;
+  const auto* bytes = reinterpret_cast<const uint8_t*>(octets->data());
+  apply(maintenance, DecodeBrotherMaintenanceRecords(bytes, octets->size()));
 }
 
 }  // namespace
@@ -204,7 +221,43 @@ BrotherSnmpSnapshot BrotherHlL3280CdwProfile::Read() const {
   tray.status = snap.error_flags.no_paper ? "empty" : "ok";
   snap.trays.push_back(std::move(tray));
 
+  ReadMaintenance(snap);
   return snap;
+}
+
+std::optional<int64_t> BrotherHlL3280CdwProfile::ReadErrorHistoryCount() const {
+  auto oid = SnmpOid::Parse(BrotherOids::kBrotherErrorHistoryCount);
+  if (!oid) {
+    return std::nullopt;
+  }
+  auto value = client_.GetInteger(*oid);
+  if (!value || *value < 0) {
+    return std::nullopt;
+  }
+  return value;
+}
+
+std::optional<std::string> BrotherHlL3280CdwProfile::ReadErrorHistoryDescription(int row) const {
+  if (row < 1 || row > kBrotherErrorHistoryMaxRows) {
+    return std::nullopt;
+  }
+  auto oid = SnmpOid::Parse(std::string(BrotherOids::kBrotherErrorHistoryDescriptionPrefix) +
+                            std::to_string(row));
+  if (!oid) {
+    return std::nullopt;
+  }
+  return client_.GetOctetString(*oid);
+}
+
+void BrotherHlL3280CdwProfile::ReadMaintenance(BrotherSnmpSnapshot& snap) const {
+  bool any = false;
+  ConsumeMaintenanceOid(client_, BrotherOids::kBrotherTonerInfo, any, snap.maintenance,
+                        ApplyBrotherTonerRecords);
+  ConsumeMaintenanceOid(client_, BrotherOids::kBrotherPageInfo, any, snap.maintenance,
+                        ApplyBrotherPageRecords);
+  ConsumeMaintenanceOid(client_, BrotherOids::kBrotherPartsInfo, any, snap.maintenance,
+                        ApplyBrotherPartsRecords);
+  snap.maintenance.available = any;
 }
 
 }  // namespace skp_printer

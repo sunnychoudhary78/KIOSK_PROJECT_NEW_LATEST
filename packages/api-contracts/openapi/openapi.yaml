@@ -1861,6 +1861,94 @@ components:
           type: string
           nullable: true
 
+    PrinterMaintenance:
+      type: object
+      required: [available]
+      description: >
+        Verified Brother HL-L3280CDW private tags. pages.total is not prtMarkerLifeCount.
+        A missing metric means that tag was not read. Zero is a real reading.
+      properties:
+        available:
+          type: boolean
+          description: True when at least one of the three maintenance octet strings was read
+        toner:
+          type: object
+          properties:
+            blackPercent:
+              type: integer
+              minimum: 0
+              maximum: 100
+              nullable: true
+            cyanPercent:
+              type: integer
+              minimum: 0
+              maximum: 100
+              nullable: true
+            magentaPercent:
+              type: integer
+              minimum: 0
+              maximum: 100
+              nullable: true
+            yellowPercent:
+              type: integer
+              minimum: 0
+              maximum: 100
+              nullable: true
+        pages:
+          type: object
+          properties:
+            total:
+              type: integer
+              minimum: 0
+              nullable: true
+            color:
+              type: integer
+              minimum: 0
+              nullable: true
+            blackAndWhite:
+              type: integer
+              minimum: 0
+              nullable: true
+        parts:
+          type: object
+          properties:
+            beltRemainingPages:
+              type: integer
+              minimum: 0
+              nullable: true
+            fuserRemainingPages:
+              type: integer
+              minimum: 0
+              nullable: true
+
+    PrinterErrorHistoryEntry:
+      type: object
+      required: [index, description]
+      properties:
+        index:
+          type: integer
+          minimum: 1
+          maximum: 10
+        description:
+          type: string
+          minLength: 1
+          maxLength: 160
+
+    PrinterErrorHistory:
+      type: object
+      required: [available]
+      description: >
+        Non-empty Brother error-history descriptions. The printer row count is not included.
+        An empty entries list means the walk succeeded and every row was blank.
+      properties:
+        available:
+          type: boolean
+        entries:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/PrinterErrorHistoryEntry'
+
     PrinterHealth:
       type: object
       required: [state, online]
@@ -1885,6 +1973,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PrinterSupply'
+        maintenance:
+          $ref: '#/components/schemas/PrinterMaintenance'
+        errorHistory:
+          $ref: '#/components/schemas/PrinterErrorHistory'
         pageCounter:
           type: integer
           nullable: true

@@ -19,6 +19,11 @@ import {
   StatusBadge,
 } from '../../core/ui/primitives';
 import {
+  resolvePrinterErrorHistory,
+  resolvePrinterMaintenance,
+  type PrinterHealthView,
+} from './printerMaintenance';
+import {
   resolveRecordingDisplay,
   type SurveillanceHealth,
 } from '../surveillance/surveillanceStatus';
@@ -36,6 +41,8 @@ type Device = {
   surveillanceEnabled: boolean;
   surveillanceHealth?: SurveillanceHealth | null;
   surveillanceHealthAt?: string | null;
+  printerHealth?: PrinterHealthView | null;
+  printerHealthAt?: string | null;
   maxPagesPerSession: number;
   freePagesPerSession: number;
   extraPageChargeRupees: number;
@@ -46,6 +53,54 @@ type Device = {
   bannerHorizontalEnabled?: boolean;
   bannerVerticalEnabled?: boolean;
 };
+
+function PrinterMaintenanceCell({ device }: { device: Device }) {
+  const display = resolvePrinterMaintenance(device.printerHealth);
+  const errors = resolvePrinterErrorHistory(device.printerHealth);
+  return (
+    <div className="max-w-xs text-sm text-muted-foreground">
+      {display.status === 'unavailable' ? (
+        <div>Unavailable</div>
+      ) : (
+        <div title={display.title}>
+          {display.status === 'stale' ? (
+            <div className="font-medium text-amber-700">Stale</div>
+          ) : null}
+          <div>
+            Black {display.toner.black} · Cyan {display.toner.cyan} · Magenta {display.toner.magenta}{' '}
+            · Yellow {display.toner.yellow}
+          </div>
+          <div>
+            {display.pages.total} total · {display.pages.color} color · {display.pages.blackAndWhite}{' '}
+            black & white
+          </div>
+          <div>
+            Belt {display.parts.belt} · Fuser {display.parts.fuser}
+          </div>
+        </div>
+      )}
+      {errors.status === 'unavailable' ? (
+        <div>Errors: Unavailable</div>
+      ) : errors.status === 'empty' || errors.entries.length === 0 ? (
+        <div title={errors.status === 'stale' ? errors.title : undefined}>
+          {errors.status === 'stale' ? (
+            <div className="font-medium text-amber-700">Errors stale</div>
+          ) : null}
+          <div>No recorded errors</div>
+        </div>
+      ) : (
+        <div title={errors.title}>
+          {errors.status === 'stale' ? (
+            <div className="font-medium text-amber-700">Errors stale</div>
+          ) : null}
+          {errors.entries.map((entry) => (
+            <div key={entry.index}>{entry.description}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function RecordingStatusCell({ device }: { device: Device }) {
   const display = resolveRecordingDisplay(device);
@@ -406,6 +461,7 @@ export function KiosksPage() {
                 <th>Status</th>
                 <th>Device key</th>
                 <th>Last heartbeat</th>
+                <th>Printer</th>
                 <th>Recording</th>
                 <th>Actions</th>
               </tr>
@@ -426,6 +482,9 @@ export function KiosksPage() {
                     {device.lastHeartbeatAt
                       ? new Date(device.lastHeartbeatAt).toLocaleString()
                       : '—'}
+                  </td>
+                  <td className="align-top">
+                    <PrinterMaintenanceCell device={device} />
                   </td>
                   <td>
                     <RecordingStatusCell device={device} />

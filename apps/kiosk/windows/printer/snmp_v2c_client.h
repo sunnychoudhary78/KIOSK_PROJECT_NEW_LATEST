@@ -22,6 +22,7 @@ class SnmpV2cClient {
   std::optional<std::string> GetOctetString(const SnmpOid& oid) const;
 
  private:
+  std::optional<std::vector<uint8_t>> TransactOnce(const std::vector<uint8_t>& request) const;
   std::optional<std::vector<uint8_t>> Transact(const std::vector<uint8_t>& request) const;
   std::vector<uint8_t> BuildGetRequest(const SnmpOid& oid, int32_t request_id) const;
 

@@ -1,5 +1,7 @@
 #include "snmp_v2c_client.h"
 
+#include "snmp_ber.h"
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -133,18 +135,15 @@ bool SkipTlv(const std::vector<uint8_t>& buf, size_t& i) {
 }
 
 std::optional<int64_t> ParseIntegerAt(const std::vector<uint8_t>& buf, size_t& i) {
-  if (i >= buf.size() || buf[i] != 0x02) {
+  if (i >= buf.size() || !IsSnmpIntegerTag(buf[i])) {
     return std::nullopt;
   }
-  ++i;
+  const uint8_t tag = buf[i++];
   size_t len = ReadLength(buf, i);
   if (len == 0 || i + len > buf.size()) {
     return std::nullopt;
   }
-  int64_t value = static_cast<int8_t>(buf[i]);
-  for (size_t k = 1; k < len; ++k) {
-    value = (value << 8) | buf[i + k];
-  }
+  auto value = DecodeSnmpInteger(tag, &buf[i], len);
   i += len;
   return value;
 }
@@ -214,17 +213,14 @@ std::vector<uint8_t> SnmpV2cClient::BuildGetRequest(const SnmpOid& oid, int32_t 
   return message;
 }
 
-std::optional<std::vector<uint8_t>> SnmpV2cClient::Transact(
+std::optional<std::vector<uint8_t>> SnmpV2cClient::TransactOnce(
     const std::vector<uint8_t>& request) const {
-  if (!EnsureWinsock()) {
-    return std::nullopt;
-  }
   SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (sock == INVALID_SOCKET) {
     return std::nullopt;
   }
 
-  DWORD timeout = static_cast<DWORD>(timeout_ms_);
+  DWORD timeout = static_cast<DWORD>(timeout_ms_ > 0 ? timeout_ms_ : 3000);
   setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout),
              sizeof(timeout));
   setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeout),
@@ -256,6 +252,21 @@ std::optional<std::vector<uint8_t>> SnmpV2cClient::Transact(
   }
   response.resize(static_cast<size_t>(received));
   return response;
+}
+
+std::optional<std::vector<uint8_t>> SnmpV2cClient::Transact(
+    const std::vector<uint8_t>& request) const {
+  if (!EnsureWinsock()) {
+    return std::nullopt;
+  }
+  // Match the working Python monitor: timeout per try, one retry.
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    auto response = TransactOnce(request);
+    if (response) {
+      return response;
+    }
+  }
+  return std::nullopt;
 }
 
 std::optional<int64_t> SnmpV2cClient::GetInteger(const SnmpOid& oid) const {

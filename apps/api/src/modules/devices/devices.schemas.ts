@@ -81,6 +81,47 @@ export const printerSupplySchema = z.object({
   status: z.string().max(80).nullable().optional(),
 });
 
+const printerPercent = z.number().int().min(0).max(100).nullable().optional();
+const printerCounter = z.number().int().nonnegative().nullable().optional();
+
+export const printerMaintenanceSchema = z.object({
+  available: z.boolean(),
+  toner: z
+    .object({
+      blackPercent: printerPercent,
+      cyanPercent: printerPercent,
+      magentaPercent: printerPercent,
+      yellowPercent: printerPercent,
+    })
+    .optional(),
+  pages: z
+    .object({
+      total: printerCounter,
+      color: printerCounter,
+      blackAndWhite: printerCounter,
+    })
+    .optional(),
+  parts: z
+    .object({
+      beltRemainingPages: printerCounter,
+      fuserRemainingPages: printerCounter,
+    })
+    .optional(),
+});
+
+export const printerErrorHistorySchema = z.object({
+  available: z.boolean(),
+  entries: z
+    .array(
+      z.object({
+        index: z.number().int().min(1).max(10),
+        description: z.string().min(1).max(160),
+      }),
+    )
+    .max(10)
+    .optional(),
+});
+
 export const printerHealthSchema = z.object({
   state: z.enum(printerHealthStates),
   online: z.boolean(),
@@ -88,6 +129,8 @@ export const printerHealthSchema = z.object({
   model: z.string().max(120).nullable().optional(),
   trays: z.array(printerTraySchema).max(16).optional(),
   supplies: z.array(printerSupplySchema).max(16).optional(),
+  maintenance: printerMaintenanceSchema.optional(),
+  errorHistory: printerErrorHistorySchema.optional(),
   pageCounter: z.number().int().nonnegative().nullable().optional(),
   snmpOk: z.boolean().nullable().optional(),
   snmpReachable: z.boolean().nullable().optional(),

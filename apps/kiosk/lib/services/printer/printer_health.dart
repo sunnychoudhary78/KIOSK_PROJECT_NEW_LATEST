@@ -24,6 +24,181 @@ class PrinterTrayHealth {
   }
 }
 
+class PrinterMaintenanceToner {
+  const PrinterMaintenanceToner({
+    this.blackPercent,
+    this.cyanPercent,
+    this.magentaPercent,
+    this.yellowPercent,
+  });
+
+  final int? blackPercent;
+  final int? cyanPercent;
+  final int? magentaPercent;
+  final int? yellowPercent;
+
+  Map<String, dynamic> toJson() => {
+        if (blackPercent != null) 'blackPercent': blackPercent,
+        if (cyanPercent != null) 'cyanPercent': cyanPercent,
+        if (magentaPercent != null) 'magentaPercent': magentaPercent,
+        if (yellowPercent != null) 'yellowPercent': yellowPercent,
+      };
+
+  factory PrinterMaintenanceToner.fromJson(Map<dynamic, dynamic> json) {
+    return PrinterMaintenanceToner(
+      blackPercent: (json['blackPercent'] as num?)?.toInt(),
+      cyanPercent: (json['cyanPercent'] as num?)?.toInt(),
+      magentaPercent: (json['magentaPercent'] as num?)?.toInt(),
+      yellowPercent: (json['yellowPercent'] as num?)?.toInt(),
+    );
+  }
+}
+
+class PrinterMaintenancePages {
+  const PrinterMaintenancePages({
+    this.total,
+    this.color,
+    this.blackAndWhite,
+  });
+
+  final int? total;
+  final int? color;
+  final int? blackAndWhite;
+
+  Map<String, dynamic> toJson() => {
+        if (total != null) 'total': total,
+        if (color != null) 'color': color,
+        if (blackAndWhite != null) 'blackAndWhite': blackAndWhite,
+      };
+
+  factory PrinterMaintenancePages.fromJson(Map<dynamic, dynamic> json) {
+    return PrinterMaintenancePages(
+      total: (json['total'] as num?)?.toInt(),
+      color: (json['color'] as num?)?.toInt(),
+      blackAndWhite: (json['blackAndWhite'] as num?)?.toInt(),
+    );
+  }
+}
+
+class PrinterMaintenanceParts {
+  const PrinterMaintenanceParts({
+    this.beltRemainingPages,
+    this.fuserRemainingPages,
+  });
+
+  final int? beltRemainingPages;
+  final int? fuserRemainingPages;
+
+  Map<String, dynamic> toJson() => {
+        if (beltRemainingPages != null) 'beltRemainingPages': beltRemainingPages,
+        if (fuserRemainingPages != null) 'fuserRemainingPages': fuserRemainingPages,
+      };
+
+  factory PrinterMaintenanceParts.fromJson(Map<dynamic, dynamic> json) {
+    return PrinterMaintenanceParts(
+      beltRemainingPages: (json['beltRemainingPages'] as num?)?.toInt(),
+      fuserRemainingPages: (json['fuserRemainingPages'] as num?)?.toInt(),
+    );
+  }
+}
+
+/// Verified Brother private maintenance tags. Absent fields are unread, not zero.
+class PrinterMaintenance {
+  const PrinterMaintenance({
+    required this.available,
+    this.toner,
+    this.pages,
+    this.parts,
+  });
+
+  final bool available;
+  final PrinterMaintenanceToner? toner;
+  final PrinterMaintenancePages? pages;
+  final PrinterMaintenanceParts? parts;
+
+  Map<String, dynamic> toJson() {
+    final tonerJson = toner?.toJson();
+    final pagesJson = pages?.toJson();
+    final partsJson = parts?.toJson();
+    return {
+      'available': available,
+      if (tonerJson != null && tonerJson.isNotEmpty) 'toner': tonerJson,
+      if (pagesJson != null && pagesJson.isNotEmpty) 'pages': pagesJson,
+      if (partsJson != null && partsJson.isNotEmpty) 'parts': partsJson,
+    };
+  }
+
+  factory PrinterMaintenance.fromJson(Map<dynamic, dynamic> json) {
+    final tonerRaw = json['toner'];
+    final pagesRaw = json['pages'];
+    final partsRaw = json['parts'];
+    return PrinterMaintenance(
+      available: json['available'] == true,
+      toner: tonerRaw is Map
+          ? PrinterMaintenanceToner.fromJson(tonerRaw)
+          : null,
+      pages: pagesRaw is Map
+          ? PrinterMaintenancePages.fromJson(pagesRaw)
+          : null,
+      parts: partsRaw is Map
+          ? PrinterMaintenanceParts.fromJson(partsRaw)
+          : null,
+    );
+  }
+}
+
+class PrinterErrorHistoryEntry {
+  const PrinterErrorHistoryEntry({
+    required this.index,
+    required this.description,
+  });
+
+  final int index;
+  final String description;
+
+  Map<String, dynamic> toJson() => {
+        'index': index,
+        'description': description,
+      };
+
+  factory PrinterErrorHistoryEntry.fromJson(Map<dynamic, dynamic> json) {
+    return PrinterErrorHistoryEntry(
+      index: (json['index'] as num?)?.toInt() ?? 0,
+      description: json['description'] as String? ?? '',
+    );
+  }
+}
+
+/// Non-empty Brother error-history descriptions. A missing block is unread.
+class PrinterErrorHistory {
+  const PrinterErrorHistory({
+    required this.available,
+    this.entries = const [],
+  });
+
+  final bool available;
+  final List<PrinterErrorHistoryEntry> entries;
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        if (entries.isNotEmpty) 'entries': entries.map((entry) => entry.toJson()).toList(),
+      };
+
+  factory PrinterErrorHistory.fromJson(Map<dynamic, dynamic> json) {
+    final raw = json['entries'];
+    return PrinterErrorHistory(
+      available: json['available'] == true,
+      entries: raw is List
+          ? raw
+              .whereType<Map>()
+              .map((entry) => PrinterErrorHistoryEntry.fromJson(entry))
+              .where((entry) => entry.index > 0 && entry.description.isNotEmpty)
+              .toList()
+          : const [],
+    );
+  }
+}
+
 class PrinterSupplyHealth {
   const PrinterSupplyHealth({
     required this.name,
@@ -63,6 +238,8 @@ class PrinterHealth {
     this.model,
     this.trays = const [],
     this.supplies = const [],
+    this.maintenance,
+    this.errorHistory,
     this.pageCounter,
     this.snmpOk,
     this.snmpReachable,
@@ -95,6 +272,8 @@ class PrinterHealth {
   final String? model;
   final List<PrinterTrayHealth> trays;
   final List<PrinterSupplyHealth> supplies;
+  final PrinterMaintenance? maintenance;
+  final PrinterErrorHistory? errorHistory;
   final int? pageCounter;
   final bool? snmpOk;
   final bool? snmpReachable;
@@ -177,6 +356,8 @@ class PrinterHealth {
         if (trays.isNotEmpty) 'trays': trays.map((t) => t.toJson()).toList(),
         if (supplies.isNotEmpty)
           'supplies': supplies.map((s) => s.toJson()).toList(),
+        if (maintenance != null) 'maintenance': maintenance!.toJson(),
+        if (errorHistory != null) 'errorHistory': errorHistory!.toJson(),
         if (pageCounter != null) 'pageCounter': pageCounter,
         if (snmpOk != null) 'snmpOk': snmpOk,
         if (snmpReachable != null) 'snmpReachable': snmpReachable,
@@ -204,6 +385,8 @@ class PrinterHealth {
   factory PrinterHealth.fromJson(Map<dynamic, dynamic> json) {
     final traysRaw = json['trays'];
     final suppliesRaw = json['supplies'];
+    final maintenanceRaw = json['maintenance'];
+    final errorHistoryRaw = json['errorHistory'];
     return PrinterHealth(
       state: json['state'] as String? ?? 'unknown',
       online: json['online'] as bool? ?? false,
@@ -223,6 +406,12 @@ class PrinterHealth {
               )
               .toList()
           : const [],
+      maintenance: maintenanceRaw is Map
+          ? PrinterMaintenance.fromJson(maintenanceRaw)
+          : null,
+      errorHistory: errorHistoryRaw is Map
+          ? PrinterErrorHistory.fromJson(errorHistoryRaw)
+          : null,
       pageCounter: (json['pageCounter'] as num?)?.toInt(),
       snmpOk: json['snmpOk'] as bool?,
       snmpReachable: json['snmpReachable'] as bool?,

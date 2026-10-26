@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DeviceStatus } from '@prisma/client';
 import { DevicesService } from '../src/modules/devices/devices.service.js';
+import { deviceHeartbeatBodySchema } from '../src/modules/devices/devices.schemas.js';
 import { assertActiveDevice } from '../src/shared/device-guard.js';
 import type { DbClient } from '../src/infrastructure/database/prisma.js';
 import type { AuditService } from '../src/modules/audit/audit.service.js';
@@ -266,6 +267,151 @@ describe('DevicesService.heartbeat', () => {
         printerHealthAt: expect.any(Date),
       },
     });
+  });
+
+  it('persists verified Brother maintenance without changing the page counter field', async () => {
+    const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...deviceRow(DeviceStatus.active),
+      ...data,
+    }));
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => deviceRow(DeviceStatus.active)),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    const maintenance = {
+      available: true,
+      toner: { blackPercent: 90, cyanPercent: 100, magentaPercent: 100, yellowPercent: 100 },
+      pages: { total: 64, color: 47, blackAndWhite: 17 },
+      parts: { beltRemainingPages: 49882, fuserRemainingPages: 49936 },
+    };
+    const printer = {
+      state: 'ready' as const,
+      online: true,
+      pageCounter: 64,
+      maintenance,
+    };
+    await service.heartbeat(deviceId, deviceId, { printer });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: deviceId },
+      data: {
+        lastHeartbeatAt: expect.any(Date),
+        printerHealth: printer,
+        printerHealthAt: expect.any(Date),
+      },
+    });
+  });
+});
+
+describe('deviceHeartbeatBodySchema printer maintenance', () => {
+  it('accepts a heartbeat that has no maintenance block', () => {
+    const parsed = deviceHeartbeatBodySchema.safeParse({
+      printer: { state: 'ready', online: true, pageCounter: 64 },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.printer?.maintenance).toBeUndefined();
+      expect(parsed.data.printer?.pageCounter).toBe(64);
+    }
+  });
+
+  it('accepts verified maintenance, including a real zero', () => {
+    const parsed = deviceHeartbeatBodySchema.safeParse({
+      printer: {
+        state: 'ready',
+        online: true,
+        maintenance: {
+          available: true,
+          toner: { blackPercent: 0, cyanPercent: 100, magentaPercent: 100, yellowPercent: 100 },
+          pages: { total: 64, color: 47, blackAndWhite: 17 },
+          parts: { beltRemainingPages: 49882, fuserRemainingPages: 0 },
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.printer?.maintenance?.toner?.blackPercent).toBe(0);
+      expect(parsed.data.printer?.maintenance?.parts?.fuserRemainingPages).toBe(0);
+    }
+  });
+
+  it('rejects a toner percent above 100', () => {
+    const parsed = deviceHeartbeatBodySchema.safeParse({
+      printer: {
+        state: 'ready',
+        online: true,
+        maintenance: { available: true, toner: { blackPercent: 101 } },
+      },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('strips unverified maintenance fields', () => {
+    const parsed = deviceHeartbeatBodySchema.safeParse({
+      printer: {
+        state: 'ready',
+        online: true,
+        maintenance: {
+          available: true,
+          toner: { blackPercent: 90, drumPercent: 10000 },
+          jamCount: 0,
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.printer?.maintenance).toEqual({
+        available: true,
+        toner: { blackPercent: 90 },
+      });
+    }
+  });
+
+  it('accepts error history and an older heartbeat without it', () => {
+    const legacy = deviceHeartbeatBodySchema.safeParse({
+      printer: { state: 'ready', online: true, pageCounter: 64 },
+    });
+    expect(legacy.success).toBe(true);
+    if (legacy.success) {
+      expect(legacy.data.printer?.errorHistory).toBeUndefined();
+    }
+
+    const parsed = deviceHeartbeatBodySchema.safeParse({
+      printer: {
+        state: 'ready',
+        online: true,
+        errorHistory: {
+          available: true,
+          entries: [{ index: 1, description: 'Cannot Print ZC' }],
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.printer?.errorHistory?.entries).toEqual([
+        { index: 1, description: 'Cannot Print ZC' },
+      ]);
+    }
+  });
+
+  it('rejects an eleventh error-history entry', () => {
+    const entries = Array.from({ length: 11 }, (_, index) => ({
+      index: 1,
+      description: `Error ${index + 1}`,
+    }));
+    const parsed = deviceHeartbeatBodySchema.safeParse({
+      printer: {
+        state: 'ready',
+        online: true,
+        errorHistory: { available: true, entries },
+      },
+    });
+    expect(parsed.success).toBe(false);
   });
 });
 

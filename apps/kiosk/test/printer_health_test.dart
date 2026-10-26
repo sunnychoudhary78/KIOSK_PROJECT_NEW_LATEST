@@ -93,6 +93,85 @@ void main() {
       expect(json['hrPrinterStatus'], 3);
       expect(json['errorFlagsHex'], '00');
       expect(json['snmpReachable'], isTrue);
+      expect(json.containsKey('maintenance'), isFalse);
+      expect(json.containsKey('errorHistory'), isFalse);
+    });
+
+    test('toJson includes verified maintenance and omits empty metrics', () {
+      final json = const PrinterHealth(
+        state: 'ready',
+        online: true,
+        maintenance: PrinterMaintenance(
+          available: true,
+          toner: PrinterMaintenanceToner(
+            blackPercent: 90,
+            cyanPercent: 100,
+            magentaPercent: 100,
+            yellowPercent: 100,
+          ),
+          pages: PrinterMaintenancePages(total: 64, color: 47, blackAndWhite: 17),
+          parts: PrinterMaintenanceParts(
+            beltRemainingPages: 49882,
+            fuserRemainingPages: 49936,
+          ),
+        ),
+      ).toJson();
+
+      expect(json.containsKey('community'), isFalse);
+      expect(json['maintenance'], {
+        'available': true,
+        'toner': {
+          'blackPercent': 90,
+          'cyanPercent': 100,
+          'magentaPercent': 100,
+          'yellowPercent': 100,
+        },
+        'pages': {'total': 64, 'color': 47, 'blackAndWhite': 17},
+        'parts': {'beltRemainingPages': 49882, 'fuserRemainingPages': 49936},
+      });
+    });
+
+    test('toJson keeps one error description and omits an empty history list', () {
+      final json = const PrinterHealth(
+        state: 'ready',
+        online: true,
+        errorHistory: PrinterErrorHistory(
+          available: true,
+          entries: [
+            PrinterErrorHistoryEntry(index: 1, description: 'Cannot Print ZC'),
+          ],
+        ),
+      ).toJson();
+      expect(json.containsKey('community'), isFalse);
+      expect(json['errorHistory'], {
+        'available': true,
+        'entries': [
+          {'index': 1, 'description': 'Cannot Print ZC'},
+        ],
+      });
+
+      final empty = const PrinterHealth(
+        state: 'ready',
+        online: true,
+        errorHistory: PrinterErrorHistory(available: true),
+      ).toJson();
+      expect(empty['errorHistory'], {'available': true});
+      expect((empty['errorHistory'] as Map).containsKey('entries'), isFalse);
+    });
+
+    test('fromJson keeps a zero toner and leaves a missing color empty', () {
+      final health = PrinterHealth.fromJson({
+        'state': 'ready',
+        'online': true,
+        'maintenance': {
+          'available': true,
+          'toner': {'blackPercent': 0},
+        },
+      });
+      expect(health.maintenance?.available, isTrue);
+      expect(health.maintenance?.toner?.blackPercent, 0);
+      expect(health.maintenance?.toner?.cyanPercent, isNull);
+      expect(health.maintenance?.toJson()['toner'], {'blackPercent': 0});
     });
 
     test('fromJson round-trips new fields', () {

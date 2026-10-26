@@ -69,6 +69,102 @@ EncodableValue NullOrInt64(const std::optional<int64_t>& value) {
   return EncodableValue(static_cast<int64_t>(*value));
 }
 
+void PutInt(EncodableMap& map, const char* key, const std::optional<int>& value) {
+  if (value) {
+    map[EncodableValue(key)] = EncodableValue(*value);
+  }
+}
+
+void PutInt64(EncodableMap& map, const char* key, const std::optional<int64_t>& value) {
+  if (value) {
+    map[EncodableValue(key)] = EncodableValue(static_cast<int64_t>(*value));
+  }
+}
+
+EncodableValue EncodeMaintenance(const skp_printer::BrotherMaintenance& maintenance) {
+  EncodableMap out;
+  out[EncodableValue("available")] = EncodableValue(maintenance.available);
+  if (!maintenance.available) {
+    return EncodableValue(out);
+  }
+  EncodableMap toner;
+  PutInt(toner, "blackPercent", maintenance.black_toner_percent);
+  PutInt(toner, "cyanPercent", maintenance.cyan_toner_percent);
+  PutInt(toner, "magentaPercent", maintenance.magenta_toner_percent);
+  PutInt(toner, "yellowPercent", maintenance.yellow_toner_percent);
+  if (!toner.empty()) {
+    out[EncodableValue("toner")] = EncodableValue(toner);
+  }
+  EncodableMap pages;
+  PutInt64(pages, "total", maintenance.pages_total);
+  PutInt64(pages, "color", maintenance.pages_color);
+  PutInt64(pages, "blackAndWhite", maintenance.pages_black_white);
+  if (!pages.empty()) {
+    out[EncodableValue("pages")] = EncodableValue(pages);
+  }
+  EncodableMap parts;
+  PutInt64(parts, "beltRemainingPages", maintenance.belt_remaining_pages);
+  PutInt64(parts, "fuserRemainingPages", maintenance.fuser_remaining_pages);
+  if (!parts.empty()) {
+    out[EncodableValue("parts")] = EncodableValue(parts);
+  }
+  return EncodableValue(out);
+}
+
+EncodableValue EncodeErrorHistory(const skp_printer::BrotherErrorHistory& history) {
+  EncodableMap out;
+  out[EncodableValue("available")] = EncodableValue(history.available);
+  if (!history.available || history.entries.empty()) {
+    return EncodableValue(out);
+  }
+  EncodableList entries;
+  for (const auto& entry : history.entries) {
+    EncodableMap item;
+    item[EncodableValue("index")] = EncodableValue(entry.index);
+    item[EncodableValue("description")] = EncodableValue(entry.description);
+    entries.push_back(EncodableValue(item));
+  }
+  out[EncodableValue("entries")] = EncodableValue(entries);
+  return EncodableValue(out);
+}
+
+EncodableValue EncodePageCounter(const skp_printer::SnmpPollTelemetry& telem, bool force_refresh) {
+  EncodableMap out;
+  if (!telem.configured) {
+    out[EncodableValue("ok")] = EncodableValue(false);
+    out[EncodableValue("error")] = EncodableValue("snmp_not_configured");
+    return EncodableValue(out);
+  }
+  // A failed forced refresh must not look like a live read of the cached counter.
+  if (force_refresh && !telem.snapshot.snmp_ok) {
+    out[EncodableValue("ok")] = EncodableValue(false);
+    out[EncodableValue("stale")] = EncodableValue(true);
+    out[EncodableValue("error")] = EncodableValue(
+        telem.last_poll_error.empty() ? "snmp_timeout" : telem.last_poll_error);
+    if (telem.snapshot.page_counter) {
+      out[EncodableValue("stalePageCounter")] =
+          EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
+    }
+    return EncodableValue(out);
+  }
+  if (telem.snapshot.page_counter && telem.snapshot.snmp_ok) {
+    out[EncodableValue("ok")] = EncodableValue(true);
+    out[EncodableValue("pageCounter")] =
+        EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
+    out[EncodableValue("stale")] = EncodableValue(false);
+    return EncodableValue(out);
+  }
+  out[EncodableValue("ok")] = EncodableValue(false);
+  out[EncodableValue("stale")] = EncodableValue(true);
+  out[EncodableValue("error")] = EncodableValue(
+      telem.last_poll_error.empty() ? "snmp_timeout" : telem.last_poll_error);
+  if (telem.snapshot.page_counter) {
+    out[EncodableValue("stalePageCounter")] =
+        EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
+  }
+  return EncodableValue(out);
+}
+
 EncodableValue IsoFromEpochMs(int64_t epoch_ms) {
   if (epoch_ms <= 0) {
     return EncodableValue();
@@ -128,7 +224,18 @@ class PrinterPlugin : public flutter::Plugin {
       return;
     }
     if (call.method_name() == "getPageCounter") {
-      result->Success(BuildPageCounter(map));
+      const bool force_refresh = BoolArg(map, "forceRefresh", false);
+      if (!force_refresh) {
+        result->Success(
+            EncodePageCounter(skp_printer::SnmpPollCache::Instance().Get(), false));
+        return;
+      }
+      // SNMP runs on the poll worker. Returning here leaves the UI thread free.
+      auto held = std::shared_ptr<flutter::MethodResult<EncodableValue>>(result.release());
+      skp_printer::SnmpPollCache::Instance().RequestPageCounter(
+          [held](const skp_printer::SnmpPollTelemetry& telem) {
+            held->Success(EncodePageCounter(telem, true));
+          });
       return;
     }
     if (call.method_name() == "getPrinterStatus") {
@@ -192,6 +299,8 @@ class PrinterPlugin : public flutter::Plugin {
     health[EncodableValue("trays")] = EncodableValue(trays);
     health[EncodableValue("supplies")] = EncodableValue(supplies);
     health[EncodableValue("pageCounter")] = NullOrInt64(snap.page_counter);
+    health[EncodableValue("maintenance")] = EncodeMaintenance(snap.maintenance);
+    health[EncodableValue("errorHistory")] = EncodeErrorHistory(snap.error_history);
     health[EncodableValue("snmpOk")] = EncodableValue(snap.snmp_ok);
     health[EncodableValue("snmpReachable")] = EncodableValue(telem.snmp_reachable);
     health[EncodableValue("snmpConfigured")] = EncodableValue(telem.configured);
@@ -224,50 +333,6 @@ class PrinterPlugin : public flutter::Plugin {
         last_error.empty() ? EncodableValue() : EncodableValue(last_error);
     health[EncodableValue("lastErrorAt")] = EncodableValue();
     return EncodableValue(health);
-  }
-
-  EncodableValue BuildPageCounter(const EncodableMap& args) {
-    EncodableMap out;
-    const bool force_refresh = BoolArg(args, "forceRefresh", false);
-    auto telem = skp_printer::SnmpPollCache::Instance().Get();
-    if (!telem.configured) {
-      out[EncodableValue("ok")] = EncodableValue(false);
-      out[EncodableValue("error")] = EncodableValue("snmp_not_configured");
-      return EncodableValue(out);
-    }
-    // Reconcile path: always RefreshNow so timeouts during print do not leave
-    // a stale lifetime counter cached for the whole wait loop.
-    if (force_refresh || !telem.snapshot.page_counter) {
-      telem = skp_printer::SnmpPollCache::Instance().RefreshNow();
-    }
-    // A failed forced refresh must not look like a live read of the cached counter.
-    if (force_refresh && !telem.snapshot.snmp_ok) {
-      out[EncodableValue("ok")] = EncodableValue(false);
-      out[EncodableValue("stale")] = EncodableValue(true);
-      out[EncodableValue("error")] = EncodableValue(
-          telem.last_poll_error.empty() ? "snmp_timeout" : telem.last_poll_error);
-      if (telem.snapshot.page_counter) {
-        out[EncodableValue("stalePageCounter")] =
-            EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
-      }
-      return EncodableValue(out);
-    }
-    if (telem.snapshot.page_counter && telem.snapshot.snmp_ok) {
-      out[EncodableValue("ok")] = EncodableValue(true);
-      out[EncodableValue("pageCounter")] =
-          EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
-      out[EncodableValue("stale")] = EncodableValue(false);
-      return EncodableValue(out);
-    }
-    out[EncodableValue("ok")] = EncodableValue(false);
-    out[EncodableValue("stale")] = EncodableValue(true);
-    out[EncodableValue("error")] = EncodableValue(
-        telem.last_poll_error.empty() ? "snmp_timeout" : telem.last_poll_error);
-    if (telem.snapshot.page_counter) {
-      out[EncodableValue("stalePageCounter")] =
-          EncodableValue(static_cast<int64_t>(*telem.snapshot.page_counter));
-    }
-    return EncodableValue(out);
   }
 
   EncodableValue BuildStatus(const EncodableMap& args) {

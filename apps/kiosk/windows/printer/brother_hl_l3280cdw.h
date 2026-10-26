@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "brother_error_history.h"
+#include "brother_maintenance.h"
 #include "snmp_v2c_client.h"
 
 namespace skp_printer {
@@ -21,6 +23,14 @@ struct BrotherOids {
   static constexpr const char* kTrayNameOid = "1.3.6.1.2.1.43.8.2.1.13.1.1";
   static constexpr const char* kTrayLevelOid = "1.3.6.1.2.1.43.8.2.1.10.1.1";
   static constexpr const char* kTrayMaxOid = "1.3.6.1.2.1.43.8.2.1.9.1.1";
+  // Brother private blobs. Verified tags only; not a replacement for prtMarkerLifeCount.
+  static constexpr const char* kBrotherTonerInfo = "1.3.6.1.4.1.2435.2.3.9.4.2.1.5.5.8.0";
+  static constexpr const char* kBrotherPageInfo = "1.3.6.1.4.1.2435.2.3.9.4.2.1.5.5.10.0";
+  static constexpr const char* kBrotherPartsInfo = "1.3.6.1.4.1.2435.2.3.9.4.2.1.5.5.11.0";
+  static constexpr const char* kBrotherErrorHistoryCount =
+      "1.3.6.1.4.1.2435.2.3.9.4.2.1.5.5.51.1.0";
+  static constexpr const char* kBrotherErrorHistoryDescriptionPrefix =
+      "1.3.6.1.4.1.2435.2.3.9.4.2.1.5.5.51.2.1.2.";
 };
 
 struct BrotherSupplyReading {
@@ -55,6 +65,8 @@ struct BrotherSnmpSnapshot {
   BrotherErrorFlagsDecoded error_flags;
   std::vector<BrotherSupplyReading> supplies;
   std::vector<BrotherTrayReading> trays;
+  BrotherMaintenance maintenance;
+  BrotherErrorHistory error_history;
   std::string snmp_state;
   std::string last_error_code;
   std::string poll_error;
@@ -66,6 +78,9 @@ class BrotherHlL3280CdwProfile {
 
   BrotherSnmpSnapshot Read() const;
   std::optional<int64_t> ReadPageCounter() const;
+  std::optional<int64_t> ReadErrorHistoryCount() const;
+  // nullopt means the GET failed. An empty string is a successful empty row.
+  std::optional<std::string> ReadErrorHistoryDescription(int row) const;
 
   static constexpr const char* kModelName = "Brother HL-L3280CDW";
 
@@ -74,6 +89,8 @@ class BrotherHlL3280CdwProfile {
   static std::string OctetsToHex(const std::string& raw_octets);
 
  private:
+  void ReadMaintenance(BrotherSnmpSnapshot& snap) const;
+
   SnmpV2cClient client_;
 };
 
