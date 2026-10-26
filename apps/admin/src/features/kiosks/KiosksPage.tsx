@@ -523,7 +523,8 @@ export function KiosksPage() {
             }
           />
         ) : (
-          <table className="table">
+          <div className="overflow-x-auto">
+          <table className="table border-separate border-spacing-0">
             <thead>
               <tr>
                 <th>Name</th>
@@ -534,7 +535,9 @@ export function KiosksPage() {
                 <th>Last heartbeat</th>
                 <th>Printer</th>
                 <th>Recording</th>
-                <th>Actions</th>
+                <th className="sticky right-0 z-20 w-52 border-l border-border bg-card">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -547,7 +550,7 @@ export function KiosksPage() {
                     <StatusBadge status={device.status} />
                   </td>
                   <td>
-                    <code>{device.deviceKey}</code>
+                    <code className="break-all">{device.deviceKey}</code>
                   </td>
                   <td className="text-muted-foreground">
                     {device.lastHeartbeatAt
@@ -563,12 +566,13 @@ export function KiosksPage() {
                   <td>
                     <RecordingStatusCell device={device} />
                   </td>
-                  <td>
-                    <div className="row-actions">
+                  <td className="sticky right-0 z-10 w-52 border-l border-border bg-card align-top">
+                    <div className="flex w-full flex-col gap-2">
                       {device.status === 'inactive' ? (
                         <Button
                           type="button"
                           variant="secondary"
+                          className="w-full"
                           disabled={submitting}
                           onClick={() => void onSetStatus(device, 'active')}
                         >
@@ -578,6 +582,7 @@ export function KiosksPage() {
                         <Button
                           type="button"
                           variant="danger"
+                          className="w-full"
                           disabled={submitting}
                           onClick={() => void onSetStatus(device, 'inactive')}
                         >
@@ -587,6 +592,7 @@ export function KiosksPage() {
                       <Button
                         type="button"
                         variant="secondary"
+                        className="w-full"
                         disabled={submitting}
                         onClick={() => openSettings(device)}
                       >
@@ -599,6 +605,7 @@ export function KiosksPage() {
                         <Button
                           type="button"
                           variant="secondary"
+                          className="w-full"
                           disabled={submitting || device.status === 'inactive'}
                           onClick={() => void onSetSurveillance(device, false)}
                         >
@@ -608,6 +615,7 @@ export function KiosksPage() {
                         <Button
                           type="button"
                           variant="secondary"
+                          className="w-full"
                           disabled={submitting || device.status === 'inactive'}
                           onClick={() => void onSetSurveillance(device, true)}
                         >
@@ -620,6 +628,7 @@ export function KiosksPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Panel>
 
