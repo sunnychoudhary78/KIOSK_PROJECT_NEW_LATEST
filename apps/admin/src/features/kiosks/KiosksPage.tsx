@@ -22,6 +22,7 @@ import {
   resolvePrinterErrorHistory,
   resolvePrinterMaintenance,
   resolvePrinterRowSummary,
+  resolvePrinterStatus,
   type PrinterHealthView,
 } from './printerMaintenance';
 import {
@@ -101,6 +102,15 @@ function PrinterDetailsBody({ health }: { health: PrinterHealthView | null | und
     (maintenance.status === 'stale' ? maintenance.title : undefined) ??
     (errors.status === 'stale' ? errors.title : undefined);
 
+  const printerStatus = resolvePrinterStatus(health);
+  const statusClass = printerStatus.fault
+    ? health?.snmpOk === false
+      ? 'font-medium text-amber-700'
+      : 'font-medium text-red-700'
+    : printerStatus.kind === 'ready' || printerStatus.kind === 'printing'
+      ? 'font-medium text-emerald-700'
+      : 'text-muted-foreground';
+
   return (
     <div className="stack">
       {stale ? (
@@ -108,6 +118,10 @@ function PrinterDetailsBody({ health }: { health: PrinterHealthView | null | und
           Stale
         </p>
       ) : null}
+      <section className="stack">
+        <h3 className="text-sm font-medium">Status</h3>
+        <p className={`text-sm ${statusClass}`}>{printerStatus.label}</p>
+      </section>
       <section className="stack">
         <h3 className="text-sm font-medium">Toner</h3>
         {maintenance.status === 'unavailable' ? (

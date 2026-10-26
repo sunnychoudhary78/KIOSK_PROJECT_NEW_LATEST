@@ -3,6 +3,7 @@ import {
   resolvePrinterErrorHistory,
   resolvePrinterMaintenance,
   resolvePrinterRowSummary,
+  resolvePrinterStatus,
 } from '../../admin/src/features/kiosks/printerMaintenance.ts';
 
 const verified = {
@@ -175,5 +176,63 @@ describe('admin printer row summary', () => {
         },
       }),
     ).toEqual({ label: '2 errors', tone: 'amber' });
+  });
+
+  it('shows Ready instead of OK when the printer is idle', () => {
+    expect(
+      resolvePrinterRowSummary({
+        ...verified,
+        state: 'ready',
+        errorHistory: { available: true, entries: [] },
+      }),
+    ).toEqual({ label: 'Ready', tone: 'ok' });
+    expect(resolvePrinterStatus({ state: 'printing' })).toEqual({
+      label: 'Printing',
+      kind: 'printing',
+      fault: false,
+    });
+  });
+
+  it('shows Out of paper ahead of a recorded error', () => {
+    expect(
+      resolvePrinterRowSummary({
+        ...verified,
+        state: 'paper_out',
+        errorHistory: {
+          available: true,
+          entries: [{ index: 1, description: 'Cannot Print ZC' }],
+        },
+      }),
+    ).toEqual({ label: 'Out of paper', tone: 'alert' });
+  });
+
+  it('keeps a fault amber when the sample is stale', () => {
+    expect(
+      resolvePrinterRowSummary({
+        ...verified,
+        state: 'paper_out',
+        snmpOk: false,
+        errorHistory: { available: true, entries: [] },
+      }),
+    ).toEqual({ label: 'Out of paper', tone: 'amber' });
+  });
+
+  it('leaves the summary unchanged when state is missing', () => {
+    expect(
+      resolvePrinterRowSummary({
+        ...verified,
+        errorHistory: { available: true, entries: [] },
+      }),
+    ).toEqual({ label: 'OK', tone: 'ok' });
+    expect(resolvePrinterStatus({})).toEqual({
+      label: 'Unavailable',
+      kind: 'unavailable',
+      fault: false,
+    });
+    expect(resolvePrinterStatus({ state: 'unknown' })).toEqual({
+      label: 'Unavailable',
+      kind: 'unavailable',
+      fault: false,
+    });
   });
 });

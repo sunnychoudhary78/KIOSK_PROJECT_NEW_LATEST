@@ -24,6 +24,7 @@ export type PrinterMaintenance = {
 };
 
 export type PrinterHealthView = {
+  state?: string | null;
   snmpOk?: boolean | null;
   lastSuccessAt?: string | null;
   maintenance?: PrinterMaintenance | null;
@@ -79,6 +80,22 @@ export type PrinterRowTone = 'muted' | 'ok' | 'amber' | 'alert';
 export type PrinterRowSummary = {
   label: string;
   tone: PrinterRowTone;
+};
+
+export type PrinterStatusKind =
+  | 'ready'
+  | 'printing'
+  | 'paper_out'
+  | 'jam'
+  | 'toner_low'
+  | 'offline'
+  | 'error'
+  | 'unavailable';
+
+export type PrinterStatusDisplay = {
+  label: string;
+  kind: PrinterStatusKind;
+  fault: boolean;
 };
 
 const MISSING = '—';
@@ -182,15 +199,52 @@ export function resolvePrinterErrorHistory(
   return { status: 'current', entries };
 }
 
+const PRINTER_STATUS_LABELS: Record<Exclude<PrinterStatusKind, 'unavailable'>, string> = {
+  ready: 'Ready',
+  printing: 'Printing',
+  paper_out: 'Out of paper',
+  jam: 'Paper jam',
+  toner_low: 'Toner low',
+  offline: 'Offline',
+  error: 'Error',
+};
+
+const PRINTER_FAULTS = new Set<PrinterStatusKind>([
+  'paper_out',
+  'jam',
+  'toner_low',
+  'offline',
+  'error',
+]);
+
+export function resolvePrinterStatus(
+  health: PrinterHealthView | null | undefined,
+): PrinterStatusDisplay {
+  const state = health?.state;
+  if (state && state in PRINTER_STATUS_LABELS) {
+    const kind = state as Exclude<PrinterStatusKind, 'unavailable'>;
+    return {
+      label: PRINTER_STATUS_LABELS[kind],
+      kind,
+      fault: PRINTER_FAULTS.has(kind),
+    };
+  }
+  return { label: 'Unavailable', kind: 'unavailable', fault: false };
+}
+
 export function resolvePrinterRowSummary(
   health: PrinterHealthView | null | undefined,
 ): PrinterRowSummary {
   const maintenance = resolvePrinterMaintenance(health);
   const errors = resolvePrinterErrorHistory(health);
+  const status = resolvePrinterStatus(health);
   const stale = maintenance.status === 'stale' || errors.status === 'stale';
   const recorded =
     errors.status === 'current' || errors.status === 'stale' ? errors.entries.length : 0;
 
+  if (status.fault) {
+    return { label: status.label, tone: health?.snmpOk === false ? 'amber' : 'alert' };
+  }
   if (recorded > 0) {
     return {
       label: recorded === 1 ? '1 error' : `${recorded} errors`,
@@ -201,6 +255,9 @@ export function resolvePrinterRowSummary(
     return { label: 'Stale', tone: 'amber' };
   }
   if (maintenance.status === 'current') {
+    if (status.kind === 'ready' || status.kind === 'printing') {
+      return { label: status.label, tone: 'ok' };
+    }
     return { label: 'OK', tone: 'ok' };
   }
   return { label: 'Unavailable', tone: 'muted' };
