@@ -1300,6 +1300,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/RazorpayVerifyResponse'
 
+  /payments/support-query:
+    get:
+      tags: [Payments]
+      summary: Read the signed-in citizen's support note for a payment
+      operationId: getPaymentSupportQuery
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: challengeId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Open note, or null when none has been sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportQueryLookup'
+        '409':
+          description: OTP was already sent
+    post:
+      tags: [Payments]
+      summary: Send one support note for a payment that did not produce an OTP
+      operationId: openPaymentSupportQuery
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenSupportQueryRequest'
+      responses:
+        '201':
+          description: The existing or newly stored note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportQuery'
+        '409':
+          description: OTP was already sent
+
+  /support-queries:
+    get:
+      tags: [Payments]
+      summary: List payment support notes, open first
+      operationId: listSupportQueries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Support notes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SupportQuery'
+
+  /support-queries/{queryId}/resolve:
+    post:
+      tags: [Payments]
+      summary: Mark a support note resolved
+      operationId: resolveSupportQuery
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: queryId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Resolved note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportQuery'
+
   /payments/razorpay/webhook:
     post:
       tags: [Payments]
@@ -2782,6 +2870,59 @@ components:
           type: string
         razorpay_key_id:
           type: string
+
+    OpenSupportQueryRequest:
+      type: object
+      required: [challengeId, message]
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    SupportQuery:
+      type: object
+      required: [id, status, message, phone, amountPaise, paymentStatus, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [open, resolved]
+        message:
+          type: string
+        phone:
+          type: string
+        amountPaise:
+          type: integer
+        razorpayOrderId:
+          type: string
+          nullable: true
+        failureReason:
+          type: string
+          nullable: true
+        paymentStatus:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SupportQueryLookup:
+      type: object
+      required: [query]
+      properties:
+        query:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/SupportQuery'
 
     VerifyRazorpayPaymentRequest:
       type: object

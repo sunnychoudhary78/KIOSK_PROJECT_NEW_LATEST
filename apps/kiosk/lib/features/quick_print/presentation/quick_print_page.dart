@@ -111,6 +111,11 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
               error: state.error,
               message: state.message,
             ),
+          QuickPrintPhase.printResult => KioskPrintResult(
+              confirmed: state.printed,
+              detail: state.message,
+              onHome: _endSession,
+            ),
           QuickPrintPhase.documents || QuickPrintPhase.done => Padding(
               padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),
               child: Column(

@@ -21,6 +21,7 @@ enum DigilockerPhase {
   preparingPreview,
   previewing,
   printing,
+  printResult,
   done,
   error,
 }
@@ -37,6 +38,7 @@ class DigilockerUiState {
     this.previewBytes,
     this.previewFilePath,
     this.previewJobId,
+    this.printConfirmed = false,
   });
 
   final DigilockerPhase phase;
@@ -49,6 +51,7 @@ class DigilockerUiState {
   final Uint8List? previewBytes;
   final String? previewFilePath;
   final String? previewJobId;
+  final bool printConfirmed;
 
   bool get loading =>
       phase == DigilockerPhase.loadingDocs ||
@@ -391,10 +394,11 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       );
       if (outcome.isSuccess || outcome.isUncertain) {
         state = DigilockerUiState(
-          phase: DigilockerPhase.done,
+          phase: DigilockerPhase.printResult,
           sessionId: sessionId,
           documents: documents,
           message: outcome.userMessage,
+          printConfirmed: outcome.isSuccess,
         );
       } else {
         state = DigilockerUiState(

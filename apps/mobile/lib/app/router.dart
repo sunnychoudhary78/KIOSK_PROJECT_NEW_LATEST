@@ -9,6 +9,7 @@ import 'package:skp_mobile/features/nearby_kiosks/presentation/nearby_kiosks_map
 import 'package:skp_mobile/features/nearby_kiosks/presentation/nearby_kiosks_page.dart';
 import 'package:skp_mobile/features/otp_print/presentation/otp_print_page.dart';
 import 'package:skp_mobile/features/otp_print/presentation/otp_print_payment_page.dart';
+import 'package:skp_mobile/features/otp_print/presentation/payment_support_page.dart';
 import 'package:skp_mobile/features/otp_print/presentation/otp_print_success_page.dart';
 import 'package:skp_mobile/features/profile/presentation/about_page.dart';
 import 'package:skp_mobile/features/profile/presentation/how_it_works_page.dart';
@@ -19,6 +20,7 @@ class AppRoutes {
   static const login = '/login';
   static const otpPrint = '/otp-print';
   static const otpPrintPayment = '/otp-print/payment';
+  static const otpPrintSupport = '/otp-print/support';
   static const otpPrintSuccess = '/otp-print/success';
   static const nearbyKiosks = '/nearby-kiosks';
   static const nearbyKiosksMap = '/nearby-kiosks/map';
@@ -39,6 +41,21 @@ class AppRouter {
       case AppRoutes.otpPrintPayment:
         return MaterialPageRoute(
           builder: (_) => const _AuthGate(child: OtpPrintPaymentPage()),
+        );
+      case AppRoutes.otpPrintSupport:
+        final supportArgs = settings.arguments;
+        return MaterialPageRoute(
+          builder: (_) => _AuthGate(
+            child: PaymentSupportPage(
+              args: supportArgs is PaymentSupportArgs
+                  ? supportArgs
+                  : const PaymentSupportArgs(
+                      challengeId: '',
+                      amountLabel: '',
+                      kioskName: 'Kiosk',
+                    ),
+            ),
+          ),
         );
       case AppRoutes.otpPrintSuccess:
         return MaterialPageRoute(

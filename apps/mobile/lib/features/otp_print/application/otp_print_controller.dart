@@ -107,6 +107,27 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
     return state.asData?.value?.otpSent ?? false;
   }
 
+  Future<PaymentSupportNote?> loadSupportNote(String challengeId) async {
+    final result = await _api.get(
+      '/payments/support-query',
+      query: {'challengeId': challengeId},
+    );
+    final query = result['query'];
+    if (query is! Map) return null;
+    return PaymentSupportNote.fromJson(Map<String, dynamic>.from(query));
+  }
+
+  Future<PaymentSupportNote> sendSupportNote({
+    required String challengeId,
+    required String message,
+  }) async {
+    final result = await _api.post(
+      '/payments/support-query',
+      body: {'challengeId': challengeId, 'message': message},
+    );
+    return PaymentSupportNote.fromJson(result);
+  }
+
   Future<void> resendOtp() async {
     final current = state.asData?.value;
     if (current == null) return;

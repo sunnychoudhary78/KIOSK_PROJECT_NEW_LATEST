@@ -125,6 +125,11 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
               error: state.error,
               message: state.message,
             ),
+          OtpPrintPhase.printResult => KioskPrintResult(
+              confirmed: state.printed,
+              detail: state.message,
+              onHome: _endSession,
+            ),
           OtpPrintPhase.documents || OtpPrintPhase.done => _DocumentList(
               title: state.redeemResult?.title ?? 'Your documents',
               message: state.message,

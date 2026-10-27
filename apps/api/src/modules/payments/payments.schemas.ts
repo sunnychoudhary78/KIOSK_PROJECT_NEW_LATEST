@@ -10,5 +10,15 @@ export const verifyRazorpayPaymentSchema = z.object({
   razorpay_signature: z.string().min(1),
 });
 
+export const openSupportQuerySchema = z.object({
+  challengeId: z.string().uuid(),
+  message: z.string().trim().min(1).max(500),
+});
+
+export const supportQueryChallengeQuerySchema = z.object({
+  challengeId: z.string().uuid(),
+});
+
 export type CreateRazorpayOrderInput = z.infer<typeof createRazorpayOrderSchema>;
 export type VerifyRazorpayPaymentInput = z.infer<typeof verifyRazorpayPaymentSchema>;
+export type OpenSupportQueryInput = z.infer<typeof openSupportQuerySchema>;

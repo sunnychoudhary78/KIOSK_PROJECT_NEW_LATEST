@@ -72,6 +72,11 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum SupportQueryStatus {
+  open
+  resolved
+}
+
 enum DigiLockerSessionStatus {
   pending
   authorized
@@ -169,6 +174,7 @@ model User {
   tenant         Tenant?        @relation(fields: [tenantId], references: [id])
   otpChallenges  OtpChallenge[]
   payments       Payment[]
+  supportQueries SupportQuery[]
 
   @@map("users")
 }
@@ -457,9 +463,30 @@ model Payment {
   challenge         OtpChallenge?      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   quickPrintSession QuickPrintSession? @relation(fields: [quickPrintSessionId], references: [id], onDelete: Cascade)
   user              User?              @relation(fields: [userId], references: [id])
+  supportQuery      SupportQuery?
 
   @@index([status, expiresAt])
   @@map("payments")
+}
+
+model SupportQuery {
+  id              String             @id @default(uuid()) @db.Uuid
+  paymentId       String             @unique @map("payment_id") @db.Uuid
+  userId          String             @map("user_id") @db.Uuid
+  phone           String             @default("")
+  message         String             @db.VarChar(500)
+  status          SupportQueryStatus @default(open)
+  razorpayOrderId String?            @map("razorpay_order_id")
+  amountPaise     Int                @map("amount_paise")
+  failureReason   String?            @map("failure_reason")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  resolvedAt      DateTime?          @map("resolved_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("support_queries")
 }
 
 model OtpDocument {

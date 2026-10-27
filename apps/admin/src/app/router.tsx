@@ -6,6 +6,7 @@ import { KiosksPage } from '../features/kiosks/KiosksPage';
 import { ServicesPage } from '../features/services/ServicesPage';
 import { FuelStationsPage } from '../features/fuel_stations/FuelStationsPage';
 import { PrintJobsPage } from '../features/print-jobs/PrintJobsPage';
+import { SupportPage } from '../features/support/SupportPage';
 import { FreePrintUsagePage } from '../features/print-quota/FreePrintUsagePage';
 import { DigiLockerPage } from '../features/digilocker/DigiLockerPage';
 import { AuditLogsPage } from '../features/audit-logs/AuditLogsPage';
@@ -36,6 +37,7 @@ export function AppRouter() {
             <Route path="services" element={<ServicesPage />} />
             <Route path="fuel-stations" element={<FuelStationsPage />} />
             <Route path="print-jobs" element={<PrintJobsPage />} />
+            <Route path="support" element={<SupportPage />} />
             <Route path="print-quota" element={<FreePrintUsagePage />} />
             <Route path="digilocker" element={<DigiLockerPage />} />
             <Route path="recordings" element={<RecordingsPage />} />

@@ -8,6 +8,7 @@ import 'package:skp_mobile/core/ui/ui.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 import 'package:skp_mobile/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_mobile/features/otp_print/data/razorpay_checkout.dart';
+import 'package:skp_mobile/features/otp_print/presentation/payment_support_page.dart';
 import 'package:skp_mobile/l10n/app_localizations.dart';
 
 class OtpPrintPaymentPage extends ConsumerStatefulWidget {
@@ -21,6 +22,7 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
   bool _busy = false;
   String? _error;
   String? _walletHint;
+  String? _orderId;
 
   Future<void> _pay() async {
     final challenge = ref.read(otpPrintControllerProvider).asData?.value;
@@ -33,6 +35,7 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
     try {
       final notifier = ref.read(otpPrintControllerProvider.notifier);
       final order = await notifier.createRazorpayOrder(challenge.id);
+      _orderId = order.orderId ?? _orderId;
       if (order.alreadyPaid || order.otpSent) {
         if (order.otpSent || await notifier.pollUntilOtpSent()) {
           if (!mounted) return;
@@ -134,9 +137,28 @@ class _OtpPrintPaymentPageState extends ConsumerState<OtpPrintPaymentPage> {
           if (_error != null) ...[
             SkpStatusBanner(message: _error!, tone: SkpBannerTone.danger),
             const SizedBox(height: 8),
+            SkpTextLink(
+              label: 'Money deducted? Contact support',
+              onPressed: _busy
+                  ? null
+                  : () {
+                      Navigator.of(context).pushNamed(
+                        AppRoutes.otpPrintSupport,
+                        arguments: PaymentSupportArgs(
+                          challengeId: challenge.id,
+                          amountLabel: amount,
+                          kioskName: challenge.deviceName ?? 'Kiosk',
+                          orderId: _orderId,
+                        ),
+                      );
+                    },
+            ),
+            const SizedBox(height: 8),
           ],
           SkpPrimaryButton(
-            label: _busy ? l10n.processing : l10n.payAmount(amount),
+            label: _busy
+                ? l10n.processing
+                : (_error != null ? 'Try again' : l10n.payAmount(amount)),
             loading: _busy,
             onPressed: _busy ? null : _pay,
           ),

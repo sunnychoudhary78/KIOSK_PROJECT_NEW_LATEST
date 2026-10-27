@@ -17,6 +17,7 @@ enum OtpPrintPhase {
   preparingPreview,
   previewing,
   printing,
+  printResult,
   done,
   error,
 }
@@ -200,10 +201,12 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       );
       if (outcome.isSuccess || outcome.isUncertain) {
         state = state.copyWith(
-          phase: OtpPrintPhase.previewing,
-          printed: true,
+          phase: OtpPrintPhase.printResult,
+          printed: outcome.isSuccess,
           message: outcome.userMessage,
           clearError: true,
+          clearPreviewDoc: true,
+          clearPreviewBytes: true,
         );
       } else {
         state = state.copyWith(

@@ -182,6 +182,28 @@ class RazorpayOrder {
   }
 }
 
+class PaymentSupportNote {
+  const PaymentSupportNote({
+    required this.id,
+    required this.status,
+    required this.message,
+  });
+
+  final String id;
+  final String status;
+  final String message;
+
+  bool get isOpen => status == 'open';
+
+  factory PaymentSupportNote.fromJson(Map<String, dynamic> json) {
+    return PaymentSupportNote(
+      id: json['id'] as String? ?? '',
+      status: json['status'] as String? ?? 'open',
+      message: json['message'] as String? ?? '',
+    );
+  }
+}
+
 int _asInt(dynamic value, [int fallback = 0]) {
   if (value is int) return value;
   if (value is num) return value.toInt();

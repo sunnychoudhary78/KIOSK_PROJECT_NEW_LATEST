@@ -104,6 +104,11 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
               pdfBytes: state.previewBytes!,
               error: state.error,
             ),
+          DigilockerPhase.printResult => KioskPrintResult(
+              confirmed: state.printConfirmed,
+              detail: state.message,
+              onHome: _endSessionAndGoHome,
+            ),
           _ => Padding(
               padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),
               child: Column(

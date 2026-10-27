@@ -1,4 +1,10 @@
-import { OtpChallengeStatus, PaymentStatus, QuickPrintSessionStatus } from '@prisma/client';
+import {
+  OtpChallengeStatus,
+  PaymentStatus,
+  QuickPrintSessionStatus,
+  SupportQueryStatus,
+  type SupportQuery,
+} from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError, isAppError } from '../../shared/errors.js';
@@ -9,7 +15,11 @@ import {
   verifyPaymentSignature,
   verifyWebhookSignature,
 } from './razorpay.client.js';
-import type { CreateRazorpayOrderInput, VerifyRazorpayPaymentInput } from './payments.schemas.js';
+import type {
+  CreateRazorpayOrderInput,
+  OpenSupportQueryInput,
+  VerifyRazorpayPaymentInput,
+} from './payments.schemas.js';
 
 type WebhookPayload = {
   event?: string;
@@ -202,6 +212,9 @@ export class PaymentsService {
         throw new AppError('not_found', 'Payment is not linked to a print session', 404);
       }
       const issued = await this.otpPrint.issueOtpAndNotify(payment.challengeId, input.correlationId);
+      if (issued.issued || issued.alreadyIssued) {
+        await this.resolveOpenSupportQuery(payment.id, input.correlationId);
+      }
       return {
         alreadyPaid: true,
         otpSent: issued.alreadyIssued || issued.issued,
@@ -260,6 +273,9 @@ export class PaymentsService {
     }
 
     const issued = await this.otpPrint.issueOtpAndNotify(payment.challengeId, input.correlationId);
+    if (issued.issued || issued.alreadyIssued) {
+      await this.resolveOpenSupportQuery(payment.id, input.correlationId);
+    }
     return {
       alreadyPaid: false,
       otpSent: issued.issued || issued.alreadyIssued,
@@ -361,6 +377,150 @@ export class PaymentsService {
     }
 
     return { status: 'ok' as const };
+  }
+
+  async getSupportQuery(userId: string, challengeId: string) {
+    const challenge = await this.loadSupportChallenge(userId, challengeId);
+    this.assertOtpNotSent(challenge.status);
+    const payment = challenge.payment;
+    if (!payment) {
+      throw new AppError('payment_not_required', 'This print session does not require payment', 400);
+    }
+    return {
+      query: payment.supportQuery
+        ? this.toPublicSupportQuery(payment.supportQuery, payment.status)
+        : null,
+    };
+  }
+
+  async openSupportQuery(userId: string, input: OpenSupportQueryInput, correlationId?: string) {
+    const challenge = await this.loadSupportChallenge(userId, input.challengeId);
+    this.assertOtpNotSent(challenge.status);
+    const payment = challenge.payment;
+    if (!payment) {
+      throw new AppError('payment_not_required', 'This print session does not require payment', 400);
+    }
+    if (payment.supportQuery) {
+      return this.toPublicSupportQuery(payment.supportQuery, payment.status);
+    }
+
+    const created = await this.db.supportQuery.create({
+      data: {
+        paymentId: payment.id,
+        userId,
+        phone: challenge.user.phone ?? '',
+        message: input.message,
+        status: SupportQueryStatus.open,
+        razorpayOrderId: payment.razorpayOrderId,
+        amountPaise: payment.amountPaise,
+        failureReason: payment.failureReason,
+      },
+    });
+
+    await this.audit.record({
+      action: 'support_query.opened',
+      principalType: 'citizen',
+      principalId: userId,
+      resourceType: 'support_query',
+      resourceId: created.id,
+      correlationId,
+      metadata: {
+        challengeId: challenge.id,
+        paymentId: payment.id,
+        razorpayOrderId: payment.razorpayOrderId,
+      },
+    });
+
+    return this.toPublicSupportQuery(created, payment.status);
+  }
+
+  async listSupportQueries() {
+    const rows = await this.db.supportQuery.findMany({
+      include: { payment: true },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    });
+    return {
+      items: rows.map((row) => this.toPublicSupportQuery(row, row.payment.status)),
+    };
+  }
+
+  async resolveSupportQuery(queryId: string, adminId: string, correlationId?: string) {
+    const row = await this.db.supportQuery.findUnique({
+      where: { id: queryId },
+      include: { payment: true },
+    });
+    if (!row) {
+      throw new AppError('not_found', 'Support message not found', 404);
+    }
+    if (row.status === SupportQueryStatus.resolved) {
+      return this.toPublicSupportQuery(row, row.payment.status);
+    }
+    const updated = await this.db.supportQuery.update({
+      where: { id: queryId },
+      data: { status: SupportQueryStatus.resolved, resolvedAt: new Date() },
+    });
+    await this.audit.record({
+      action: 'support_query.resolved',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'support_query',
+      resourceId: queryId,
+      correlationId,
+      metadata: { paymentId: row.paymentId },
+    });
+    return this.toPublicSupportQuery(updated, row.payment.status);
+  }
+
+  private async resolveOpenSupportQuery(paymentId: string, correlationId?: string) {
+    const open = await this.db.supportQuery.findUnique({ where: { paymentId } });
+    if (!open || open.status !== SupportQueryStatus.open) {
+      return;
+    }
+    await this.db.supportQuery.update({
+      where: { id: open.id },
+      data: { status: SupportQueryStatus.resolved, resolvedAt: new Date() },
+    });
+    await this.audit.record({
+      action: 'support_query.resolved',
+      principalType: 'system',
+      principalId: null,
+      resourceType: 'support_query',
+      resourceId: open.id,
+      correlationId,
+      metadata: { paymentId, automatic: true },
+    });
+  }
+
+  private assertOtpNotSent(status: OtpChallengeStatus) {
+    if (status === OtpChallengeStatus.pending || status === OtpChallengeStatus.redeemed) {
+      throw new AppError('payment_already_settled', 'This payment already has an OTP', 409);
+    }
+  }
+
+  private async loadSupportChallenge(userId: string, challengeId: string) {
+    const challenge = await this.db.otpChallenge.findUnique({
+      where: { id: challengeId },
+      include: { user: true, payment: { include: { supportQuery: true } } },
+    });
+    if (!challenge || challenge.userId !== userId) {
+      throw new AppError('not_found', 'Print session not found', 404);
+    }
+    return challenge;
+  }
+
+  private toPublicSupportQuery(query: SupportQuery, paymentStatus: PaymentStatus) {
+    return {
+      id: query.id,
+      status: query.status,
+      message: query.message,
+      phone: query.phone,
+      amountPaise: query.amountPaise,
+      razorpayOrderId: query.razorpayOrderId,
+      failureReason: query.failureReason,
+      paymentStatus,
+      createdAt: query.createdAt.toISOString(),
+      resolvedAt: query.resolvedAt?.toISOString() ?? null,
+    };
   }
 
   private toPublicPayment(payment: {

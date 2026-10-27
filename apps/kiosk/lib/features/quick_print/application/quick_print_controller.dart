@@ -21,6 +21,7 @@ enum QuickPrintPhase {
   preparingPreview,
   previewing,
   printing,
+  printResult,
   done,
   error,
 }
@@ -253,10 +254,12 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
       );
       if (outcome.isSuccess || outcome.isUncertain) {
         state = state.copyWith(
-          phase: QuickPrintPhase.previewing,
-          printed: true,
+          phase: QuickPrintPhase.printResult,
+          printed: outcome.isSuccess,
           message: outcome.userMessage,
           clearError: true,
+          clearPreviewDoc: true,
+          clearPreviewBytes: true,
         );
       } else {
         state = state.copyWith(
