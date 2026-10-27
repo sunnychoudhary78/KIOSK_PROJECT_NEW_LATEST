@@ -216,6 +216,31 @@ describe('PrintingService.updateStatus reconciliation', () => {
     });
   });
 
+  it('keeps the free-page hold on a retryable failure and releases it on the next one', async () => {
+    const { service, ledgerUpdateMany } = makeService(baseJob());
+    await service.updateStatus(
+      jobId,
+      {
+        status: 'failed',
+        pagesReported: 0,
+        errorMessage: 'spooler error',
+        holdForRetry: true,
+      },
+      deviceId,
+    );
+    expect(ledgerUpdateMany).not.toHaveBeenCalled();
+    await service.updateStatus(
+      jobId,
+      {
+        status: 'failed',
+        pagesReported: 0,
+        errorMessage: 'spooler error',
+      },
+      deviceId,
+    );
+    expect(ledgerUpdateMany).toHaveBeenCalledTimes(1);
+  });
+
   it('holds reservation and flags review on failed with partial pages', async () => {
     const { service, ledgerUpdateMany } = makeService(baseJob());
     const result = await service.updateStatus(
@@ -276,5 +301,38 @@ describe('PrintingService.updateStatus reconciliation', () => {
     });
     expect(result.pagesExpected).toBe(5);
     expect(result.reconcileStatus).toBe('pending');
+  });
+
+  it('returns the first support note for a print job', async () => {
+    const note = {
+      id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      status: 'open',
+      message: 'Visitor says the pages were not received.',
+    };
+    const create = vi.fn(async () => note);
+    const db = {
+      printJob: {
+        findUnique: vi.fn(async () => ({
+          ...baseJob(),
+          errorMessage: 'spooler error',
+        })),
+      },
+      supportQuery: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(note),
+        create,
+      },
+    };
+    const service = new PrintingService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    const first = await service.openJobSupportNote(jobId, deviceId, note.message);
+    const second = await service.openJobSupportNote(jobId, deviceId, 'another note');
+    expect(first.id).toBe(note.id);
+    expect(second).toEqual({ id: note.id, status: note.status, message: note.message });
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });

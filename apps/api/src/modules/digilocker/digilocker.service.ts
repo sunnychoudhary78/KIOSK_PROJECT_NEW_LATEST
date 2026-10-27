@@ -7,6 +7,7 @@ import {
 } from '../../infrastructure/external/digilocker.client.js';
 import type { DigiLockerClient } from '../../infrastructure/external/digilocker.types.js';
 import { AppError } from '../../shared/errors.js';
+import { assertPrintingAvailable } from '../printing/printing_pause.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
@@ -40,6 +41,7 @@ export class DigiLockerService {
   ) {}
 
   async startSession(deviceId: string, _input: StartDigiLockerSessionInput, correlationId?: string) {
+    await assertPrintingAvailable(this.db, deviceId);
     await this.services.assertEnabled(deviceId, 'digilocker_print');
 
     // Always use portal-registered redirect URI from config (ignore client returnUrl).

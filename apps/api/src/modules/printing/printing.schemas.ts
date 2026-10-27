@@ -18,6 +18,11 @@ export const updatePrintJobStatusSchema = z.object({
   reconcileStatus: z.enum(printJobReconcileStatuses).optional(),
   reconcileDetail: z.string().max(500).optional(),
   needsAdminReview: z.boolean().optional(),
+  holdForRetry: z.boolean().optional(),
+});
+
+export const printJobSupportSchema = z.object({
+  message: z.string().trim().min(1).max(500),
 });
 
 export type UpdatePrintJobStatusInput = z.infer<typeof updatePrintJobStatusSchema>;

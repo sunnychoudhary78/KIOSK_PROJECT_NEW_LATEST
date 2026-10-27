@@ -191,6 +191,7 @@ describe('DevicesService.heartbeat', () => {
     );
     await expect(service.heartbeat(deviceId, deviceId)).resolves.toEqual({
       surveillanceEnabled: true,
+      printingPausedReason: null,
     });
   });
 
@@ -374,6 +375,139 @@ describe('DevicesService.heartbeat', () => {
         printerRefreshRequestedAt: null,
       },
     });
+  });
+
+  it('latches paper-out and a later ready heartbeat does not clear it', async () => {
+    let paused: string | null = null;
+    const update = vi.fn(async ({ data }: { data: { printingPausedReason?: string | null } }) => {
+      if ('printingPausedReason' in data) paused = data.printingPausedReason ?? null;
+      return { ...deviceRow(DeviceStatus.active), printingPausedReason: paused };
+    });
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceRow(DeviceStatus.active),
+          printingPausedReason: paused,
+        })),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    const paperOut = await service.heartbeat(deviceId, deviceId, {
+      printer: { state: 'paper_out', noPaper: true, snmpReachable: true },
+    });
+    expect(paperOut.printingPausedReason).toBe('paper_out');
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ printingPausedReason: 'paper_out' }),
+      }),
+    );
+
+    const ready = await service.heartbeat(deviceId, deviceId, {
+      printer: { state: 'ready', noPaper: false, snmpReachable: true },
+    });
+    expect(ready.printingPausedReason).toBe('paper_out');
+    const second = update.mock.calls[1]?.[0] as { data: Record<string, unknown> };
+    expect(second.data.printingPausedReason).toBeUndefined();
+  });
+
+  it('does not latch when SNMP is unreachable or the printer is jammed', async () => {
+    const update = vi.fn(async () => deviceRow(DeviceStatus.active));
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => deviceRow(DeviceStatus.active)),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    await service.heartbeat(deviceId, deviceId, {
+      printer: { state: 'paper_out', snmpReachable: false },
+    });
+    await service.heartbeat(deviceId, deviceId, {
+      printer: { state: 'jam', noPaper: false, snmpReachable: true },
+    });
+    for (const call of update.mock.calls) {
+      const data = (call[0] as { data: Record<string, unknown> }).data;
+      expect(data.printingPausedReason).toBeUndefined();
+    }
+  });
+});
+
+describe('DevicesService.enablePrinting', () => {
+  it('rejects while the latest report is still paper-out', async () => {
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceRow(DeviceStatus.active),
+          printingPausedReason: 'paper_out',
+          printerHealth: { state: 'paper_out', noPaper: true },
+        })),
+        update: vi.fn(),
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    await expect(service.enablePrinting(deviceId, 'admin-1')).rejects.toMatchObject({
+      code: 'printer_still_out_of_paper',
+      statusCode: 409,
+    });
+    expect(db.device.update).not.toHaveBeenCalled();
+  });
+
+  it('clears the pause when the latest report is not paper-out', async () => {
+    const row = {
+      ...deviceRow(DeviceStatus.active),
+      printingPausedReason: 'paper_out',
+      printerHealth: { state: 'ready', noPaper: false, snmpReachable: true },
+    };
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => row),
+        update: vi.fn(async () => ({ ...row, printingPausedReason: null })),
+      },
+    };
+    const audit = { record: vi.fn(async () => undefined) };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      audit as unknown as AuditService,
+    );
+    const result = await service.enablePrinting(deviceId, 'admin-1', 'corr');
+    expect(result.printingPausedReason).toBeNull();
+    expect(db.device.update).toHaveBeenCalledWith({
+      where: { id: deviceId },
+      data: { printingPausedReason: null },
+      include: { site: true },
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'device.printing_enabled', principalId: 'admin-1' }),
+    );
+  });
+});
+
+describe('DevicesService.nearby', () => {
+  it('omits kiosks whose printing is paused', async () => {
+    const findMany = vi.fn(async () => []);
+    const service = new DevicesService(
+      { device: { findMany } } as unknown as DbClient,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+    await service.nearby({ lat: 28.6, lng: 77.2, limit: 10 });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: DeviceStatus.active,
+          printingPausedReason: null,
+        }),
+      }),
+    );
   });
 });
 

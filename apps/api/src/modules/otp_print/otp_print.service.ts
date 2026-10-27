@@ -109,6 +109,7 @@ export class OtpPrintService {
         extraColorPageChargeRupees: true,
         freeDisabledFromLocal: true,
         freeDisabledToLocal: true,
+        printingPausedReason: true,
       },
     });
     if (!device) {
@@ -116,6 +117,9 @@ export class OtpPrintService {
     }
     if (device.status !== DeviceStatus.active) {
       throw new AppError('kiosk_unavailable', 'Selected kiosk is not available', 400);
+    }
+    if (device.printingPausedReason) {
+      throw new AppError('printing_paused', 'Printing is paused because the printer is out of paper', 403);
     }
     await this.services.assertEnabled(device.id, 'otp_print');
 
@@ -565,6 +569,14 @@ export class OtpPrintService {
 
     if (!challenge.documents.length) {
       throw new AppError('otp_empty', 'No documents linked to this OTP', 400);
+    }
+
+    const kiosk = await this.db.device.findUnique({
+      where: { id: deviceId },
+      select: { printingPausedReason: true },
+    });
+    if (kiosk?.printingPausedReason) {
+      throw new AppError('printing_paused', 'Printing is paused because the printer is out of paper', 403);
     }
 
     const printJob = await this.printing.createJob(

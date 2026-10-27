@@ -46,6 +46,7 @@ type Device = {
   printerHealth?: PrinterHealthView | null;
   printerHealthAt?: string | null;
   printerRefreshRequestedAt?: string | null;
+  printingPausedReason?: string | null;
   maxPagesPerSession: number;
   freePagesPerSession: number;
   extraPageChargeRupees: number;
@@ -56,6 +57,22 @@ type Device = {
   bannerHorizontalEnabled?: boolean;
   bannerVerticalEnabled?: boolean;
 };
+
+function latestReportPaperOut(health: PrinterHealthView | null | undefined) {
+  return health?.state === 'paper_out' || health?.noPaper === true;
+}
+
+function roleFromToken(token: string | null) {
+  if (!token) return null;
+  const part = token.split('.')[1];
+  if (!part) return null;
+  try {
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/'))) as { role?: string };
+    return json.role ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const PRINTER_ROW_TONE: Record<string, string> = {
   muted: 'text-muted-foreground',
@@ -283,6 +300,8 @@ export function KiosksPage() {
   const [printerRefreshing, setPrinterRefreshing] = useState(false);
   const [printerRefreshNote, setPrinterRefreshNote] = useState<string | null>(null);
   const printerRefreshGeneration = useRef(0);
+  const canEnablePrinting =
+    roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
 
   async function load() {
     try {
@@ -381,6 +400,22 @@ export function KiosksPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update kiosk');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onEnablePrinting(device: Device) {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await apiRequest(`/devices/${device.id}/printing-enable`, {
+        method: 'POST',
+        token,
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not enable printing');
     } finally {
       setSubmitting(false);
     }
@@ -676,6 +711,31 @@ export function KiosksPage() {
                           Settings
                         </span>
                       </Button>
+                      {device.printingPausedReason ? (
+                        <>
+                          <p className="text-sm font-medium text-red-700">Printing paused</p>
+                          {latestReportPaperOut(device.printerHealth) ? (
+                            <p className="text-xs text-muted-foreground">
+                              The latest report still says out of paper.
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              The latest report says paper is back.
+                            </p>
+                          )}
+                          {canEnablePrinting ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="w-full"
+                              disabled={submitting}
+                              onClick={() => void onEnablePrinting(device)}
+                            >
+                              Enable printing
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : null}
                       {device.surveillanceEnabled ? (
                         <Button
                           type="button"

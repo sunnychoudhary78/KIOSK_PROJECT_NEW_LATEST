@@ -10,4 +10,5 @@ typedef PrintJobStatusReporter = Future<void> Function({
   String? reconcileStatus,
   String? reconcileDetail,
   bool? needsAdminReview,
+  bool? holdForRetry,
 });

@@ -23,7 +23,9 @@ class PrintChooserPage extends ConsumerWidget {
           label: 'Cancel',
           onPressed: () => _endSession(ref),
         ),
-        body: Padding(
+        body: kioskPrintingPaused(ref)
+            ? const KioskPrintingPaused()
+            : Padding(
           padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

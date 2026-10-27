@@ -13,6 +13,7 @@ import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { SmsClient } from '../../infrastructure/external/sms.client.js';
 import { AppError } from '../../shared/errors.js';
+import { assertPrintingAvailable } from '../printing/printing_pause.js';
 import {
   generateNumericOtp,
   hashOtp,
@@ -106,6 +107,7 @@ export class QuickPrintService {
   }
 
   async createSession(deviceId: string, correlationId?: string) {
+    await assertPrintingAvailable(this.db, deviceId);
     await this.services.assertEnabled(deviceId, 'quick_print');
     const device = await this.db.device.findUnique({
       where: { id: deviceId },

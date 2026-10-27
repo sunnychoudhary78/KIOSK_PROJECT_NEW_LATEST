@@ -88,6 +88,27 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
     },
   );
 
+  router.post(
+    '/devices/:deviceId/printing-enable',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.enablePrinting(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.patch(
     '/devices/:deviceId/print-limits',
     authRequired(deps.config, ['admin']),

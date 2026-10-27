@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
+import 'package:skp_kiosk/services/printer/print_job_support.dart';
+import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/otp_print/data/otp_print_repository.dart';
 import 'package:skp_kiosk/features/otp_print/domain/otp_redeem_result.dart';
@@ -31,6 +36,8 @@ class OtpPrintUiState {
     this.previewDoc,
     this.previewBytes,
     this.printed = false,
+    this.printFailures = 0,
+    this.paperOut = false,
   });
 
   final OtpPrintPhase phase;
@@ -40,6 +47,8 @@ class OtpPrintUiState {
   final OtpDocumentRef? previewDoc;
   final Uint8List? previewBytes;
   final bool printed;
+  final int printFailures;
+  final bool paperOut;
 
   bool get loading =>
       phase == OtpPrintPhase.redeeming ||
@@ -61,6 +70,8 @@ class OtpPrintUiState {
     Uint8List? previewBytes,
     bool clearPreviewBytes = false,
     bool? printed,
+    int? printFailures,
+    bool? paperOut,
   }) {
     return OtpPrintUiState(
       phase: phase ?? this.phase,
@@ -72,6 +83,8 @@ class OtpPrintUiState {
       previewBytes:
           clearPreviewBytes ? null : (previewBytes ?? this.previewBytes),
       printed: printed ?? this.printed,
+      printFailures: printFailures ?? this.printFailures,
+      paperOut: paperOut ?? this.paperOut,
     );
   }
 }
@@ -89,6 +102,14 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       state = state.copyWith(
         phase: OtpPrintPhase.error,
         error: 'Enter the OTP from SMS',
+      );
+      return;
+    }
+    if (_printingPaused()) {
+      state = state.copyWith(
+        phase: OtpPrintPhase.error,
+        error: 'Out of paper. Printing is paused.',
+        paperOut: true,
       );
       return;
     }
@@ -116,6 +137,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
     } catch (error) {
       state = state.copyWith(
         phase: OtpPrintPhase.error,
+        paperOut: error is ApiException && error.code == 'printing_paused',
         error: userFacingError(error),
         clearRedeemResult: true,
       );
@@ -156,6 +178,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
   }
 
   void backToDocuments() {
+    unawaited(abandonRetry());
     if (state.redeemResult == null) {
       reset();
       return;
@@ -190,6 +213,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
         pdfBytes: bytes,
         pagesExpected: doc.pageCount,
         colorMode: result.printColorMode,
+        holdForRetry: state.printFailures == 0,
         reportStatus: _repository.reportStatus,
         onProgress: (message) {
           state = state.copyWith(
@@ -208,9 +232,17 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
           clearPreviewDoc: true,
           clearPreviewBytes: true,
         );
+      } else if (outcome.reconcileDetail == 'paper_out') {
+        state = state.copyWith(
+          phase: OtpPrintPhase.previewing,
+          paperOut: true,
+          error: outcome.userMessage,
+          clearMessage: true,
+        );
       } else {
         state = state.copyWith(
           phase: OtpPrintPhase.previewing,
+          printFailures: state.printFailures + 1,
           error: outcome.userMessage,
           clearMessage: true,
         );
@@ -222,6 +254,47 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
         clearMessage: true,
       );
     }
+  }
+
+  bool _printingPaused() {
+    final reason = ref.read(deviceAuthProvider).printingPausedReason;
+    final health = ref.read(printerHealthControllerProvider);
+    return reason == 'paper_out' || health.state == 'paper_out' || health.noPaper;
+  }
+
+  Future<void> abandonRetry() async {
+    if (state.printFailures != 1 || state.paperOut) return;
+    final jobId = state.redeemResult?.printJobId;
+    final error = state.error;
+    state = state.copyWith(printFailures: 2);
+    if (jobId == null || jobId.isEmpty) return;
+    try {
+      await _repository.reportStatus(
+        jobId: jobId,
+        status: 'failed',
+        pagesReported: 0,
+        errorMessage: error,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> tellStaff() async {
+    final jobId = state.redeemResult?.printJobId;
+    if (jobId == null || jobId.isEmpty) return;
+    await PrintJobSupport(ref.read(apiClientProvider)).send(
+      jobId: jobId,
+      message: state.error ?? 'Print failed',
+    );
+    state = state.copyWith(message: 'We received this. Staff will review.', clearError: true);
+  }
+
+  Future<void> reportPagesMissing() async {
+    final jobId = state.redeemResult?.printJobId;
+    if (jobId == null || jobId.isEmpty) return;
+    await PrintJobSupport(ref.read(apiClientProvider)).send(
+      jobId: jobId,
+      message: 'Visitor says the pages were not received.',
+    );
   }
 
   void markDoneWithoutPrint() {

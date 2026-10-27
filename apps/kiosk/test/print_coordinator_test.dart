@@ -40,6 +40,7 @@ typedef _Report = Future<void> Function({
   String? reconcileStatus,
   String? reconcileDetail,
   bool? needsAdminReview,
+  bool? holdForRetry,
 });
 
 _Report _collecting(_Report? inner, List<Map<String, dynamic>> reports) {
@@ -54,6 +55,7 @@ _Report _collecting(_Report? inner, List<Map<String, dynamic>> reports) {
     String? reconcileStatus,
     String? reconcileDetail,
     bool? needsAdminReview,
+    bool? holdForRetry,
   }) async {
     reports.add({
       'status': status,
@@ -73,6 +75,7 @@ _Report _collecting(_Report? inner, List<Map<String, dynamic>> reports) {
         reconcileStatus: reconcileStatus,
         reconcileDetail: reconcileDetail,
         needsAdminReview: needsAdminReview,
+        holdForRetry: holdForRetry,
       );
     }
   };
@@ -181,6 +184,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
       onProgress: progress.add,
     );
@@ -247,6 +251,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
     );
     final elapsed = DateTime.now().difference(started);
@@ -285,6 +290,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
       onProgress: progress.add,
     );
@@ -327,6 +333,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
     );
 
@@ -404,6 +411,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
     );
 
@@ -457,6 +465,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
     );
 
@@ -516,6 +525,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
     );
 
@@ -556,6 +566,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
     );
 
@@ -596,6 +607,7 @@ void main() {
         String? reconcileStatus,
         String? reconcileDetail,
         bool? needsAdminReview,
+        bool? holdForRetry,
       }) async {},
     );
 
@@ -630,6 +642,7 @@ void main() {
       String? reconcileStatus,
       String? reconcileDetail,
       bool? needsAdminReview,
+      bool? holdForRetry,
     }) async {}
 
     final first = coordinator.printAndReconcile(
@@ -682,6 +695,7 @@ void main() {
       String? reconcileStatus,
       String? reconcileDetail,
       bool? needsAdminReview,
+      bool? holdForRetry,
     }) async {}
 
     final first = coordinator.printAndReconcile(

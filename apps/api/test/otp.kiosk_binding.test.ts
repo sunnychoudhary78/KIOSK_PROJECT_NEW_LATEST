@@ -185,4 +185,63 @@ describe('OtpPrintService kiosk binding', () => {
     expect(db.otpChallenge.update).not.toHaveBeenCalled();
     expect(printing.createJob).not.toHaveBeenCalled();
   });
+
+  it('rejects a new OTP when printing is paused', async () => {
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceProps(),
+          printingPausedReason: 'paper_out',
+        })),
+      },
+    };
+    const service = new OtpPrintService(
+      db as unknown as DbClient,
+      makeConfig(),
+      { record: vi.fn() } as unknown as AuditService,
+      {} as PrintingService,
+      { assertEnabled: vi.fn() } as unknown as ServicesCatalogService,
+      {} as SmsClient,
+    );
+    await expect(
+      service.createChallenge(userId, [], 'Docs', 'corr', 'bw', deviceId),
+    ).rejects.toMatchObject({ code: 'printing_paused', statusCode: 403 });
+  });
+
+  it('rejects redeem on a paused kiosk without consuming the OTP', async () => {
+    const challenge = {
+      id: '11111111-1111-1111-1111-111111111111',
+      userId,
+      deviceId,
+      codeHash: 'hash',
+      attemptCount: 0,
+      status: OtpChallengeStatus.pending,
+      expiresAt: new Date(Date.now() + 60_000),
+      documents: [{ id: 'd1' }],
+      printColorMode: PrintColorMode.bw,
+    };
+    const db = {
+      otpChallenge: {
+        findFirst: vi.fn(async () => challenge),
+        update: vi.fn(),
+      },
+      device: { findUnique: vi.fn(async () => ({ printingPausedReason: 'paper_out' })) },
+      platformSetting: { findUnique: vi.fn(async () => null) },
+    };
+    const printing = { createJob: vi.fn() };
+    const service = new OtpPrintService(
+      db as unknown as DbClient,
+      makeConfig(),
+      { record: vi.fn() } as unknown as AuditService,
+      printing as unknown as PrintingService,
+      { assertEnabled: vi.fn(async () => undefined) } as unknown as ServicesCatalogService,
+      {} as SmsClient,
+    );
+    await expect(service.redeem(deviceId, { code: '123456' })).rejects.toMatchObject({
+      code: 'printing_paused',
+      statusCode: 403,
+    });
+    expect(db.otpChallenge.update).not.toHaveBeenCalled();
+    expect(printing.createJob).not.toHaveBeenCalled();
+  });
 });

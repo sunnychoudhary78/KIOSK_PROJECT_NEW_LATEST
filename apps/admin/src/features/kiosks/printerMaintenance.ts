@@ -25,6 +25,7 @@ export type PrinterMaintenance = {
 
 export type PrinterHealthView = {
   state?: string | null;
+  noPaper?: boolean | null;
   snmpOk?: boolean | null;
   lastSuccessAt?: string | null;
   maintenance?: PrinterMaintenance | null;

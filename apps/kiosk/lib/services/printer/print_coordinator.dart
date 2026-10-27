@@ -63,8 +63,41 @@ class PrintCoordinator {
     required int pagesExpected,
     required String colorMode,
     required PrintJobStatusReporter reportStatus,
+    bool holdForRetry = false,
     void Function(String message)? onProgress,
   }) async {
+    final allowHold = holdForRetry;
+    Future<void> report({
+      required String jobId,
+      required String status,
+      String? errorMessage,
+      int? pagesReported,
+      String? spoolerJobId,
+      int? pageCounterBefore,
+      int? pageCounterAfter,
+      String? reconcileStatus,
+      String? reconcileDetail,
+      bool? needsAdminReview,
+      bool? holdForRetry,
+    }) {
+      final keep = allowHold &&
+          status == 'failed' &&
+          (pagesReported ?? 0) == 0 &&
+          reconcileDetail != 'paper_out';
+      return reportStatus(
+        jobId: jobId,
+        status: status,
+        errorMessage: errorMessage,
+        pagesReported: pagesReported,
+        spoolerJobId: spoolerJobId,
+        pageCounterBefore: pageCounterBefore,
+        pageCounterAfter: pageCounterAfter,
+        reconcileStatus: reconcileStatus,
+        reconcileDetail: reconcileDetail,
+        needsAdminReview: needsAdminReview,
+        holdForRetry: keep ? true : null,
+      );
+    }
     if (_locked) {
       return const PrintReconcileResult(
         outcome: PrintReconcileOutcome.busy,
@@ -83,7 +116,7 @@ class PrintCoordinator {
         pdfBytes: pdfBytes,
         pagesExpected: pagesExpected,
         colorMode: colorMode,
-        reportStatus: reportStatus,
+        reportStatus: report,
         onProgress: onProgress,
       );
     } finally {

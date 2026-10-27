@@ -11,6 +11,7 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
   Timer? _refreshWatch;
   bool _snmpPollerStarted = false;
   String? _lastRefreshAck;
+  bool _paperOutNotified = false;
 
   @override
   PrinterHealth build() {
@@ -74,6 +75,7 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
   void _armRefreshWatch() {
     _refreshWatch ??= Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_publishPendingRefresh());
+      unawaited(_watchPaperOut());
     });
   }
 
@@ -101,6 +103,29 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
       }
     } catch (error) {
       AppLogger.error('PRINTER refresh publish failed', error);
+    }
+  }
+
+  Future<void> _watchPaperOut() async {
+    if (!ref.read(deviceAuthProvider).isAuthenticated) return;
+    try {
+      final health = await _monitor.getHealth();
+      final paper = health.noPaper || health.state == 'paper_out';
+      if (!paper) {
+        _paperOutNotified = false;
+        if (state.noPaper || state.state == 'paper_out') {
+          state = health;
+        }
+        return;
+      }
+      if (state.state != health.state || state.noPaper != health.noPaper) {
+        state = health;
+      }
+      if (_paperOutNotified) return;
+      final sent = await ref.read(deviceAuthProvider.notifier).sendPrinterHealthHeartbeat();
+      if (sent) _paperOutNotified = true;
+    } catch (error) {
+      AppLogger.error('PRINTER paper-out watch failed', error);
     }
   }
 

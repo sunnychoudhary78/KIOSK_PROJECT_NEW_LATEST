@@ -238,10 +238,33 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [surveillanceEnabled]
+                required: [surveillanceEnabled, printingPausedReason]
                 properties:
                   surveillanceEnabled:
                     type: boolean
+                  printingPausedReason:
+                    type: string
+                    nullable: true
+                    description: paper_out while printing stays paused until an admin enables it
+
+  /devices/{deviceId}/printing-enable:
+    post:
+      tags: [Devices]
+      summary: Clear a paper-out printing pause when the latest report is not paper-out
+      operationId: enableDevicePrinting
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Printing is available again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '409':
+          description: The latest printer report is still paper-out
 
   /devices/{deviceId}/printer-refresh:
     post:
@@ -1645,6 +1668,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/PrintJob'
 
+  /print-jobs/{jobId}/support-query:
+    post:
+      tags: [Printing]
+      summary: One staff note for a print job (device)
+      operationId: openPrintJobSupportQuery
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+      responses:
+        '201':
+          description: The note for this job. A second call returns the first note.
+
   /print-jobs/{jobId}/content:
     get:
       tags: [Printing]
@@ -1924,6 +1977,10 @@ components:
           format: date-time
           nullable: true
           description: Set while an admin is waiting for the kiosk to post its current SNMP snapshot
+        printingPausedReason:
+          type: string
+          nullable: true
+          description: Set when the printer reports paper-out. Cleared only by an admin.
         bannerHorizontalEnabled:
           type: boolean
           description: When false, playlist omits top/bottom home banners for this kiosk
@@ -2885,7 +2942,7 @@ components:
 
     SupportQuery:
       type: object
-      required: [id, status, message, phone, amountPaise, paymentStatus, createdAt]
+      required: [id, status, message, phone, amountPaise, source, createdAt]
       properties:
         id:
           type: string
@@ -2907,6 +2964,14 @@ components:
           nullable: true
         paymentStatus:
           type: string
+          nullable: true
+        printJobId:
+          type: string
+          format: uuid
+          nullable: true
+        source:
+          type: string
+          enum: [payment, print]
         createdAt:
           type: string
           format: date-time
@@ -3200,6 +3265,9 @@ components:
           maxLength: 500
         needsAdminReview:
           type: boolean
+        holdForRetry:
+          type: boolean
+          description: When true, a failed job with zero pages keeps its free-page hold
 
     AuditLog:
       type: object

@@ -8,6 +8,7 @@ Map<String, dynamic> printStatusBody({
   String? reconcileStatus,
   String? reconcileDetail,
   bool? needsAdminReview,
+  bool? holdForRetry,
 }) {
   return {
     'status': status,
@@ -19,5 +20,6 @@ Map<String, dynamic> printStatusBody({
     'reconcileStatus': ?reconcileStatus,
     'reconcileDetail': ?reconcileDetail,
     'needsAdminReview': ?needsAdminReview,
+    'holdForRetry': ?holdForRetry,
   };
 }

@@ -3,6 +3,7 @@ import {
   PrintJobReconcileStatus,
   PrintJobSource,
   PrintJobStatus,
+  SupportQueryStatus,
 } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
@@ -270,7 +271,11 @@ export class PrintingService {
 
     if (status === PrintJobStatus.completed && reconcileStatus === PrintJobReconcileStatus.verified) {
       await this.quota.consumeForPrintJob(jobId).catch(() => undefined);
-    } else if (status === PrintJobStatus.failed && (pagesReported == null || pagesReported === 0)) {
+    } else if (
+      status === PrintJobStatus.failed &&
+      (pagesReported == null || pagesReported === 0) &&
+      input.holdForRetry !== true
+    ) {
       await this.quota.releaseForPrintJob(jobId).catch(() => undefined);
     }
     // partial / reconciliation_required / unknown / failed-with-pages: leave ledger reserved
@@ -291,5 +296,41 @@ export class PrintingService {
     });
 
     return mapJob(updated);
+  }
+
+  async openJobSupportNote(
+    jobId: string,
+    deviceId: string,
+    message: string,
+    correlationId?: string,
+  ) {
+    const job = await this.db.printJob.findUnique({ where: { id: jobId } });
+    if (!job || job.deviceId !== deviceId) {
+      throw new AppError('not_found', 'Print job not found', 404);
+    }
+    const existing = await this.db.supportQuery.findUnique({ where: { printJobId: jobId } });
+    if (existing) {
+      return { id: existing.id, status: existing.status, message: existing.message };
+    }
+    const created = await this.db.supportQuery.create({
+      data: {
+        printJobId: jobId,
+        message,
+        phone: '',
+        amountPaise: 0,
+        failureReason: job.errorMessage,
+        status: SupportQueryStatus.open,
+      },
+    });
+    await this.audit.record({
+      action: 'support_query.opened',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'support_query',
+      resourceId: created.id,
+      correlationId,
+      metadata: { printJobId: jobId },
+    });
+    return { id: created.id, status: created.status, message: created.message };
   }
 }

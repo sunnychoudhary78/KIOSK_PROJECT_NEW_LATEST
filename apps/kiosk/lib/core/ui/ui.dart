@@ -6,6 +6,7 @@ export 'kiosk_keyboard.dart';
 export 'kiosk_numeric_keypad.dart';
 export 'kiosk_pdf_preview.dart';
 export 'kiosk_print_result.dart';
+export 'kiosk_printing_paused.dart';
 export 'kiosk_pin_field.dart';
 export 'kiosk_scaffold.dart';
 export 'kiosk_service_tile.dart';

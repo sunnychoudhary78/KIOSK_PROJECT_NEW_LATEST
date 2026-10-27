@@ -3,6 +3,10 @@ import bcrypt from 'bcryptjs';
 import { DeviceStatus } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
+import {
+  PRINTING_PAUSED_PAPER_OUT,
+  printerReportsPaperOut,
+} from '../printing/printing_pause.js';
 import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type {
@@ -51,6 +55,7 @@ function mapDevice(device: {
   printerHealth?: unknown;
   printerHealthAt?: Date | null;
   printerRefreshRequestedAt?: Date | null;
+  printingPausedReason?: string | null;
   maxPagesPerSession?: number;
   freePagesPerSession?: number;
   extraPageChargeRupees?: number;
@@ -78,6 +83,7 @@ function mapDevice(device: {
     printerHealth: mapPrinterHealth(device.printerHealth),
     printerHealthAt: device.printerHealthAt?.toISOString() ?? null,
     printerRefreshRequestedAt: device.printerRefreshRequestedAt?.toISOString() ?? null,
+    printingPausedReason: device.printingPausedReason ?? null,
     bannerHorizontalEnabled: device.bannerHorizontalEnabled !== false,
     bannerVerticalEnabled: device.bannerVerticalEnabled !== false,
     ...printLimitsFromDevice(device),
@@ -102,6 +108,7 @@ export class DevicesService {
     const devices = await this.db.device.findMany({
       where: {
         status: DeviceStatus.active,
+        printingPausedReason: null,
         latitude: { not: null },
         longitude: { not: null },
       },
@@ -374,10 +381,13 @@ export class DevicesService {
     }
 
     const now = new Date();
+    const latchPaperOut =
+      !device.printingPausedReason && printerReportsPaperOut(body.printer);
     await this.db.device.update({
       where: { id: deviceId },
       data: {
         lastHeartbeatAt: now,
+        ...(latchPaperOut ? { printingPausedReason: PRINTING_PAUSED_PAPER_OUT } : {}),
         ...(body.surveillance
           ? {
               surveillanceHealth: body.surveillance,
@@ -400,6 +410,45 @@ export class DevicesService {
       },
     });
 
-    return { surveillanceEnabled: device.surveillanceEnabled };
+    return {
+      surveillanceEnabled: device.surveillanceEnabled,
+      printingPausedReason: latchPaperOut
+        ? PRINTING_PAUSED_PAPER_OUT
+        : (device.printingPausedReason ?? null),
+    };
+  }
+
+  async enablePrinting(deviceId: string, adminId: string, correlationId?: string) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    if (printerReportsPaperOut(device.printerHealth)) {
+      throw new AppError(
+        'printer_still_out_of_paper',
+        'The printer still reports it is out of paper',
+        409,
+      );
+    }
+    if (!device.printingPausedReason) {
+      return mapDevice(device);
+    }
+    const updated = await this.db.device.update({
+      where: { id: deviceId },
+      data: { printingPausedReason: null },
+      include: { site: true },
+    });
+    await this.audit.record({
+      action: 'device.printing_enabled',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+    });
+    return mapDevice(updated);
   }
 }

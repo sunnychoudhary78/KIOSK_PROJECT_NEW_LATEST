@@ -13,12 +13,14 @@ class KioskPrintResult extends StatefulWidget {
     required this.onHome,
     this.detail,
     this.autoReturn = const Duration(seconds: 20),
+    this.onNotReceived,
   });
 
   final bool confirmed;
   final VoidCallback onHome;
   final String? detail;
-  final Duration autoReturn;
+  final Duration? autoReturn;
+  final Future<void> Function()? onNotReceived;
 
   @override
   State<KioskPrintResult> createState() => _KioskPrintResultState();
@@ -27,17 +29,47 @@ class KioskPrintResult extends StatefulWidget {
 class _KioskPrintResultState extends State<KioskPrintResult> {
   Timer? _timer;
   var _left = false;
+  var _noting = false;
+  var _noted = false;
+  String? _noteError;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer(widget.autoReturn, _goHome);
+    final wait = widget.autoReturn;
+    if (wait != null) {
+      _timer = Timer(wait, _goHome);
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _reportMissing() async {
+    final report = widget.onNotReceived;
+    if (report == null || _noting || _noted) return;
+    _timer?.cancel();
+    setState(() {
+      _noting = true;
+      _noteError = null;
+    });
+    try {
+      await report();
+      if (!mounted) return;
+      setState(() {
+        _noted = true;
+        _noting = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _noting = false;
+        _noteError = '$error';
+      });
+    }
   }
 
   void _goHome() {
@@ -74,6 +106,28 @@ class _KioskPrintResultState extends State<KioskPrintResult> {
             textAlign: TextAlign.center,
           ),
           const Spacer(),
+          if (_noted)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                'We received this. Staff will review.',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+            )
+          else if (widget.confirmed && widget.onNotReceived != null) ...[
+            TextButton(
+              onPressed: _noting ? null : _reportMissing,
+              child: Text(_noting ? 'Sending…' : 'Didn\'t receive the print?'),
+            ),
+            if (_noteError != null)
+              Text(
+                _noteError!,
+                style: theme.textTheme.bodyMedium?.copyWith(color: SkpColors.danger),
+                textAlign: TextAlign.center,
+              ),
+            const SizedBox(height: 8),
+          ],
           KioskPrimaryButton(label: 'Home', icon: Icons.home, onPressed: _goHome),
           const SizedBox(height: 24),
         ],

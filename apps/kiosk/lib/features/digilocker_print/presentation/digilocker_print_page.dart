@@ -22,8 +22,9 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
     Future.microtask(() => ref.read(digilockerControllerProvider.notifier).start());
   }
 
-  Future<void> _endSessionAndGoHome() {
-    return ref
+  Future<void> _endSessionAndGoHome() async {
+    await ref.read(digilockerControllerProvider.notifier).abandonRetry();
+    await ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
   }
@@ -44,6 +45,16 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
         state.phase == DigilockerPhase.printing;
     final listing = state.phase == DigilockerPhase.ready ||
         state.phase == DigilockerPhase.done;
+    if ((kioskPrintingPaused(ref) || state.paperOut) &&
+        state.phase != DigilockerPhase.printing) {
+      return VisitorSessionPopScope(
+        child: KioskShell(
+          title: 'DigiLocker',
+          onHome: _endSessionAndGoHome,
+          body: const KioskPrintingPaused(),
+        ),
+      );
+    }
 
     Widget? leading;
     Widget? trailing;
@@ -56,14 +67,19 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
             ? null
             : controller.backToDocuments,
       );
-      trailing = KioskPrimaryButton(
-        label: state.phase == DigilockerPhase.printing ? 'Printing…' : 'Print',
-        icon: Icons.print,
-        loading: state.phase == DigilockerPhase.printing,
-        onPressed: state.phase == DigilockerPhase.printing
-            ? null
-            : () => controller.confirmPrint(),
-      );
+      trailing = state.printFailures >= 2
+          ? KioskPrimaryButton(
+              label: 'Tell staff',
+              onPressed: controller.tellStaff,
+            )
+          : KioskPrimaryButton(
+              label: state.phase == DigilockerPhase.printing ? 'Printing…' : 'Print',
+              icon: Icons.print,
+              loading: state.phase == DigilockerPhase.printing,
+              onPressed: state.phase == DigilockerPhase.printing
+                  ? null
+                  : () => controller.confirmPrint(),
+            );
       step = 'Preview';
     } else if (listing) {
       leading = KioskGhostButton(label: 'End session', onPressed: _endSessionAndGoHome);
@@ -107,7 +123,9 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
           DigilockerPhase.printResult => KioskPrintResult(
               confirmed: state.printConfirmed,
               detail: state.message,
+              autoReturn: state.printConfirmed ? const Duration(seconds: 20) : null,
               onHome: _endSessionAndGoHome,
+              onNotReceived: state.printConfirmed ? controller.reportPagesMissing : null,
             ),
           _ => Padding(
               padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),

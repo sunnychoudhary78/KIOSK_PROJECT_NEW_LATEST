@@ -225,6 +225,8 @@ model Device {
   printerHealthAt      DateTime?    @map("printer_health_at")
   /// Set when an admin asks the kiosk to post its current SNMP snapshot now.
   printerRefreshRequestedAt DateTime? @map("printer_refresh_requested_at")
+  /// Set when the printer reports paper-out. Cleared only by an admin.
+  printingPausedReason String? @map("printing_paused_reason") @db.VarChar(32)
   maxPagesPerSession         Int @default(10) @map("max_pages_per_session")
   freePagesPerSession        Int @default(5) @map("free_pages_per_session")
   extraPageChargeRupees      Int @default(10) @map("extra_page_charge_rupees")
@@ -471,8 +473,9 @@ model Payment {
 
 model SupportQuery {
   id              String             @id @default(uuid()) @db.Uuid
-  paymentId       String             @unique @map("payment_id") @db.Uuid
-  userId          String             @map("user_id") @db.Uuid
+  paymentId       String?            @unique @map("payment_id") @db.Uuid
+  printJobId      String?            @unique @map("print_job_id") @db.Uuid
+  userId          String?            @map("user_id") @db.Uuid
   phone           String             @default("")
   message         String             @db.VarChar(500)
   status          SupportQueryStatus @default(open)
@@ -482,8 +485,9 @@ model SupportQuery {
   createdAt       DateTime           @default(now()) @map("created_at")
   resolvedAt      DateTime?          @map("resolved_at")
 
-  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id])
+  payment  Payment?  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  printJob PrintJob? @relation(fields: [printJobId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id])
 
   @@index([status, createdAt])
   @@map("support_queries")
@@ -606,6 +610,7 @@ model PrintJob {
   otpChallenge      OtpChallenge?
   quickPrintSession QuickPrintSession?
   freePageLedgerEntries PhoneFreePageLedger[]
+  supportQuery      SupportQuery?
 
   @@index([status, createdAt])
   @@index([needsAdminReview, createdAt])

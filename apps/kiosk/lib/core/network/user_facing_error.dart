@@ -33,6 +33,7 @@ const _codeMessages = <String, String>{
   'payment_expired': 'Payment window has expired. Upload again.',
   'payment_required': 'Payment is not complete yet.',
   'payment_unavailable': 'Payment is not available for this print.',
+  'printing_paused': 'Out of paper. Printing is paused.',
   'phone_required': 'A mobile number is required to continue.',
   'request_failed': _fallback,
   'page_limit_exceeded': 'Too many pages for this kiosk. Remove some pages and try again.',

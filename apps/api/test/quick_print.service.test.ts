@@ -127,6 +127,21 @@ describe('QuickPrintService', () => {
     expect(result.phoneVerified).toBe(false);
   });
 
+  it('does not create a session when printing is paused', async () => {
+    const db = {
+      device: {
+        findUnique: vi.fn().mockResolvedValue({ printingPausedReason: 'paper_out' }),
+      },
+      quickPrintSession: { create: vi.fn() },
+    };
+    const service = makeService(db);
+    await expect(service.createSession(deviceId)).rejects.toMatchObject({
+      code: 'printing_paused',
+      statusCode: 403,
+    });
+    expect(db.quickPrintSession.create).not.toHaveBeenCalled();
+  });
+
   it('charges all pages when phone is not verified', async () => {
     const file = await onePagePdf();
     const token = 'guest-token';

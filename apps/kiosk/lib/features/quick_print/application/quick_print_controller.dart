@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
+import 'package:skp_kiosk/services/printer/print_job_support.dart';
 import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/quick_print/data/quick_print_repository.dart';
@@ -36,6 +38,8 @@ class QuickPrintUiState {
     this.previewDoc,
     this.previewBytes,
     this.printed = false,
+    this.printFailures = 0,
+    this.paperOut = false,
   });
 
   final QuickPrintPhase phase;
@@ -46,6 +50,8 @@ class QuickPrintUiState {
   final QuickPrintDocumentRef? previewDoc;
   final Uint8List? previewBytes;
   final bool printed;
+  final int printFailures;
+  final bool paperOut;
 
   bool get loading =>
       phase == QuickPrintPhase.starting ||
@@ -70,6 +76,8 @@ class QuickPrintUiState {
     Uint8List? previewBytes,
     bool clearPreviewBytes = false,
     bool? printed,
+    int? printFailures,
+    bool? paperOut,
   }) {
     return QuickPrintUiState(
       phase: phase ?? this.phase,
@@ -80,6 +88,8 @@ class QuickPrintUiState {
       previewDoc: clearPreviewDoc ? null : (previewDoc ?? this.previewDoc),
       previewBytes: clearPreviewBytes ? null : (previewBytes ?? this.previewBytes),
       printed: printed ?? this.printed,
+      printFailures: printFailures ?? this.printFailures,
+      paperOut: paperOut ?? this.paperOut,
     );
   }
 }
@@ -98,8 +108,22 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
   QuickPrintRepository get _repository => ref.read(quickPrintRepositoryProvider);
   PrintCoordinator get _coordinator => ref.read(printCoordinatorProvider);
 
+  bool _printingPaused() {
+    final reason = ref.read(deviceAuthProvider).printingPausedReason;
+    final health = ref.read(printerHealthControllerProvider);
+    return reason == 'paper_out' || health.state == 'paper_out' || health.noPaper;
+  }
+
   Future<void> start() async {
     _poll?.cancel();
+    if (_printingPaused()) {
+      state = const QuickPrintUiState(
+        phase: QuickPrintPhase.error,
+        paperOut: true,
+        error: 'Out of paper. Printing is paused.',
+      );
+      return;
+    }
     state = const QuickPrintUiState(phase: QuickPrintPhase.starting);
     try {
       final session = await _repository.createSession();
@@ -112,8 +136,10 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
         unawaited(_tick());
       });
     } catch (error) {
+      final paused = error is ApiException && error.code == 'printing_paused';
       state = QuickPrintUiState(
         phase: QuickPrintPhase.error,
+        paperOut: paused,
         error: userFacingError(error),
       );
     }
@@ -212,6 +238,7 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
   }
 
   void backToDocuments() {
+    unawaited(abandonRetry());
     if (state.claim == null) {
       return;
     }
@@ -243,6 +270,7 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
         pdfBytes: bytes,
         pagesExpected: doc.pageCount,
         colorMode: claim.printColorMode,
+        holdForRetry: state.printFailures == 0,
         reportStatus: _repository.reportStatus,
         onProgress: (message) {
           state = state.copyWith(
@@ -261,9 +289,17 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
           clearPreviewDoc: true,
           clearPreviewBytes: true,
         );
+      } else if (outcome.reconcileDetail == 'paper_out') {
+        state = state.copyWith(
+          phase: QuickPrintPhase.previewing,
+          paperOut: true,
+          error: outcome.userMessage,
+          clearMessage: true,
+        );
       } else {
         state = state.copyWith(
           phase: QuickPrintPhase.previewing,
+          printFailures: state.printFailures + 1,
           error: outcome.userMessage,
           clearMessage: true,
         );
@@ -271,10 +307,46 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
     } catch (error) {
       state = state.copyWith(
         phase: QuickPrintPhase.previewing,
+        printFailures: state.printFailures + 1,
         error: userFacingError(error),
         clearMessage: true,
       );
     }
+  }
+
+  Future<void> abandonRetry() async {
+    if (state.printFailures != 1 || state.paperOut) return;
+    final jobId = state.claim?.printJobId;
+    final error = state.error;
+    state = state.copyWith(printFailures: 2);
+    if (jobId == null || jobId.isEmpty) return;
+    try {
+      await _repository.reportStatus(
+        jobId: jobId,
+        status: 'failed',
+        pagesReported: 0,
+        errorMessage: error,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> tellStaff() async {
+    final jobId = state.claim?.printJobId;
+    if (jobId == null || jobId.isEmpty) return;
+    await PrintJobSupport(ref.read(apiClientProvider)).send(
+      jobId: jobId,
+      message: state.error ?? 'Print failed',
+    );
+    state = state.copyWith(message: 'We received this. Staff will review.', clearError: true);
+  }
+
+  Future<void> reportPagesMissing() async {
+    final jobId = state.claim?.printJobId;
+    if (jobId == null || jobId.isEmpty) return;
+    await PrintJobSupport(ref.read(apiClientProvider)).send(
+      jobId: jobId,
+      message: 'Visitor says the pages were not received.',
+    );
   }
 
   void markDoneWithoutPrint() {

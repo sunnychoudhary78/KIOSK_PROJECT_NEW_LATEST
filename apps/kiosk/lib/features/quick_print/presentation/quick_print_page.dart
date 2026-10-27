@@ -25,8 +25,9 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
     Future.microtask(() => ref.read(quickPrintControllerProvider.notifier).start());
   }
 
-  Future<void> _endSession() {
-    return ref.read(kioskSessionControllerProvider.notifier).endVisitorSession(attract: false);
+  Future<void> _endSession() async {
+    await ref.read(quickPrintControllerProvider.notifier).abandonRetry();
+    await ref.read(kioskSessionControllerProvider.notifier).endVisitorSession(attract: false);
   }
 
   @override
@@ -46,6 +47,16 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
         state.phase == QuickPrintPhase.printing;
     final listing =
         state.phase == QuickPrintPhase.documents || state.phase == QuickPrintPhase.done;
+    if ((kioskPrintingPaused(ref) || state.paperOut) &&
+        state.phase != QuickPrintPhase.printing) {
+      return VisitorSessionPopScope(
+        child: KioskShell(
+          title: 'Quick Print',
+          onHome: _endSession,
+          body: const KioskPrintingPaused(),
+        ),
+      );
+    }
 
     Widget? leading;
     Widget? trailing;
@@ -67,12 +78,17 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
         icon: Icons.arrow_back,
         onPressed: state.phase == QuickPrintPhase.printing ? null : controller.backToDocuments,
       );
-      trailing = KioskPrimaryButton(
-        label: state.phase == QuickPrintPhase.printing ? 'Printing…' : 'Print',
-        icon: Icons.print,
-        loading: state.phase == QuickPrintPhase.printing,
-        onPressed: state.phase == QuickPrintPhase.printing ? null : controller.confirmPrint,
-      );
+      trailing = state.printFailures >= 2
+          ? KioskPrimaryButton(
+              label: 'Tell staff',
+              onPressed: controller.tellStaff,
+            )
+          : KioskPrimaryButton(
+              label: state.phase == QuickPrintPhase.printing ? 'Printing…' : 'Print',
+              icon: Icons.print,
+              loading: state.phase == QuickPrintPhase.printing,
+              onPressed: state.phase == QuickPrintPhase.printing ? null : controller.confirmPrint,
+            );
       step = 'Preview';
     } else if (listing) {
       leading = KioskGhostButton(label: 'Done', onPressed: _endSession);
@@ -114,7 +130,9 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
           QuickPrintPhase.printResult => KioskPrintResult(
               confirmed: state.printed,
               detail: state.message,
+              autoReturn: state.printed ? const Duration(seconds: 20) : null,
               onHome: _endSession,
+              onNotReceived: state.printed ? controller.reportPagesMissing : null,
             ),
           QuickPrintPhase.documents || QuickPrintPhase.done => Padding(
               padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),

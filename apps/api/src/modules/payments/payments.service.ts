@@ -436,24 +436,24 @@ export class PaymentsService {
 
   async listSupportQueries() {
     const rows = await this.db.supportQuery.findMany({
-      include: { payment: true },
+      include: { payment: true, printJob: true },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
     return {
-      items: rows.map((row) => this.toPublicSupportQuery(row, row.payment.status)),
+      items: rows.map((row) => this.toPublicSupportQuery(row, row.payment?.status ?? null)),
     };
   }
 
   async resolveSupportQuery(queryId: string, adminId: string, correlationId?: string) {
     const row = await this.db.supportQuery.findUnique({
       where: { id: queryId },
-      include: { payment: true },
+      include: { payment: true, printJob: true },
     });
     if (!row) {
       throw new AppError('not_found', 'Support message not found', 404);
     }
     if (row.status === SupportQueryStatus.resolved) {
-      return this.toPublicSupportQuery(row, row.payment.status);
+      return this.toPublicSupportQuery(row, row.payment?.status ?? null);
     }
     const updated = await this.db.supportQuery.update({
       where: { id: queryId },
@@ -468,7 +468,7 @@ export class PaymentsService {
       correlationId,
       metadata: { paymentId: row.paymentId },
     });
-    return this.toPublicSupportQuery(updated, row.payment.status);
+    return this.toPublicSupportQuery(updated, row.payment?.status ?? null);
   }
 
   private async resolveOpenSupportQuery(paymentId: string, correlationId?: string) {
@@ -508,7 +508,7 @@ export class PaymentsService {
     return challenge;
   }
 
-  private toPublicSupportQuery(query: SupportQuery, paymentStatus: PaymentStatus) {
+  private toPublicSupportQuery(query: SupportQuery, paymentStatus: PaymentStatus | null) {
     return {
       id: query.id,
       status: query.status,
@@ -518,6 +518,8 @@ export class PaymentsService {
       razorpayOrderId: query.razorpayOrderId,
       failureReason: query.failureReason,
       paymentStatus,
+      printJobId: query.printJobId,
+      source: query.printJobId ? 'print' : 'payment',
       createdAt: query.createdAt.toISOString(),
       resolvedAt: query.resolvedAt?.toISOString() ?? null,
     };

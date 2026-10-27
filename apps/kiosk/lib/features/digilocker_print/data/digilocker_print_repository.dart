@@ -128,6 +128,7 @@ class DigilockerPrintRepository {
     String? reconcileStatus,
     String? reconcileDetail,
     bool? needsAdminReview,
+    bool? holdForRetry,
   }) async {
     await _api.patch(
       '/print-jobs/$jobId/status',
@@ -141,6 +142,7 @@ class DigilockerPrintRepository {
         reconcileStatus: reconcileStatus,
         reconcileDetail: reconcileDetail,
         needsAdminReview: needsAdminReview,
+        holdForRetry: holdForRetry,
       ),
     );
   }

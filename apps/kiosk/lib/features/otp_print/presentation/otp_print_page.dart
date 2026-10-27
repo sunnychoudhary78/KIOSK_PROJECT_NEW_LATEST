@@ -20,8 +20,9 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
   static const _otpLength = 6;
   String _otp = '';
 
-  Future<void> _endSession() {
-    return ref
+  Future<void> _endSession() async {
+    await ref.read(otpPrintControllerProvider.notifier).abandonRetry();
+    await ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
   }
@@ -63,6 +64,16 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
         state.phase == OtpPrintPhase.done;
     final entering = state.phase == OtpPrintPhase.enterOtp ||
         state.phase == OtpPrintPhase.error;
+    if ((kioskPrintingPaused(ref) || state.paperOut) &&
+        state.phase != OtpPrintPhase.printing) {
+      return VisitorSessionPopScope(
+        child: KioskShell(
+          title: 'OTP Print',
+          onHome: _endSession,
+          body: const KioskPrintingPaused(),
+        ),
+      );
+    }
 
     Widget? leading;
     Widget? trailing;
@@ -83,12 +94,17 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
         icon: Icons.arrow_back,
         onPressed: state.phase == OtpPrintPhase.printing ? null : controller.backToDocuments,
       );
-      trailing = KioskPrimaryButton(
-        label: state.phase == OtpPrintPhase.printing ? 'Printing…' : 'Print',
-        icon: Icons.print,
-        loading: state.phase == OtpPrintPhase.printing,
-        onPressed: state.phase == OtpPrintPhase.printing ? null : controller.confirmPrint,
-      );
+      trailing = state.printFailures >= 2
+          ? KioskPrimaryButton(
+              label: 'Tell staff',
+              onPressed: controller.tellStaff,
+            )
+          : KioskPrimaryButton(
+              label: state.phase == OtpPrintPhase.printing ? 'Printing…' : 'Print',
+              icon: Icons.print,
+              loading: state.phase == OtpPrintPhase.printing,
+              onPressed: state.phase == OtpPrintPhase.printing ? null : controller.confirmPrint,
+            );
       step = 'Preview';
     } else if (listing) {
       leading = KioskGhostButton(
@@ -128,7 +144,9 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           OtpPrintPhase.printResult => KioskPrintResult(
               confirmed: state.printed,
               detail: state.message,
+              autoReturn: state.printed ? const Duration(seconds: 20) : null,
               onHome: _endSession,
+              onNotReceived: state.printed ? controller.reportPagesMissing : null,
             ),
           OtpPrintPhase.documents || OtpPrintPhase.done => _DocumentList(
               title: state.redeemResult?.title ?? 'Your documents',

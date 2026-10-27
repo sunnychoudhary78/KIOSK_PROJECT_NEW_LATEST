@@ -7,7 +7,7 @@ import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { PrintingService } from './printing.service.js';
-import { updatePrintJobStatusSchema } from './printing.schemas.js';
+import { printJobSupportSchema, updatePrintJobStatusSchema } from './printing.schemas.js';
 
 export function registerPrintingModule(router: Router, deps: AppDeps): void {
   const service = new PrintingService(deps.db, deps.auditService);
@@ -54,6 +54,28 @@ export function registerPrintingModule(router: Router, deps: AppDeps): void {
           req.correlationId,
         );
         res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/print-jobs/:jobId/support-query',
+    ...requireDevice(deps),
+    validateBody(printJobSupportSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const result = await service.openJobSupportNote(
+          requireParam(req.params.jobId, 'jobId'),
+          req.principal.deviceId,
+          req.body.message,
+          req.correlationId,
+        );
+        res.status(201).json(result);
       } catch (error) {
         next(error);
       }

@@ -30,6 +30,7 @@ class DeviceAuthState {
     this.provisioned = false,
     this.stopped = false,
     this.surveillanceEnabled = false,
+    this.printingPausedReason,
   });
 
   final String? accessToken;
@@ -47,6 +48,9 @@ class DeviceAuthState {
 
   /// Admin started 24/7 local recording for this device.
   final bool surveillanceEnabled;
+
+  /// `paper_out` while an admin has not re-enabled printing.
+  final String? printingPausedReason;
 
   bool get isAuthenticated => accessToken != null && !stopped;
 }
@@ -116,6 +120,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
       deviceName: state.deviceName,
       deviceId: state.deviceId,
       surveillanceEnabled: state.surveillanceEnabled,
+      printingPausedReason: state.printingPausedReason,
     );
     try {
       final result = await _api.post(
@@ -129,6 +134,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
       final deviceId = result['deviceId'] as String?;
       final deviceName = result['deviceName'] as String?;
       var surveillanceEnabled = result['surveillanceEnabled'] == true;
+      String? printingPausedReason;
       _api.setAccessToken(token);
 
       _credentials = DeviceCredentials(
@@ -148,6 +154,8 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
           if (beat.containsKey('surveillanceEnabled')) {
             surveillanceEnabled = beat['surveillanceEnabled'] == true;
           }
+          final paused = beat['printingPausedReason'];
+          printingPausedReason = paused is String && paused.isNotEmpty ? paused : null;
         } catch (error) {
           if (_isInactive(error)) {
             _enterStopped(deviceName: deviceName, deviceId: deviceId);
@@ -162,6 +170,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
         deviceName: deviceName,
         provisioned: true,
         surveillanceEnabled: surveillanceEnabled,
+        printingPausedReason: printingPausedReason,
       );
       _armLoop();
     } catch (error) {
@@ -228,16 +237,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
           '/devices/$deviceId/heartbeat',
           body: _surveillanceHeartbeatBody(),
         );
-        final enabled = beat['surveillanceEnabled'] == true;
-        if (enabled != state.surveillanceEnabled) {
-          state = DeviceAuthState(
-            accessToken: state.accessToken,
-            deviceId: state.deviceId,
-            deviceName: state.deviceName,
-            provisioned: true,
-            surveillanceEnabled: enabled,
-          );
-        }
+        _applyHeartbeat(beat);
       } catch (error) {
         if (_isInactive(error)) {
           _enterStopped(deviceName: state.deviceName, deviceId: deviceId);
@@ -246,6 +246,51 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
     } finally {
       _tickInFlight = false;
     }
+  }
+
+  /// Posts the current printer sample immediately. Used when the tray goes empty.
+  Future<bool> sendPrinterHealthHeartbeat() async {
+    if (_tickInFlight || !ref.mounted || state.stopped) {
+      return false;
+    }
+    final deviceId = state.deviceId;
+    final token = state.accessToken;
+    if (deviceId == null || deviceId.isEmpty || token == null || isJwtExpired(token)) {
+      return false;
+    }
+    _tickInFlight = true;
+    try {
+      final beat = await _api.post(
+        '/devices/$deviceId/heartbeat',
+        body: _surveillanceHeartbeatBody(),
+      );
+      _applyHeartbeat(beat);
+      return true;
+    } catch (error) {
+      if (_isInactive(error)) {
+        _enterStopped(deviceName: state.deviceName, deviceId: deviceId);
+      }
+      return false;
+    } finally {
+      _tickInFlight = false;
+    }
+  }
+
+  void _applyHeartbeat(Map<String, dynamic> beat) {
+    final enabled = beat['surveillanceEnabled'] == true;
+    final pausedRaw = beat['printingPausedReason'];
+    final paused = pausedRaw is String && pausedRaw.isNotEmpty ? pausedRaw : null;
+    if (enabled == state.surveillanceEnabled && paused == state.printingPausedReason) {
+      return;
+    }
+    state = DeviceAuthState(
+      accessToken: state.accessToken,
+      deviceId: state.deviceId,
+      deviceName: state.deviceName,
+      provisioned: true,
+      surveillanceEnabled: enabled,
+      printingPausedReason: paused,
+    );
   }
 
   /// Posts the current heartbeat and acknowledges a pending printer refresh.
@@ -267,16 +312,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
         '/devices/$deviceId/heartbeat',
         body: body,
       );
-      final enabled = beat['surveillanceEnabled'] == true;
-      if (enabled != state.surveillanceEnabled) {
-        state = DeviceAuthState(
-          accessToken: state.accessToken,
-          deviceId: state.deviceId,
-          deviceName: state.deviceName,
-          provisioned: true,
-          surveillanceEnabled: enabled,
-        );
-      }
+      _applyHeartbeat(beat);
       return true;
     } catch (error) {
       if (_isInactive(error)) {

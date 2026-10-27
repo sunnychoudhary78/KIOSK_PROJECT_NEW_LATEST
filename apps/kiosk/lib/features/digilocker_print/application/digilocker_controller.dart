@@ -5,6 +5,9 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
+import 'package:skp_kiosk/services/printer/print_job_support.dart';
+import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/digilocker_print/data/digilocker_print_repository.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
@@ -39,6 +42,8 @@ class DigilockerUiState {
     this.previewFilePath,
     this.previewJobId,
     this.printConfirmed = false,
+    this.printFailures = 0,
+    this.paperOut = false,
   });
 
   final DigilockerPhase phase;
@@ -52,6 +57,8 @@ class DigilockerUiState {
   final String? previewFilePath;
   final String? previewJobId;
   final bool printConfirmed;
+  final int printFailures;
+  final bool paperOut;
 
   bool get loading =>
       phase == DigilockerPhase.loadingDocs ||
@@ -153,8 +160,22 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     await _deletePreviewFile(previewPath);
   }
 
+  bool _printingPaused() {
+    final reason = ref.read(deviceAuthProvider).printingPausedReason;
+    final health = ref.read(printerHealthControllerProvider);
+    return reason == 'paper_out' || health.state == 'paper_out' || health.noPaper;
+  }
+
   Future<void> start() async {
     _pollTimer?.cancel();
+    if (_printingPaused()) {
+      state = const DigilockerUiState(
+        phase: DigilockerPhase.error,
+        paperOut: true,
+        error: 'Out of paper. Printing is paused.',
+      );
+      return;
+    }
     _authCallbackSeen = false;
     _pollInFlight = false;
     _serverCancelled = false;
@@ -171,6 +192,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     } catch (error) {
       state = DigilockerUiState(
         phase: DigilockerPhase.error,
+        paperOut: error is ApiException && error.code == 'printing_paused',
         error: userFacingError(error),
       );
     }
@@ -360,6 +382,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     if (sessionId == null || bytes == null || jobId == null) {
       return;
     }
+    final failures = state.printFailures;
 
     state = DigilockerUiState(
       phase: DigilockerPhase.printing,
@@ -369,6 +392,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       previewBytes: bytes,
       previewFilePath: filePath,
       previewJobId: jobId,
+      printFailures: failures,
     );
 
     try {
@@ -378,6 +402,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         pdfBytes: bytes,
         pagesExpected: 1,
         colorMode: 'color',
+        holdForRetry: failures == 0,
         reportStatus: _repository.reportStatus,
         onProgress: (message) {
           state = DigilockerUiState(
@@ -388,6 +413,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
             previewBytes: bytes,
             previewFilePath: filePath,
             previewJobId: jobId,
+            printFailures: failures,
             message: message,
           );
         },
@@ -399,6 +425,19 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           documents: documents,
           message: outcome.userMessage,
           printConfirmed: outcome.isSuccess,
+          previewJobId: jobId,
+        );
+      } else if (outcome.reconcileDetail == 'paper_out') {
+        state = DigilockerUiState(
+          phase: DigilockerPhase.previewing,
+          sessionId: sessionId,
+          documents: documents,
+          previewTitle: title,
+          previewBytes: bytes,
+          previewFilePath: filePath,
+          previewJobId: jobId,
+          paperOut: true,
+          error: outcome.userMessage,
         );
       } else {
         state = DigilockerUiState(
@@ -409,6 +448,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           previewBytes: bytes,
           previewFilePath: filePath,
           previewJobId: jobId,
+          printFailures: failures + 1,
           error: outcome.userMessage,
         );
       }
@@ -421,12 +461,72 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         previewBytes: bytes,
         previewFilePath: filePath,
         previewJobId: jobId,
+        printFailures: failures + 1,
         error: userFacingError(error),
       );
     }
   }
 
+  Future<void> abandonRetry() async {
+    if (state.printFailures != 1 || state.paperOut) return;
+    final jobId = state.previewJobId;
+    final error = state.error;
+    state = DigilockerUiState(
+      phase: state.phase,
+      sessionId: state.sessionId,
+      documents: state.documents,
+      message: state.message,
+      error: state.error,
+      previewTitle: state.previewTitle,
+      previewBytes: state.previewBytes,
+      previewFilePath: state.previewFilePath,
+      previewJobId: state.previewJobId,
+      printConfirmed: state.printConfirmed,
+      printFailures: 2,
+      paperOut: state.paperOut,
+    );
+    if (jobId == null || jobId.isEmpty) return;
+    try {
+      await _repository.reportStatus(
+        jobId: jobId,
+        status: 'failed',
+        pagesReported: 0,
+        errorMessage: error,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> tellStaff() async {
+    final jobId = state.previewJobId;
+    if (jobId == null || jobId.isEmpty) return;
+    await PrintJobSupport(ref.read(apiClientProvider)).send(
+      jobId: jobId,
+      message: state.error ?? 'Print failed',
+    );
+    state = DigilockerUiState(
+      phase: state.phase,
+      sessionId: state.sessionId,
+      documents: state.documents,
+      previewTitle: state.previewTitle,
+      previewBytes: state.previewBytes,
+      previewFilePath: state.previewFilePath,
+      previewJobId: jobId,
+      printFailures: state.printFailures,
+      message: 'We received this. Staff will review.',
+    );
+  }
+
+  Future<void> reportPagesMissing() async {
+    final jobId = state.previewJobId;
+    if (jobId == null || jobId.isEmpty) return;
+    await PrintJobSupport(ref.read(apiClientProvider)).send(
+      jobId: jobId,
+      message: 'Visitor says the pages were not received.',
+    );
+  }
+
   void backToDocuments() {
+    unawaited(abandonRetry());
     final sessionId = state.sessionId;
     if (sessionId == null) {
       return;

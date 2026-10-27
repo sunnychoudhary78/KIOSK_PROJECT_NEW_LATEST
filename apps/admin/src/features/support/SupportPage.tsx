@@ -11,7 +11,9 @@ type SupportQuery = {
   amountPaise: number;
   razorpayOrderId?: string | null;
   failureReason?: string | null;
-  paymentStatus: string;
+  paymentStatus: string | null;
+  printJobId?: string | null;
+  source?: string;
   createdAt: string;
   resolvedAt?: string | null;
 };
@@ -84,20 +86,21 @@ export function SupportPage() {
     <div>
       <PageHeader
         title="Support"
-        subtitle="Notes from people whose payment did not produce an OTP"
+        subtitle="Payment notes and print notes from the kiosk"
       />
       <Panel>
         {error ? <p className="error">{error}</p> : null}
         {items.length === 0 && !error ? (
           <EmptyState
             title="No support messages"
-            description="A message appears here when someone reports a payment that left their account without an OTP."
+            description="A message appears here when a payment or a print needs staff."
           />
         ) : (
           <table className="table">
             <thead>
               <tr>
                 <th>Time</th>
+                <th>Source</th>
                 <th>Phone</th>
                 <th>Amount</th>
                 <th>Order</th>
@@ -115,8 +118,11 @@ export function SupportPage() {
                   <td className="text-muted-foreground whitespace-nowrap">
                     {new Date(item.createdAt).toLocaleString()}
                   </td>
+                  <td>{item.source === 'print' ? 'Print' : 'Payment'}</td>
                   <td>{item.phone || '—'}</td>
-                  <td>{rupees(item.amountPaise)}</td>
+                  <td>
+                    {item.amountPaise === 0 && !item.razorpayOrderId ? '—' : rupees(item.amountPaise)}
+                  </td>
                   <td className="font-mono text-xs">{item.razorpayOrderId || '—'}</td>
                   <td className="max-w-xs truncate">{item.message}</td>
                   <td>
@@ -132,7 +138,8 @@ export function SupportPage() {
         <Panel title="Message" className="mt-6">
           <p className="whitespace-pre-wrap">{selected.message}</p>
           <p className="mt-4 text-sm text-muted-foreground">
-            Payment status: <StatusBadge status={selected.paymentStatus} />
+            {selected.source === 'print' ? 'Print job' : 'Payment status:'}{' '}
+            {selected.paymentStatus ? <StatusBadge status={selected.paymentStatus} /> : '—'}
             {selected.failureReason ? ` · ${selected.failureReason}` : ''}
           </p>
           {canResolve && selected.status === 'open' ? (
