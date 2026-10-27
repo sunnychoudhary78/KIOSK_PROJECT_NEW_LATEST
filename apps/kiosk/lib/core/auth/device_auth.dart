@@ -248,6 +248,46 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
     }
   }
 
+  /// Posts the current heartbeat and acknowledges a pending printer refresh.
+  /// Returns false when another heartbeat is already in flight.
+  Future<bool> sendPrinterRefreshHeartbeat(String requestedAt) async {
+    if (_tickInFlight || !ref.mounted || state.stopped) {
+      return false;
+    }
+    final deviceId = state.deviceId;
+    final token = state.accessToken;
+    if (deviceId == null || deviceId.isEmpty || token == null || isJwtExpired(token)) {
+      return false;
+    }
+    _tickInFlight = true;
+    try {
+      final body = _surveillanceHeartbeatBody();
+      body['printerRefreshAck'] = requestedAt;
+      final beat = await _api.post(
+        '/devices/$deviceId/heartbeat',
+        body: body,
+      );
+      final enabled = beat['surveillanceEnabled'] == true;
+      if (enabled != state.surveillanceEnabled) {
+        state = DeviceAuthState(
+          accessToken: state.accessToken,
+          deviceId: state.deviceId,
+          deviceName: state.deviceName,
+          provisioned: true,
+          surveillanceEnabled: enabled,
+        );
+      }
+      return true;
+    } catch (error) {
+      if (_isInactive(error)) {
+        _enterStopped(deviceName: state.deviceName, deviceId: deviceId);
+      }
+      return false;
+    } finally {
+      _tickInFlight = false;
+    }
+  }
+
   void _enterStopped({String? deviceName, String? deviceId}) {
     _api.setAccessToken(null);
     state = DeviceAuthState(

@@ -10,7 +10,7 @@ from pysnmp.hlapi.v3arch.asyncio import (
     ContextData, ObjectType, ObjectIdentity, get_cmd
 )
 
-HOST = os.environ.get("SKP_PRINTER_SNMP_HOST", "192.168.1.13")
+HOST = os.environ.get("SKP_PRINTER_SNMP_HOST", "192.168.1.30")
 COMMUNITY = os.environ["SKP_PRINTER_SNMP_COMMUNITY"]
 
 OIDS = [

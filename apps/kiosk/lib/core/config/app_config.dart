@@ -29,7 +29,7 @@ class AppConfig {
   /// with page 1 on top. Set `SKP_PRINT_REVERSE_PAGES=false` for face-down.
   final bool printReversePages;
 
-  /// SNMP host (e.g. `192.168.1.13`). Empty disables SNMP reconciliation.
+  /// SNMP host (e.g. `192.168.1.30`). Empty disables SNMP reconciliation.
   final String printerSnmpHost;
 
   /// Only `2c` is supported in Phase 2.
@@ -90,7 +90,7 @@ class AppConfig {
     // in other environments; do not use a non-public community in committed defaults.
     const snmpHost = String.fromEnvironment(
       'SKP_PRINTER_SNMP_HOST',
-      defaultValue: '192.168.1.13',
+      defaultValue: '192.168.1.30',
     );
     const snmpVersion = String.fromEnvironment(
       'SKP_PRINTER_SNMP_VERSION',

@@ -155,6 +155,7 @@ export const deviceHeartbeatBodySchema = z
   .object({
     surveillance: surveillanceHealthSchema.optional(),
     printer: printerHealthSchema.optional(),
+    printerRefreshAck: z.string().datetime().optional(),
   })
   .default({});
 

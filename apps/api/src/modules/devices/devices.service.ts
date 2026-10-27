@@ -30,6 +30,12 @@ function mapPrinterHealth(value: unknown): PrinterHealthInput | null {
   return value as PrinterHealthInput;
 }
 
+function ackMatchesRefresh(stored: Date | null | undefined, ack: string | undefined): boolean {
+  if (!stored || !ack) return false;
+  const parsed = Date.parse(ack);
+  return Number.isFinite(parsed) && stored.getTime() === parsed;
+}
+
 function mapDevice(device: {
   id: string;
   name: string;
@@ -44,6 +50,7 @@ function mapDevice(device: {
   surveillanceHealthAt?: Date | null;
   printerHealth?: unknown;
   printerHealthAt?: Date | null;
+  printerRefreshRequestedAt?: Date | null;
   maxPagesPerSession?: number;
   freePagesPerSession?: number;
   extraPageChargeRupees?: number;
@@ -70,6 +77,7 @@ function mapDevice(device: {
     surveillanceHealthAt: device.surveillanceHealthAt?.toISOString() ?? null,
     printerHealth: mapPrinterHealth(device.printerHealth),
     printerHealthAt: device.printerHealthAt?.toISOString() ?? null,
+    printerRefreshRequestedAt: device.printerRefreshRequestedAt?.toISOString() ?? null,
     bannerHorizontalEnabled: device.bannerHorizontalEnabled !== false,
     bannerVerticalEnabled: device.bannerVerticalEnabled !== false,
     ...printLimitsFromDevice(device),
@@ -321,6 +329,33 @@ export class DevicesService {
     return mapDevice(updated);
   }
 
+  async requestPrinterRefresh(deviceId: string) {
+    const device = await this.db.device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    const requestedAt = new Date();
+    await this.db.device.update({
+      where: { id: deviceId },
+      data: { printerRefreshRequestedAt: requestedAt },
+    });
+    return { requestedAt: requestedAt.toISOString() };
+  }
+
+  async getPrinterRefresh(deviceId: string, principalDeviceId: string) {
+    if (deviceId !== principalDeviceId) {
+      throw new AppError('forbidden', 'Device can only read its own refresh request', 403);
+    }
+    const device = await this.db.device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    if (device.status === DeviceStatus.inactive) {
+      throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
+    }
+    return { requestedAt: device.printerRefreshRequestedAt?.toISOString() ?? null };
+  }
+
   async heartbeat(
     deviceId: string,
     principalDeviceId: string,
@@ -354,6 +389,10 @@ export class DevicesService {
               printerHealth: body.printer,
               printerHealthAt: now,
             }
+          : {}),
+        ...(body.printer &&
+        ackMatchesRefresh(device.printerRefreshRequestedAt, body.printerRefreshAck)
+          ? { printerRefreshRequestedAt: null }
           : {}),
         ...(device.status === DeviceStatus.provisioning
           ? { status: DeviceStatus.active }

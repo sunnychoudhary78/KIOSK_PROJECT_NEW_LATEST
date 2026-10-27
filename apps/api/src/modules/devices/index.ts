@@ -135,6 +135,41 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
   );
 
   router.post(
+    '/devices/:deviceId/printer-refresh',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await service.requestPrinterRefresh(
+          requireParam(req.params.deviceId, 'deviceId'),
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/devices/:deviceId/printer-refresh',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const result = await service.getPrinterRefresh(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.principal.deviceId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
     '/devices/:deviceId/heartbeat',
     ...requireDevice(deps),
     validateBody(deviceHeartbeatBodySchema),

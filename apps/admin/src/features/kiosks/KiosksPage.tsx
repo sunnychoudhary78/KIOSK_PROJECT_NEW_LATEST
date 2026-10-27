@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   CloudUpload,
   PauseCircle,
@@ -45,6 +45,7 @@ type Device = {
   surveillanceHealthAt?: string | null;
   printerHealth?: PrinterHealthView | null;
   printerHealthAt?: string | null;
+  printerRefreshRequestedAt?: string | null;
   maxPagesPerSession: number;
   freePagesPerSession: number;
   extraPageChargeRupees: number;
@@ -279,6 +280,9 @@ export function KiosksPage() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [printerDeviceId, setPrinterDeviceId] = useState<string | null>(null);
+  const [printerRefreshing, setPrinterRefreshing] = useState(false);
+  const [printerRefreshNote, setPrinterRefreshNote] = useState<string | null>(null);
+  const printerRefreshGeneration = useRef(0);
 
   async function load() {
     try {
@@ -469,6 +473,60 @@ export function KiosksPage() {
     }
   }
 
+  async function refreshPrinterDetails() {
+    if (!printerDeviceId || printerRefreshing) return;
+    const generation = printerRefreshGeneration.current + 1;
+    printerRefreshGeneration.current = generation;
+    setPrinterRefreshing(true);
+    setPrinterRefreshNote(null);
+    try {
+      const pending = await apiRequest<{ requestedAt: string }>(
+        `/devices/${printerDeviceId}/printer-refresh`,
+        { method: 'POST', token },
+      );
+      const requestedAt = Date.parse(pending.requestedAt);
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+        if (printerRefreshGeneration.current !== generation) return;
+        const result = await apiRequest<{ items: Device[] }>('/devices', { token });
+        if (printerRefreshGeneration.current !== generation) return;
+        setItems(result.items);
+        const device = result.items.find((item) => item.id === printerDeviceId);
+        const posted = device?.printerHealthAt ? Date.parse(device.printerHealthAt) : NaN;
+        if (
+          device &&
+          !device.printerRefreshRequestedAt &&
+          Number.isFinite(posted) &&
+          Number.isFinite(requestedAt) &&
+          posted >= requestedAt
+        ) {
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (printerRefreshGeneration.current === generation) {
+        setPrinterRefreshNote('The kiosk did not answer. Showing the last report.');
+      }
+    } catch (err) {
+      if (printerRefreshGeneration.current === generation) {
+        setPrinterRefreshNote(
+          err instanceof Error ? err.message : 'The kiosk did not answer. Showing the last report.',
+        );
+      }
+    } finally {
+      if (printerRefreshGeneration.current === generation) {
+        setPrinterRefreshing(false);
+      }
+    }
+  }
+
+  function closePrinterDetails() {
+    printerRefreshGeneration.current += 1;
+    setPrinterRefreshing(false);
+    setPrinterRefreshNote(null);
+    setPrinterDeviceId(null);
+  }
+
   const printerDevice = printerDeviceId
     ? items.find((device) => device.id === printerDeviceId) ?? null
     : null;
@@ -574,7 +632,10 @@ export function KiosksPage() {
                   <td>
                     <PrinterSummaryCell
                       device={device}
-                      onDetails={() => setPrinterDeviceId(device.id)}
+                      onDetails={() => {
+                        setPrinterRefreshNote(null);
+                        setPrinterDeviceId(device.id);
+                      }}
                     />
                   </td>
                   <td>
@@ -873,13 +934,24 @@ export function KiosksPage() {
       <Modal
         open={printerDevice != null}
         title={printerDevice ? `Printer · ${printerDevice.name}` : 'Printer'}
-        onClose={() => setPrinterDeviceId(null)}
+        onClose={closePrinterDetails}
         footer={
-          <Button type="button" variant="ghost" onClick={() => setPrinterDeviceId(null)}>
-            Close
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={printerRefreshing}
+              onClick={() => void refreshPrinterDetails()}
+            >
+              {printerRefreshing ? 'Refreshing…' : 'Refresh'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={closePrinterDetails}>
+              Close
+            </Button>
+          </>
         }
       >
+        {printerRefreshNote ? <p className="error">{printerRefreshNote}</p> : null}
         {printerDevice ? <PrinterDetailsBody health={printerDevice.printerHealth} /> : null}
       </Modal>
     </div>

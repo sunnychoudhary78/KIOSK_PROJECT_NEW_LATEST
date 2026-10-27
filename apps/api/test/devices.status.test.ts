@@ -306,6 +306,75 @@ describe('DevicesService.heartbeat', () => {
       },
     });
   });
+
+  it('stores a printer refresh request', async () => {
+    const update = vi.fn(async ({ data }: { data: { printerRefreshRequestedAt: Date } }) => ({
+      ...deviceRow(DeviceStatus.active),
+      ...data,
+    }));
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => deviceRow(DeviceStatus.active)),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    const result = await service.requestPrinterRefresh(deviceId);
+    expect(Date.parse(result.requestedAt)).not.toBeNaN();
+    expect(update).toHaveBeenCalledWith({
+      where: { id: deviceId },
+      data: { printerRefreshRequestedAt: expect.any(Date) },
+    });
+  });
+
+  it('clears the refresh request only when the heartbeat acks that timestamp', async () => {
+    const requestedAt = new Date('2026-10-27T07:00:00.000Z');
+    const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...deviceRow(DeviceStatus.active),
+      printerRefreshRequestedAt: requestedAt,
+      ...data,
+    }));
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceRow(DeviceStatus.active),
+          printerRefreshRequestedAt: requestedAt,
+        })),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    const printer = { state: 'ready' as const, online: true, snmpOk: true };
+    await service.heartbeat(deviceId, deviceId, { printer });
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: deviceId },
+      data: {
+        lastHeartbeatAt: expect.any(Date),
+        printerHealth: printer,
+        printerHealthAt: expect.any(Date),
+      },
+    });
+
+    await service.heartbeat(deviceId, deviceId, {
+      printer,
+      printerRefreshAck: requestedAt.toISOString(),
+    });
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: deviceId },
+      data: {
+        lastHeartbeatAt: expect.any(Date),
+        printerHealth: printer,
+        printerHealthAt: expect.any(Date),
+        printerRefreshRequestedAt: null,
+      },
+    });
+  });
 });
 
 describe('deviceHeartbeatBodySchema printer maintenance', () => {

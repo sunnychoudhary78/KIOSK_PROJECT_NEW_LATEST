@@ -243,6 +243,49 @@ paths:
                   surveillanceEnabled:
                     type: boolean
 
+  /devices/{deviceId}/printer-refresh:
+    post:
+      tags: [Devices]
+      summary: Ask a kiosk to post its current printer snapshot
+      operationId: requestPrinterRefresh
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Refresh requested
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requestedAt]
+                properties:
+                  requestedAt:
+                    type: string
+                    format: date-time
+    get:
+      tags: [Devices]
+      summary: Read this kiosk's pending printer refresh, if any
+      operationId: getPrinterRefresh
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Pending refresh timestamp, or null when none is waiting
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requestedAt]
+                properties:
+                  requestedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+
   /devices/{deviceId}/status:
     patch:
       tags: [Devices]
@@ -1788,6 +1831,11 @@ components:
           type: string
           format: date-time
           nullable: true
+        printerRefreshRequestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set while an admin is waiting for the kiosk to post its current SNMP snapshot
         bannerHorizontalEnabled:
           type: boolean
           description: When false, playlist omits top/bottom home banners for this kiosk
@@ -2036,6 +2084,10 @@ components:
           $ref: '#/components/schemas/SurveillanceHealth'
         printer:
           $ref: '#/components/schemas/PrinterHealth'
+        printerRefreshAck:
+          type: string
+          format: date-time
+          description: Echo of printerRefreshRequestedAt. Present only on the post that answers that request.
 
     SurveillanceUploadUrlRequest:
       type: object
