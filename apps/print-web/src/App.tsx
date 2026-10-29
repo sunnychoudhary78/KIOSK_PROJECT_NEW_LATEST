@@ -6,6 +6,7 @@ import {
   getSession,
   loadRazorpay,
   requestPhoneOtp,
+  sendSupportNote,
   uploadDocuments,
   verifyPayment,
   verifyPhoneOtp,
@@ -208,6 +209,12 @@ function SessionPage() {
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportReference, setSupportReference] = useState('');
+  const [supportSending, setSupportSending] = useState(false);
+  const [supportReceived, setSupportReceived] = useState(false);
+  const [supportError, setSupportError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -378,6 +385,37 @@ function SessionPage() {
       setError(err instanceof Error ? err.message : 'Payment failed. You can try again.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onSendSupport() {
+    const text = supportMessage.trim();
+    if (!text || supportSending) return;
+    setSupportSending(true);
+    setSupportError(null);
+    try {
+      const reference = supportReference.trim();
+      await sendSupportNote(token, {
+        message: text,
+        ...(reference ? { paymentReference: reference } : {}),
+      });
+      setSupportReceived(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'payment_already_settled') {
+        try {
+          const next = await getSession(token);
+          setSession(next);
+          setStep('done');
+        } catch (loadError) {
+          setSupportError(
+            loadError instanceof ApiError ? loadError.message : 'This payment is already settled.',
+          );
+        }
+        return;
+      }
+      setSupportError(err instanceof ApiError ? err.message : 'Could not send this note.');
+    } finally {
+      setSupportSending(false);
     }
   }
 
@@ -589,6 +627,49 @@ function SessionPage() {
             <strong>{quote ? formatMoney(quote.amountPaise) : 'Payment required'}</strong>
           </div>
         </div>
+        {error ? (
+          <div className="support-box">
+            {supportReceived ? (
+              <p className="banner">We received this. Staff will check this payment.</p>
+            ) : (
+              <>
+                <button className="linkish" type="button" onClick={() => setSupportOpen(true)}>
+                  Money deducted? Contact support
+                </button>
+                {supportOpen ? (
+                  <>
+                    <label className="field">
+                      <span className="field-label">What happened</span>
+                      <textarea
+                        maxLength={500}
+                        value={supportMessage}
+                        onChange={(event) => setSupportMessage(event.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span className="field-label">UPI or bank reference</span>
+                      <input
+                        maxLength={80}
+                        value={supportReference}
+                        onChange={(event) => setSupportReference(event.target.value)}
+                        placeholder="Optional"
+                      />
+                    </label>
+                    {supportError ? <p className="banner error">{supportError}</p> : null}
+                    <button
+                      className="primary"
+                      type="button"
+                      disabled={supportSending || supportMessage.trim().length === 0}
+                      onClick={() => void onSendSupport()}
+                    >
+                      {supportSending ? 'Sending…' : 'Send'}
+                    </button>
+                  </>
+                ) : null}
+              </>
+            )}
+          </div>
+        ) : null}
       </AppShell>
     );
   }

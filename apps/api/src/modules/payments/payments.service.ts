@@ -1,13 +1,16 @@
 import {
   OtpChallengeStatus,
   PaymentStatus,
+  Prisma,
   QuickPrintSessionStatus,
   SupportQueryStatus,
+  SupportResolution,
   type SupportQuery,
 } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError, isAppError } from '../../shared/errors.js';
+import { hashSecret } from '../../shared/otp.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { OtpPrintService } from '../otp_print/otp_print.service.js';
 import {
@@ -20,6 +23,66 @@ import type {
   OpenSupportQueryInput,
   VerifyRazorpayPaymentInput,
 } from './payments.schemas.js';
+
+const supportQueryInclude = {
+  payment: {
+    include: {
+      challenge: { include: { device: true, user: true } },
+      quickPrintSession: { include: { device: true } },
+    },
+  },
+  printJob: {
+    include: {
+      device: true,
+      otpChallenge: { include: { user: true } },
+      quickPrintSession: true,
+    },
+  },
+} satisfies Prisma.SupportQueryInclude;
+
+type SupportQueryRecord = Prisma.SupportQueryGetPayload<{ include: typeof supportQueryInclude }>;
+
+type SupportPublicContext = {
+  paymentStatus: PaymentStatus | null;
+  kioskName: string | null;
+  fallbackPhone: string | null;
+  challengeId: string | null;
+  printJobStatus: string | null;
+  pagesExpected: number | null;
+  pagesReported: number | null;
+  printJobError: string | null;
+};
+
+function cleanPaymentReference(value?: string | null) {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function supportContextFromRecord(row: SupportQueryRecord): SupportPublicContext {
+  const payment = row.payment;
+  const job = row.printJob;
+  const kioskName =
+    payment?.challenge?.device?.name ??
+    payment?.quickPrintSession?.device?.name ??
+    job?.device?.name ??
+    null;
+  const fallbackPhone =
+    payment?.challenge?.user?.phone ??
+    payment?.quickPrintSession?.verifiedPhone ??
+    job?.otpChallenge?.user?.phone ??
+    job?.quickPrintSession?.verifiedPhone ??
+    null;
+  return {
+    paymentStatus: payment?.status ?? null,
+    kioskName,
+    fallbackPhone,
+    challengeId: payment?.challengeId ?? null,
+    printJobStatus: job ? String(job.status) : null,
+    pagesExpected: job?.pagesExpected ?? null,
+    pagesReported: job?.pagesReported ?? null,
+    printJobError: job?.errorMessage ?? null,
+  };
+}
 
 type WebhookPayload = {
   event?: string;
@@ -199,10 +262,10 @@ export class PaymentsService {
     }
 
     if (payment.status === PaymentStatus.PAID) {
-      if (payment.quickPrintSessionId) {
-        await this.markQuickPrintReady(payment.quickPrintSessionId, input.correlationId);
-        return {
-          alreadyPaid: true,
+    if (payment.quickPrintSessionId) {
+      await this.markQuickPrintReady(payment.quickPrintSessionId, payment.id, input.correlationId);
+      return {
+        alreadyPaid: true,
           otpSent: false,
           sessionReady: true,
           payment: this.toPublicPayment(payment),
@@ -213,7 +276,11 @@ export class PaymentsService {
       }
       const issued = await this.otpPrint.issueOtpAndNotify(payment.challengeId, input.correlationId);
       if (issued.issued || issued.alreadyIssued) {
-        await this.resolveOpenSupportQuery(payment.id, input.correlationId);
+        await this.resolveOpenSupportQuery(
+          payment.id,
+          input.correlationId,
+          SupportResolution.otp_sent,
+        );
       }
       return {
         alreadyPaid: true,
@@ -260,7 +327,7 @@ export class PaymentsService {
     });
 
     if (payment.quickPrintSessionId) {
-      await this.markQuickPrintReady(payment.quickPrintSessionId, input.correlationId);
+      await this.markQuickPrintReady(payment.quickPrintSessionId, payment.id, input.correlationId);
       return {
         alreadyPaid: false,
         otpSent: false,
@@ -274,7 +341,11 @@ export class PaymentsService {
 
     const issued = await this.otpPrint.issueOtpAndNotify(payment.challengeId, input.correlationId);
     if (issued.issued || issued.alreadyIssued) {
-      await this.resolveOpenSupportQuery(payment.id, input.correlationId);
+      await this.resolveOpenSupportQuery(
+        payment.id,
+        input.correlationId,
+        SupportResolution.otp_sent,
+      );
     }
     return {
       alreadyPaid: false,
@@ -283,7 +354,7 @@ export class PaymentsService {
     };
   }
 
-  private async markQuickPrintReady(sessionId: string, correlationId?: string) {
+  private async markQuickPrintReady(sessionId: string, paymentId: string, correlationId?: string) {
     const session = await this.db.quickPrintSession.findUnique({ where: { id: sessionId } });
     if (!session) {
       return;
@@ -292,6 +363,7 @@ export class PaymentsService {
       session.status === QuickPrintSessionStatus.ready ||
       session.status === QuickPrintSessionStatus.consumed
     ) {
+      await this.resolveOpenSupportQuery(paymentId, correlationId, SupportResolution.session_ready);
       return;
     }
     const paidGraceMs = 5 * 60 * 1000;
@@ -311,6 +383,7 @@ export class PaymentsService {
       correlationId,
       metadata: { afterPayment: true },
     });
+    await this.resolveOpenSupportQuery(paymentId, correlationId, SupportResolution.session_ready);
   }
 
   async markRazorpayPaymentFailed(razorpayOrderId: string, reason?: string) {
@@ -388,7 +461,7 @@ export class PaymentsService {
     }
     return {
       query: payment.supportQuery
-        ? this.toPublicSupportQuery(payment.supportQuery, payment.status)
+        ? this.toPublicSupportQuery(payment.supportQuery, this.challengeContext(challenge, payment.status))
         : null,
     };
   }
@@ -401,7 +474,10 @@ export class PaymentsService {
       throw new AppError('payment_not_required', 'This print session does not require payment', 400);
     }
     if (payment.supportQuery) {
-      return this.toPublicSupportQuery(payment.supportQuery, payment.status);
+      return this.toPublicSupportQuery(
+        payment.supportQuery,
+        this.challengeContext(challenge, payment.status),
+      );
     }
 
     const created = await this.db.supportQuery.create({
@@ -410,6 +486,7 @@ export class PaymentsService {
         userId,
         phone: challenge.user.phone ?? '',
         message: input.message,
+        paymentReference: cleanPaymentReference(input.paymentReference),
         status: SupportQueryStatus.open,
         razorpayOrderId: payment.razorpayOrderId,
         amountPaise: payment.amountPaise,
@@ -431,34 +508,139 @@ export class PaymentsService {
       },
     });
 
-    return this.toPublicSupportQuery(created, payment.status);
+    return this.toPublicSupportQuery(created, this.challengeContext(challenge, payment.status));
   }
 
-  async listSupportQueries() {
-    const rows = await this.db.supportQuery.findMany({
-      include: { payment: true, printJob: true },
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+  async openQuickPrintSupportQuery(
+    token: string,
+    input: { message: string; paymentReference?: string | null },
+    correlationId?: string,
+  ) {
+    const trimmed = token.trim();
+    if (!trimmed) {
+      throw new AppError('not_found', 'Print session not found', 404);
+    }
+    const session = await this.db.quickPrintSession.findUnique({
+      where: { tokenHash: hashSecret(trimmed) },
+      include: {
+        device: { select: { name: true } },
+        payment: { include: { supportQuery: true } },
+      },
     });
+    if (!session) {
+      throw new AppError('not_found', 'Print session not found', 404);
+    }
+    if (
+      session.status === QuickPrintSessionStatus.ready ||
+      session.status === QuickPrintSessionStatus.consumed
+    ) {
+      throw new AppError('payment_already_settled', 'This payment is already settled', 409);
+    }
+    const payment = session.payment;
+    if (!payment) {
+      throw new AppError('payment_not_required', 'This print session does not require payment', 400);
+    }
+    const context: SupportPublicContext = {
+      paymentStatus: payment.status,
+      kioskName: session.device?.name ?? null,
+      fallbackPhone: session.verifiedPhone,
+      challengeId: null,
+      printJobStatus: null,
+      pagesExpected: null,
+      pagesReported: null,
+      printJobError: null,
+    };
+    if (payment.supportQuery) {
+      return this.toPublicSupportQuery(payment.supportQuery, context);
+    }
+
+    const created = await this.db.supportQuery.create({
+      data: {
+        paymentId: payment.id,
+        phone: session.verifiedPhone ?? '',
+        message: input.message,
+        paymentReference: cleanPaymentReference(input.paymentReference),
+        status: SupportQueryStatus.open,
+        razorpayOrderId: payment.razorpayOrderId,
+        amountPaise: payment.amountPaise,
+        failureReason: payment.failureReason,
+      },
+    });
+
+    await this.audit.record({
+      action: 'support_query.opened',
+      principalType: 'system',
+      principalId: session.deviceId,
+      resourceType: 'support_query',
+      resourceId: created.id,
+      correlationId,
+      metadata: {
+        quickPrintSessionId: session.id,
+        paymentId: payment.id,
+        razorpayOrderId: payment.razorpayOrderId,
+      },
+    });
+
+    return this.toPublicSupportQuery(created, context);
+  }
+
+  async listSupportQueries(filter: {
+    status?: 'open' | 'resolved';
+    source?: 'payment' | 'print';
+  } = {}) {
+    const where: Prisma.SupportQueryWhereInput = {};
+    if (filter.status) {
+      where.status = filter.status;
+    }
+    if (filter.source === 'payment') {
+      where.printJobId = null;
+    } else if (filter.source === 'print') {
+      where.printJobId = { not: null };
+    }
+    const [rows, openCount] = await Promise.all([
+      this.db.supportQuery.findMany({
+        where,
+        include: supportQueryInclude,
+        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      }),
+      this.db.supportQuery.count({ where: { status: SupportQueryStatus.open } }),
+    ]);
     return {
-      items: rows.map((row) => this.toPublicSupportQuery(row, row.payment?.status ?? null)),
+      items: rows.map((row) => this.toPublicSupportQuery(row, supportContextFromRecord(row))),
+      openCount,
     };
   }
 
-  async resolveSupportQuery(queryId: string, adminId: string, correlationId?: string) {
+  async resolveSupportQuery(
+    queryId: string,
+    adminId: string,
+    resolution: SupportResolution,
+    correlationId?: string,
+  ) {
     const row = await this.db.supportQuery.findUnique({
       where: { id: queryId },
-      include: { payment: true, printJob: true },
+      include: supportQueryInclude,
     });
     if (!row) {
       throw new AppError('not_found', 'Support message not found', 404);
     }
     if (row.status === SupportQueryStatus.resolved) {
-      return this.toPublicSupportQuery(row, row.payment?.status ?? null);
+      return this.toPublicSupportQuery(row, supportContextFromRecord(row));
     }
-    const updated = await this.db.supportQuery.update({
-      where: { id: queryId },
-      data: { status: SupportQueryStatus.resolved, resolvedAt: new Date() },
+    const won = await this.db.supportQuery.updateMany({
+      where: { id: queryId, status: SupportQueryStatus.open },
+      data: { status: SupportQueryStatus.resolved, resolvedAt: new Date(), resolution },
     });
+    const current = await this.db.supportQuery.findUnique({
+      where: { id: queryId },
+      include: supportQueryInclude,
+    });
+    if (!current) {
+      throw new AppError('not_found', 'Support message not found', 404);
+    }
+    if (won.count === 0) {
+      return this.toPublicSupportQuery(current, supportContextFromRecord(current));
+    }
     await this.audit.record({
       action: 'support_query.resolved',
       principalType: 'admin',
@@ -466,20 +648,66 @@ export class PaymentsService {
       resourceType: 'support_query',
       resourceId: queryId,
       correlationId,
-      metadata: { paymentId: row.paymentId },
+      metadata: { paymentId: row.paymentId, resolution },
     });
-    return this.toPublicSupportQuery(updated, row.payment?.status ?? null);
+    return this.toPublicSupportQuery(current, supportContextFromRecord(current));
   }
 
-  private async resolveOpenSupportQuery(paymentId: string, correlationId?: string) {
+  async resendSupportOtp(queryId: string, adminId: string, correlationId?: string) {
+    const row = await this.db.supportQuery.findUnique({
+      where: { id: queryId },
+      include: supportQueryInclude,
+    });
+    if (!row) {
+      throw new AppError('not_found', 'Support message not found', 404);
+    }
+    const payment = row.payment;
+    if (!payment || payment.status !== PaymentStatus.PAID || !payment.challengeId) {
+      throw new AppError(
+        'payment_required',
+        'OTP can only be resent after a paid OTP print payment',
+        402,
+      );
+    }
+    const issued = await this.otpPrint.issueOtpAndNotify(payment.challengeId, correlationId);
+    if (issued.issued || issued.alreadyIssued) {
+      await this.resolveOpenSupportQuery(payment.id, correlationId, SupportResolution.otp_sent);
+    }
+    await this.audit.record({
+      action: 'support_query.otp_resent',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'support_query',
+      resourceId: queryId,
+      correlationId,
+      metadata: { paymentId: payment.id, challengeId: payment.challengeId },
+    });
+    const fresh = await this.db.supportQuery.findUnique({
+      where: { id: queryId },
+      include: supportQueryInclude,
+    });
+    if (!fresh) {
+      throw new AppError('not_found', 'Support message not found', 404);
+    }
+    return this.toPublicSupportQuery(fresh, supportContextFromRecord(fresh));
+  }
+
+  private async resolveOpenSupportQuery(
+    paymentId: string,
+    correlationId: string | undefined,
+    resolution: SupportResolution,
+  ) {
     const open = await this.db.supportQuery.findUnique({ where: { paymentId } });
     if (!open || open.status !== SupportQueryStatus.open) {
       return;
     }
-    await this.db.supportQuery.update({
-      where: { id: open.id },
-      data: { status: SupportQueryStatus.resolved, resolvedAt: new Date() },
+    const won = await this.db.supportQuery.updateMany({
+      where: { id: open.id, status: SupportQueryStatus.open },
+      data: { status: SupportQueryStatus.resolved, resolvedAt: new Date(), resolution },
     });
+    if (won.count === 0) {
+      return;
+    }
     await this.audit.record({
       action: 'support_query.resolved',
       principalType: 'system',
@@ -487,7 +715,7 @@ export class PaymentsService {
       resourceType: 'support_query',
       resourceId: open.id,
       correlationId,
-      metadata: { paymentId, automatic: true },
+      metadata: { paymentId, automatic: true, resolution },
     });
   }
 
@@ -500,7 +728,11 @@ export class PaymentsService {
   private async loadSupportChallenge(userId: string, challengeId: string) {
     const challenge = await this.db.otpChallenge.findUnique({
       where: { id: challengeId },
-      include: { user: true, payment: { include: { supportQuery: true } } },
+      include: {
+        user: true,
+        device: { select: { name: true } },
+        payment: { include: { supportQuery: true } },
+      },
     });
     if (!challenge || challenge.userId !== userId) {
       throw new AppError('not_found', 'Print session not found', 404);
@@ -508,18 +740,43 @@ export class PaymentsService {
     return challenge;
   }
 
-  private toPublicSupportQuery(query: SupportQuery, paymentStatus: PaymentStatus | null) {
+  private challengeContext(
+    challenge: { id: string; device: { name: string } | null; user: { phone: string | null } },
+    paymentStatus: PaymentStatus,
+  ): SupportPublicContext {
+    return {
+      paymentStatus,
+      kioskName: challenge.device?.name ?? null,
+      fallbackPhone: challenge.user.phone,
+      challengeId: challenge.id,
+      printJobStatus: null,
+      pagesExpected: null,
+      pagesReported: null,
+      printJobError: null,
+    };
+  }
+
+  private toPublicSupportQuery(query: SupportQuery, context: SupportPublicContext) {
+    const phone = query.phone.trim() || context.fallbackPhone?.trim() || '';
     return {
       id: query.id,
       status: query.status,
       message: query.message,
-      phone: query.phone,
+      phone,
       amountPaise: query.amountPaise,
       razorpayOrderId: query.razorpayOrderId,
       failureReason: query.failureReason,
-      paymentStatus,
+      paymentReference: query.paymentReference,
+      paymentStatus: context.paymentStatus,
+      challengeId: context.challengeId,
+      kioskName: context.kioskName,
       printJobId: query.printJobId,
-      source: query.printJobId ? 'print' : 'payment',
+      printJobStatus: context.printJobStatus,
+      pagesExpected: context.pagesExpected,
+      pagesReported: context.pagesReported,
+      printJobError: context.printJobError,
+      source: query.printJobId ? 'print' as const : 'payment' as const,
+      resolution: query.resolution,
       createdAt: query.createdAt.toISOString(),
       resolvedAt: query.resolvedAt?.toISOString() ?? null,
     };

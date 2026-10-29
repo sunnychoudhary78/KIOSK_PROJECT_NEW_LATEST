@@ -15,21 +15,18 @@ class RelayCommands {
     return '{"relay":$relay,"state":"$state"}';
   }
 
-  static String chargingOn() =>
-      setState(relay: chargingRelayNumber, on: true);
+  static String chargingOn() => setState(relay: chargingRelayNumber, on: true);
 
   static String chargingOff() =>
       setState(relay: chargingRelayNumber, on: false);
+
+  /// Ask the ESP32 for the INA226 charger snapshot.
+  static String chargerStatus() => '{"command":"charger"}';
 }
 
 /// Parsed relay reply from firmware.
 class RelayResponse {
-  const RelayResponse({
-    required this.ok,
-    this.relay,
-    this.state,
-    this.error,
-  });
+  const RelayResponse({required this.ok, this.relay, this.state, this.error});
 
   final bool ok;
   final int? relay;
@@ -90,11 +87,13 @@ class RelayResponse {
       return null;
     }
 
-    // Sensor status / result lines are not relay replies.
+    // Sensor status, charger monitor, and result lines are not relay replies.
     if (json.containsKey('status') ||
         json.containsKey('bpm') ||
         json.containsKey('spo2') ||
-        json.containsKey('command')) {
+        json.containsKey('command') ||
+        json.containsKey('charger') ||
+        json.containsKey('i2c_found')) {
       return null;
     }
 

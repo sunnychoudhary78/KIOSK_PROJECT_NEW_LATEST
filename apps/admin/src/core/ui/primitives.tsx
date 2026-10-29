@@ -92,7 +92,8 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
 
 function badgeVariant(status: string): 'success' | 'destructive' | 'warning' | 'muted' | 'secondary' {
   const value = status.toLowerCase();
-  if (['active', 'ready', 'printed', 'completed', 'paid', 'on'].includes(value)) return 'success';
+  if (['active', 'ready', 'printed', 'completed', 'paid', 'resolved', 'on'].includes(value)) return 'success';
+  if (value === 'open') return 'warning';
   if (['inactive', 'ended', 'failed', 'expired', 'not_configured'].includes(value)) return 'destructive';
   if (['paused', 'draft', 'scheduled', 'printing'].includes(value)) return 'warning';
   if (['off'].includes(value)) return 'muted';

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -19,6 +19,7 @@ import {
   Menu,
   Monitor,
 } from 'lucide-react';
+import { apiRequest } from '../core/api/client';
 import { useAuth } from '../core/auth/auth-context';
 import { config } from '../core/config';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -96,7 +97,13 @@ function initials(email: string | null) {
   return email.slice(0, 2).toUpperCase();
 }
 
-function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarNav({
+  onNavigate,
+  openSupportCount,
+}: {
+  onNavigate?: () => void;
+  openSupportCount: number;
+}) {
   return (
     <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-4">
       {NAV.map((section) => (
@@ -121,7 +128,12 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                 }
               >
                 <item.icon className="h-4 w-4 shrink-0 opacity-80" />
-                {item.label}
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                {item.to === '/support' && openSupportCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[11px] font-semibold text-sidebar">
+                    {openSupportCount}
+                  </span>
+                ) : null}
               </NavLink>
             ))}
           </div>
@@ -145,12 +157,18 @@ function Brand() {
   );
 }
 
-function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarBody({
+  onNavigate,
+  openSupportCount,
+}: {
+  onNavigate?: () => void;
+  openSupportCount: number;
+}) {
   return (
     <>
       <Brand />
       <Separator className="bg-sidebar-border" />
-      <SidebarNav onNavigate={onNavigate} />
+      <SidebarNav onNavigate={onNavigate} openSupportCount={openSupportCount} />
     </>
   );
 }
@@ -159,6 +177,28 @@ export function AppShell() {
   const auth = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openSupportCount, setOpenSupportCount] = useState(0);
+
+  useEffect(() => {
+    if (!auth.token) return;
+    let cancelled = false;
+    async function loadCount() {
+      try {
+        const result = await apiRequest<{ openCount: number }>('/support-queries?status=open', {
+          token: auth.token,
+        });
+        if (!cancelled) setOpenSupportCount(result.openCount);
+      } catch {
+        if (!cancelled) setOpenSupportCount(0);
+      }
+    }
+    void loadCount();
+    window.addEventListener('skp-support-changed', loadCount);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('skp-support-changed', loadCount);
+    };
+  }, [auth.token]);
 
   if (!auth.token) {
     return <Navigate to="/login" replace />;
@@ -167,12 +207,12 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen bg-background">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground lg:flex">
-        <SidebarBody />
+        <SidebarBody openSupportCount={openSupportCount} />
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent className="p-0">
-          <SidebarBody onNavigate={() => setMobileOpen(false)} />
+          <SidebarBody openSupportCount={openSupportCount} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 

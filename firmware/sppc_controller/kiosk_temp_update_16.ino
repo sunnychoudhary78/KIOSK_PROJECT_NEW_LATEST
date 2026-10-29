@@ -14,6 +14,8 @@
 // 2. MLX90614 temperature
 // 3. Relay 1 / Relay 2 control
 // 4. USB JSON communication (115200 baud)
+// 5. INA226 charger monitor: phone plugged in / plugged out
+//    detection, and automatic Relay 1 OFF when the phone is full
 //
 // RELAYS: GPIO25 -> Relay 1, GPIO26 -> Relay 2
 // I2C:    GPIO21 -> SDA,     GPIO22 -> SCL
@@ -42,6 +44,8 @@
 // Any session running longer than this is force-aborted.
 #define SESSION_MAX_SECONDS 90
 
+bool watchdogRunning = false;
+
 void startWatchdog()
 {
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -60,6 +64,8 @@ void startWatchdog()
 #endif
 
   esp_task_wdt_add(NULL);
+
+  watchdogRunning = true;
 }
 
 
@@ -130,14 +136,114 @@ void startWatchdog()
 
 #define PRESENCE_CHECK_INTERVAL 200
 
-#define PRESENCE_DELTA_C 2.0f
+// LONG-DISTANCE (1.5-2 cm+) TUNING
+// At distance the sensor's field of view includes more background, so
+// the raw object temperature reads LOWER than the real skin temperature.
+//
+// PRESENCE_DELTA_C   : (object - ambient) needed to detect a forehead.
+//                      Was 2.0 (close range); lowered for distance.
+// PRESENCE_CONFIRM_COUNT : consecutive hits needed, so the lower
+//                      threshold doesn't trigger on noise.
+// TEMP_RAW_MIN_C     : lowest RAW object temp accepted (before gain).
+// TEMP_DISTANCE_GAIN : scales (object - ambient) back up to compensate
+//                      for the distance. 1.0 = no compensation.
+//                      Tune against a reference thermometer.
+#define PRESENCE_DELTA_C 0.5f
+#define PRESENCE_CONFIRM_COUNT 3
 
+// After the forehead is detected (from ~6-7 cm), wait this long before
+// the measurement actually starts, so the person can settle/move closer.
+#define TEMP_SETTLE_MS 2000
+
+#define TEMP_RAW_MIN_C 24.0f
+
+#define TEMP_DISTANCE_GAIN 1.35f
+
+// Valid range applies to the distance-corrected temperature.
 #define TEMP_VALID_MIN_C 30.0f
 #define TEMP_VALID_MAX_C 42.0f
 
 #define PRESENCE_TIMEOUT_SECONDS 15
 
 #define TEMP_OFFSET_F 4.0f
+
+
+// =====================================================
+// INA226 / CHARGER MONITOR CONFIGURATION
+// =====================================================
+//
+// The INA226 sits on the same I2C bus (GPIO21/22) and measures the
+// charging line. While the charger relay is ON the ESP32 watches the
+// power drawn:
+//   - power rises above PLUG_ON_W   -> phone plugged in
+//   - power drops abruptly to ~0    -> phone plugged out, relay OFF
+//   - power tapers off and stays low for FULL_HOLD_S seconds
+//                                   -> phone fully charged, relay OFF
+//
+// NOTE: with the relay OFF the charging module has no power, so
+// plug in / plug out can only be detected while the relay is ON.
+
+// Relay that powers the charging module / socket
+#define CHARGER_RELAY 1
+
+// INA226 I2C address (A0 = A1 = GND -> 0x40)
+#define INA226_ADDR 0x40
+
+// Value of the shunt resistor on YOUR INA226 module, in ohms.
+// Printed on the module: R100 = 0.1, R010 = 0.01, R002 = 0.002.
+// The INA226 can only measure +/-81.92 mV across the shunt,
+// so max current = 0.08192 / SHUNT_OHMS (0.01 ohm -> 8.19 A).
+#define INA226_SHUNT_OHMS 0.01f
+
+#define INA226_REG_CONFIG 0x00
+#define INA226_REG_SHUNT 0x01
+#define INA226_REG_BUS 0x02
+#define INA226_REG_MANUF_ID 0xFE
+
+// 16 sample averaging, 1.1 ms conversions, continuous mode
+#define INA226_CONFIG_VALUE 0x4527
+
+// How often the charger is checked (ms)
+#define CHARGER_POLL_MS 500
+
+// Ignore readings for this long after the relay turns ON (inrush)
+#define CHARGER_SETTLE_MS 3000
+
+// If polling was paused longer than this (e.g. during a MAX30102
+// session) the plug in / plug out debounce counters restart.
+#define CHARGER_GAP_MS 3000
+
+// Retry interval when the INA226 is not responding
+#define CHARGER_REINIT_MS 5000
+
+// POWER THRESHOLDS (watts, measured by the INA226)
+// Tune these with CHARGER_DEBUG_STREAM (see below).
+//   PLUG_ON_W  : above this for PLUG_CONFIRM samples = phone plugged in
+//   PLUG_OFF_W : below this = nothing drawing power
+//   FULL_W     : below this = charge has tapered off (almost full)
+#define CHARGER_PLUG_ON_W 2.0f
+#define CHARGER_PLUG_OFF_W 0.8f
+#define CHARGER_FULL_W 3.0f
+
+// Samples (x CHARGER_POLL_MS) needed to confirm plug in / plug out
+#define CHARGER_PLUG_CONFIRM 3
+#define CHARGER_UNPLUG_CONFIRM 4
+
+// A drop below PLUG_OFF_W counts as "unplugged" only if the power was
+// above FULL_W within the last ABRUPT_SAMPLES samples. A slow taper to
+// zero is treated as the end of charging instead.
+#define CHARGER_ABRUPT_SAMPLES 8
+
+// Power must stay below FULL_W this long to call the phone full.
+#define CHARGER_FULL_HOLD_S 60
+#define CHARGER_FULL_HOLD_SAMPLES ((CHARGER_FULL_HOLD_S * 1000) / CHARGER_POLL_MS)
+
+// Safety: relay is switched OFF after this long on one phone.
+#define CHARGER_MAX_MINUTES 240
+
+// true: print a {"charger":"debug",...} line every 2 s with the
+// live volts / mA / watts, to tune the thresholds above.
+#define CHARGER_DEBUG_STREAM false
 
 
 // =====================================================
@@ -529,12 +635,34 @@ bool checkForeheadPresent(float &objectCOut, float &ambientCOut)
   objectCOut = objectC;
   ambientCOut = ambientC;
 
+  static int hits = 0;
+
   if (isnan(objectC) || isnan(ambientC))
   {
+    hits = 0;
     return false;
   }
 
-  return (objectC - ambientC) > PRESENCE_DELTA_C;
+  if ((objectC - ambientC) > PRESENCE_DELTA_C)
+  {
+    if (++hits >= PRESENCE_CONFIRM_COUNT)
+    {
+      hits = 0;
+      return true;
+    }
+  }
+  else
+  {
+    hits = 0;
+  }
+
+  return false;
+}
+
+// Compensate for reduced reading at distance (wider FOV mixes in ambient)
+float applyDistanceGain(float objectC, float ambientC)
+{
+  return ambientC + (objectC - ambientC) * TEMP_DISTANCE_GAIN;
 }
 
 
@@ -575,6 +703,12 @@ void accumulateTempSample()
     return;
   }
 
+  // Still inside the 2 s settle delay after detection
+  if (millis() < tempCollectionStart)
+  {
+    return;
+  }
+
   float objectC = readMLXTemperature(0x07);
   float ambientC = readMLXTemperature(0x06);
 
@@ -582,6 +716,13 @@ void accumulateTempSample()
   {
     return;
   }
+
+  if (objectC < TEMP_RAW_MIN_C)
+  {
+    return;
+  }
+
+  objectC = applyDistanceGain(objectC, ambientC);
 
   if (objectC < TEMP_VALID_MIN_C || objectC > TEMP_VALID_MAX_C)
   {
@@ -951,6 +1092,414 @@ void stopSession()
 
 
 // =====================================================
+// CHARGER MONITOR (INA226)
+// =====================================================
+
+enum ChargerState
+{
+  CH_OFF,        // charger relay is OFF
+  CH_WAITING,    // relay ON, no phone connected
+  CH_CHARGING    // relay ON, phone connected and charging
+};
+
+ChargerState chargerState = CH_OFF;
+
+bool inaOK = false;
+uint8_t inaFailCount = 0;
+
+float chargerVolts = 0.0f;
+float chargerMA = 0.0f;
+float chargerW = 0.0f;
+float chargerPeakW = 0.0f;
+
+int chargerPlugCount = 0;
+int chargerUnplugCount = 0;
+int chargerLowStreak = 0;
+
+unsigned long lastChargerPoll = 0;
+unsigned long lastInaInit = 0;
+unsigned long lastChargerDebug = 0;
+unsigned long chargerRelayOnMs = 0;
+unsigned long chargerPlugMs = 0;
+
+const char* chargerLastResult = "none";
+
+bool ina226Read16(uint8_t reg, uint16_t &value)
+{
+  Wire.beginTransmission(INA226_ADDR);
+  Wire.write(reg);
+
+  if (Wire.endTransmission(false) != 0)
+  {
+    return false;
+  }
+
+  if (Wire.requestFrom((uint8_t)INA226_ADDR, (uint8_t)2) != 2)
+  {
+    return false;
+  }
+
+  uint8_t hi = Wire.read();
+  uint8_t lo = Wire.read();
+
+  value = ((uint16_t)hi << 8) | lo;
+
+  return true;
+}
+
+bool ina226Write16(uint8_t reg, uint16_t value)
+{
+  Wire.beginTransmission(INA226_ADDR);
+  Wire.write(reg);
+  Wire.write((uint8_t)(value >> 8));
+  Wire.write((uint8_t)(value & 0xFF));
+
+  return (Wire.endTransmission() == 0);
+}
+
+bool initINA226()
+{
+  uint16_t id = 0;
+
+  // 0x5449 = "TI". Confirms a real INA226 is answering.
+  if (!ina226Read16(INA226_REG_MANUF_ID, id) || id != 0x5449)
+  {
+    return false;
+  }
+
+  return ina226Write16(INA226_REG_CONFIG, INA226_CONFIG_VALUE);
+}
+
+bool readCharger(float &volts, float &mA, float &watts)
+{
+  uint16_t rawBus = 0;
+  uint16_t rawShunt = 0;
+
+  if (!ina226Read16(INA226_REG_BUS, rawBus)) return false;
+  if (!ina226Read16(INA226_REG_SHUNT, rawShunt)) return false;
+
+  // Bus voltage: 1.25 mV per bit
+  volts = rawBus * 0.00125f;
+
+  // Shunt voltage: 2.5 uV per bit -> mA = mV / ohms
+  // fabsf() so the reading is positive whichever way the INA226
+  // IN+ / IN- wires are connected.
+  mA = fabsf((float)(int16_t)rawShunt * 0.0025f / INA226_SHUNT_OHMS);
+
+  watts = volts * mA / 1000.0f;
+
+  return true;
+}
+
+const char* chargerStateName()
+{
+  if (chargerState == CH_CHARGING) return "charging";
+  if (chargerState == CH_WAITING) return "waiting_for_phone";
+  return "relay_off";
+}
+
+void resetChargerCounters()
+{
+  chargerPlugCount = 0;
+  chargerUnplugCount = 0;
+  chargerLowStreak = 0;
+  chargerPeakW = 0.0f;
+}
+
+// Events: plugged_in, plugged_out, charge_complete, charge_timeout,
+//         ina226_error, ina226_ready, debug
+void sendChargerEvent(const char* event)
+{
+  JsonDocument response;
+
+  response["charger"] = event;
+  response["relay_state"] = getRelayState(CHARGER_RELAY) ? "on" : "off";
+  response["volts"] = roundf(chargerVolts * 100.0f) / 100.0f;
+  response["current_ma"] = roundf(chargerMA);
+  response["power_w"] = roundf(chargerW * 100.0f) / 100.0f;
+  response["ts"] = millis();
+
+  serializeJson(response, Serial);
+  Serial.println();
+}
+
+// Answer to {"command":"charger"} / "CHARGER"
+void sendChargerSnapshot()
+{
+  // Do not touch the I2C bus while the MAX30102 is recording.
+  if (inaOK && !sessionMAX)
+  {
+    float v, mA, w;
+
+    if (readCharger(v, mA, w))
+    {
+      chargerVolts = v;
+      chargerMA = mA;
+      chargerW = w;
+    }
+  }
+
+  JsonDocument response;
+
+  response["charger"] = "status";
+  response["ina226"] = inaOK;
+  response["state"] = chargerStateName();
+  response["plugged"] = (chargerState == CH_CHARGING);
+  response["last_result"] = chargerLastResult;
+  response["relay_state"] = getRelayState(CHARGER_RELAY) ? "on" : "off";
+  response["volts"] = roundf(chargerVolts * 100.0f) / 100.0f;
+  response["current_ma"] = roundf(chargerMA);
+  response["power_w"] = roundf(chargerW * 100.0f) / 100.0f;
+  response["ts"] = millis();
+
+  serializeJson(response, Serial);
+  Serial.println();
+}
+
+// Switch the charger relay OFF and tell the host why.
+void chargerStop(const char* event)
+{
+  setRelay(CHARGER_RELAY, false);
+
+  chargerLastResult = event;
+  chargerState = CH_OFF;
+
+  sendChargerEvent(event);
+
+  resetChargerCounters();
+}
+
+void pollCharger()
+{
+  unsigned long now = millis();
+
+  if (now - lastChargerPoll < CHARGER_POLL_MS)
+  {
+    return;
+  }
+
+  // Polling was paused for a while: restart the debounce counters.
+  if (now - lastChargerPoll > CHARGER_GAP_MS)
+  {
+    chargerPlugCount = 0;
+    chargerUnplugCount = 0;
+  }
+
+  lastChargerPoll = now;
+
+  // INA226 missing / lost: retry now and then.
+  if (!inaOK)
+  {
+    if (now - lastInaInit >= CHARGER_REINIT_MS)
+    {
+      lastInaInit = now;
+      inaOK = initINA226();
+
+      if (inaOK)
+      {
+        inaFailCount = 0;
+        sendChargerEvent("ina226_ready");
+      }
+    }
+
+    return;
+  }
+
+  // Relay OFF: the charging module is unpowered, nothing to watch.
+  if (!getRelayState(CHARGER_RELAY))
+  {
+    if (chargerState != CH_OFF)
+    {
+      chargerState = CH_OFF;
+      resetChargerCounters();
+    }
+
+    return;
+  }
+
+  // Relay just turned ON
+  if (chargerState == CH_OFF)
+  {
+    chargerState = CH_WAITING;
+    resetChargerCounters();
+    chargerRelayOnMs = now;
+  }
+
+  if (now - chargerRelayOnMs < CHARGER_SETTLE_MS)
+  {
+    return;
+  }
+
+  float v = 0.0f;
+  float mA = 0.0f;
+  float w = 0.0f;
+
+  if (!readCharger(v, mA, w))
+  {
+    if (++inaFailCount >= 5)
+    {
+      inaOK = false;
+      lastInaInit = now;
+      sendChargerEvent("ina226_error");
+    }
+
+    return;
+  }
+
+  inaFailCount = 0;
+
+  chargerVolts = v;
+  chargerMA = mA;
+  chargerW = w;
+
+  if (CHARGER_DEBUG_STREAM && (now - lastChargerDebug >= 2000))
+  {
+    lastChargerDebug = now;
+    sendChargerEvent("debug");
+  }
+
+  // ---------- no phone yet: wait for plug in ----------
+  if (chargerState == CH_WAITING)
+  {
+    if (w >= CHARGER_PLUG_ON_W)
+    {
+      if (++chargerPlugCount >= CHARGER_PLUG_CONFIRM)
+      {
+        chargerState = CH_CHARGING;
+        chargerPlugMs = now;
+
+        chargerPlugCount = 0;
+        chargerUnplugCount = 0;
+        chargerLowStreak = 0;
+        chargerPeakW = w;
+
+        chargerLastResult = "plugged_in";
+        sendChargerEvent("plugged_in");
+      }
+    }
+    else
+    {
+      chargerPlugCount = 0;
+    }
+
+    return;
+  }
+
+  // ---------- phone connected: watch for unplug / full ----------
+  if (chargerState == CH_CHARGING)
+  {
+    if (w > chargerPeakW)
+    {
+      chargerPeakW = w;
+    }
+
+    if (w >= CHARGER_FULL_W)
+    {
+      // Still charging properly
+      chargerLowStreak = 0;
+      chargerUnplugCount = 0;
+    }
+    else
+    {
+      // Sudden drop to ~0 right after real charging = cable pulled
+      if (
+        w < CHARGER_PLUG_OFF_W &&
+        chargerLowStreak < CHARGER_ABRUPT_SAMPLES
+      )
+      {
+        chargerUnplugCount++;
+      }
+      else
+      {
+        chargerUnplugCount = 0;
+      }
+
+      chargerLowStreak++;
+    }
+
+    if (chargerUnplugCount >= CHARGER_UNPLUG_CONFIRM)
+    {
+      // Phone pulled out: switch the charger relay OFF
+      chargerStop("plugged_out");
+      return;
+    }
+
+    // Power stayed low long enough after a real charge: phone is full
+    if (
+      chargerLowStreak >= CHARGER_FULL_HOLD_SAMPLES &&
+      chargerPeakW >= CHARGER_FULL_W
+    )
+    {
+      chargerStop("charge_complete");
+      return;
+    }
+
+    // Safety limit
+    if (now - chargerPlugMs >= (unsigned long)CHARGER_MAX_MINUTES * 60000UL)
+    {
+      chargerStop("charge_timeout");
+      return;
+    }
+  }
+}
+
+
+// Prints whether the INA226 answers on the I2C bus:
+// {"charger":"ina226_connected",...} or {"charger":"ina226_not_connected",...}
+void reportINA226()
+{
+  Wire.beginTransmission(INA226_ADDR);
+  uint8_t i2cErr = Wire.endTransmission();
+
+  JsonDocument response;
+
+  response["charger"] = (i2cErr == 0 && inaOK)
+    ? "ina226_connected"
+    : "ina226_not_connected";
+
+  response["addr"] = "0x40";
+  response["i2c_ack"] = (i2cErr == 0);
+  response["i2c_err"] = i2cErr;
+  response["init_ok"] = inaOK;
+  response["ts"] = millis();
+
+  serializeJson(response, Serial);
+  Serial.println();
+}
+
+// Lists every I2C address that answers, e.g. ["0x40","0x57","0x5A"]
+// Expected: 0x40 = INA226, 0x57 = MAX30102, 0x5A = MLX90614
+void i2cScanReport()
+{
+  JsonDocument response;
+
+  JsonArray found = response["i2c_found"].to<JsonArray>();
+
+  for (uint8_t addr = 1; addr < 127; addr++)
+  {
+    Wire.beginTransmission(addr);
+
+    if (Wire.endTransmission() == 0)
+    {
+      char buf[8];
+      snprintf(buf, sizeof(buf), "0x%02X", addr);
+      found.add(String(buf));
+    }
+
+    if (watchdogRunning)
+    {
+      esp_task_wdt_reset();
+    }
+  }
+
+  response["ts"] = millis();
+
+  serializeJson(response, Serial);
+  Serial.println();
+}
+
+
+// =====================================================
 // COMMAND HANDLING
 // =====================================================
 
@@ -1044,6 +1593,19 @@ void processJSONCommand(String input)
     return;
   }
 
+  if (strcmp(cmd, "charger") == 0)
+  {
+    sendChargerSnapshot();
+    return;
+  }
+
+  if (strcmp(cmd, "scan") == 0)
+  {
+    reportINA226();
+    i2cScanReport();
+    return;
+  }
+
   printStatus("unknown_command");
 }
 
@@ -1077,6 +1639,15 @@ void processLegacyCommand(String command)
   )
   {
     stopSession();
+  }
+  else if (command == "CHARGER")
+  {
+    sendChargerSnapshot();
+  }
+  else if (command == "SCAN")
+  {
+    reportINA226();
+    i2cScanReport();
   }
   else
   {
@@ -1152,6 +1723,8 @@ void setup()
 
   tempSensorOK = checkMLX90614();
 
+  inaOK = initINA226();
+
   resetAccumulators();
 
   currentState = STATE_IDLE;
@@ -1168,11 +1741,17 @@ void setup()
   startup["reset_reason"] = (int)esp_reset_reason();
   startup["max30102"] = maxSensorOK;
   startup["mlx90614"] = tempSensorOK;
+  startup["ina226"] = inaOK;
   startup["relay1"] = getRelayState(1);
   startup["relay2"] = getRelayState(2);
 
   serializeJson(startup, Serial);
   Serial.println();
+
+  // Show clearly whether the INA226 is connected, and which
+  // I2C devices the ESP32 can see at all.
+  reportINA226();
+  i2cScanReport();
 
   startWatchdog();
 }
@@ -1196,6 +1775,13 @@ void loop()
   {
     abortSession("session_timeout");
     return;
+  }
+
+  // Charger plug in / plug out / full detection. Skipped while the
+  // MAX30102 is recording so the extra I2C traffic cannot disturb it.
+  if (!sessionMAX)
+  {
+    pollCharger();
   }
 
   if (currentState == STATE_WAITING_FINGER)
@@ -1272,7 +1858,7 @@ void loop()
       if (checkForeheadPresent(objectC, ambientC))
       {
         tempStarted = true;
-        tempCollectionStart = millis();
+        tempCollectionStart = millis() + TEMP_SETTLE_MS;
         lastTempSample = millis();
 
         currentState = STATE_COLLECTING;
@@ -1330,7 +1916,7 @@ void loop()
           if (checkForeheadPresent(objectC, ambientC))
           {
             tempStarted = true;
-            tempCollectionStart = millis();
+            tempCollectionStart = millis() + TEMP_SETTLE_MS;
 
             printStatus("object_detected");
 
@@ -1362,7 +1948,7 @@ void loop()
       }
     }
 
-    if (sessionTEMP && tempStarted)
+    if (sessionTEMP && tempStarted && millis() >= tempCollectionStart)
     {
       unsigned long tempElapsed = millis() - tempCollectionStart;
       int tempSeconds = (int)(tempElapsed / 1000UL);
@@ -1395,6 +1981,7 @@ void loop()
     {
       tempDone =
         (
+          millis() >= tempCollectionStart &&
           millis() - tempCollectionStart >=
           (unsigned long)TEMP_COLLECTION_SECONDS * 1000UL
         );

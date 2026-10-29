@@ -541,6 +541,14 @@ export class QuickPrintService {
     };
   }
 
+  async openSupportQuery(
+    token: string,
+    input: { message: string; paymentReference?: string | null },
+    correlationId?: string,
+  ) {
+    return this.payments.openQuickPrintSupportQuery(token, input, correlationId);
+  }
+
   async verifyCheckoutPayment(
     token: string,
     input: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string },

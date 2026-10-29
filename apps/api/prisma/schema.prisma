@@ -77,6 +77,14 @@ enum SupportQueryStatus {
   resolved
 }
 
+enum SupportResolution {
+  otp_sent
+  reprinted
+  refunded
+  no_action
+  session_ready
+}
+
 enum DigiLockerSessionStatus {
   pending
   authorized
@@ -480,10 +488,12 @@ model SupportQuery {
   message         String             @db.VarChar(500)
   status          SupportQueryStatus @default(open)
   razorpayOrderId String?            @map("razorpay_order_id")
-  amountPaise     Int                @map("amount_paise")
-  failureReason   String?            @map("failure_reason")
-  createdAt       DateTime           @default(now()) @map("created_at")
-  resolvedAt      DateTime?          @map("resolved_at")
+  amountPaise      Int                 @map("amount_paise")
+  failureReason    String?             @map("failure_reason")
+  paymentReference String?             @map("payment_reference") @db.VarChar(80)
+  resolution       SupportResolution?
+  createdAt        DateTime            @default(now()) @map("created_at")
+  resolvedAt       DateTime?           @map("resolved_at")
 
   payment  Payment?  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   printJob PrintJob? @relation(fields: [printJobId], references: [id], onDelete: Cascade)

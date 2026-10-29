@@ -16,6 +16,11 @@ export const quickPrintPhoneOtpVerifySchema = z.object({
   otp: z.string().min(4).max(8),
 });
 
+export const openQuickPrintSupportQuerySchema = z.object({
+  message: z.string().trim().min(1).max(500),
+  paymentReference: z.string().trim().max(80).optional(),
+});
+
 export type VerifyQuickPrintPaymentInput = z.infer<typeof verifyQuickPrintPaymentSchema>;
 export type QuickPrintPhoneOtpRequestInput = z.infer<typeof quickPrintPhoneOtpRequestSchema>;
 export type QuickPrintPhoneOtpVerifyInput = z.infer<typeof quickPrintPhoneOtpVerifySchema>;

@@ -1281,6 +1281,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/QuickPrintRazorpayVerifyResponse'
 
+  /quick-print/public/sessions/{token}/support-query:
+    post:
+      tags: [QuickPrint]
+      summary: One support note for a Quick Print payment that did not finish
+      operationId: openQuickPrintSupportQuery
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenQuickPrintSupportQueryRequest'
+      responses:
+        '201':
+          description: The existing or newly stored note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportQuery'
+        '409':
+          description: The print session is already ready
+
   /payments/razorpay/order:
     post:
       tags: [Payments]
@@ -1371,23 +1399,36 @@ paths:
   /support-queries:
     get:
       tags: [Payments]
-      summary: List payment support notes, open first
+      summary: List support notes, open first
       operationId: listSupportQueries
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [open, resolved]
+        - in: query
+          name: source
+          schema:
+            type: string
+            enum: [payment, print]
       responses:
         '200':
-          description: Support notes
+          description: Support notes and the unfiltered open total
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, openCount]
                 properties:
                   items:
                     type: array
                     items:
                       $ref: '#/components/schemas/SupportQuery'
+                  openCount:
+                    type: integer
 
   /support-queries/{queryId}/resolve:
     post:
@@ -1403,9 +1444,37 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveSupportQueryRequest'
       responses:
         '200':
           description: Resolved note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportQuery'
+
+  /support-queries/{queryId}/resend-otp:
+    post:
+      tags: [Payments]
+      summary: Resend the print OTP for a paid support note and close it
+      operationId: resendSupportQueryOtp
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: queryId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Note after the OTP send, resolved when the send succeeded
           content:
             application/json:
               schema:
@@ -2939,6 +3008,29 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+        paymentReference:
+          type: string
+          maxLength: 80
+
+    OpenQuickPrintSupportQueryRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+        paymentReference:
+          type: string
+          maxLength: 80
+
+    ResolveSupportQueryRequest:
+      type: object
+      required: [resolution]
+      properties:
+        resolution:
+          type: string
+          enum: [reprinted, refunded, no_action]
 
     SupportQuery:
       type: object
@@ -2962,16 +3054,42 @@ components:
         failureReason:
           type: string
           nullable: true
+        paymentReference:
+          type: string
+          nullable: true
         paymentStatus:
+          type: string
+          nullable: true
+        challengeId:
+          type: string
+          format: uuid
+          nullable: true
+        kioskName:
           type: string
           nullable: true
         printJobId:
           type: string
           format: uuid
           nullable: true
+        printJobStatus:
+          type: string
+          nullable: true
+        pagesExpected:
+          type: integer
+          nullable: true
+        pagesReported:
+          type: integer
+          nullable: true
+        printJobError:
+          type: string
+          nullable: true
         source:
           type: string
           enum: [payment, print]
+        resolution:
+          type: string
+          nullable: true
+          enum: [otp_sent, reprinted, refunded, no_action, session_ready]
         createdAt:
           type: string
           format: date-time

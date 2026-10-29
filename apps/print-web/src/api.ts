@@ -157,6 +157,24 @@ export async function createOrder(token: string): Promise<RazorpayOrder> {
   return (await response.json()) as RazorpayOrder;
 }
 
+export async function sendSupportNote(
+  token: string,
+  input: { message: string; paymentReference?: string },
+): Promise<{ id: string; status: string; message: string }> {
+  const response = await fetch(
+    `${API_BASE}/quick-print/public/sessions/${encodeURIComponent(token)}/support-query`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as { id: string; status: string; message: string };
+}
+
 export async function verifyPayment(
   token: string,
   input: {

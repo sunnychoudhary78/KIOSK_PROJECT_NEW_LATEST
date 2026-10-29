@@ -1,5 +1,5 @@
 import express, { type Express, type NextFunction, type Request, type Response, type Router } from 'express';
-import { UserRole } from '@prisma/client';
+import { SupportResolution, UserRole } from '@prisma/client';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired, requireAdminRole } from '../../shared/auth.js';
 import { validateBody, validateQuery } from '../../infrastructure/http/validate.js';
@@ -12,7 +12,9 @@ import { PaymentsService } from './payments.service.js';
 import { RazorpayClient } from './razorpay.client.js';
 import {
   createRazorpayOrderSchema,
+  listSupportQueriesQuerySchema,
   openSupportQuerySchema,
+  resolveSupportQuerySchema,
   supportQueryChallengeQuerySchema,
   verifyRazorpayPaymentSchema,
 } from './payments.schemas.js';
@@ -145,9 +147,16 @@ export function registerPaymentsModule(router: Router, deps: AppDeps): void {
     '/support-queries',
     authRequired(deps.config, ['admin']),
     requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
-    async (_req: Request, res: Response, next: NextFunction) => {
+    validateQuery(listSupportQueriesQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
       try {
-        res.json(await service.listSupportQueries());
+        const status = req.query.status === 'open' || req.query.status === 'resolved'
+          ? req.query.status
+          : undefined;
+        const source = req.query.source === 'payment' || req.query.source === 'print'
+          ? req.query.source
+          : undefined;
+        res.json(await service.listSupportQueries({ status, source }));
       } catch (error) {
         next(error);
       }
@@ -158,12 +167,35 @@ export function registerPaymentsModule(router: Router, deps: AppDeps): void {
     '/support-queries/:queryId/resolve',
     authRequired(deps.config, ['admin']),
     requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(resolveSupportQuerySchema),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         if (!req.principal) {
           throw new AppError('unauthorized', 'Missing principal', 401);
         }
         const result = await service.resolveSupportQuery(
+          requireParam(req.params.queryId, 'queryId'),
+          req.principal.id,
+          req.body.resolution as SupportResolution,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/support-queries/:queryId/resend-otp',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.resendSupportOtp(
           requireParam(req.params.queryId, 'queryId'),
           req.principal.id,
           req.correlationId,

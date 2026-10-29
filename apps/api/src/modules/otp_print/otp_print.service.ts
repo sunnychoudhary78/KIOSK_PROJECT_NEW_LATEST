@@ -420,8 +420,9 @@ export class OtpPrintService {
 
   /**
    * Generate OTP and send SMS after payment is captured.
+   * The challenge stays awaiting_payment until the SMS succeeds, then becomes pending.
    * Idempotent when the challenge is already pending/redeemed.
-   * On SMS failure after a paid capture, reverts to awaiting_payment with no OTP.
+   * On SMS failure, clears the claimed code and leaves the challenge awaiting payment.
    */
   async issueOtpAndNotify(challengeId: string, correlationId?: string) {
     const challenge = await this.db.otpChallenge.findUnique({
@@ -451,6 +452,7 @@ export class OtpPrintService {
     const otpLength = printConfig.otpLength || this.config.otp.length;
     const ttlSeconds = printConfig.ttlSeconds || this.config.otp.ttlSeconds;
     const code = generateNumericOtp(otpLength);
+    const codeHash = hashOtp(code);
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
     const claimed = await this.db.otpChallenge.updateMany({
@@ -460,9 +462,8 @@ export class OtpPrintService {
         codeHash: null,
       },
       data: {
-        codeHash: hashOtp(code),
+        codeHash,
         codeHint: code.slice(-2),
-        status: OtpChallengeStatus.pending,
         expiresAt,
       },
     });
@@ -475,14 +476,18 @@ export class OtpPrintService {
       ) {
         return { issued: false, alreadyIssued: true, challengeId };
       }
-      throw new AppError('otp_unavailable', 'Could not issue print OTP', 409);
+      throw new AppError(
+        'otp_unavailable',
+        current?.codeHash ? 'Print OTP is already being sent' : 'Could not issue print OTP',
+        409,
+      );
     }
 
     try {
       await this.sms.sendOtp(challenge.user.phone, code, ttlSeconds);
     } catch (error) {
-      await this.db.otpChallenge.update({
-        where: { id: challengeId },
+      await this.db.otpChallenge.updateMany({
+        where: { id: challengeId, codeHash },
         data: {
           codeHash: null,
           codeHint: null,
@@ -490,6 +495,18 @@ export class OtpPrintService {
         },
       });
       throw new AppError('sms_failed', sanitizeOtpDeliveryError(error), 502);
+    }
+
+    const published = await this.db.otpChallenge.updateMany({
+      where: {
+        id: challengeId,
+        status: OtpChallengeStatus.awaiting_payment,
+        codeHash,
+      },
+      data: { status: OtpChallengeStatus.pending },
+    });
+    if (published.count === 0) {
+      throw new AppError('otp_unavailable', 'Could not issue print OTP', 409);
     }
 
     await this.audit.record({

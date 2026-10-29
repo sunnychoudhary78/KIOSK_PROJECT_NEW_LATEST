@@ -9,6 +9,10 @@ void main() {
       expect(RelayCommands.chargingOff(), '{"relay":1,"state":"off"}');
     });
 
+    test('builds the charger snapshot query', () {
+      expect(RelayCommands.chargerStatus(), '{"command":"charger"}');
+    });
+
     test('builds arbitrary relay state', () {
       expect(
         RelayCommands.setState(relay: 2, on: false),
@@ -36,6 +40,24 @@ void main() {
       expect(result.error, 'invalid_state');
     });
 
+    test('ignores charger monitor lines', () {
+      expect(
+        RelayResponse.tryParse(
+          '{"charger":"plugged_in","relay_state":"on","volts":5.02,"current_ma":820,"power_w":4.12,"ts":12345}',
+        ),
+        isNull,
+      );
+      expect(
+        RelayResponse.tryParse(
+          '{"charger":"status","ina226":true,"state":"waiting_for_phone","plugged":false,"last_result":"none","relay_state":"on","volts":0.1,"current_ma":0,"power_w":0.0,"ts":12345}',
+        ),
+        isNull,
+      );
+      expect(
+        RelayResponse.tryParse('{"i2c_found":["0x40","0x57"],"ts":1}'),
+        isNull,
+      );
+    });
     test('ignores sensor status lines', () {
       expect(
         RelayResponse.tryParse('{"status":"ready","max30102":true}'),
@@ -50,9 +72,7 @@ void main() {
     });
 
     test('confirms charging only when ok and gpio state match', () {
-      final on = RelayResponse.tryParse(
-        '{"ok":true,"relay":1,"state":"on"}',
-      )!;
+      final on = RelayResponse.tryParse('{"ok":true,"relay":1,"state":"on"}')!;
       expect(on.confirmsCharging(on: true), isTrue);
       expect(on.confirmsCharging(on: false), isFalse);
 
@@ -88,7 +108,9 @@ void main() {
         isFalse,
       );
       expect(
-        RelayResponse.isControllerReadyLine('{"ok":true,"relay":1,"state":"on"}'),
+        RelayResponse.isControllerReadyLine(
+          '{"ok":true,"relay":1,"state":"on"}',
+        ),
         isFalse,
       );
     });

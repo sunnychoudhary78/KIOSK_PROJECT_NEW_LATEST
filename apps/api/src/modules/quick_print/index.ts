@@ -15,6 +15,7 @@ import { RazorpayClient } from '../payments/razorpay.client.js';
 import { parsePrintColorMode, type UploadedPdf } from '../otp_print/otp_print.schemas.js';
 import { QuickPrintService } from './quick_print.service.js';
 import {
+  openQuickPrintSupportQuerySchema,
   quickPrintPhoneOtpRequestSchema,
   quickPrintPhoneOtpVerifySchema,
   verifyQuickPrintPaymentSchema,
@@ -241,6 +242,20 @@ export function registerQuickPrintModule(router: Router, deps: AppDeps): void {
       try {
         const token = requireParam(req.params.token, 'token');
         res.json(await service.verifyCheckoutPayment(token, req.body, req.correlationId));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/quick-print/public/sessions/:token/support-query',
+    publicLimiter,
+    validateBody(openQuickPrintSupportQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const token = requireParam(req.params.token, 'token');
+        res.status(201).json(await service.openSupportQuery(token, req.body, req.correlationId));
       } catch (error) {
         next(error);
       }
