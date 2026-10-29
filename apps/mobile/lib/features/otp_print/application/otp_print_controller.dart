@@ -120,10 +120,16 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
   Future<PaymentSupportNote> sendSupportNote({
     required String challengeId,
     required String message,
+    String? paymentReference,
   }) async {
+    final reference = paymentReference?.trim();
     final result = await _api.post(
       '/payments/support-query',
-      body: {'challengeId': challengeId, 'message': message},
+      body: {
+        'challengeId': challengeId,
+        'message': message,
+        if (reference != null && reference.isNotEmpty) 'paymentReference': reference,
+      },
     );
     return PaymentSupportNote.fromJson(result);
   }

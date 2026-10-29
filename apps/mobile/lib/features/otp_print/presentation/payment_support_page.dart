@@ -31,6 +31,7 @@ class PaymentSupportPage extends ConsumerStatefulWidget {
 
 class _PaymentSupportPageState extends ConsumerState<PaymentSupportPage> {
   final _message = TextEditingController();
+  final _reference = TextEditingController();
   var _loading = true;
   var _sending = false;
   var _received = false;
@@ -45,6 +46,7 @@ class _PaymentSupportPageState extends ConsumerState<PaymentSupportPage> {
   @override
   void dispose() {
     _message.dispose();
+    _reference.dispose();
     super.dispose();
   }
 
@@ -82,6 +84,7 @@ class _PaymentSupportPageState extends ConsumerState<PaymentSupportPage> {
       await ref.read(otpPrintControllerProvider.notifier).sendSupportNote(
             challengeId: widget.args.challengeId,
             message: text,
+            paymentReference: _reference.text,
           );
       if (!mounted) return;
       setState(() {
@@ -147,6 +150,17 @@ class _PaymentSupportPageState extends ConsumerState<PaymentSupportPage> {
                     decoration: const InputDecoration(
                       labelText: 'What happened',
                       alignLabelWithHint: true,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _reference,
+                    enabled: !_sending,
+                    maxLength: 80,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'UPI or bank reference',
+                      helperText: 'Optional',
                     ),
                   ),
                   if (_error != null) ...[
