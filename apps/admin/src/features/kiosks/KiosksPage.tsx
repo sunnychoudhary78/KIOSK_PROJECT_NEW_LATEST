@@ -82,6 +82,36 @@ const PRINTER_ROW_TONE: Record<string, string> = {
   alert: 'font-medium text-red-700',
 };
 
+function pagesLeftBand(pagesLeft: number | null): 'muted' | 'low' | 'very-low' {
+  if (pagesLeft == null || pagesLeft >= 100) return 'muted';
+  if (pagesLeft < 50) return 'very-low';
+  return 'low';
+}
+
+const PAGES_LEFT_NUMBER: Record<ReturnType<typeof pagesLeftBand>, string> = {
+  muted: 'text-muted-foreground',
+  low: 'font-medium text-orange-700',
+  'very-low': 'font-medium text-red-700',
+};
+
+const PAGES_LEFT_FIGURE: Record<ReturnType<typeof pagesLeftBand>, string> = {
+  muted: 'text-foreground',
+  low: 'text-orange-700',
+  'very-low': 'text-red-700',
+};
+
+const PAGES_LEFT_TILE: Record<ReturnType<typeof pagesLeftBand>, string> = {
+  muted: 'bg-muted/40',
+  low: 'border border-orange-200 bg-orange-50',
+  'very-low': 'border border-red-200 bg-red-50',
+};
+
+const PAGES_LEFT_NOTE: Record<ReturnType<typeof pagesLeftBand>, string | null> = {
+  muted: null,
+  low: 'Low',
+  'very-low': 'Very low',
+};
+
 function PrinterSummaryCell({
   device,
   onDetails,
@@ -94,7 +124,9 @@ function PrinterSummaryCell({
   return (
     <div className="flex items-center gap-3 whitespace-nowrap text-sm">
       <span className={PRINTER_ROW_TONE[summary.tone]}>{summary.label}</span>
-      <span className="text-muted-foreground">Pages left {pagesLeft}</span>
+      <span className="text-muted-foreground">
+        Pages left <span className={PAGES_LEFT_NUMBER[pagesLeftBand(device.pagesLeft ?? null)]}>{pagesLeft}</span>
+      </span>
       <Button type="button" variant="secondary" className="h-8 px-2" onClick={onDetails}>
         Details
       </Button>
@@ -102,11 +134,40 @@ function PrinterSummaryCell({
   );
 }
 
-function MetricTile({ label, value }: { label: string; value: string }) {
+type TonerColor = 'black' | 'cyan' | 'magenta' | 'yellow';
+
+const TONER_TILE: Record<TonerColor, { wash: string; bar: string }> = {
+  black: { wash: 'border-neutral-300 bg-neutral-100', bar: 'bg-neutral-900' },
+  cyan: { wash: 'border-cyan-200 bg-cyan-50', bar: 'bg-cyan-500' },
+  magenta: { wash: 'border-fuchsia-200 bg-fuchsia-50', bar: 'bg-fuchsia-500' },
+  yellow: { wash: 'border-yellow-200 bg-yellow-50', bar: 'bg-yellow-400' },
+};
+
+function tonerPercent(value: string): number | null {
+  const match = /^(\d{1,3})%$/.exec(value);
+  if (!match) return null;
+  const percent = Number(match[1]);
+  return percent <= 100 ? percent : null;
+}
+
+function TonerTile({ label, value, color }: { label: string; value: string; color: TonerColor }) {
+  const percent = tonerPercent(value);
+  if (percent == null) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-0.5 text-sm font-medium">{value}</p>
+      </div>
+    );
+  }
+  const tone = TONER_TILE[color];
   return (
-    <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+    <div className={`rounded-lg border px-3 py-2 ${tone.wash}`}>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-sm font-medium">{value}</p>
+      <p className="mt-0.5 text-sm font-medium text-foreground">{value}</p>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/80">
+        <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${percent}%` }} />
+      </div>
     </div>
   );
 }
@@ -153,6 +214,7 @@ function PrinterDetailsBody({
 
   const pagesReady = maintenance.status !== 'unavailable';
   const pagesLeftLabel = pagesLeft == null ? '—' : String(pagesLeft);
+  const pagesBand = pagesLeftBand(pagesLeft);
   const trayBlocked = traySaving || usbPagesTotal(health) == null;
 
   return (
@@ -173,10 +235,10 @@ function PrinterDetailsBody({
           <p className="text-sm text-muted-foreground">Unavailable</p>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <MetricTile label="Black" value={maintenance.toner.black} />
-            <MetricTile label="Cyan" value={maintenance.toner.cyan} />
-            <MetricTile label="Magenta" value={maintenance.toner.magenta} />
-            <MetricTile label="Yellow" value={maintenance.toner.yellow} />
+            <TonerTile label="Black" value={maintenance.toner.black} color="black" />
+            <TonerTile label="Cyan" value={maintenance.toner.cyan} color="cyan" />
+            <TonerTile label="Magenta" value={maintenance.toner.magenta} color="magenta" />
+            <TonerTile label="Yellow" value={maintenance.toner.yellow} color="yellow" />
           </div>
         )}
       </section>
@@ -190,9 +252,14 @@ function PrinterDetailsBody({
               {pagesReady ? maintenance.pages.total : '—'}
             </p>
           </div>
-          <div className="rounded-lg bg-muted/40 px-3 py-3">
+          <div className={`rounded-lg px-3 py-3 ${PAGES_LEFT_TILE[pagesBand]}`}>
             <p className="text-xs text-muted-foreground">Pages left</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{pagesLeftLabel}</p>
+            <p className={`mt-1 text-2xl font-semibold tabular-nums ${PAGES_LEFT_FIGURE[pagesBand]}`}>
+              {pagesLeftLabel}
+            </p>
+            {PAGES_LEFT_NOTE[pagesBand] ? (
+              <p className={`text-xs font-medium ${PAGES_LEFT_FIGURE[pagesBand]}`}>{PAGES_LEFT_NOTE[pagesBand]}</p>
+            ) : null}
           </div>
         </div>
         {pagesReady ? (
