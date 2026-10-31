@@ -235,6 +235,10 @@ model Device {
   printerRefreshRequestedAt DateTime? @map("printer_refresh_requested_at")
   /// Set when the printer reports paper-out. Cleared only by an admin.
   printingPausedReason String? @map("printing_paused_reason") @db.VarChar(32)
+  /// Pages credited at the last tray load. Null until an admin records paper.
+  trayPages            Int?    @map("tray_pages")
+  /// USB lifetime page total at that same load. Pages left subtracts the rise since then.
+  trayBaselinePages    Int?    @map("tray_baseline_pages")
   maxPagesPerSession         Int @default(10) @map("max_pages_per_session")
   freePagesPerSession        Int @default(5) @map("free_pages_per_session")
   extraPageChargeRupees      Int @default(10) @map("extra_page_charge_rupees")

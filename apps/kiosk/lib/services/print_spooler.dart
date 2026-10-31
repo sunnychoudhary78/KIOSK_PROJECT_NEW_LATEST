@@ -5,6 +5,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:skp_kiosk/core/config/app_config.dart';
+import 'package:skp_kiosk/services/printer/printer_monitor.dart';
+import 'package:skp_kiosk/services/printer/printer_native.dart';
 
 /// Local print spooler adapter for Windows kiosk PDF printing.
 abstract class PrintSpooler {
@@ -20,24 +22,58 @@ abstract class PrintSpooler {
 
 final printSpoolerProvider = Provider<PrintSpooler>((ref) {
   final config = AppConfig.fromEnvironment();
+  final native = ref.watch(printerNativeProvider);
   return WindowsPdfPrintSpooler(
-    preferredPrinterName: config.printerName,
     reversePages: config.printReversePages,
+    resolveUsbPrinter: () =>
+        native.resolveUsbPrinter(printerName: config.printerName),
   );
 });
+
+/// Picks the Windows queue named by a USB resolution. Substring matches are ignored.
+Printer matchResolvedPrinter(List<Printer> printers, String resolvedName) {
+  final needle = resolvedName.trim().toLowerCase();
+  if (needle.isEmpty) {
+    throw StateError(
+      'USB printer was not found. Check the USB cable and that the Brother queue uses a USB port.',
+    );
+  }
+  final matches = printers
+      .where((printer) => printer.name.toLowerCase() == needle)
+      .toList(growable: false);
+  if (matches.isEmpty) {
+    throw StateError(
+      'USB printer "$resolvedName" is not available. '
+      'Available: ${printers.map((printer) => '"${printer.name}"').join(', ')}',
+    );
+  }
+  return matches.first;
+}
 
 /// Silent PDF print via the Flutter `printing` package (Windows spooler).
 class WindowsPdfPrintSpooler implements PrintSpooler {
   WindowsPdfPrintSpooler({
-    this.preferredPrinterName = '',
+    required this.resolveUsbPrinter,
     this.reversePages = true,
+    this.listPrinters,
+    this.directPrint,
   });
 
-  /// Case-insensitive substring of the Windows printer name.
-  final String preferredPrinterName;
+  /// Native lookup of the Brother queue whose port starts with USB.
+  final Future<UsbPrinterResolution> Function() resolveUsbPrinter;
 
   /// Print last page first so face-up output trays stack with page 1 on top.
   final bool reversePages;
+
+  /// Override for tests. Production uses [Printing.listPrinters].
+  final Future<List<Printer>> Function()? listPrinters;
+
+  /// Override for tests. Production uses [Printing.directPrintPdf].
+  final Future<bool> Function({
+    required Printer printer,
+    required String name,
+    required Uint8List bytes,
+  })? directPrint;
 
   @override
   Future<void> printDocument({
@@ -53,26 +89,30 @@ class WindowsPdfPrintSpooler implements PrintSpooler {
       throw StateError('No PDF bytes available to print.');
     }
 
-    final printer = await _resolvePrinter();
+    final target = await _resolvePrinter();
+    final printer = target.printer;
     final grayscale = colorMode == 'bw';
     final layoutBytes = (reversePages || grayscale)
         ? await _layoutPdfPages(bytes, grayscale: grayscale)
         : bytes;
     debugPrint(
-      '[PrintSpooler] job=$jobId → "${printer.name}" '
+      '[PrintSpooler] job=$jobId → "${printer.name}" port=${target.port} '
       '(default=${printer.isDefault}, reversePages=$reversePages, '
       'colorMode=$colorMode)',
     );
 
-    // Request A4 explicitly so the Windows job matches typical Canon cassette
-    // registration (avoids Support Code 2113 paper-mismatch dialogs).
-    final ok = await Printing.directPrintPdf(
-      printer: printer,
-      name: title,
-      format: PdfPageFormat.a4,
-      usePrinterSettings: false,
-      onLayout: (_) async => layoutBytes,
-    );
+    // Request A4 explicitly so the Windows job matches the cassette
+    // registration (avoids paper-mismatch dialogs).
+    final send = directPrint;
+    final ok = send != null
+        ? await send(printer: printer, name: title, bytes: layoutBytes)
+        : await Printing.directPrintPdf(
+            printer: printer,
+            name: title,
+            format: PdfPageFormat.a4,
+            usePrinterSettings: false,
+            onLayout: (_) async => layoutBytes,
+          );
     if (!ok) {
       throw StateError(
         'Print was rejected by Windows for "${printer.name}". Check the printer queue and try again.',
@@ -126,48 +166,17 @@ class WindowsPdfPrintSpooler implements PrintSpooler {
     return Uint8List.fromList(img.encodePng(decoded));
   }
 
-  Future<Printer> _resolvePrinter() async {
-    final printers = await Printing.listPrinters();
-    if (printers.isEmpty) {
+  Future<({Printer printer, String port})> _resolvePrinter() async {
+    final resolved = await resolveUsbPrinter();
+    if (!resolved.found || resolved.name.trim().isEmpty) {
       throw StateError(
-        'No printer available. Install and connect a Windows printer (e.g. Canon), then try Print again.',
+        'USB printer was not found. Check the USB cable and that the Brother queue uses a USB port.',
       );
     }
-
-    final preferred = preferredPrinterName.trim();
-    if (preferred.isNotEmpty) {
-      final needle = preferred.toLowerCase();
-      final matches = printers
-          .where((p) => p.name.toLowerCase().contains(needle))
-          .toList(growable: false);
-      if (matches.isEmpty) {
-        throw StateError(
-          'Printer "$preferred" not found. Available: ${_formatNames(printers)}',
-        );
-      }
-      final exact = matches.where((p) => p.name.toLowerCase() == needle);
-      if (exact.isNotEmpty) return exact.first;
-      final defaultMatch = matches.where((p) => p.isDefault);
-      if (defaultMatch.isNotEmpty) return defaultMatch.first;
-      return matches.first;
-    }
-
-    final defaults = printers.where((p) => p.isDefault).toList(growable: false);
-    if (defaults.isNotEmpty) {
-      return defaults.first;
-    }
-
-    if (printers.length == 1) {
-      return printers.first;
-    }
-
-    throw StateError(
-      'Multiple printers installed and none is the Windows default. '
-      'Set a default printer, or launch with '
-      '--dart-define=SKP_PRINTER_NAME=<name>. Available: ${_formatNames(printers)}',
+    final printers = await (listPrinters ?? Printing.listPrinters)();
+    return (
+      printer: matchResolvedPrinter(printers, resolved.name),
+      port: resolved.port,
     );
   }
-
-  String _formatNames(List<Printer> printers) =>
-      printers.map((p) => '"${p.name}"').join(', ');
 }

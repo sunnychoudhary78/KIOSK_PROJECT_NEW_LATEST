@@ -2,44 +2,34 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/services/printer/printer_health.dart';
+import 'package:skp_kiosk/services/printer/usb_snapshot.dart';
 
 const printerMethodChannel = MethodChannel('skp/printer');
 
-/// Live page count from a native `getPageCounter` map.
-/// A failed or stale forced refresh is not a reading, even if a cached count is attached.
-int? pageCounterFromNative(Map<dynamic, dynamic> raw, {required bool forceRefresh}) {
-  final ok = raw['ok'] == true;
-  final stale = raw['stale'] == true;
-  if (!ok || (forceRefresh && stale)) {
-    return null;
-  }
-  return (raw['pageCounter'] as num?)?.toInt();
+/// USB queue chosen by the native spooler. [name] is the Windows printer name.
+class UsbPrinterResolution {
+  const UsbPrinterResolution({
+    required this.found,
+    this.name = '',
+    this.port = '',
+  });
+
+  final bool found;
+  final String name;
+  final String port;
 }
 
 abstract class PrinterNative {
-  Future<bool> configureSnmpPolling({
-    required String host,
-    required String community,
-    int intervalMs = 2000,
-    int timeoutMs = 3000,
-  });
-
-  Future<void> stopSnmpPolling();
-
   Future<PrinterHealth> getHealth({
     required String printerName,
-    required String snmpHost,
-    required String snmpCommunity,
     required String model,
   });
 
-  Future<int?> getPageCounter({
-    required String snmpHost,
-    required String snmpCommunity,
-    bool forceRefresh = false,
-  });
-
   Future<PrinterHealth> getPrinterStatus({required String printerName});
+
+  Future<UsbPrinterResolution> resolveUsbPrinter({required String printerName});
+
+  Future<UsbSnapshot> getUsbSnapshot({required String scope});
 }
 
 class MethodChannelPrinterNative implements PrinterNative {
@@ -49,55 +39,13 @@ class MethodChannelPrinterNative implements PrinterNative {
   final MethodChannel _methods;
 
   @override
-  Future<bool> configureSnmpPolling({
-    required String host,
-    required String community,
-    int intervalMs = 2000,
-    int timeoutMs = 3000,
-  }) async {
-    try {
-      final raw = await _methods.invokeMethod<dynamic>('configureSnmpPolling', {
-        'host': host,
-        'community': community,
-        'intervalMs': intervalMs,
-        'timeoutMs': timeoutMs,
-      });
-      if (raw is Map) {
-        return raw['ok'] == true;
-      }
-      return false;
-    } on MissingPluginException {
-      AppLogger.error('PRINTER native plugin missing for configureSnmpPolling');
-      return false;
-    } catch (error) {
-      AppLogger.error('PRINTER configureSnmpPolling failed', error);
-      return false;
-    }
-  }
-
-  @override
-  Future<void> stopSnmpPolling() async {
-    try {
-      await _methods.invokeMethod<dynamic>('stopSnmpPolling');
-    } on MissingPluginException {
-      // ignore
-    } catch (error) {
-      AppLogger.error('PRINTER stopSnmpPolling failed', error);
-    }
-  }
-
-  @override
   Future<PrinterHealth> getHealth({
     required String printerName,
-    required String snmpHost,
-    required String snmpCommunity,
     required String model,
   }) async {
     try {
       final raw = await _methods.invokeMethod<dynamic>('getHealth', {
         'printerName': printerName,
-        'snmpHost': snmpHost,
-        'snmpCommunity': snmpCommunity,
         'model': model,
       });
       if (raw is Map) {
@@ -110,39 +58,6 @@ class MethodChannelPrinterNative implements PrinterNative {
     } catch (error) {
       AppLogger.error('PRINTER getHealth failed', error);
       return PrinterHealth.unknown;
-    }
-  }
-
-  @override
-  Future<int?> getPageCounter({
-    required String snmpHost,
-    required String snmpCommunity,
-    bool forceRefresh = false,
-  }) async {
-    try {
-      final raw = await _methods.invokeMethod<dynamic>('getPageCounter', {
-        'snmpHost': snmpHost,
-        'snmpCommunity': snmpCommunity,
-        'forceRefresh': forceRefresh,
-      });
-      if (raw is Map) {
-        final value = pageCounterFromNative(raw, forceRefresh: forceRefresh);
-        if (value == null && forceRefresh) {
-          AppLogger.info(
-            'PRINTER counter refresh failed'
-            ' error=${raw['error'] ?? 'stale'}'
-            ' stalePageCounter=${raw['stalePageCounter']}',
-          );
-        }
-        return value;
-      }
-      return null;
-    } on MissingPluginException {
-      AppLogger.error('PRINTER native plugin missing for getPageCounter');
-      return null;
-    } catch (error) {
-      AppLogger.error('PRINTER getPageCounter failed', error);
-      return null;
     }
   }
 
@@ -172,55 +87,87 @@ class MethodChannelPrinterNative implements PrinterNative {
       return PrinterHealth.unknown;
     }
   }
+
+  @override
+  Future<UsbPrinterResolution> resolveUsbPrinter({
+    required String printerName,
+  }) async {
+    try {
+      final raw = await _methods.invokeMethod<dynamic>('resolveUsbPrinter', {
+        'printerName': printerName,
+      });
+      if (raw is Map) {
+        return UsbPrinterResolution(
+          found: raw['found'] == true,
+          name: raw['name'] as String? ?? '',
+          port: raw['port'] as String? ?? '',
+        );
+      }
+      return const UsbPrinterResolution(found: false);
+    } on MissingPluginException {
+      AppLogger.error('PRINTER native plugin missing for resolveUsbPrinter');
+      return const UsbPrinterResolution(found: false);
+    } catch (error) {
+      AppLogger.error('PRINTER resolveUsbPrinter failed', error);
+      return const UsbPrinterResolution(found: false);
+    }
+  }
+
+  @override
+  Future<UsbSnapshot> getUsbSnapshot({required String scope}) async {
+    try {
+      final raw = await _methods.invokeMethod<dynamic>('getUsbSnapshot', {
+        'scope': scope,
+      });
+      if (raw is String && raw.isNotEmpty) {
+        return UsbSnapshot.parse(raw);
+      }
+      if (raw is Map) {
+        return UsbSnapshot.fromJson(Map<String, dynamic>.from(raw));
+      }
+      return UsbSnapshot.failed('usb_helper_failed');
+    } on MissingPluginException {
+      AppLogger.error('PRINTER native plugin missing for getUsbSnapshot');
+      return UsbSnapshot.failed('helper_missing');
+    } catch (error) {
+      AppLogger.error('PRINTER getUsbSnapshot failed', error);
+      return UsbSnapshot.failed('usb_helper_failed');
+    }
+  }
 }
 
 /// In-memory fake for unit tests.
 class FakePrinterNative implements PrinterNative {
   FakePrinterNative({
     this.health = PrinterHealth.unknown,
-    this.pageCounter,
-    this.pageCounterSequence,
+    this.usbPagesSequence,
     this.healthAfterFirst,
   });
 
   PrinterHealth health;
   /// Returned from the 2nd getHealth call onward (mid-reconcile blips).
   PrinterHealth? healthAfterFirst;
-  int? pageCounter;
-  /// Optional sequence of counter reads (null entries = SNMP miss).
-  List<int?>? pageCounterSequence;
-  int _counterIndex = 0;
+  /// Optional USB total sequence. Null entries are failed reads (`usb_timeout`).
+  List<int?>? usbPagesSequence;
+  int _usbIndex = 0;
+  int usbSnapshotCalls = 0;
   int _healthReads = 0;
-  bool snmpPollingConfigured = false;
-
-  @override
-  Future<bool> configureSnmpPolling({
-    required String host,
-    required String community,
-    int intervalMs = 2000,
-    int timeoutMs = 3000,
-  }) async {
-    snmpPollingConfigured = host.isNotEmpty && community.isNotEmpty;
-    return snmpPollingConfigured;
-  }
-
-  @override
-  Future<void> stopSnmpPolling() async {
-    snmpPollingConfigured = false;
-  }
+  UsbPrinterResolution usbPrinter = const UsbPrinterResolution(
+    found: true,
+    name: 'Brother HL-L3280CDW series',
+    port: 'USB001',
+  );
+  UsbSnapshot usbSnapshot = UsbSnapshot.failed('helper_missing');
 
   @override
   Future<PrinterHealth> getHealth({
     required String printerName,
-    required String snmpHost,
-    required String snmpCommunity,
     required String model,
   }) async {
     _healthReads++;
     final source = (_healthReads > 1 && healthAfterFirst != null)
         ? healthAfterFirst!
         : health;
-    // Do not consume pageCounterSequence — reconcile uses getPageCounter.
     return PrinterHealth(
       state: source.state,
       online: source.online,
@@ -228,10 +175,12 @@ class FakePrinterNative implements PrinterNative {
       model: model,
       trays: source.trays,
       supplies: source.supplies,
-      pageCounter: source.pageCounter ?? pageCounter,
-      snmpOk: source.snmpOk ?? (pageCounter != null),
-      snmpReachable: source.snmpReachable ?? true,
-      snmpConfigured: source.snmpConfigured ?? snmpPollingConfigured,
+      maintenance: source.maintenance,
+      errorHistory: source.errorHistory,
+      pageCounter: source.pageCounter,
+      snmpOk: source.snmpOk,
+      snmpReachable: source.snmpReachable,
+      snmpConfigured: source.snmpConfigured,
       consecutiveFailures: source.consecutiveFailures,
       lastSuccessAtMs: source.lastSuccessAtMs,
       lastPollError: source.lastPollError,
@@ -252,24 +201,31 @@ class FakePrinterNative implements PrinterNative {
   }
 
   @override
-  Future<int?> getPageCounter({
-    required String snmpHost,
-    required String snmpCommunity,
-    bool forceRefresh = false,
-  }) async {
-    final seq = pageCounterSequence;
-    if (seq != null && seq.isNotEmpty) {
-      final value = seq[_counterIndex.clamp(0, seq.length - 1)];
-      if (_counterIndex < seq.length - 1) {
-        _counterIndex++;
-      }
-      return value;
-    }
-    return pageCounter;
+  Future<PrinterHealth> getPrinterStatus({required String printerName}) async {
+    return health;
   }
 
   @override
-  Future<PrinterHealth> getPrinterStatus({required String printerName}) async {
-    return health;
+  Future<UsbPrinterResolution> resolveUsbPrinter({
+    required String printerName,
+  }) async {
+    return usbPrinter;
+  }
+
+  @override
+  Future<UsbSnapshot> getUsbSnapshot({required String scope}) async {
+    usbSnapshotCalls++;
+    final seq = usbPagesSequence;
+    if (seq != null && seq.isNotEmpty) {
+      final value = seq[_usbIndex.clamp(0, seq.length - 1)];
+      if (_usbIndex < seq.length - 1) {
+        _usbIndex++;
+      }
+      if (value == null) {
+        return UsbSnapshot.failed('usb_timeout');
+      }
+      return UsbSnapshot(ok: true, connected: true, pagesTotal: value);
+    }
+    return usbSnapshot;
   }
 }

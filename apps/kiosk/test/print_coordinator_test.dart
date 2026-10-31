@@ -8,6 +8,8 @@ import 'package:skp_kiosk/services/printer/print_reconcile_result.dart';
 import 'package:skp_kiosk/services/printer/printer_health.dart';
 import 'package:skp_kiosk/services/printer/printer_monitor.dart';
 import 'package:skp_kiosk/services/printer/printer_native.dart';
+import 'package:skp_kiosk/services/printer/usb_page_watch.dart';
+import 'package:skp_kiosk/services/printer/usb_snapshot.dart';
 
 class _FakeSpooler implements PrintSpooler {
   bool shouldFail = false;
@@ -84,15 +86,7 @@ _Report _collecting(_Report? inner, List<Map<String, dynamic>> reports) {
 void main() {
   final pdf = Uint8List.fromList([1, 2, 3]);
 
-  AppConfig snmpConfig() => const AppConfig(
-        apiBaseUrl: 'http://localhost/v1',
-        environment: 'test',
-        printerSnmpHost: '192.168.1.13',
-        printerSnmpCommunity: 'public',
-        printReconcileTimeoutMs: 200,
-      );
-
-  AppConfig noSnmpConfig() => const AppConfig(
+  AppConfig testConfig() => const AppConfig(
         apiBaseUrl: 'http://localhost/v1',
         environment: 'test',
         printReconcileTimeoutMs: 200,
@@ -100,174 +94,53 @@ void main() {
 
   PrintCoordinator buildCoordinator({
     required FakePrinterNative native,
-    required AppConfig config,
     _FakeSpooler? spooler,
+    UsbPageWatch? usbPageWatch,
     Duration? reconcileTimeout,
-    Duration? noSnmpGrace,
+    Duration? usbBaselineGrace,
     Duration? pollInterval,
     Duration? counterRetryDelay,
     int counterRetryAttempts = 2,
   }) {
     return PrintCoordinator(
       spooler: spooler ?? _FakeSpooler(),
-      monitor: PrinterMonitor(native: native, config: config),
+      monitor: PrinterMonitor(
+        native: native,
+        config: testConfig(),
+        usbPageWatch: usbPageWatch,
+      ),
+      usbPageWatch: usbPageWatch,
       pollInterval: pollInterval ?? const Duration(milliseconds: 20),
       counterRetryAttempts: counterRetryAttempts,
       counterRetryDelay: counterRetryDelay ?? const Duration(milliseconds: 5),
-      noSnmpGrace: noSnmpGrace ?? const Duration(milliseconds: 60),
+      usbBaselineGrace: usbBaselineGrace ?? const Duration(milliseconds: 60),
       reconcileTimeout: reconcileTimeout ?? const Duration(milliseconds: 120),
     );
   }
 
-  test('verified when SNMP page counter advances', () async {
+  Future<void> quietReport({
+    required String jobId,
+    required String status,
+    String? errorMessage,
+    int? pagesReported,
+    String? spoolerJobId,
+    int? pageCounterBefore,
+    int? pageCounterAfter,
+    String? reconcileStatus,
+    String? reconcileDetail,
+    bool? needsAdminReview,
+    bool? holdForRetry,
+  }) async {}
+
+  test('missing USB baseline ends unknown after the grace wait', () async {
     final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      pageCounterSequence: [100, 100, 101],
+      health: const PrinterHealth(state: 'ready', online: true),
     );
     final spooler = _FakeSpooler();
     final coordinator = buildCoordinator(
       native: native,
-      config: snmpConfig(),
       spooler: spooler,
-      reconcileTimeout: const Duration(seconds: 2),
-    );
-    final reports = <Map<String, dynamic>>[];
-
-    final result = await coordinator.printAndReconcile(
-      jobId: 'job-1',
-      title: 't.pdf',
-      pdfBytes: pdf,
-      pagesExpected: 1,
-      colorMode: 'bw',
-      reportStatus: _collecting(null, reports),
-    );
-
-    expect(result.outcome, PrintReconcileOutcome.verified);
-    expect(spooler.calls, 1);
-    expect(reports.last['status'], 'completed');
-    expect(reports.last['reconcileStatus'], 'verified');
-  });
-
-  test('verified after initial SNMP misses then page delta', () async {
-    final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      // getHealth does not consume sequence; only getPageCounter does.
-      pageCounterSequence: [
-        null, null, // counter retries (attempts=2)
-        null, // poll 1 — still miss
-        100, // poll 2 — provisional watermark
-        101, // poll 3 — rise → verified
-      ],
-    );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      counterRetryAttempts: 2,
-      reconcileTimeout: const Duration(seconds: 2),
-    );
-    final progress = <String>[];
-
-    final result = await coordinator.printAndReconcile(
-      jobId: 'job-delayed',
-      title: 't.pdf',
-      pdfBytes: pdf,
-      pagesExpected: 1,
-      colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
-      onProgress: progress.add,
-    );
-
-    expect(result.outcome, PrintReconcileOutcome.verified);
-    expect(progress, contains('Printer processing…'));
-    expect(progress, contains('Confirming print…'));
-    expect(progress, isNot(contains('Could not confirm print on the printer…')));
-  });
-
-  test('reconciliation_required on timeout without page delta', () async {
-    final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      pageCounter: 50,
-    );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      reconcileTimeout: const Duration(milliseconds: 80),
-    );
-    final reports = <Map<String, dynamic>>[];
-
-    final result = await coordinator.printAndReconcile(
-      jobId: 'job-2',
-      title: 't.pdf',
-      pdfBytes: pdf,
-      pagesExpected: 2,
-      colorMode: 'bw',
-      reportStatus: _collecting(null, reports),
-    );
-
-    expect(result.outcome, PrintReconcileOutcome.reconciliationRequired);
-    expect(reports.last['status'], 'printing');
-    expect(reports.last['reconcileStatus'], 'reconciliation_required');
-    expect(reports.last['needsAdminReview'], true);
-  });
-
-  test('unknown after timeout when SNMP counter never readable', () async {
-    final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true),
-      pageCounter: null,
-    );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      counterRetryAttempts: 2,
-      reconcileTimeout: const Duration(milliseconds: 80),
-    );
-    final started = DateTime.now();
-    final result = await coordinator.printAndReconcile(
-      jobId: 'job-null-counter',
-      title: 't.pdf',
-      pdfBytes: pdf,
-      pagesExpected: 1,
-      colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
-    );
-    final elapsed = DateTime.now().difference(started);
-
-    expect(result.outcome, PrintReconcileOutcome.unknown);
-    expect(elapsed.inMilliseconds, greaterThanOrEqualTo(60));
-  });
-
-  test('unknown when SNMP is not configured only after grace', () async {
-    final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true),
-    );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: noSnmpConfig(),
-      noSnmpGrace: const Duration(milliseconds: 80),
+      usbBaselineGrace: const Duration(milliseconds: 80),
       pollInterval: const Duration(milliseconds: 20),
     );
     final progress = <String>[];
@@ -279,26 +152,16 @@ void main() {
       pdfBytes: pdf,
       pagesExpected: 1,
       colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
+      reportStatus: quietReport,
       onProgress: progress.add,
     );
     final elapsed = DateTime.now().difference(started);
 
     expect(result.outcome, PrintReconcileOutcome.unknown);
+    expect(result.reconcileDetail, 'usb_baseline_unavailable');
     expect(progress, contains('Printer processing…'));
     expect(elapsed.inMilliseconds, greaterThanOrEqualTo(60));
+    expect(spooler.calls, 1);
   });
 
   test('failed with zero pages on jam before print', () async {
@@ -312,7 +175,6 @@ void main() {
     final spooler = _FakeSpooler();
     final coordinator = buildCoordinator(
       native: native,
-      config: snmpConfig(),
       spooler: spooler,
     );
 
@@ -322,19 +184,7 @@ void main() {
       pdfBytes: pdf,
       pagesExpected: 1,
       colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
+      reportStatus: quietReport,
     );
 
     expect(result.outcome, PrintReconcileOutcome.failed);
@@ -342,24 +192,18 @@ void main() {
     expect(result.userMessage, contains('jam'));
   });
 
-  test('does not verify from idle/spooler alone without page delta', () async {
+  test('idle spooler without a USB baseline does not verify', () async {
     final native = FakePrinterNative(
       health: const PrinterHealth(
         state: 'ready',
         online: true,
-        snmpOk: true,
         hrPrinterStatus: 3,
         hrPrinterStatusLabel: 'idle',
         spoolerJobsQueued: 0,
         spoolerJobsPrinting: 0,
       ),
-      pageCounter: 50,
     );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      reconcileTimeout: const Duration(milliseconds: 80),
-    );
+    final coordinator = buildCoordinator(native: native);
     final reports = <Map<String, dynamic>>[];
 
     final result = await coordinator.printAndReconcile(
@@ -371,28 +215,20 @@ void main() {
       reportStatus: _collecting(null, reports),
     );
 
-    expect(result.outcome, PrintReconcileOutcome.reconciliationRequired);
+    expect(result.outcome, PrintReconcileOutcome.unknown);
+    expect(result.reconcileDetail, 'usb_baseline_unavailable');
     expect(reports.last['reconcileStatus'], isNot('verified'));
   });
 
-  test('paper_out mid-job fails without verifying', () async {
+  test('paper_out before print fails without verifying', () async {
     final native = FakePrinterNative(
       health: const PrinterHealth(
         state: 'paper_out',
         online: true,
         noPaper: true,
-        errorFlagsHex: '40',
-        snmpOk: true,
-        snmpReachable: true,
-        snmpConfigured: true,
       ),
-      pageCounter: 10,
     );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      reconcileTimeout: const Duration(milliseconds: 200),
-    );
+    final coordinator = buildCoordinator(native: native);
 
     final result = await coordinator.printAndReconcile(
       jobId: 'job-paper',
@@ -400,250 +236,22 @@ void main() {
       pdfBytes: pdf,
       pagesExpected: 1,
       colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
+      reportStatus: quietReport,
     );
 
-    // Fatal on preHealth before spooler send.
     expect(result.outcome, PrintReconcileOutcome.failed);
     expect(result.reconcileDetail, 'paper_out');
   });
 
-  test('SNMP unreachable mid-reconcile does not fail; page delta still verifies',
-      () async {
-    final native = FakePrinterNative(
-      health: const PrinterHealth(
-        state: 'ready',
-        online: true,
-        snmpOk: true,
-        snmpConfigured: true,
-        snmpReachable: true,
-      ),
-      // After preHealth, simulate lab timeouts (reachable false) mid-wait.
-      healthAfterFirst: const PrinterHealth(
-        state: 'ready',
-        online: true,
-        snmpOk: false,
-        snmpConfigured: true,
-        snmpReachable: false,
-        consecutiveFailures: 5,
-        offlineBit: true,
-      ),
-      pageCounterSequence: [20, 20, 21],
-    );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      reconcileTimeout: const Duration(seconds: 2),
-    );
-
-    final result = await coordinator.printAndReconcile(
-      jobId: 'job-blip',
-      title: 't.pdf',
-      pdfBytes: pdf,
-      pagesExpected: 1,
-      colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
-    );
-
-    expect(result.outcome, PrintReconcileOutcome.verified);
-  });
-
-  test('pageCounterFromNative ignores a stale forced refresh', () {
-    expect(
-      pageCounterFromNative(
-        {'ok': true, 'stale': true, 'pageCounter': 40},
-        forceRefresh: true,
-      ),
-      isNull,
-    );
-    expect(
-      pageCounterFromNative(
-        {'ok': false, 'stalePageCounter': 40, 'error': 'snmp_timeout'},
-        forceRefresh: true,
-      ),
-      isNull,
-    );
-    expect(
-      pageCounterFromNative(
-        {'ok': true, 'stale': false, 'pageCounter': 41},
-        forceRefresh: true,
-      ),
-      41,
-    );
-  });
-
-  test('failed refreshes after baseline do not verify from cached count', () async {
-    final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      pageCounterSequence: [100, null, null, null, null, null],
-    );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      counterRetryAttempts: 2,
-      reconcileTimeout: const Duration(milliseconds: 80),
-    );
-
-    final result = await coordinator.printAndReconcile(
-      jobId: 'job-stale',
-      title: 't.pdf',
-      pdfBytes: pdf,
-      pagesExpected: 1,
-      colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
-    );
-
-    expect(result.outcome, isNot(PrintReconcileOutcome.verified));
-    expect(
-      result.outcome == PrintReconcileOutcome.reconciliationRequired ||
-          result.outcome == PrintReconcileOutcome.unknown,
-      isTrue,
-    );
-  });
-
-  test('later fresh counter increase still verifies after failed refreshes', () async {
-    final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      pageCounterSequence: [100, null, null, 101],
-    );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      counterRetryAttempts: 2,
-      reconcileTimeout: const Duration(seconds: 2),
-    );
-
-    final result = await coordinator.printAndReconcile(
-      jobId: 'job-recover',
-      title: 't.pdf',
-      pdfBytes: pdf,
-      pagesExpected: 1,
-      colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
-    );
-
-    expect(result.outcome, PrintReconcileOutcome.verified);
-    expect(result.pagesReported, 1);
-  });
-
-  test('mid-flight single post-print reading does not false-verify', () async {
-    final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      // No pre-print baseline; only ever see 101 after send → uncertain.
-      pageCounterSequence: [
-        null, null, // retries
-        101, 101, 101, 101, 101,
-      ],
-    );
-    final coordinator = buildCoordinator(
-      native: native,
-      config: snmpConfig(),
-      counterRetryAttempts: 2,
-      reconcileTimeout: const Duration(milliseconds: 120),
-    );
-
-    final result = await coordinator.printAndReconcile(
-      jobId: 'job-mid-stuck',
-      title: 't.pdf',
-      pdfBytes: pdf,
-      pagesExpected: 1,
-      colorMode: 'bw',
-      reportStatus: ({
-        required String jobId,
-        required String status,
-        String? errorMessage,
-        int? pagesReported,
-        String? spoolerJobId,
-        int? pageCounterBefore,
-        int? pageCounterAfter,
-        String? reconcileStatus,
-        String? reconcileDetail,
-        bool? needsAdminReview,
-        bool? holdForRetry,
-      }) async {},
-    );
-
-    expect(result.outcome, isNot(PrintReconcileOutcome.verified));
-    expect(
-      result.outcome == PrintReconcileOutcome.reconciliationRequired ||
-          result.outcome == PrintReconcileOutcome.unknown,
-      isTrue,
-    );
-  });
-
   test('abortAndReset unlocks so next print is not busy', () async {
     final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      pageCounter: 10,
+      health: const PrinterHealth(state: 'ready', online: true),
     );
     final coordinator = buildCoordinator(
       native: native,
-      config: snmpConfig(),
       pollInterval: const Duration(milliseconds: 40),
       reconcileTimeout: const Duration(seconds: 2),
     );
-
-    Future<void> noopReport({
-      required String jobId,
-      required String status,
-      String? errorMessage,
-      int? pagesReported,
-      String? spoolerJobId,
-      int? pageCounterBefore,
-      int? pageCounterAfter,
-      String? reconcileStatus,
-      String? reconcileDetail,
-      bool? needsAdminReview,
-      bool? holdForRetry,
-    }) async {}
 
     final first = coordinator.printAndReconcile(
       jobId: 'job-abort-a',
@@ -651,7 +259,7 @@ void main() {
       pdfBytes: pdf,
       pagesExpected: 5,
       colorMode: 'bw',
-      reportStatus: noopReport,
+      reportStatus: quietReport,
     );
     await Future<void>.delayed(const Duration(milliseconds: 30));
     expect(coordinator.isLocked, isTrue);
@@ -664,8 +272,7 @@ void main() {
       pdfBytes: pdf,
       pagesExpected: 1,
       colorMode: 'bw',
-      reportStatus: noopReport,
-      // Counter stuck at 10 → will timeout; outcome irrelevant vs busy.
+      reportStatus: quietReport,
     );
     expect(second.outcome, isNot(PrintReconcileOutcome.busy));
     final firstResult = await first;
@@ -674,29 +281,13 @@ void main() {
 
   test('busy when a second job starts while locked', () async {
     final native = FakePrinterNative(
-      health: const PrinterHealth(state: 'ready', online: true, snmpOk: true),
-      pageCounter: 10,
+      health: const PrinterHealth(state: 'ready', online: true),
     );
     final coordinator = buildCoordinator(
       native: native,
-      config: snmpConfig(),
       pollInterval: const Duration(milliseconds: 40),
       reconcileTimeout: const Duration(milliseconds: 300),
     );
-
-    Future<void> noopReport({
-      required String jobId,
-      required String status,
-      String? errorMessage,
-      int? pagesReported,
-      String? spoolerJobId,
-      int? pageCounterBefore,
-      int? pageCounterAfter,
-      String? reconcileStatus,
-      String? reconcileDetail,
-      bool? needsAdminReview,
-      bool? holdForRetry,
-    }) async {}
 
     final first = coordinator.printAndReconcile(
       jobId: 'job-a',
@@ -704,7 +295,7 @@ void main() {
       pdfBytes: pdf,
       pagesExpected: 5,
       colorMode: 'bw',
-      reportStatus: noopReport,
+      reportStatus: quietReport,
     );
     await Future<void>.delayed(const Duration(milliseconds: 20));
     final second = await coordinator.printAndReconcile(
@@ -713,9 +304,174 @@ void main() {
       pdfBytes: pdf,
       pagesExpected: 1,
       colorMode: 'bw',
-      reportStatus: noopReport,
+      reportStatus: quietReport,
     );
     expect(second.outcome, PrintReconcileOutcome.busy);
     await first;
+  });
+
+  test('verified from USB page total', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 186));
+    final coordinator = buildCoordinator(
+      native: native,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 30), () {
+      watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 190));
+    });
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-usb-color',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 4,
+      colorMode: 'color',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.verified);
+    expect(result.reconcileDetail, 'usb_page_delta');
+    expect(result.pageCounterBefore, 186);
+    expect(result.pageCounterAfter, 190);
+    expect(result.pagesReported, 4);
+    expect(native.usbSnapshotCalls, 0);
+  });
+
+  test('failed USB baseline ends unknown', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true),
+    );
+    final coordinator = buildCoordinator(
+      native: native,
+      usbBaselineGrace: const Duration(milliseconds: 40),
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-usb-fallback',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 4,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.unknown);
+    expect(result.reconcileDetail, 'usb_baseline_unavailable');
+    expect(native.usbSnapshotCalls, 2);
+  });
+
+  test('flat USB total does not verify', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 186));
+    final coordinator = buildCoordinator(
+      native: native,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(milliseconds: 80),
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-usb-flat',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 4,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.reconciliationRequired);
+    expect(result.reconcileDetail, 'timeout');
+    expect(result.pageCounterBefore, 186);
+    expect(result.pageCounterAfter, 186);
+    expect(native.usbSnapshotCalls, 0);
+  });
+
+  test('a failed USB sample then a later rise still verifies', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 186));
+    final coordinator = buildCoordinator(
+      native: native,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 40), () {
+      watch.record(UsbSnapshot.failed('busy'));
+      watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 190));
+    });
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-usb-busy',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 4,
+      colorMode: 'color',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.verified);
+    expect(result.reconcileDetail, 'usb_page_delta');
+    expect(result.pagesReported, 4);
+    expect(result.pageCounterBefore, 186);
+    expect(result.pageCounterAfter, 190);
+    expect(native.usbSnapshotCalls, 0);
+  });
+
+  test('latched USB paper-out fails the job even if the page total would verify',
+      () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true),
+    );
+    final watch = UsbPageWatch();
+    watch.record(
+      const UsbSnapshot(
+        ok: true,
+        connected: true,
+        pagesTotal: 186,
+        statusCode: usbStatusPaperOut,
+        statusMessage: 'No Paper T1',
+      ),
+    );
+    final spooler = _FakeSpooler();
+    final coordinator = buildCoordinator(
+      native: native,
+      spooler: spooler,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 30), () {
+      watch.record(
+        const UsbSnapshot(
+          ok: true,
+          connected: true,
+          pagesTotal: 190,
+          statusCode: usbStatusPaperOut,
+          statusMessage: 'No Paper T1',
+        ),
+      );
+    });
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-usb-paper-latch',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 4,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.failed);
+    expect(result.reconcileDetail, 'paper_out');
+    expect(result.pagesReported, 0);
+    expect(spooler.calls, 0);
   });
 }

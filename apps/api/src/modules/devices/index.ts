@@ -14,6 +14,7 @@ import {
   setDevicePrintLimitsSchema,
   setDeviceStatusSchema,
   setDeviceSurveillanceSchema,
+  setPrinterTraySchema,
 } from './devices.schemas.js';
 import type { NearbyDevicesQuery } from './devices.schemas.js';
 
@@ -120,6 +121,29 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
           throw new AppError('unauthorized', 'Missing principal', 401);
         }
         const result = await service.setPrintLimits(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.body,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.patch(
+    '/devices/:deviceId/printer-tray',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(setPrinterTraySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.setPrinterTray(
           requireParam(req.params.deviceId, 'deviceId'),
           req.body,
           req.principal.id,

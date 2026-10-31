@@ -7,11 +7,13 @@ import 'package:skp_kiosk/services/print_spooler.dart';
 import 'package:skp_kiosk/services/printer/print_job_status_reporter.dart';
 import 'package:skp_kiosk/services/printer/print_reconcile_result.dart';
 import 'package:skp_kiosk/services/printer/printer_monitor.dart';
+import 'package:skp_kiosk/services/printer/usb_page_watch.dart';
 
 final printCoordinatorProvider = Provider<PrintCoordinator>((ref) {
   return PrintCoordinator(
     spooler: ref.watch(printSpoolerProvider),
     monitor: ref.watch(printerMonitorProvider),
+    usbPageWatch: ref.watch(usbPageWatchProvider),
   );
 });
 
@@ -22,18 +24,21 @@ class PrintCoordinator {
     this.pollInterval = const Duration(seconds: 2),
     this.counterRetryAttempts = 5,
     this.counterRetryDelay = const Duration(seconds: 1),
-    this.noSnmpGrace = const Duration(seconds: 20),
+    this.usbBaselineGrace = const Duration(seconds: 20),
+    UsbPageWatch? usbPageWatch,
     Duration? reconcileTimeout,
   })  : _spooler = spooler,
         _monitor = monitor,
+        _usbPageWatch = usbPageWatch ?? UsbPageWatch(),
         _reconcileTimeout = reconcileTimeout;
 
   final PrintSpooler _spooler;
   final PrinterMonitor _monitor;
+  final UsbPageWatch _usbPageWatch;
   final Duration pollInterval;
   final int counterRetryAttempts;
   final Duration counterRetryDelay;
-  final Duration noSnmpGrace;
+  final Duration usbBaselineGrace;
   final Duration? _reconcileTimeout;
 
   bool _locked = false;
@@ -126,12 +131,48 @@ class PrintCoordinator {
     }
   }
 
-  Future<int?> _readPageCounterWithRetries({
+  /// Fast USB total. `busy`, a failed snapshot, and a missing total are misses.
+  Future<int?> _readUsbPagesOnce() async {
+    try {
+      final snapshot = await _monitor.getUsbSnapshot(full: false);
+      _usbPageWatch.record(snapshot);
+      if (!snapshot.ok || snapshot.pagesTotal == null) return null;
+      return snapshot.pagesTotal;
+    } catch (error) {
+      AppLogger.error('PRINTER usb page read failed', error);
+      return null;
+    }
+  }
+
+  /// Prefer a watch sample from the last 5 seconds. Otherwise one fast read
+  /// while the compare loop stays off the pipe.
+  Future<int?> _readUsbBaseline({
+    void Function(String message)? onProgress,
+  }) async {
+    final cached = _usbPageWatch.freshPages();
+    if (cached != null) return cached;
+    _usbPageWatch.suppress = true;
+    try {
+      return _readCounterWithRetries(
+        read: () async {
+          final published = _usbPageWatch.freshPages();
+          if (published != null) return published;
+          return _readUsbPagesOnce();
+        },
+        onProgress: onProgress,
+      );
+    } finally {
+      _usbPageWatch.suppress = false;
+    }
+  }
+
+  Future<int?> _readCounterWithRetries({
+    required Future<int?> Function() read,
     void Function(String message)? onProgress,
   }) async {
     int? last;
     for (var i = 0; i < counterRetryAttempts; i++) {
-      last = await _monitor.getPageCounter(forceRefresh: true);
+      last = await read();
       if (last != null) {
         return last;
       }
@@ -181,15 +222,12 @@ class PrintCoordinator {
     void Function(String message)? onProgress,
   }) async {
     final expected = pagesExpected < 1 ? 1 : pagesExpected;
-    final snmp = _monitor.snmpConfigured;
-    int? counterBefore;
 
     onProgress?.call('Checking printer…');
     final preHealth = await _monitor.getHealth();
     if (_isAborted(runId)) {
       return _abortedResult(jobId: jobId, reportStatus: reportStatus);
     }
-    // Starting a job: full isFatal (incl. sustained SNMP unreachable).
     if (preHealth.isFatal) {
       final preDetail = preHealth.noPaper
           ? 'paper_out'
@@ -212,11 +250,12 @@ class PrintCoordinator {
       );
     }
 
-    if (snmp) {
-      counterBefore = await _readPageCounterWithRetries(onProgress: onProgress);
-    }
+    final usbBefore = await _readUsbBaseline(onProgress: onProgress);
+    final useUsb = usbBefore != null;
+    final int? counterBefore = usbBefore;
+    final source = useUsb ? 'usb' : 'none';
     AppLogger.info(
-      'PRINTER reconcile job=$jobId baseline=$counterBefore expected=$expected',
+      'PRINTER reconcile job=$jobId source=$source baseline=$counterBefore expected=$expected',
     );
     if (_isAborted(runId)) {
       return _abortedResult(
@@ -269,40 +308,44 @@ class PrintCoordinator {
       );
     }
 
-    if (!snmp) {
-      return _waitWithoutSnmp(
+    if (useUsb) {
+      return _reconcileCounter(
         runId: runId,
         jobId: jobId,
+        expected: expected,
+        counterBefore: counterBefore,
+        readCounter: () async => _usbPageWatch.latestPages,
+        verifiedDetail: 'usb_page_delta',
+        unavailableDetail: 'usb_page_counter_unavailable',
+        timeoutDetail:
+            'timeout: no USB page delta within ${reconcileTimeout.inSeconds}s',
         reportStatus: reportStatus,
         onProgress: onProgress,
       );
     }
 
-    return _reconcileWithSnmp(
+    return _waitWithoutUsbBaseline(
       runId: runId,
       jobId: jobId,
-      expected: expected,
-      counterBefore: counterBefore,
       reportStatus: reportStatus,
       onProgress: onProgress,
     );
   }
 
-  Future<PrintReconcileResult> _waitWithoutSnmp({
+  Future<PrintReconcileResult> _waitWithoutUsbBaseline({
     required int runId,
     required String jobId,
     required PrintJobStatusReporter reportStatus,
     void Function(String message)? onProgress,
   }) async {
     onProgress?.call('Printer processing…');
-    final deadline = DateTime.now().add(noSnmpGrace);
+    final deadline = DateTime.now().add(usbBaselineGrace);
     while (DateTime.now().isBefore(deadline)) {
       if (_isAborted(runId)) {
         return _abortedResult(jobId: jobId, reportStatus: reportStatus);
       }
       await Future<void>.delayed(pollInterval);
       final health = await _monitor.getHealth();
-      // Mid-wait without SNMP: physical fatals only.
       if (health.isPhysicalFatal) {
         await reportStatus(
           jobId: jobId,
@@ -325,7 +368,7 @@ class PrintCoordinator {
       status: 'printing',
       pagesReported: 0,
       reconcileStatus: 'unknown',
-      reconcileDetail: 'snmp_not_configured',
+      reconcileDetail: 'usb_baseline_unavailable',
       needsAdminReview: true,
     );
     return const PrintReconcileResult(
@@ -333,15 +376,19 @@ class PrintCoordinator {
       userMessage:
           'Print was sent, but physical completion could not be confirmed. Staff will review.',
       pagesReported: 0,
-      reconcileDetail: 'snmp_not_configured',
+      reconcileDetail: 'usb_baseline_unavailable',
     );
   }
 
-  Future<PrintReconcileResult> _reconcileWithSnmp({
+  Future<PrintReconcileResult> _reconcileCounter({
     required int runId,
     required String jobId,
     required int expected,
     required int? counterBefore,
+    required Future<int?> Function() readCounter,
+    required String verifiedDetail,
+    required String unavailableDetail,
+    required String timeoutDetail,
     required PrintJobStatusReporter reportStatus,
     void Function(String message)? onProgress,
   }) async {
@@ -383,8 +430,8 @@ class PrintCoordinator {
       }
 
       final health = await _monitor.getHealth();
-      // Always force-refresh during reconcile (lab: timeouts leave stale cache).
-      final after = await _monitor.getPageCounter(forceRefresh: true);
+      // A null read is a miss. USB `busy` and SNMP timeouts both look like this.
+      final after = await readCounter();
       if (after == null) {
         AppLogger.info('PRINTER reconcile job=$jobId counter refresh failed');
       } else {
@@ -435,7 +482,7 @@ class PrintCoordinator {
           pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
           reconcileStatus: 'verified',
-          reconcileDetail: 'snmp_page_delta',
+          reconcileDetail: verifiedDetail,
         );
         return PrintReconcileResult(
           outcome: PrintReconcileOutcome.verified,
@@ -443,7 +490,7 @@ class PrintCoordinator {
           pagesReported: pagesReported,
           pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
-          reconcileDetail: 'snmp_page_delta',
+          reconcileDetail: verifiedDetail,
         );
       }
 
@@ -498,7 +545,7 @@ class PrintCoordinator {
 
     if (!sawAnyCounter) {
       AppLogger.info(
-        'PRINTER reconcile job=$jobId not verified detail=snmp_page_counter_unavailable',
+        'PRINTER reconcile job=$jobId not verified detail=$unavailableDetail',
       );
       await reportStatus(
         jobId: jobId,
@@ -507,7 +554,7 @@ class PrintCoordinator {
         pageCounterBefore: baseline,
         pageCounterAfter: counterAfter,
         reconcileStatus: 'unknown',
-        reconcileDetail: 'snmp_page_counter_unavailable',
+        reconcileDetail: unavailableDetail,
         needsAdminReview: true,
       );
       return PrintReconcileResult(
@@ -517,7 +564,7 @@ class PrintCoordinator {
         pagesReported: 0,
         pageCounterBefore: baseline,
         pageCounterAfter: counterAfter,
-        reconcileDetail: 'snmp_page_counter_unavailable',
+        reconcileDetail: unavailableDetail,
       );
     }
 
@@ -531,8 +578,7 @@ class PrintCoordinator {
       pageCounterBefore: baseline ?? provisionalWatermark,
       pageCounterAfter: counterAfter,
       reconcileStatus: 'reconciliation_required',
-      reconcileDetail:
-          'timeout: no SNMP page delta within ${reconcileTimeout.inSeconds}s',
+      reconcileDetail: timeoutDetail,
       needsAdminReview: true,
     );
     return PrintReconcileResult(

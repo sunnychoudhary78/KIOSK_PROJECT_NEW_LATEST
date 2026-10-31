@@ -14,10 +14,8 @@ add_executable(${BINARY_NAME} WIN32
   "../surveillance/surveillance_plugin.cpp"
   "../surveillance/surveillance_recorder.cpp"
   "../printer/printer_plugin.cpp"
-  "../printer/snmp_v2c_client.cpp"
-  "../printer/brother_hl_l3280cdw.cpp"
-  "../printer/snmp_poll_cache.cpp"
   "../printer/spooler_status.cpp"
+  "../printer/usb_helper_client.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "Runner.rc"
   "runner.exe.manifest"
@@ -40,7 +38,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app flutter_wrapper_plugin)
-target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "mf.lib" "mfplat.lib" "mfuuid.lib" "ole32.lib" "shlwapi.lib" "winspool.lib" "ws2_32.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "mf.lib" "mfplat.lib" "mfuuid.lib" "ole32.lib" "shlwapi.lib" "winspool.lib")
 target_include_directories(${BINARY_NAME} PRIVATE
   "${CMAKE_SOURCE_DIR}"
   "${CMAKE_CURRENT_SOURCE_DIR}/../surveillance"
@@ -49,3 +47,13 @@ target_include_directories(${BINARY_NAME} PRIVATE
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+# x86 Brother USB helper. A missing MSBuild or SDK DLL must not fail the kiosk build.
+add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND}
+    -DSOURCE_CSPROJ=${CMAKE_CURRENT_SOURCE_DIR}/../printer-usb/skp_printer_usb.csproj
+    -DOUT_DIR=$<TARGET_FILE_DIR:${BINARY_NAME}>
+    -DCONFIG=$<CONFIG>
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/../printer-usb/copy_usb_helper.cmake
+  VERBATIM
+)

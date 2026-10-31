@@ -147,7 +147,7 @@ export function resolvePrinterMaintenance(
   if (health?.snmpOk === false) {
     const parsed = health.lastSuccessAt ? Date.parse(health.lastSuccessAt) : NaN;
     const title = Number.isFinite(parsed)
-      ? `Last successful SNMP poll ${new Date(parsed).toLocaleString()}`
+      ? `Last successful printer poll ${new Date(parsed).toLocaleString()}`
       : undefined;
     return { status: 'stale', title, ...lines };
   }
@@ -190,7 +190,7 @@ export function resolvePrinterErrorHistory(
       status: 'stale',
       entries,
       title: Number.isFinite(parsed)
-        ? `Last successful SNMP poll ${new Date(parsed).toLocaleString()}`
+        ? `Last successful printer poll ${new Date(parsed).toLocaleString()}`
         : undefined,
     };
   }

@@ -299,15 +299,10 @@ class PrinterHealth {
   final String? lastErrorCode;
   final String? lastErrorAt;
 
-  /// Fatal for blocking a new print. Offline bit alone is NOT fatal.
-  bool get isFatal {
-    if (isPhysicalFatal) return true;
-    if (snmpConfigured == true && snmpReachable == false) return true;
-    return false;
-  }
+  /// Fatal for blocking a new print. Offline bit alone is not fatal.
+  bool get isFatal => isPhysicalFatal;
 
-  /// Jam / paper-out / spooler offline / hard error — safe to fail mid-reconcile.
-  /// Does NOT include SNMP reachability blips (normal during Brother print).
+  /// Jam, paper-out, spooler offline, or a hard error.
   bool get isPhysicalFatal {
     if (state == 'jam' || jammed) return true;
     if (state == 'paper_out' || noPaper) return true;
@@ -332,11 +327,11 @@ class PrinterHealth {
     if (state == 'toner_low' || lowToner || noToner) {
       return 'Toner is low — printing may still work.';
     }
-    if (snmpConfigured == true && snmpReachable == false) {
-      return 'Printer SNMP unreachable — check network and try again.';
+    if (lastErrorCode == 'USB_PRINTER_NOT_FOUND') {
+      return 'USB printer was not found. Check the USB cable and that the Brother queue uses a USB port.';
     }
     if (state == 'offline') {
-      return 'Printer is offline — check power and Wi‑Fi.';
+      return 'Printer is offline — check power and the USB cable.';
     }
     if (state == 'error') {
       return 'Printer error — check the device panel.';
@@ -345,6 +340,300 @@ class PrinterHealth {
       return 'Printer is busy…';
     }
     return 'Printer ready';
+  }
+
+  /// SNMP jam and paper flags are not part of the USB detail card.
+  PrinterHealth withoutSnmpFaultFlags() {
+    if (!noPaper && !jammed) return this;
+    return PrinterHealth(
+      state: state,
+      online: online,
+      printerName: printerName,
+      model: model,
+      trays: trays,
+      supplies: supplies,
+      maintenance: maintenance,
+      errorHistory: errorHistory,
+      pageCounter: pageCounter,
+      snmpOk: snmpOk,
+      snmpReachable: snmpReachable,
+      snmpConfigured: snmpConfigured,
+      consecutiveFailures: consecutiveFailures,
+      lastSuccessAtMs: lastSuccessAtMs,
+      lastAttemptAtMs: lastAttemptAtMs,
+      lastPollError: lastPollError,
+      hrPrinterStatus: hrPrinterStatus,
+      hrPrinterStatusLabel: hrPrinterStatusLabel,
+      errorFlagsHex: errorFlagsHex,
+      offlineBit: offlineBit,
+      lowPaper: lowPaper,
+      lowToner: lowToner,
+      noToner: noToner,
+      doorOpen: doorOpen,
+      spoolerJobsQueued: spoolerJobsQueued,
+      spoolerJobsPrinting: spoolerJobsPrinting,
+      spoolerLatestJobId: spoolerLatestJobId,
+      spoolerLatestJobStatus: spoolerLatestJobStatus,
+      lastErrorCode: lastErrorCode,
+      lastErrorAt: lastErrorAt,
+    );
+  }
+
+  /// Ready, sleep, wait, or printing from USB. Online stays as it was.
+  PrinterHealth withActivityState(String nextState) {
+    if (state == nextState && !noPaper && !jammed) return this;
+    return PrinterHealth(
+      state: nextState,
+      online: online,
+      printerName: printerName,
+      model: model,
+      trays: trays,
+      supplies: supplies,
+      maintenance: maintenance,
+      errorHistory: errorHistory,
+      pageCounter: pageCounter,
+      snmpOk: snmpOk,
+      snmpReachable: snmpReachable,
+      snmpConfigured: snmpConfigured,
+      consecutiveFailures: consecutiveFailures,
+      lastSuccessAtMs: lastSuccessAtMs,
+      lastAttemptAtMs: lastAttemptAtMs,
+      lastPollError: lastPollError,
+      hrPrinterStatus: hrPrinterStatus,
+      hrPrinterStatusLabel: hrPrinterStatusLabel,
+      errorFlagsHex: errorFlagsHex,
+      offlineBit: offlineBit,
+      lowPaper: lowPaper,
+      lowToner: lowToner,
+      noToner: noToner,
+      doorOpen: doorOpen,
+      spoolerJobsQueued: spoolerJobsQueued,
+      spoolerJobsPrinting: spoolerJobsPrinting,
+      spoolerLatestJobId: spoolerLatestJobId,
+      spoolerLatestJobStatus: spoolerLatestJobStatus,
+      lastErrorCode: lastErrorCode,
+      lastErrorAt: lastErrorAt,
+    );
+  }
+
+  /// Tray 1 USB paper-out. SNMP jam does not stay. Online is unchanged.
+  PrinterHealth withPaperOut() {
+    return PrinterHealth(
+      state: 'paper_out',
+      online: online,
+      printerName: printerName,
+      model: model,
+      trays: trays,
+      supplies: supplies,
+      maintenance: maintenance,
+      errorHistory: errorHistory,
+      pageCounter: pageCounter,
+      snmpOk: snmpOk,
+      snmpReachable: snmpReachable,
+      snmpConfigured: snmpConfigured,
+      consecutiveFailures: consecutiveFailures,
+      lastSuccessAtMs: lastSuccessAtMs,
+      lastAttemptAtMs: lastAttemptAtMs,
+      lastPollError: lastPollError,
+      hrPrinterStatus: hrPrinterStatus,
+      hrPrinterStatusLabel: hrPrinterStatusLabel,
+      errorFlagsHex: errorFlagsHex,
+      noPaper: true,
+      jammed: false,
+      offlineBit: offlineBit,
+      lowPaper: lowPaper,
+      lowToner: lowToner,
+      noToner: noToner,
+      doorOpen: doorOpen,
+      spoolerJobsQueued: spoolerJobsQueued,
+      spoolerJobsPrinting: spoolerJobsPrinting,
+      spoolerLatestJobId: spoolerLatestJobId,
+      spoolerLatestJobStatus: spoolerLatestJobStatus,
+      lastErrorCode: 'PAPER_OUT',
+      lastErrorAt: lastErrorAt,
+    );
+  }
+
+  /// USB toner, pages, and parts only. SNMP supplies and trays are dropped.
+  PrinterHealth withUsbMaintenance({
+    int? blackPercent,
+    int? cyanPercent,
+    int? magentaPercent,
+    int? yellowPercent,
+    int? pagesTotal,
+    int? pagesColor,
+    int? pagesBlackAndWhite,
+    int? beltRemainingPages,
+    int? fuserRemainingPages,
+  }) {
+    return PrinterHealth(
+      state: state,
+      online: online,
+      printerName: printerName,
+      model: model,
+      trays: const [],
+      supplies: const [],
+      maintenance: PrinterMaintenance(
+        available: true,
+        toner: PrinterMaintenanceToner(
+          blackPercent: blackPercent,
+          cyanPercent: cyanPercent,
+          magentaPercent: magentaPercent,
+          yellowPercent: yellowPercent,
+        ),
+        pages: PrinterMaintenancePages(
+          total: pagesTotal,
+          color: pagesColor,
+          blackAndWhite: pagesBlackAndWhite,
+        ),
+        parts: PrinterMaintenanceParts(
+          beltRemainingPages: beltRemainingPages,
+          fuserRemainingPages: fuserRemainingPages,
+        ),
+      ),
+      errorHistory: errorHistory,
+      pageCounter: pageCounter,
+      snmpOk: snmpOk,
+      snmpReachable: snmpReachable,
+      snmpConfigured: snmpConfigured,
+      consecutiveFailures: consecutiveFailures,
+      lastSuccessAtMs: lastSuccessAtMs,
+      lastAttemptAtMs: lastAttemptAtMs,
+      lastPollError: lastPollError,
+      hrPrinterStatus: hrPrinterStatus,
+      hrPrinterStatusLabel: hrPrinterStatusLabel,
+      errorFlagsHex: errorFlagsHex,
+      noPaper: noPaper,
+      jammed: jammed,
+      offlineBit: offlineBit,
+      lowPaper: lowPaper,
+      lowToner: lowToner,
+      noToner: noToner,
+      doorOpen: doorOpen,
+      spoolerJobsQueued: spoolerJobsQueued,
+      spoolerJobsPrinting: spoolerJobsPrinting,
+      spoolerLatestJobId: spoolerLatestJobId,
+      spoolerLatestJobStatus: spoolerLatestJobStatus,
+      lastErrorCode: lastErrorCode,
+      lastErrorAt: lastErrorAt,
+    );
+  }
+
+  /// Drops an SNMP error list before the first full USB history read.
+  PrinterHealth withoutErrorHistory() {
+    if (errorHistory == null) return this;
+    return PrinterHealth(
+      state: state,
+      online: online,
+      printerName: printerName,
+      model: model,
+      trays: trays,
+      supplies: supplies,
+      maintenance: maintenance,
+      pageCounter: pageCounter,
+      snmpOk: snmpOk,
+      snmpReachable: snmpReachable,
+      snmpConfigured: snmpConfigured,
+      consecutiveFailures: consecutiveFailures,
+      lastSuccessAtMs: lastSuccessAtMs,
+      lastAttemptAtMs: lastAttemptAtMs,
+      lastPollError: lastPollError,
+      hrPrinterStatus: hrPrinterStatus,
+      hrPrinterStatusLabel: hrPrinterStatusLabel,
+      errorFlagsHex: errorFlagsHex,
+      noPaper: noPaper,
+      jammed: jammed,
+      offlineBit: offlineBit,
+      lowPaper: lowPaper,
+      lowToner: lowToner,
+      noToner: noToner,
+      doorOpen: doorOpen,
+      spoolerJobsQueued: spoolerJobsQueued,
+      spoolerJobsPrinting: spoolerJobsPrinting,
+      spoolerLatestJobId: spoolerLatestJobId,
+      spoolerLatestJobStatus: spoolerLatestJobStatus,
+      lastErrorCode: lastErrorCode,
+      lastErrorAt: lastErrorAt,
+    );
+  }
+
+  /// A full USB history replaces the SNMP list. An empty list clears it.
+  PrinterHealth withUsbErrorHistory(List<PrinterErrorHistoryEntry> entries) {
+    return PrinterHealth(
+      state: state,
+      online: online,
+      printerName: printerName,
+      model: model,
+      trays: trays,
+      supplies: supplies,
+      maintenance: maintenance,
+      errorHistory: PrinterErrorHistory(available: true, entries: entries),
+      pageCounter: pageCounter,
+      snmpOk: snmpOk,
+      snmpReachable: snmpReachable,
+      snmpConfigured: snmpConfigured,
+      consecutiveFailures: consecutiveFailures,
+      lastSuccessAtMs: lastSuccessAtMs,
+      lastAttemptAtMs: lastAttemptAtMs,
+      lastPollError: lastPollError,
+      hrPrinterStatus: hrPrinterStatus,
+      hrPrinterStatusLabel: hrPrinterStatusLabel,
+      errorFlagsHex: errorFlagsHex,
+      noPaper: noPaper,
+      jammed: jammed,
+      offlineBit: offlineBit,
+      lowPaper: lowPaper,
+      lowToner: lowToner,
+      noToner: noToner,
+      doorOpen: doorOpen,
+      spoolerJobsQueued: spoolerJobsQueued,
+      spoolerJobsPrinting: spoolerJobsPrinting,
+      spoolerLatestJobId: spoolerLatestJobId,
+      spoolerLatestJobStatus: spoolerLatestJobStatus,
+      lastErrorCode: lastErrorCode,
+      lastErrorAt: lastErrorAt,
+    );
+  }
+
+  /// The last USB read decides whether the admin card is current.
+  PrinterHealth withUsbFreshness({
+    required bool lastReadOk,
+    required DateTime lastSuccessAt,
+  }) {
+    return PrinterHealth(
+      state: state,
+      online: online,
+      printerName: printerName,
+      model: model,
+      trays: trays,
+      supplies: supplies,
+      maintenance: maintenance,
+      errorHistory: errorHistory,
+      pageCounter: pageCounter,
+      snmpOk: lastReadOk,
+      snmpReachable: lastReadOk ? true : snmpReachable,
+      snmpConfigured: snmpConfigured,
+      consecutiveFailures: consecutiveFailures,
+      lastSuccessAtMs: lastSuccessAt.millisecondsSinceEpoch,
+      lastAttemptAtMs: lastAttemptAtMs,
+      lastPollError: lastPollError,
+      hrPrinterStatus: hrPrinterStatus,
+      hrPrinterStatusLabel: hrPrinterStatusLabel,
+      errorFlagsHex: errorFlagsHex,
+      noPaper: noPaper,
+      jammed: jammed,
+      offlineBit: offlineBit,
+      lowPaper: lowPaper,
+      lowToner: lowToner,
+      noToner: noToner,
+      doorOpen: doorOpen,
+      spoolerJobsQueued: spoolerJobsQueued,
+      spoolerJobsPrinting: spoolerJobsPrinting,
+      spoolerLatestJobId: spoolerLatestJobId,
+      spoolerLatestJobStatus: spoolerLatestJobStatus,
+      lastErrorCode: lastErrorCode,
+      lastErrorAt: lastErrorAt,
+    );
   }
 
   /// Heartbeat / API payload — never includes community or host secrets.
@@ -358,7 +647,6 @@ class PrinterHealth {
           'supplies': supplies.map((s) => s.toJson()).toList(),
         if (maintenance != null) 'maintenance': maintenance!.toJson(),
         if (errorHistory != null) 'errorHistory': errorHistory!.toJson(),
-        if (pageCounter != null) 'pageCounter': pageCounter,
         if (snmpOk != null) 'snmpOk': snmpOk,
         if (snmpReachable != null) 'snmpReachable': snmpReachable,
         if (consecutiveFailures != null)

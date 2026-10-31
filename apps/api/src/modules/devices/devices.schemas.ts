@@ -201,3 +201,10 @@ export const setDevicePrintLimitsSchema = z
   );
 
 export type SetDevicePrintLimitsInput = z.infer<typeof setDevicePrintLimitsSchema>;
+
+export const setPrinterTraySchema = z.object({
+  mode: z.enum(['add', 'replace']),
+  pages: z.number().int().min(1).max(2000),
+});
+
+export type SetPrinterTrayInput = z.infer<typeof setPrinterTraySchema>;

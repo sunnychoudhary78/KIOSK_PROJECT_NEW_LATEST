@@ -7,6 +7,7 @@
 #include <winspool.h>
 
 #include <algorithm>
+#include <cctype>
 #include <vector>
 
 #pragma comment(lib, "winspool.lib")
@@ -27,10 +28,128 @@ std::string WideToUtf8(const wchar_t* wide) {
   return out;
 }
 
+std::wstring Utf8ToWide(const std::string& utf8) {
+  if (utf8.empty()) {
+    return {};
+  }
+  int size = MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), nullptr, 0);
+  if (size <= 0) {
+    return {};
+  }
+  std::wstring out(static_cast<size_t>(size), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), out.data(), size);
+  return out;
+}
+
 std::string ToLower(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return s;
+}
+
+std::string Trim(std::string s) {
+  auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](char c) { return !is_space(static_cast<unsigned char>(c)); }));
+  s.erase(std::find_if(s.rbegin(), s.rend(), [&](char c) { return !is_space(static_cast<unsigned char>(c)); }).base(),
+          s.end());
+  return s;
+}
+
+bool IsUsbPort(const std::string& port) {
+  const std::string lower = ToLower(Trim(port));
+  return lower.size() >= 3 && lower.compare(0, 3, "usb") == 0;
+}
+
+struct ListedPrinter {
+  std::wstring name_wide;
+  std::string name;
+  std::string port;
+  bool is_default = false;
+  DWORD status = 0;
+};
+
+struct EnumOutcome {
+  bool failed = false;
+  std::vector<ListedPrinter> printers;
+};
+
+EnumOutcome EnumerateInstalledPrinters() {
+  EnumOutcome outcome;
+  DWORD needed = 0;
+  DWORD returned = 0;
+  EnumPrintersW(PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS, nullptr, 2, nullptr, 0, &needed,
+                &returned);
+  if (needed == 0) {
+    return outcome;
+  }
+  std::vector<BYTE> buffer(needed);
+  if (!EnumPrintersW(PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS, nullptr, 2, buffer.data(),
+                     needed, &needed, &returned)) {
+    outcome.failed = true;
+    return outcome;
+  }
+
+  auto* printers = reinterpret_cast<PRINTER_INFO_2W*>(buffer.data());
+  outcome.printers.reserve(returned);
+  for (DWORD i = 0; i < returned; ++i) {
+    auto& p = printers[i];
+    ListedPrinter listed;
+    listed.name = WideToUtf8(p.pPrinterName);
+    listed.name_wide = p.pPrinterName ? std::wstring(p.pPrinterName) : Utf8ToWide(listed.name);
+    listed.port = WideToUtf8(p.pPortName);
+    listed.is_default = (p.Attributes & PRINTER_ATTRIBUTE_DEFAULT) != 0;
+    listed.status = p.Status;
+    outcome.printers.push_back(std::move(listed));
+  }
+  return outcome;
+}
+
+const ListedPrinter* SelectUsbPrinter(const std::vector<ListedPrinter>& printers,
+                                      const std::string& preferred_name_substring) {
+  std::vector<const ListedPrinter*> usb;
+  usb.reserve(printers.size());
+  for (const auto& printer : printers) {
+    if (IsUsbPort(printer.port)) {
+      usb.push_back(&printer);
+    }
+  }
+  if (usb.empty()) {
+    return nullptr;
+  }
+
+  const std::string needle = ToLower(Trim(preferred_name_substring));
+  if (!needle.empty()) {
+    std::vector<const ListedPrinter*> matches;
+    for (const auto* printer : usb) {
+      if (ToLower(printer->name).find(needle) != std::string::npos) {
+        matches.push_back(printer);
+      }
+    }
+    if (matches.empty()) {
+      return nullptr;
+    }
+    for (const auto* printer : matches) {
+      if (ToLower(printer->name) == needle) {
+        return printer;
+      }
+    }
+    for (const auto* printer : matches) {
+      if (printer->is_default) {
+        return printer;
+      }
+    }
+    return matches.front();
+  }
+
+  for (const auto* printer : usb) {
+    if (printer->is_default) {
+      return printer;
+    }
+  }
+  if (usb.size() == 1) {
+    return usb.front();
+  }
+  return nullptr;
 }
 
 void MapStatus(DWORD status, SpoolerPrinterInfo* info) {
@@ -77,61 +196,87 @@ void MapStatus(DWORD status, SpoolerPrinterInfo* info) {
   info->state = "ready";
 }
 
+void ReadJobs(HANDLE handle, SpoolerPrinterInfo* info) {
+  DWORD jobs_needed = 0;
+  DWORD jobs_returned = 0;
+  EnumJobsW(handle, 0, 0xFFFFFFFF, 1, nullptr, 0, &jobs_needed, &jobs_returned);
+  if (jobs_needed == 0) {
+    return;
+  }
+  std::vector<BYTE> jobs_buf(jobs_needed);
+  if (!EnumJobsW(handle, 0, 0xFFFFFFFF, 1, jobs_buf.data(), jobs_needed, &jobs_needed,
+                 &jobs_returned)) {
+    return;
+  }
+  auto* jobs = reinterpret_cast<JOB_INFO_1W*>(jobs_buf.data());
+  for (DWORD i = 0; i < jobs_returned; ++i) {
+    const DWORD st = jobs[i].Status;
+    if (st & (JOB_STATUS_PRINTING | JOB_STATUS_SPOOLING)) {
+      info->jobs_printing += 1;
+    } else {
+      info->jobs_queued += 1;
+    }
+    if (i + 1 == jobs_returned || info->latest_job_id == 0) {
+      info->latest_job_id = jobs[i].JobId;
+      if (st & JOB_STATUS_ERROR) {
+        info->latest_job_status = "error";
+      } else if (st & JOB_STATUS_PAUSED) {
+        info->latest_job_status = "paused";
+      } else if (st & JOB_STATUS_PRINTING) {
+        info->latest_job_status = "printing";
+      } else if (st & JOB_STATUS_SPOOLING) {
+        info->latest_job_status = "spooling";
+      } else if (st & JOB_STATUS_PRINTED) {
+        info->latest_job_status = "printed";
+      } else {
+        info->latest_job_status = "queued";
+      }
+    }
+  }
+}
+
 }  // namespace
+
+UsbPrinterResolution ResolveUsbPrinter(const std::string& preferred_name_substring) {
+  UsbPrinterResolution resolution;
+  const EnumOutcome listed = EnumerateInstalledPrinters();
+  if (listed.failed) {
+    return resolution;
+  }
+  const ListedPrinter* chosen = SelectUsbPrinter(listed.printers, preferred_name_substring);
+  if (chosen == nullptr) {
+    return resolution;
+  }
+  resolution.found = true;
+  resolution.name = chosen->name;
+  resolution.port = chosen->port;
+  return resolution;
+}
 
 SpoolerPrinterInfo QuerySpoolerStatus(const std::string& preferred_name_substring) {
   SpoolerPrinterInfo info;
-  DWORD needed = 0;
-  DWORD returned = 0;
-  EnumPrintersW(PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS, nullptr, 2, nullptr, 0, &needed,
-                &returned);
-  if (needed == 0) {
-    info.state = "offline";
-    info.last_error_code = "NO_PRINTERS";
-    return info;
-  }
-  std::vector<BYTE> buffer(needed);
-  if (!EnumPrintersW(PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS, nullptr, 2, buffer.data(),
-                     needed, &needed, &returned)) {
+  const EnumOutcome listed = EnumerateInstalledPrinters();
+  if (listed.failed) {
     info.state = "unknown";
     info.last_error_code = "ENUM_FAILED";
     return info;
   }
 
-  auto* printers = reinterpret_cast<PRINTER_INFO_2W*>(buffer.data());
-  const std::string needle = ToLower(preferred_name_substring);
-  PRINTER_INFO_2W* chosen = nullptr;
-  PRINTER_INFO_2W* default_printer = nullptr;
-
-  for (DWORD i = 0; i < returned; ++i) {
-    auto& p = printers[i];
-    std::string name = WideToUtf8(p.pPrinterName);
-    if (p.Attributes & PRINTER_ATTRIBUTE_DEFAULT) {
-      default_printer = &p;
-    }
-    if (!needle.empty() && ToLower(name).find(needle) != std::string::npos) {
-      chosen = &p;
-      break;
-    }
-  }
-  if (!chosen) {
-    chosen = default_printer;
-  }
-  if (!chosen && returned == 1) {
-    chosen = &printers[0];
-  }
-  if (!chosen) {
-    info.state = "unknown";
-    info.last_error_code = "PRINTER_NOT_RESOLVED";
+  const ListedPrinter* chosen = SelectUsbPrinter(listed.printers, preferred_name_substring);
+  if (chosen == nullptr) {
+    info.state = "offline";
+    info.last_error_code = "USB_PRINTER_NOT_FOUND";
     return info;
   }
 
   info.found = true;
-  info.name = WideToUtf8(chosen->pPrinterName);
-  MapStatus(chosen->Status, &info);
+  info.name = chosen->name;
+  info.port = chosen->port;
+  MapStatus(chosen->status, &info);
 
   HANDLE handle = nullptr;
-  if (OpenPrinterW(chosen->pPrinterName, &handle, nullptr)) {
+  if (!chosen->name_wide.empty() &&
+      OpenPrinterW(const_cast<LPWSTR>(chosen->name_wide.c_str()), &handle, nullptr)) {
     DWORD bytes = 0;
     GetPrinterW(handle, 2, nullptr, 0, &bytes);
     if (bytes > 0) {
@@ -139,43 +284,13 @@ SpoolerPrinterInfo QuerySpoolerStatus(const std::string& preferred_name_substrin
       if (GetPrinterW(handle, 2, detail.data(), bytes, &bytes)) {
         auto* live = reinterpret_cast<PRINTER_INFO_2W*>(detail.data());
         MapStatus(live->Status, &info);
-      }
-    }
-
-    DWORD jobs_needed = 0;
-    DWORD jobs_returned = 0;
-    EnumJobsW(handle, 0, 0xFFFFFFFF, 1, nullptr, 0, &jobs_needed, &jobs_returned);
-    if (jobs_needed > 0) {
-      std::vector<BYTE> jobs_buf(jobs_needed);
-      if (EnumJobsW(handle, 0, 0xFFFFFFFF, 1, jobs_buf.data(), jobs_needed, &jobs_needed,
-                    &jobs_returned)) {
-        auto* jobs = reinterpret_cast<JOB_INFO_1W*>(jobs_buf.data());
-        for (DWORD i = 0; i < jobs_returned; ++i) {
-          const DWORD st = jobs[i].Status;
-          if (st & (JOB_STATUS_PRINTING | JOB_STATUS_SPOOLING)) {
-            info.jobs_printing += 1;
-          } else {
-            info.jobs_queued += 1;
-          }
-          if (i + 1 == jobs_returned || info.latest_job_id == 0) {
-            info.latest_job_id = jobs[i].JobId;
-            if (st & JOB_STATUS_ERROR) {
-              info.latest_job_status = "error";
-            } else if (st & JOB_STATUS_PAUSED) {
-              info.latest_job_status = "paused";
-            } else if (st & JOB_STATUS_PRINTING) {
-              info.latest_job_status = "printing";
-            } else if (st & JOB_STATUS_SPOOLING) {
-              info.latest_job_status = "spooling";
-            } else if (st & JOB_STATUS_PRINTED) {
-              info.latest_job_status = "printed";
-            } else {
-              info.latest_job_status = "queued";
-            }
-          }
+        info.port = WideToUtf8(live->pPortName);
+        if (info.port.empty()) {
+          info.port = chosen->port;
         }
       }
     }
+    ReadJobs(handle, &info);
     ClosePrinter(handle);
   }
   return info;

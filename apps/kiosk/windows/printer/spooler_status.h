@@ -6,10 +6,17 @@
 
 namespace skp_printer {
 
+struct UsbPrinterResolution {
+  bool found = false;
+  std::string name;
+  std::string port;
+};
+
 struct SpoolerPrinterInfo {
   bool found = false;
   bool online = false;
   std::string name;
+  std::string port;
   std::string state;  // ready|printing|jam|paper_out|toner_low|offline|error|unknown
   std::string last_error_code;
   int jobs_queued = 0;
@@ -18,7 +25,11 @@ struct SpoolerPrinterInfo {
   std::string latest_job_status;
 };
 
-// Resolve by preferred substring (case-insensitive). Empty preferred uses default.
+// USB-port queue only. Name match is case-insensitive inside that set.
+// Network ports (WSD, IP_, TCP) are never selected.
+UsbPrinterResolution ResolveUsbPrinter(const std::string& preferred_name_substring);
+
+// Same USB queue as ResolveUsbPrinter, plus live Win32 status and jobs.
 SpoolerPrinterInfo QuerySpoolerStatus(const std::string& preferred_name_substring);
 
 }  // namespace skp_printer

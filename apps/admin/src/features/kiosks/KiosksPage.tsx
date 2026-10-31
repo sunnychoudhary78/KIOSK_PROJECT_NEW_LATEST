@@ -56,6 +56,7 @@ type Device = {
   freeDisabledToLocal?: string | null;
   bannerHorizontalEnabled?: boolean;
   bannerVerticalEnabled?: boolean;
+  pagesLeft?: number | null;
 };
 
 function latestReportPaperOut(health: PrinterHealthView | null | undefined) {
@@ -112,7 +113,30 @@ function PrinterMetricList({ rows }: { rows: { label: string; value: string }[] 
   );
 }
 
-function PrinterDetailsBody({ health }: { health: PrinterHealthView | null | undefined }) {
+function usbPagesTotal(health: PrinterHealthView | null | undefined) {
+  const total = health?.maintenance?.pages?.total;
+  return typeof total === 'number' ? total : null;
+}
+
+function PrinterDetailsBody({
+  health,
+  pagesLeft,
+  canEditTray,
+  trayInput,
+  onTrayInput,
+  trayError,
+  traySaving,
+  onSaveTray,
+}: {
+  health: PrinterHealthView | null | undefined;
+  pagesLeft: number | null;
+  canEditTray: boolean;
+  trayInput: string;
+  onTrayInput: (value: string) => void;
+  trayError: string | null;
+  traySaving: boolean;
+  onSaveTray: (mode: 'add' | 'replace') => void;
+}) {
   const maintenance = resolvePrinterMaintenance(health);
   const errors = resolvePrinterErrorHistory(health);
   const stale = maintenance.status === 'stale' || errors.status === 'stale';
@@ -165,9 +189,53 @@ function PrinterDetailsBody({ health }: { health: PrinterHealthView | null | und
               { label: 'Total', value: maintenance.pages.total },
               { label: 'Color', value: maintenance.pages.color },
               { label: 'Black and white', value: maintenance.pages.blackAndWhite },
+              { label: 'Pages left', value: pagesLeft == null ? '—' : String(pagesLeft) },
             ]}
           />
         )}
+        {maintenance.status === 'unavailable' ? (
+          <p className="text-sm">
+            Pages left <span className="text-muted-foreground">{pagesLeft == null ? '—' : pagesLeft}</span>
+          </p>
+        ) : null}
+        {canEditTray ? (
+          <div className="stack">
+            <Input
+              type="number"
+              min={1}
+              max={2000}
+              inputMode="numeric"
+              placeholder="Pages to load"
+              value={trayInput}
+              disabled={traySaving}
+              onChange={(event) => onTrayInput(event.target.value)}
+            />
+            {usbPagesTotal(health) == null ? (
+              <p className="text-sm text-muted-foreground">
+                The printer page total is not available yet.
+              </p>
+            ) : null}
+            {trayError ? <p className="error">{trayError}</p> : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={traySaving || usbPagesTotal(health) == null}
+                onClick={() => onSaveTray('add')}
+              >
+                Add to current
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={traySaving || usbPagesTotal(health) == null}
+                onClick={() => onSaveTray('replace')}
+              >
+                Replace tray
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </section>
       <section className="stack">
         <h3 className="text-sm font-medium">Parts</h3>
@@ -299,6 +367,9 @@ export function KiosksPage() {
   const [printerDeviceId, setPrinterDeviceId] = useState<string | null>(null);
   const [printerRefreshing, setPrinterRefreshing] = useState(false);
   const [printerRefreshNote, setPrinterRefreshNote] = useState<string | null>(null);
+  const [trayInput, setTrayInput] = useState('');
+  const [trayError, setTrayError] = useState<string | null>(null);
+  const [traySaving, setTraySaving] = useState(false);
   const printerRefreshGeneration = useRef(0);
   const canEnablePrinting =
     roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
@@ -316,6 +387,14 @@ export function KiosksPage() {
   useEffect(() => {
     void load();
   }, [token]);
+
+  useEffect(() => {
+    if (!printerDeviceId) return;
+    const timer = window.setInterval(() => {
+      void load();
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [printerDeviceId, token]);
 
   function resetForm() {
     setName('');
@@ -559,7 +638,33 @@ export function KiosksPage() {
     printerRefreshGeneration.current += 1;
     setPrinterRefreshing(false);
     setPrinterRefreshNote(null);
+    setTrayInput('');
+    setTrayError(null);
     setPrinterDeviceId(null);
+  }
+
+  async function saveTray(mode: 'add' | 'replace') {
+    if (!printerDeviceId || traySaving) return;
+    const pages = Number(trayInput);
+    if (!Number.isInteger(pages) || pages < 1 || pages > 2000) {
+      setTrayError('Enter a whole number of pages from 1 to 2000');
+      return;
+    }
+    setTraySaving(true);
+    setTrayError(null);
+    try {
+      await apiRequest(`/devices/${printerDeviceId}/printer-tray`, {
+        method: 'PATCH',
+        token,
+        body: { mode, pages },
+      });
+      setTrayInput('');
+      await load();
+    } catch (err) {
+      setTrayError(err instanceof Error ? err.message : 'Could not update the tray');
+    } finally {
+      setTraySaving(false);
+    }
   }
 
   const printerDevice = printerDeviceId
@@ -669,6 +774,8 @@ export function KiosksPage() {
                       device={device}
                       onDetails={() => {
                         setPrinterRefreshNote(null);
+                        setTrayInput('');
+                        setTrayError(null);
                         setPrinterDeviceId(device.id);
                       }}
                     />
@@ -1012,7 +1119,21 @@ export function KiosksPage() {
         }
       >
         {printerRefreshNote ? <p className="error">{printerRefreshNote}</p> : null}
-        {printerDevice ? <PrinterDetailsBody health={printerDevice.printerHealth} /> : null}
+        {printerDevice ? (
+          <PrinterDetailsBody
+            health={printerDevice.printerHealth}
+            pagesLeft={printerDevice.pagesLeft ?? null}
+            canEditTray={canEnablePrinting}
+            trayInput={trayInput}
+            onTrayInput={(value) => {
+              setTrayInput(value);
+              setTrayError(null);
+            }}
+            trayError={trayError}
+            traySaving={traySaving}
+            onSaveTray={(mode) => void saveTray(mode)}
+          />
+        ) : null}
       </Modal>
     </div>
   );

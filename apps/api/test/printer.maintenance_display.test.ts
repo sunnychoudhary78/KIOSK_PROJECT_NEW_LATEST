@@ -36,7 +36,7 @@ describe('admin printer maintenance display', () => {
     });
     expect(display.status).toBe('stale');
     if (display.status === 'stale') {
-      expect(display.title).toContain('Last successful SNMP poll');
+      expect(display.title).toContain('Last successful printer poll');
       expect(display.toner.black).toBe('90%');
       expect(display.pages.total).toBe((64).toLocaleString());
       expect(display.parts.belt).toBe((49882).toLocaleString());
@@ -123,7 +123,7 @@ describe('admin printer error history display', () => {
     expect(display.status).toBe('stale');
     if (display.status === 'stale') {
       expect(display.entries).toEqual([{ index: 1, description: 'Cannot Print ZC' }]);
-      expect(display.title).toContain('Last successful SNMP poll');
+      expect(display.title).toContain('Last successful printer poll');
     }
   });
 });

@@ -3,15 +3,21 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 import 'package:skp_kiosk/services/printer/printer_health.dart';
 import 'package:skp_kiosk/services/printer/printer_monitor.dart';
+import 'package:skp_kiosk/services/printer/usb_page_watch.dart';
+import 'package:skp_kiosk/services/printer/usb_snapshot.dart';
 
 class PrinterHealthController extends Notifier<PrinterHealth> {
   Timer? _poll;
   Timer? _refreshWatch;
-  bool _snmpPollerStarted = false;
   String? _lastRefreshAck;
   bool _paperOutNotified = false;
+  bool _usbCompareBusy = false;
+  DateTime? _nextFullUsbAt;
+  int? _previousUsbPages;
+  int? _lastUsbStatusCode;
 
   @override
   PrinterHealth build() {
@@ -19,10 +25,6 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
     ref.onDispose(() {
       _poll?.cancel();
       _refreshWatch?.cancel();
-      if (_snmpPollerStarted) {
-        unawaited(_monitor.stopSnmpPolling());
-        _snmpPollerStarted = false;
-      }
       if (identical(printerHeartbeatBodyBuilder, heartbeatPayload)) {
         printerHeartbeatBodyBuilder = null;
       }
@@ -37,10 +39,9 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
         _refreshWatch?.cancel();
         _refreshWatch = null;
         _lastRefreshAck = null;
-        if (_snmpPollerStarted) {
-          unawaited(_monitor.stopSnmpPolling());
-          _snmpPollerStarted = false;
-        }
+        _previousUsbPages = null;
+        _lastUsbStatusCode = null;
+        _nextFullUsbAt = null;
       }
     });
     if (ref.read(deviceAuthProvider).isAuthenticated) {
@@ -53,20 +54,7 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
   PrinterMonitor get _monitor => ref.read(printerMonitorProvider);
 
   void _ensurePolling() {
-    if (!_snmpPollerStarted) {
-      _snmpPollerStarted = true;
-      // Starts native cache; community is never logged or put in heartbeat.
-      unawaited(_monitor.startSnmpPolling().then((ok) {
-        if (!ok) {
-          AppLogger.error('PRINTER SNMP poller failed to start');
-          _snmpPollerStarted = false;
-          return;
-        }
-        _armRefreshWatch();
-      }));
-    } else {
-      _armRefreshWatch();
-    }
+    _armRefreshWatch();
     _poll ??= Timer.periodic(const Duration(seconds: 30), (_) {
       unawaited(refresh());
     });
@@ -76,6 +64,7 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
     _refreshWatch ??= Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_publishPendingRefresh());
       unawaited(_watchPaperOut());
+      unawaited(_compareUsb());
     });
   }
 
@@ -111,17 +100,11 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
     try {
       final health = await _monitor.getHealth();
       final paper = health.noPaper || health.state == 'paper_out';
-      if (!paper) {
-        _paperOutNotified = false;
-        if (state.noPaper || state.state == 'paper_out') {
-          state = health;
-        }
-        return;
-      }
-      if (state.state != health.state || state.noPaper != health.noPaper) {
+      if (!paper) _paperOutNotified = false;
+      if (_overlaidHealthChanged(state, health)) {
         state = health;
       }
-      if (_paperOutNotified) return;
+      if (!paper || _paperOutNotified) return;
       final sent = await ref.read(deviceAuthProvider.notifier).sendPrinterHealthHeartbeat();
       if (sent) _paperOutNotified = true;
     } catch (error) {
@@ -142,6 +125,67 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
   }
 
   Map<String, dynamic> heartbeatPayload() => state.toJson();
+
+  /// Logs USB readings. Does not change [state] or the heartbeat.
+  Future<void> _compareUsb() async {
+    final watch = ref.read(usbPageWatchProvider);
+    if (watch.suppress ||
+        _usbCompareBusy ||
+        !ref.read(deviceAuthProvider).isAuthenticated) {
+      return;
+    }
+    _usbCompareBusy = true;
+    final jobLocked = ref.read(printCoordinatorProvider).isLocked;
+    final full = !jobLocked &&
+        (_nextFullUsbAt == null || !DateTime.now().isBefore(_nextFullUsbAt!));
+    try {
+      final snapshot = await _monitor.getUsbSnapshot(full: full);
+      watch.record(snapshot);
+      final statusCode = watch.statusCode;
+      if (snapshot.ok && statusCode != null && statusCode != _lastUsbStatusCode) {
+        _lastUsbStatusCode = statusCode;
+        AppLogger.info(
+          formatUsbStatusLine(
+            code: statusCode,
+            message: watch.statusMessage,
+          ),
+        );
+      }
+      if (full && snapshot.ok) {
+        _nextFullUsbAt = DateTime.now().add(const Duration(minutes: 1));
+      }
+      AppLogger.info(
+        formatUsbCompareLine(
+          previousUsbPages: _previousUsbPages,
+          snapshot: snapshot,
+          tonerBlack: watch.tonerBlack,
+          tonerCyan: watch.tonerCyan,
+          tonerMagenta: watch.tonerMagenta,
+          tonerYellow: watch.tonerYellow,
+        ),
+      );
+      if (snapshot.ok && snapshot.pagesTotal != null) {
+        _previousUsbPages = snapshot.pagesTotal;
+      }
+    } catch (error) {
+      AppLogger.error('PRINTER usb-compare failed', error);
+    } finally {
+      _usbCompareBusy = false;
+    }
+  }
+}
+
+bool _overlaidHealthChanged(PrinterHealth current, PrinterHealth next) {
+  return current.state != next.state ||
+      current.noPaper != next.noPaper ||
+      current.online != next.online ||
+      current.snmpOk != next.snmpOk ||
+      current.snmpReachable != next.snmpReachable ||
+      current.lastSuccessAtMs != next.lastSuccessAtMs ||
+      current.maintenance?.toJson().toString() !=
+          next.maintenance?.toJson().toString() ||
+      current.errorHistory?.toJson().toString() !=
+          next.errorHistory?.toJson().toString();
 }
 
 final printerHealthControllerProvider =

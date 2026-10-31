@@ -4,9 +4,6 @@ class AppConfig {
     required this.environment,
     this.printerName = '',
     this.printReversePages = true,
-    this.printerSnmpHost = '',
-    this.printerSnmpVersion = '2c',
-    this.printerSnmpCommunity = '',
     this.printReconcileTimeoutMs = 180000,
     this.printerModel = 'Brother HL-L3280CDW',
     this.surveillanceSegmentSeconds = 600,
@@ -29,24 +26,11 @@ class AppConfig {
   /// with page 1 on top. Set `SKP_PRINT_REVERSE_PAGES=false` for face-down.
   final bool printReversePages;
 
-  /// SNMP host (e.g. `192.168.1.30`). Empty disables SNMP reconciliation.
-  final String printerSnmpHost;
-
-  /// Only `2c` is supported in Phase 2.
-  final String printerSnmpVersion;
-
-  /// SNMP v2c community. Empty disables SNMP (never commit real secrets).
-  final String printerSnmpCommunity;
-
-  /// Max wait for physical page-counter proof before reconciliation_required.
+  /// Max wait for a USB page-count rise before reconciliation_required.
   final int printReconcileTimeoutMs;
 
-  /// Printer profile selector. Only Brother HL-L3280CDW is implemented.
+  /// Printer model stored on the heartbeat.
   final String printerModel;
-
-  /// True when host + community are set for SNMP polling.
-  bool get snmpConfigured =>
-      printerSnmpHost.trim().isNotEmpty && printerSnmpCommunity.trim().isNotEmpty;
 
   final int surveillanceSegmentSeconds;
   final int surveillanceWidth;
@@ -86,20 +70,6 @@ class AppConfig {
       defaultValue: 'true',
     );
     final printReversePages = reverseRaw.toLowerCase() != 'false';
-    // Lab defaults for Brother HL-L3280CDW on LAN. Override with dart-defines
-    // in other environments; do not use a non-public community in committed defaults.
-    const snmpHost = String.fromEnvironment(
-      'SKP_PRINTER_SNMP_HOST',
-      defaultValue: '192.168.1.30',
-    );
-    const snmpVersion = String.fromEnvironment(
-      'SKP_PRINTER_SNMP_VERSION',
-      defaultValue: '2c',
-    );
-    const snmpCommunity = String.fromEnvironment(
-      'SKP_PRINTER_SNMP_COMMUNITY',
-      defaultValue: 'public',
-    );
     const reconcileTimeoutMs = int.fromEnvironment(
       'SKP_PRINT_RECONCILE_TIMEOUT_MS',
       defaultValue: 180000,
@@ -138,9 +108,6 @@ class AppConfig {
       environment: env,
       printerName: printerName,
       printReversePages: printReversePages,
-      printerSnmpHost: snmpHost,
-      printerSnmpVersion: snmpVersion,
-      printerSnmpCommunity: snmpCommunity,
       printReconcileTimeoutMs: reconcileTimeoutMs,
       printerModel: printerModel,
       surveillanceSegmentSeconds: segmentSeconds,

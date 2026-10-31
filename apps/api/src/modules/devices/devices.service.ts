@@ -15,8 +15,10 @@ import type {
   PrinterHealthInput,
   RegisterDeviceInput,
   SetDevicePrintLimitsInput,
+  SetPrinterTrayInput,
   SurveillanceHealthInput,
 } from './devices.schemas.js';
+import { applyTrayLoad, pagesLeft, usbPagesTotal } from './printer_tray.js';
 import { isWithinLocalTimeWindow } from '../print_quota/print_quota.time.js';
 import { printLimitsFromDevice } from './device_print_limits.js';
 
@@ -65,6 +67,8 @@ function mapDevice(device: {
   freeDisabledToLocal?: string | null;
   bannerHorizontalEnabled?: boolean;
   bannerVerticalEnabled?: boolean;
+  trayPages?: number | null;
+  trayBaselinePages?: number | null;
   site: { name: string };
 }) {
   return {
@@ -84,6 +88,13 @@ function mapDevice(device: {
     printerHealthAt: device.printerHealthAt?.toISOString() ?? null,
     printerRefreshRequestedAt: device.printerRefreshRequestedAt?.toISOString() ?? null,
     printingPausedReason: device.printingPausedReason ?? null,
+    trayPages: device.trayPages ?? null,
+    trayBaselinePages: device.trayBaselinePages ?? null,
+    pagesLeft: pagesLeft(
+      device.trayPages,
+      device.trayBaselinePages,
+      usbPagesTotal(device.printerHealth),
+    ),
     bannerHorizontalEnabled: device.bannerHorizontalEnabled !== false,
     bannerVerticalEnabled: device.bannerVerticalEnabled !== false,
     ...printLimitsFromDevice(device),
@@ -333,6 +344,56 @@ export class DevicesService {
       metadata: { ...input },
     });
 
+    return mapDevice(updated);
+  }
+
+  async setPrinterTray(
+    deviceId: string,
+    input: SetPrinterTrayInput,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    const usbTotal = usbPagesTotal(device.printerHealth);
+    if (usbTotal == null) {
+      throw new AppError(
+        'printer_page_total_unavailable',
+        'The printer page total is not available yet.',
+        409,
+      );
+    }
+    const next = applyTrayLoad({
+      mode: input.mode,
+      pages: input.pages,
+      trayPages: device.trayPages,
+      trayBaselinePages: device.trayBaselinePages,
+      usbTotal,
+    });
+    const updated = await this.db.device.update({
+      where: { id: deviceId },
+      data: next,
+      include: { site: true },
+    });
+    await this.audit.record({
+      action: 'device.printer_tray_updated',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: {
+        mode: input.mode,
+        pages: input.pages,
+        trayPages: next.trayPages,
+        trayBaselinePages: next.trayBaselinePages,
+      },
+    });
     return mapDevice(updated);
   }
 

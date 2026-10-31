@@ -58,23 +58,42 @@ void main() {
       );
     });
 
-    test('!snmpReachable after threshold is fatal when configured', () {
+    test('USB_PRINTER_NOT_FOUND names the USB cable', () {
+      const health = PrinterHealth(
+        state: 'offline',
+        online: false,
+        lastErrorCode: 'USB_PRINTER_NOT_FOUND',
+        snmpConfigured: true,
+        snmpReachable: true,
+      );
+      expect(health.userMessage, contains('USB printer was not found'));
+    });
+
+    test('an unreachable poll flag does not block a ready printer', () {
       const health = PrinterHealth(
         state: 'ready',
         online: true,
-        snmpConfigured: true,
+        snmpOk: false,
         snmpReachable: false,
         consecutiveFailures: 3,
       );
-      expect(health.isFatal, isTrue);
+      expect(health.isFatal, isFalse);
       expect(health.isPhysicalFatal, isFalse);
+    });
+
+    test('offline names the USB cable', () {
+      const health = PrinterHealth(
+        state: 'offline',
+        online: false,
+        lastErrorCode: 'OFFLINE',
+      );
+      expect(health.userMessage, contains('USB cable'));
     });
 
     test('toJson omits community and includes telemetry fields', () {
       final json = const PrinterHealth(
         state: 'ready',
         online: true,
-        pageCounter: 42,
         snmpReachable: true,
         consecutiveFailures: 0,
         hrPrinterStatus: 3,
@@ -89,7 +108,7 @@ void main() {
 
       expect(json.containsKey('community'), isFalse);
       expect(json.containsKey('snmpCommunity'), isFalse);
-      expect(json['pageCounter'], 42);
+      expect(json.containsKey('pageCounter'), isFalse);
       expect(json['hrPrinterStatus'], 3);
       expect(json['errorFlagsHex'], '00');
       expect(json['snmpReachable'], isTrue);

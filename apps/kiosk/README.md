@@ -4,75 +4,39 @@ Windows Flutter client for the Smart Kiosk Platform (OTP print, DigiLocker, well
 
 ## Printing (Windows)
 
-The kiosk sends PDFs to a **Windows-installed printer** via silent `directPrintPdf`, then **reconciles** physical completion using SNMP page counters (Brother HL-L3280CDW) and Windows spooler status. Bare `completed` is never reported without `reconcileStatus=verified`.
+The kiosk sends PDFs to the **USB** Brother queue via silent `directPrintPdf`, then **reconciles** physical completion from the USB total page count (`final - baseline >= expected`). If that USB baseline cannot be read, the job ends as `unknown` after a short wait. Bare `completed` is never reported without `reconcileStatus=verified`. Status, toner, pages, belt, fuser, and error history on the admin card come from the USB latch.
 
 ### Brother HL-L3280CDW (current fleet)
 
-1. Install the Brother driver; prefer that printer as Windows **default** (or set `SKP_PRINTER_NAME`).
+1. Install the Brother driver on a USB port. The lab queue is **Brother HL-L3280CDW series** on **USB001**. Any port whose name starts with `USB` is accepted (`USB002` after a reinstall still matches). WSD, TCP/IP, and other network ports are never selected.
 2. Load **A4** plain paper; register cassette size as A4 on the printer panel.
-3. Enable **SNMP v2c** on the printer (community for lab only — do not commit secrets).
-4. Use a **DHCP reservation** so the printer IP stays stable.
+3. Printer Wi-Fi can stay off. The kiosk does not poll the printer over the network.
 
-Print resolution order:
+Print resolution order (USB ports only):
 
-1. `SKP_PRINTER_NAME` (substring match on the Windows printer name), if set
-2. Windows default printer
-3. The only installed printer (if there is exactly one)
+1. `SKP_PRINTER_NAME` substring match (default `Brother`), then an exact name match, then the Windows default among those matches
+2. If `SKP_PRINTER_NAME` is empty: the default USB printer, otherwise the only USB printer
+3. If no USB queue matches, printing fails with `USB_PRINTER_NOT_FOUND` and does not fall back to a network queue
 
 Face-up trays: by default pages print last→first (`SKP_PRINT_REVERSE_PAGES=true`) so page 1 lands on top. Use `SKP_PRINT_REVERSE_PAGES=false` for face-down output.
 
-### Dart-defines (SNMP — never hardcode in source)
+### Dart-defines
 
 | Define | Default | Purpose |
 |--------|---------|---------|
 | `SKP_PRINTER_NAME` | `Brother` | Windows printer name substring |
-| `SKP_PRINTER_SNMP_HOST` | `192.168.1.13` | Printer LAN IP (lab default) |
-| `SKP_PRINTER_SNMP_VERSION` | `2c` | Only v2c supported |
-| `SKP_PRINTER_SNMP_COMMUNITY` | `public` | Lab community only — override in prod |
-| `SKP_PRINT_RECONCILE_TIMEOUT_MS` | `180000` | Max wait for page-counter proof |
-| `SKP_PRINTER_MODEL` | `Brother HL-L3280CDW` | Profile selector |
+| `SKP_PRINT_RECONCILE_TIMEOUT_MS` | `180000` | Max wait for a USB page-count rise |
+| `SKP_PRINTER_MODEL` | `Brother HL-L3280CDW` | Model stored on the heartbeat |
 
-Lab defaults are baked into `AppConfig` (Brother @ `192.168.1.13`, community `public`). Override with dart-defines when needed. Empty host/community via override disables SNMP; jobs end as `unknown` / `reconciliation_required` (never fake verified).
-
-Community is never logged or included in heartbeat / MethodChannel responses.
-
-### SNMP poller (native)
-
-| Setting | Value | Notes |
-|---------|-------|--------|
-| Poll interval | 2000 ms | Background `SnmpPollCache` worker |
-| SNMP timeout | 3000 ms | Per-request |
-| Reachable threshold | 3 consecutive failures | One timeout does **not** mark offline |
-
-`getHealth` / `getPageCounter` read the cache (non-blocking) plus a fast Winspool snapshot.
-
-### OIDs (Brother HL-L3280CDW lab)
-
-| OID | Meaning | Lab notes |
-|-----|---------|-----------|
-| `1.3.6.1.2.1.25.3.5.1.1.1` | `hrPrinterStatus` | `3` idle, `4` printing, `5` warmup |
-| `1.3.6.1.2.1.25.3.5.1.2.1` | `hrPrinterDetectedErrorState` | Raw hex e.g. `00` / `02` / `40` / `42` |
-| `1.3.6.1.2.1.43.10.2.1.4.1.1` | `prtMarkerLifeCount` | Lifetime pages; rises during print |
-
-### Error-state bits (RFC 2790, first octet)
-
-Bit 0 = MSB. Verified naming for this device: **`noPaper` (`0x40`) → UI `paper_out`**.
-
-| Hex | Flag | UI / reconcile |
-|-----|------|----------------|
-| `0x40` | `noPaper` | `paper_out` (fatal) |
-| `0x04` | `jammed` | `jam` (fatal) |
-| `0x02` | `offline` bit | Exposed as `offlineBit` only — **does not** alone mean SNMP unreachable |
-| `0x80` / `0x20` / `0x10` / `0x08` | lowPaper / lowToner / noToner / doorOpen | Flags / toner messaging |
-
-Raw `errorFlagsHex` is always returned when octets are read.
+`getHealth` reads the USB spooler queue. After the first successful USB read, toner, pages, parts, and error history come from the USB latch. Until that read, those cells stay blank.
 
 ### Reconcile rules
 
-- Progress may use `hrPrinterStatus` (`printing` / `warmup`).
-- **Verified only** when lifetime page Δ ≥ expected under exclusive lock.
+- **Verified only** when the USB total page Δ ≥ expected under exclusive lock. A flat counter is not paper-out.
+- If the USB baseline cannot be read, the job is `unknown` with detail `usb_baseline_unavailable`.
 - Do **not** verify from spooler job gone/idle, `directPrintPdf` ok, or status back to idle alone.
 - Spooler `EnumJobs` fields are correlation-only.
+- Tray 1 out of paper is USB status `41236`.
 
 ```powershell
 flutter run -d windows
@@ -82,11 +46,11 @@ flutter run -d windows
 
 Run only after a Windows rebuild against a live HL-L3280CDW; do not claim these passed from unit tests alone.
 
-1. Rebuild/restart the Windows kiosk with SNMP dart-defines above.
+1. Restart the Windows kiosk so the native printer plugin rebuilds.
 2. Quick Print a **1-page** PDF.
 3. UI should show “Confirming print…” then success (no `completed requires reconcileStatus=verified` error).
 4. Admin/API print job: `status=completed`, `reconcileStatus=verified`, `pagesReported >= 1`.
-5. Optional: pull paper mid-job — expect paper-out messaging (`errorFlagsHex` `40`/`42`) and `needsAdminReview` when partial/uncertain.
+5. Optional: pull paper mid-job — expect paper-out from USB status `41236` and printing paused.
 
 ## Surveillance (Windows)
 
