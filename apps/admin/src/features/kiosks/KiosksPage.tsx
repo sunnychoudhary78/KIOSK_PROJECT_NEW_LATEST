@@ -90,26 +90,24 @@ function PrinterSummaryCell({
   onDetails: () => void;
 }) {
   const summary = resolvePrinterRowSummary(device.printerHealth);
+  const pagesLeft = device.pagesLeft == null ? '—' : String(device.pagesLeft);
   return (
-    <div className="flex items-center gap-2 whitespace-nowrap text-sm">
+    <div className="flex flex-wrap items-center gap-2 text-sm">
       <span className={PRINTER_ROW_TONE[summary.tone]}>{summary.label}</span>
-      <Button type="button" variant="secondary" onClick={onDetails}>
+      <span className="text-muted-foreground">Pages left {pagesLeft}</span>
+      <Button type="button" variant="secondary" className="h-8 px-2" onClick={onDetails}>
         Details
       </Button>
     </div>
   );
 }
 
-function PrinterMetricList({ rows }: { rows: { label: string; value: string }[] }) {
+function MetricTile({ label, value }: { label: string; value: string }) {
   return (
-    <dl className="grid grid-cols-[9rem_1fr] gap-y-1 text-sm">
-      {rows.map((row) => (
-        <div key={row.label} className="contents">
-          <dt className="text-muted-foreground">{row.label}</dt>
-          <dd>{row.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-sm font-medium">{value}</p>
+    </div>
   );
 }
 
@@ -153,74 +151,83 @@ function PrinterDetailsBody({
       ? 'font-medium text-emerald-700'
       : 'text-muted-foreground';
 
+  const pagesReady = maintenance.status !== 'unavailable';
+  const pagesLeftLabel = pagesLeft == null ? '—' : String(pagesLeft);
+  const trayBlocked = traySaving || usbPagesTotal(health) == null;
+
   return (
-    <div className="stack">
-      {stale ? (
-        <p className="font-medium text-amber-700" title={staleTitle}>
-          Stale
-        </p>
-      ) : null}
-      <section className="stack">
-        <h3 className="text-sm font-medium">Status</h3>
-        <p className={`text-sm ${statusClass}`}>{printerStatus.label}</p>
-      </section>
-      <section className="stack">
-        <h3 className="text-sm font-medium">Toner</h3>
+    <div className="flex flex-col gap-4 pr-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">Status</span>
+        <span className={`text-sm ${statusClass}`}>{printerStatus.label}</span>
+        {stale ? (
+          <span className="text-sm font-medium text-amber-700" title={staleTitle}>
+            Stale
+          </span>
+        ) : null}
+      </div>
+
+      <section className="rounded-xl border border-border p-3">
+        <h3 className="mb-2 text-sm font-medium">Toner</h3>
         {maintenance.status === 'unavailable' ? (
           <p className="text-sm text-muted-foreground">Unavailable</p>
         ) : (
-          <PrinterMetricList
-            rows={[
-              { label: 'Black', value: maintenance.toner.black },
-              { label: 'Cyan', value: maintenance.toner.cyan },
-              { label: 'Magenta', value: maintenance.toner.magenta },
-              { label: 'Yellow', value: maintenance.toner.yellow },
-            ]}
-          />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <MetricTile label="Black" value={maintenance.toner.black} />
+            <MetricTile label="Cyan" value={maintenance.toner.cyan} />
+            <MetricTile label="Magenta" value={maintenance.toner.magenta} />
+            <MetricTile label="Yellow" value={maintenance.toner.yellow} />
+          </div>
         )}
       </section>
-      <section className="stack">
-        <h3 className="text-sm font-medium">Pages</h3>
-        {maintenance.status === 'unavailable' ? (
-          <p className="text-sm text-muted-foreground">Unavailable</p>
-        ) : (
-          <PrinterMetricList
-            rows={[
-              { label: 'Total', value: maintenance.pages.total },
-              { label: 'Color', value: maintenance.pages.color },
-              { label: 'Black and white', value: maintenance.pages.blackAndWhite },
-              { label: 'Pages left', value: pagesLeft == null ? '—' : String(pagesLeft) },
-            ]}
-          />
-        )}
-        {maintenance.status === 'unavailable' ? (
-          <p className="text-sm">
-            Pages left <span className="text-muted-foreground">{pagesLeft == null ? '—' : pagesLeft}</span>
+
+      <section className="rounded-xl border border-border p-3">
+        <h3 className="mb-2 text-sm font-medium">Pages</h3>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-muted/40 px-3 py-3">
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {pagesReady ? maintenance.pages.total : '—'}
+            </p>
+          </div>
+          <div className="rounded-lg bg-muted/40 px-3 py-3">
+            <p className="text-xs text-muted-foreground">Pages left</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">{pagesLeftLabel}</p>
+          </div>
+        </div>
+        {pagesReady ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Color {maintenance.pages.color} · Black and white {maintenance.pages.blackAndWhite}
           </p>
         ) : null}
+
         {canEditTray ? (
-          <div className="stack">
+          <div className="mt-3 rounded-lg border border-border p-3">
+            <p className="mb-2 text-sm text-muted-foreground">
+              Add keeps the leftover. Replace starts the tray over.
+            </p>
             <Input
               type="number"
               min={1}
               max={2000}
               inputMode="numeric"
               placeholder="Pages to load"
+              aria-label="Pages to load"
               value={trayInput}
               disabled={traySaving}
               onChange={(event) => onTrayInput(event.target.value)}
             />
             {usbPagesTotal(health) == null ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-2 text-sm text-muted-foreground">
                 The printer page total is not available yet.
               </p>
             ) : null}
-            {trayError ? <p className="error">{trayError}</p> : null}
-            <div className="flex flex-wrap gap-2">
+            {trayError ? <p className="error mt-2">{trayError}</p> : null}
+            <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="secondary"
-                disabled={traySaving || usbPagesTotal(health) == null}
+                disabled={trayBlocked}
                 onClick={() => onSaveTray('add')}
               >
                 Add to current
@@ -228,7 +235,7 @@ function PrinterDetailsBody({
               <Button
                 type="button"
                 variant="secondary"
-                disabled={traySaving || usbPagesTotal(health) == null}
+                disabled={trayBlocked}
                 onClick={() => onSaveTray('replace')}
               >
                 Replace tray
@@ -237,27 +244,23 @@ function PrinterDetailsBody({
           </div>
         ) : null}
       </section>
-      <section className="stack">
-        <h3 className="text-sm font-medium">Parts</h3>
+
+      <section className="rounded-xl border border-border bg-muted/20 p-3">
+        <h3 className="mb-2 text-sm font-medium text-muted-foreground">Parts</h3>
         {maintenance.status === 'unavailable' ? (
           <p className="text-sm text-muted-foreground">Unavailable</p>
         ) : (
-          <PrinterMetricList
-            rows={[
-              { label: 'Belt', value: maintenance.parts.belt },
-              { label: 'Fuser', value: maintenance.parts.fuser },
-            ]}
-          />
+          <p className="text-sm">
+            Belt {maintenance.parts.belt} · Fuser {maintenance.parts.fuser}
+          </p>
         )}
-      </section>
-      <section className="stack">
-        <h3 className="text-sm font-medium">Errors</h3>
+        <h3 className="mb-2 mt-3 text-sm font-medium text-muted-foreground">Errors</h3>
         {errors.status === 'unavailable' ? (
           <p className="text-sm text-muted-foreground">Unavailable</p>
         ) : errors.status === 'empty' || errors.entries.length === 0 ? (
           <p className="text-sm text-muted-foreground">No recorded errors</p>
         ) : (
-          <ul className="text-sm">
+          <ul className="space-y-1 text-sm">
             {errors.entries.map((entry) => (
               <li key={entry.index}>{entry.description}</li>
             ))}
@@ -747,7 +750,7 @@ export function KiosksPage() {
                 <th>Last heartbeat</th>
                 <th>Printer</th>
                 <th>Recording</th>
-                <th className="sticky right-0 z-20 w-52 border-l border-border bg-card">
+                <th className="sticky right-0 z-20 min-w-64 border-l border-border bg-card">
                   Actions
                 </th>
               </tr>
@@ -762,7 +765,9 @@ export function KiosksPage() {
                     <StatusBadge status={device.status} />
                   </td>
                   <td>
-                    <code className="break-all">{device.deviceKey}</code>
+                    <code className="block max-w-[10rem] truncate" title={device.deviceKey}>
+                      {device.deviceKey}
+                    </code>
                   </td>
                   <td className="text-muted-foreground">
                     {device.lastHeartbeatAt
@@ -783,13 +788,14 @@ export function KiosksPage() {
                   <td>
                     <RecordingStatusCell device={device} />
                   </td>
-                  <td className="sticky right-0 z-10 w-52 border-l border-border bg-card align-top">
-                    <div className="flex w-full flex-col gap-2">
+                  <td className="sticky right-0 z-10 min-w-64 border-l border-border bg-card align-middle">
+                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {device.status === 'inactive' ? (
                         <Button
                           type="button"
                           variant="secondary"
-                          className="w-full"
+                          className="h-8 px-2"
                           disabled={submitting}
                           onClick={() => void onSetStatus(device, 'active')}
                         >
@@ -799,7 +805,7 @@ export function KiosksPage() {
                         <Button
                           type="button"
                           variant="danger"
-                          className="w-full"
+                          className="h-8 px-2"
                           disabled={submitting}
                           onClick={() => void onSetStatus(device, 'inactive')}
                         >
@@ -809,7 +815,7 @@ export function KiosksPage() {
                       <Button
                         type="button"
                         variant="secondary"
-                        className="w-full"
+                        className="h-8 px-2"
                         disabled={submitting}
                         onClick={() => openSettings(device)}
                       >
@@ -818,8 +824,30 @@ export function KiosksPage() {
                           Settings
                         </span>
                       </Button>
+                      {device.surveillanceEnabled ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 px-2"
+                          disabled={submitting || device.status === 'inactive'}
+                          onClick={() => void onSetSurveillance(device, false)}
+                        >
+                          Stop surveillance
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 px-2"
+                          disabled={submitting || device.status === 'inactive'}
+                          onClick={() => void onSetSurveillance(device, true)}
+                        >
+                          Start surveillance
+                        </Button>
+                      )}
+                    </div>
                       {device.printingPausedReason ? (
-                        <>
+                        <div>
                           <p className="text-sm font-medium text-red-700">Printing paused</p>
                           {latestReportPaperOut(device.printerHealth) ? (
                             <p className="text-xs text-muted-foreground">
@@ -834,36 +862,15 @@ export function KiosksPage() {
                             <Button
                               type="button"
                               variant="secondary"
-                              className="w-full"
+                              className="h-8 px-2"
                               disabled={submitting}
                               onClick={() => void onEnablePrinting(device)}
                             >
                               Enable printing
                             </Button>
                           ) : null}
-                        </>
+                        </div>
                       ) : null}
-                      {device.surveillanceEnabled ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="w-full"
-                          disabled={submitting || device.status === 'inactive'}
-                          onClick={() => void onSetSurveillance(device, false)}
-                        >
-                          Stop surveillance
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="w-full"
-                          disabled={submitting || device.status === 'inactive'}
-                          onClick={() => void onSetSurveillance(device, true)}
-                        >
-                          Start surveillance
-                        </Button>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -1101,6 +1108,7 @@ export function KiosksPage() {
       <Modal
         open={printerDevice != null}
         title={printerDevice ? `Printer · ${printerDevice.name}` : 'Printer'}
+        className="max-w-2xl"
         onClose={closePrinterDetails}
         footer={
           <>

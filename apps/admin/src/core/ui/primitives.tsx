@@ -164,21 +164,28 @@ export function Modal({
   onClose,
   children,
   footer,
+  className,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  className?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent
+        className={cn(
+          'flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden',
+          className,
+        )}
+      >
+        <DialogHeader className="shrink-0 pr-6">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div>{children}</div>
-        {footer ? <DialogFooter>{footer}</DialogFooter> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {footer ? <DialogFooter className="shrink-0">{footer}</DialogFooter> : null}
       </DialogContent>
     </Dialog>
   );
