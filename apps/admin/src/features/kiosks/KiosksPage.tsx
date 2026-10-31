@@ -92,7 +92,7 @@ function PrinterSummaryCell({
   const summary = resolvePrinterRowSummary(device.printerHealth);
   const pagesLeft = device.pagesLeft == null ? '—' : String(device.pagesLeft);
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
+    <div className="flex items-center gap-3 whitespace-nowrap text-sm">
       <span className={PRINTER_ROW_TONE[summary.tone]}>{summary.label}</span>
       <span className="text-muted-foreground">Pages left {pagesLeft}</span>
       <Button type="button" variant="secondary" className="h-8 px-2" onClick={onDetails}>
@@ -739,7 +739,7 @@ export function KiosksPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-          <table className="table border-separate border-spacing-0">
+          <table className="table w-max min-w-full border-separate border-spacing-0 [&_th]:whitespace-nowrap">
             <thead>
               <tr>
                 <th>Name</th>
@@ -750,18 +750,22 @@ export function KiosksPage() {
                 <th>Last heartbeat</th>
                 <th>Printer</th>
                 <th>Recording</th>
-                <th className="sticky right-0 z-20 min-w-64 border-l border-border bg-card">
-                  Actions
-                </th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((device) => (
+              {items.map((device) => {
+                const location = formatLocation(device);
+                return (
                 <tr key={device.id}>
-                  <td className="font-medium">{device.name}</td>
-                  <td>{device.siteName}</td>
-                  <td>{formatLocation(device)}</td>
-                  <td>
+                  <td className="whitespace-nowrap font-medium">{device.name}</td>
+                  <td className="whitespace-nowrap">{device.siteName}</td>
+                  <td className="max-w-[12rem]">
+                    <span className="block truncate" title={location}>
+                      {location}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap">
                     <StatusBadge status={device.status} />
                   </td>
                   <td>
@@ -769,7 +773,7 @@ export function KiosksPage() {
                       {device.deviceKey}
                     </code>
                   </td>
-                  <td className="text-muted-foreground">
+                  <td className="whitespace-nowrap text-muted-foreground">
                     {device.lastHeartbeatAt
                       ? new Date(device.lastHeartbeatAt).toLocaleString()
                       : '—'}
@@ -785,12 +789,12 @@ export function KiosksPage() {
                       }}
                     />
                   </td>
-                  <td>
+                  <td className="whitespace-nowrap">
                     <RecordingStatusCell device={device} />
                   </td>
-                  <td className="sticky right-0 z-10 min-w-64 border-l border-border bg-card align-middle">
+                  <td>
                     <div className="flex flex-col gap-2">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-nowrap gap-2">
                       {device.status === 'inactive' ? (
                         <Button
                           type="button"
@@ -874,7 +878,8 @@ export function KiosksPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           </div>
