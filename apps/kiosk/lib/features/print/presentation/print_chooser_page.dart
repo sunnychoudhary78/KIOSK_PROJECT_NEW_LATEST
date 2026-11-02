@@ -36,7 +36,7 @@ class PrintChooserPage extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Use your phone here, enter an OTP, or print from DigiLocker.',
+                'Scan a QR, enter an OTP, or print from DigiLocker.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
               ),
               const SizedBox(height: 24),
@@ -53,7 +53,7 @@ class PrintChooserPage extends ConsumerWidget {
                           height: tileH,
                           child: KioskServiceTile(
                             icon: Icons.qr_code_2_outlined,
-                            title: 'Print from this phone',
+                            title: 'Print from QR',
                             subtitle: 'Scan a QR and upload in the browser',
                             onTap: () => Navigator.of(context).pushNamed(AppRoutes.quickPrint),
                           ),

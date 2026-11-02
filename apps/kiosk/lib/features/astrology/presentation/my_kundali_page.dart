@@ -12,6 +12,7 @@ import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart'
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
@@ -236,6 +237,8 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
                   error: state.error,
                   title: 'Birth details',
                   subtitle: 'Accurate birth time · pick chart style',
+                  accent: AstrologyColors.kundali,
+                  emblem: AstrologyReadingKind.kundali,
                   onFocus: (value) => setState(() {
                     _focus = value;
                     _clampStepperColumn();
@@ -251,6 +254,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
                       setState(() => _placeCoords = value),
                   footer: AstrologyStyleSegment(
                     style: _style,
+                    accent: AstrologyColors.kundali,
                     onStyle: (value) => setState(() => _style = value),
                   ),
                 ),
@@ -258,6 +262,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
             ),
             KundaliPhase.loading => const AstrologyCastingView(
               key: ValueKey('kundali-loading'),
+              accent: AstrologyColors.kundali,
               lines: [
                 'Drawing your kundali…',
                 'Mapping houses & signs…',
@@ -270,6 +275,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
             ),
             KundaliPhase.result => const AstrologyCastingView(
               key: ValueKey('kundali-result-empty'),
+              accent: AstrologyColors.kundali,
               lines: ['Preparing your chart…'],
             ),
           },
@@ -400,46 +406,52 @@ class _KundaliResultViewState extends State<KundaliResultView>
                         Expanded(
                           child: GlassPanel(
                             key: const ValueKey('kundali-chart-stage'),
-                            padding: const EdgeInsets.all(6),
-                            borderColor: AstrologyColors.gold.withValues(
-                              alpha: 0.55,
+                            padding: const EdgeInsets.all(10),
+                            borderColor: AstrologyColors.kundali.withValues(
+                              alpha: 0.75,
                             ),
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: AstrologyColors.gold.withValues(
-                                    alpha: 0.35,
-                                  ),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
+                            child: CustomPaint(
+                              foregroundPainter: const _ManuscriptCorners(),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
                                     color: AstrologyColors.gold.withValues(
-                                      alpha: 0.12,
+                                      alpha: 0.35,
                                     ),
-                                    blurRadius: 18,
                                   ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 220),
-                                    switchInCurve: Curves.easeOut,
-                                    switchOutCurve: Curves.easeIn,
-                                    child: SvgPicture.string(
-                                      selectedSvg,
-                                      key: ValueKey(
-                                        'kundali-chart-$_selectedTab',
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AstrologyColors.gold.withValues(
+                                        alpha: 0.12,
                                       ),
-                                      fit: BoxFit.contain,
-                                      placeholderBuilder: (_) => const Center(
-                                        child: CircularProgressIndicator(
-                                          color: AstrologyColors.gold,
+                                      blurRadius: 18,
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 220,
+                                      ),
+                                      switchInCurve: Curves.easeOut,
+                                      switchOutCurve: Curves.easeIn,
+                                      child: SvgPicture.string(
+                                        selectedSvg,
+                                        key: ValueKey(
+                                          'kundali-chart-$_selectedTab',
                                         ),
+                                        fit: BoxFit.contain,
+                                        placeholderBuilder: (_) =>
+                                            const Center(
+                                              child: CircularProgressIndicator(
+                                                color: AstrologyColors.gold,
+                                              ),
+                                            ),
                                       ),
                                     ),
                                   ),
@@ -669,31 +681,40 @@ class _KundaliSummaryTile extends StatelessWidget {
     final theme = Theme.of(context);
     return GlassPanel(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      borderColor: AstrologyColors.kundali.withValues(alpha: 0.4),
       child: Row(
         children: [
-          if (tile.art != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: AstrologyAssetImage(
-                asset: tile.art!,
-                width: 44,
-                height: 44,
-              ),
-            )
-          else
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AstrologyColors.raised,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.auto_awesome,
-                color: AstrologyColors.gold,
-                size: 22,
-              ),
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AstrologyColors.kundali, width: 1.6),
+              boxShadow: [
+                BoxShadow(
+                  color: AstrologyColors.gold.withValues(alpha: 0.28),
+                  blurRadius: 10,
+                ),
+              ],
             ),
+            child: ClipOval(
+              child: tile.art != null
+                  ? AstrologyAssetImage(
+                      asset: tile.art!,
+                      width: 46,
+                      height: 46,
+                      fit: BoxFit.cover,
+                    )
+                  : const ColoredBox(
+                      color: AstrologyColors.raised,
+                      child: Icon(
+                        Icons.auto_awesome,
+                        color: AstrologyColors.gold,
+                        size: 22,
+                      ),
+                    ),
+            ),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -723,4 +744,31 @@ class _KundaliSummaryTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ManuscriptCorners extends CustomPainter {
+  const _ManuscriptCorners();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AstrologyColors.gold
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    const length = 18.0;
+    const inset = 4.0;
+    void corner(Offset origin, double xSign, double ySign) {
+      canvas.drawLine(origin, origin + Offset(xSign * length, 0), paint);
+      canvas.drawLine(origin, origin + Offset(0, ySign * length), paint);
+    }
+
+    corner(const Offset(inset, inset), 1, 1);
+    corner(Offset(size.width - inset, inset), -1, 1);
+    corner(Offset(inset, size.height - inset), 1, -1);
+    corner(Offset(size.width - inset, size.height - inset), -1, -1);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ManuscriptCorners oldDelegate) => false;
 }

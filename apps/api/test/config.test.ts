@@ -30,6 +30,7 @@ describe('loadConfig', () => {
 
     expect(config.port).toBe(4000);
     expect(config.auth.accessTtlSeconds).toBe(1800);
+    expect(config.auth.adminRefreshTtlSeconds).toBe(43_200);
     expect(config.otp.length).toBe(6);
     expect(config.msg91).toEqual({
       authKey: 'test-key',

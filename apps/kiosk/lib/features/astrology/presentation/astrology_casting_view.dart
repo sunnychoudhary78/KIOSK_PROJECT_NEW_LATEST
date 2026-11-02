@@ -9,10 +9,15 @@ import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.da
 
 /// Casting wait: ads behind a glass “chart casting” overlay (keeps session hold).
 class AstrologyCastingView extends StatefulWidget {
-  const AstrologyCastingView({super.key, this.lines});
+  const AstrologyCastingView({
+    super.key,
+    this.lines,
+    this.accent = AstrologyColors.gold,
+  });
 
   /// Rotating status lines. Defaults to the palm-reading copy.
   final List<String>? lines;
+  final Color accent;
 
   @override
   State<AstrologyCastingView> createState() => _AstrologyCastingViewState();
@@ -74,6 +79,7 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
             constraints: const BoxConstraints(maxWidth: 520),
             child: GlassPanel(
               padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
+              borderColor: widget.accent.withValues(alpha: 0.55),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -84,7 +90,10 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
                       animation: _orbit,
                       builder: (context, _) {
                         return CustomPaint(
-                          painter: _OrbitPainter(t: _orbit.value),
+                          painter: _OrbitPainter(
+                            t: _orbit.value,
+                            color: widget.accent,
+                          ),
                           child: Center(
                             child: Container(
                               width: 88,
@@ -92,12 +101,12 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: AstrologyColors.gold.withValues(alpha: 0.55),
+                                  color: widget.accent.withValues(alpha: 0.7),
                                   width: 1.5,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AstrologyColors.gold.withValues(alpha: 0.25),
+                                    color: widget.accent.withValues(alpha: 0.28),
                                     blurRadius: 18,
                                   ),
                                 ],
@@ -118,7 +127,7 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
                   Text(
                     'CASTING YOUR CHART',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AstrologyColors.gold,
+                          color: widget.accent,
                           letterSpacing: 2.2,
                           fontWeight: FontWeight.w700,
                         ),
@@ -157,16 +166,17 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
 }
 
 class _OrbitPainter extends CustomPainter {
-  const _OrbitPainter({required this.t});
+  const _OrbitPainter({required this.t, required this.color});
 
   final double t;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
     final radius = size.shortestSide * 0.42;
     final ring = Paint()
-      ..color = AstrologyColors.gold.withValues(alpha: 0.22)
+      ..color = color.withValues(alpha: 0.28)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     canvas.drawCircle(center, radius, ring);
@@ -178,11 +188,12 @@ class _OrbitPainter extends CustomPainter {
         center.dx + math.cos(angle) * radius,
         center.dy + math.sin(angle) * radius,
       );
-      paint.color = AstrologyColors.gold.withValues(alpha: 0.35 + (i % 3) * 0.2);
+      paint.color = color.withValues(alpha: 0.4 + (i % 3) * 0.18);
       canvas.drawCircle(p, i.isEven ? 4.2 : 2.8, paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _OrbitPainter oldDelegate) => oldDelegate.t != t;
+  bool shouldRepaint(covariant _OrbitPainter oldDelegate) =>
+      oldDelegate.t != t || oldDelegate.color != color;
 }

@@ -6,7 +6,7 @@ import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { SmsClient } from '../../infrastructure/external/sms.client.js';
 import { AppError } from '../../shared/errors.js';
-import { signAccessToken } from '../../shared/auth.js';
+import { signAccessToken, signAdminRefreshToken, verifyAdminRefreshToken } from '../../shared/auth.js';
 import {
   generateNumericOtp,
   hashOtp,
@@ -17,6 +17,7 @@ import type { AuditService } from '../audit/audit.service.js';
 import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
 import type {
   AdminLoginInput,
+  AdminRefreshInput,
   CitizenOtpRequestInput,
   CitizenOtpVerifyInput,
   DeviceTokenInput,
@@ -252,13 +253,6 @@ export class IdentityService {
       throw new AppError('invalid_credentials', 'Invalid email or password', 401);
     }
 
-    const token = signAccessToken(this.config, {
-      type: 'admin',
-      id: user.id,
-      role: user.role,
-      tenantId: user.tenantId ?? undefined,
-    });
-
     await this.audit.record({
       action: 'auth.admin_login',
       principalType: 'admin',
@@ -266,10 +260,41 @@ export class IdentityService {
       correlationId,
     });
 
+    return this.issueAdminSession(user);
+  }
+
+  async adminRefresh(input: AdminRefreshInput) {
+    let userId: string;
+    try {
+      userId = verifyAdminRefreshToken(this.config, input.refreshToken).sub;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('unauthorized', 'Invalid or expired token', 401);
+    }
+
+    const user = await this.db.user.findUnique({ where: { id: userId } });
+    const adminRoles: UserRole[] = [UserRole.admin, UserRole.operator, UserRole.viewer];
+    if (!user || !adminRoles.includes(user.role) || !user.isActive) {
+      throw new AppError('unauthorized', 'Invalid or expired token', 401);
+    }
+
+    return this.issueAdminSession(user);
+  }
+
+  private issueAdminSession(user: { id: string; role: UserRole; tenantId: string | null }) {
+    const principal = {
+      type: 'admin' as const,
+      id: user.id,
+      role: user.role,
+      tenantId: user.tenantId ?? undefined,
+    };
+    const access = signAccessToken(this.config, principal);
+    const refresh = signAdminRefreshToken(this.config, principal);
     return {
-      accessToken: token.accessToken,
+      accessToken: access.accessToken,
+      refreshToken: refresh.refreshToken,
       tokenType: 'Bearer' as const,
-      expiresIn: token.expiresIn,
+      expiresIn: access.expiresIn,
       principalType: 'admin' as const,
     };
   }

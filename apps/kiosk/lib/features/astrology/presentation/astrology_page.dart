@@ -21,6 +21,7 @@ import 'package:skp_kiosk/features/astrology/presentation/astrology_result_view.
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/palm_overlay.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/palm_seal_ring.dart';
@@ -472,6 +473,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
               ),
             AstrologyPhase.submitting => const AstrologyCastingView(
                 key: ValueKey('submitting'),
+                accent: AstrologyColors.palm,
               ),
             AstrologyPhase.result when state.reading != null => AstrologyResultView(
                 key: const ValueKey('result'),
@@ -479,6 +481,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
               ),
             AstrologyPhase.result => const AstrologyCastingView(
                 key: ValueKey('result-empty'),
+                accent: AstrologyColors.palm,
               ),
           },
         ),
@@ -592,7 +595,7 @@ class _CaptureViewState extends State<_CaptureView>
                 'Open your palm to the stars',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall?.copyWith(
-                  color: AstrologyColors.gold,
+                  color: AstrologyColors.palm,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -620,14 +623,14 @@ class _CaptureViewState extends State<_CaptureView>
                               borderRadius:
                                   BorderRadius.circular(SkpTokens.radiusLg),
                               border: Border.all(
-                                color: AstrologyColors.gold.withValues(
-                                  alpha: ok ? 0.55 : 0.28,
+                                color: AstrologyColors.palm.withValues(
+                                  alpha: ok ? 0.7 : 0.35,
                                 ),
                               ),
                               boxShadow: ok
                                   ? [
                                       BoxShadow(
-                                        color: AstrologyColors.gold
+                                        color: AstrologyColors.palm
                                             .withValues(alpha: glow * 0.45),
                                         blurRadius: 18 + (_pulse.value * 10),
                                         spreadRadius: 1,
@@ -664,7 +667,7 @@ class _CaptureViewState extends State<_CaptureView>
                           : !widget.cameraReady || widget.camera == null
                               ? const Center(
                                   child: CircularProgressIndicator(
-                                    color: AstrologyColors.gold,
+                                    color: AstrologyColors.palm,
                                   ),
                                 )
                               : Center(
@@ -728,7 +731,7 @@ class _RitualSteps extends StatelessWidget {
                 height: 1,
                 margin: const EdgeInsets.symmetric(horizontal: 6),
                 color: i <= activeIndex
-                    ? AstrologyColors.gold.withValues(alpha: 0.55)
+                    ? AstrologyColors.palm.withValues(alpha: 0.7)
                     : AstrologyColors.line,
               ),
             ),
@@ -763,12 +766,12 @@ class _RitualChip extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
       decoration: BoxDecoration(
         color: active
-            ? AstrologyColors.gold.withValues(alpha: current ? 0.22 : 0.12)
+            ? AstrologyColors.palm.withValues(alpha: current ? 0.28 : 0.14)
             : AstrologyColors.raised,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
           color: active
-              ? AstrologyColors.gold.withValues(alpha: 0.65)
+              ? AstrologyColors.palm.withValues(alpha: 0.75)
               : AstrologyColors.line,
         ),
       ),
@@ -787,7 +790,7 @@ class _RitualChip extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: active ? AstrologyColors.gold : AstrologyColors.muted,
+                  color: active ? AstrologyColors.palm : AstrologyColors.muted,
                   letterSpacing: 1.1,
                   fontWeight: FontWeight.w700,
                 ),
@@ -833,13 +836,13 @@ class _QualityBanner extends StatelessWidget {
     return GlassPanel(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       borderColor: ok
-          ? AstrologyColors.gold.withValues(alpha: 0.65)
+          ? AstrologyColors.palm.withValues(alpha: 0.7)
           : AstrologyColors.line,
       child: Row(
         children: [
           Icon(
             ok ? Icons.auto_awesome : Icons.back_hand_outlined,
-            color: AstrologyColors.gold,
+            color: AstrologyColors.palm,
             size: 26,
           ),
           const SizedBox(width: 12),
@@ -925,17 +928,17 @@ class _FormView extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: AstrologyColors.gold.withValues(alpha: 0.16),
+                        color: AstrologyColors.palm.withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: AstrologyColors.gold.withValues(alpha: 0.55),
+                          color: AstrologyColors.palm.withValues(alpha: 0.7),
                         ),
                       ),
                       child: Text(
                         'PALM LOCKED',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.labelMedium?.copyWith(
-                          color: AstrologyColors.gold,
+                          color: AstrologyColors.palm,
                           letterSpacing: 1.2,
                           fontWeight: FontWeight.w700,
                         ),
@@ -990,6 +993,8 @@ class _FormView extends StatelessWidget {
           focus: focus,
           error: error,
           leading: leading,
+          accent: AstrologyColors.palm,
+          emblem: AstrologyReadingKind.palm,
           onFocus: onFocus,
           onDob: onDob,
           onTime: onTime,

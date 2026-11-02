@@ -11,6 +11,7 @@ class KioskServiceTile extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     this.tone = KioskServiceTileTone.standard,
+    this.accent,
   });
 
   final IconData icon;
@@ -18,17 +19,27 @@ class KioskServiceTile extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
   final KioskServiceTileTone tone;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cosmic = tone == KioskServiceTileTone.cosmic;
+    final tint = cosmic ? null : accent;
     final titleColor = cosmic ? const Color(0xFFF4F0E6) : SkpColors.text;
     final subtitleColor = cosmic ? const Color(0xFFA8B0BC) : SkpColors.muted;
-    final iconColor = cosmic ? SkpColors.gold : SkpColors.accent;
+    final iconColor = cosmic ? SkpColors.gold : (tint ?? SkpColors.accent);
     final chipBg = cosmic
         ? SkpColors.gold.withValues(alpha: 0.16)
-        : SkpColors.accent.withValues(alpha: 0.12);
+        : (tint ?? SkpColors.accent).withValues(alpha: tint == null ? 0.12 : 0.20);
+    final cardColor = tint == null
+        ? SkpColors.panel
+        : Color.alphaBlend(tint.withValues(alpha: 0.10), SkpColors.panel);
+    final borderColor = cosmic
+        ? SkpColors.gold.withValues(alpha: 0.45)
+        : tint == null
+            ? SkpColors.line
+            : tint.withValues(alpha: 0.35);
 
     return Material(
       color: Colors.transparent,
@@ -52,9 +63,9 @@ class KioskServiceTile extends StatelessWidget {
                     ],
                   )
                 : null,
-            color: cosmic ? null : SkpColors.panel,
+            color: cosmic ? null : cardColor,
             border: Border.all(
-              color: cosmic ? SkpColors.gold.withValues(alpha: 0.45) : SkpColors.line,
+              color: borderColor,
               width: SkpTokens.hairline,
             ),
             boxShadow: [

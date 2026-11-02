@@ -8,6 +8,7 @@ import 'package:skp_kiosk/features/astrology/application/astrology_controller.da
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 
 /// Shared birth-detail fields for palm and kundali flows.
 class AstrologyBirthFormPanel extends ConsumerStatefulWidget {
@@ -34,6 +35,8 @@ class AstrologyBirthFormPanel extends ConsumerStatefulWidget {
     this.leading,
     this.footer,
     this.showGender = true,
+    this.accent = AstrologyColors.gold,
+    this.emblem,
   });
 
   final TextEditingController nameController;
@@ -57,6 +60,8 @@ class AstrologyBirthFormPanel extends ConsumerStatefulWidget {
   final Widget? leading;
   final Widget? footer;
   final bool showGender;
+  final Color accent;
+  final AstrologyReadingKind? emblem;
 
   @override
   ConsumerState<AstrologyBirthFormPanel> createState() =>
@@ -208,6 +213,8 @@ class _AstrologyBirthFormPanelState
     final leading = widget.leading;
     final footer = widget.footer;
     final showGender = widget.showGender;
+    final accent = widget.accent;
+    final emblem = widget.emblem;
     // Keep intrinsic heights under the 720p form budget (keyboard is fixed).
     final leftColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -217,6 +224,7 @@ class _AstrologyBirthFormPanelState
           hint: 'Your name',
           value: nameController.text,
           focused: focus == 0,
+          accent: accent,
           onTap: () => onFocus(0),
         ),
         const SizedBox(height: 8),
@@ -225,6 +233,7 @@ class _AstrologyBirthFormPanelState
           hint: 'City, State',
           value: placeController.text,
           focused: focus == 1,
+          accent: accent,
           onTap: () => onFocus(1),
         ),
         if (footer != null) ...[const SizedBox(height: 8), footer],
@@ -237,7 +246,11 @@ class _AstrologyBirthFormPanelState
         if (showGender) ...[
           Semantics(
             label: 'Gender',
-            child: AstrologyGenderSegment(gender: gender, onGender: onGender),
+            child: AstrologyGenderSegment(
+              gender: gender,
+              onGender: onGender,
+              accent: accent,
+            ),
           ),
           const SizedBox(height: 8),
         ],
@@ -245,6 +258,7 @@ class _AstrologyBirthFormPanelState
           label: 'Date of birth',
           value: dob.toIso8601String().split('T').first,
           focused: focus == 2,
+          accent: accent,
           onTap: () => onFocus(2),
         ),
         if (!timeUnknown) ...[
@@ -253,12 +267,14 @@ class _AstrologyBirthFormPanelState
             label: 'Birth time',
             value: timeValue,
             focused: focus == 3,
+            accent: accent,
             onTap: () => onFocus(3),
           ),
         ],
         const SizedBox(height: 8),
         AstrologyUnknownTimeRow(
           selected: timeUnknown,
+          accent: accent,
           onTap: () => onTimeUnknown(!timeUnknown),
         ),
       ],
@@ -267,13 +283,23 @@ class _AstrologyBirthFormPanelState
     final fields = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: AstrologyColors.gold,
-            fontWeight: FontWeight.w700,
-            height: 1.1,
-          ),
+        Row(
+          children: [
+            if (emblem != null) ...[
+              ReadingEmblem(kind: emblem, size: 28, color: accent),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ],
         ),
         if (subtitle.trim().isNotEmpty) ...[
           const SizedBox(height: 2),
@@ -292,7 +318,114 @@ class _AstrologyBirthFormPanelState
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: leftColumn),
+              Expanded(
+                child: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    leftColumn,
+                    if (showSuggestions)
+                      Positioned(
+                        key: const ValueKey('place-suggestions'),
+                        left: 0,
+                        right: 0,
+                        top:
+                            AstrologyCosmicTextField.height +
+                            8 +
+                            AstrologyCosmicTextField.height,
+                        bottom: 0,
+                        child: GlassPanel(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          child: _searchingPlaces && _suggestions.isEmpty
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: _suggestions.length,
+                                  separatorBuilder: (_, _) => Divider(
+                                    height: 1,
+                                    color: AstrologyColors.line.withValues(
+                                      alpha: 0.7,
+                                    ),
+                                  ),
+                                  itemBuilder: (context, index) {
+                                    final suggestion = _suggestions[index];
+                                    return InkWell(
+                                      onTap: () =>
+                                          _selectSuggestion(suggestion),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.place_outlined,
+                                              color: AstrologyColors.gold,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    suggestion.label,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: theme
+                                                        .textTheme
+                                                        .titleSmall
+                                                        ?.copyWith(
+                                                          color:
+                                                              AstrologyColors
+                                                                  .text,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                  ),
+                                                  if (suggestion
+                                                      .subtitle
+                                                      .isNotEmpty)
+                                                    Text(
+                                                      suggestion.subtitle,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            color:
+                                                                AstrologyColors
+                                                                    .muted,
+                                                          ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               const SizedBox(width: 16),
               Expanded(child: rightColumn),
             ],
@@ -352,6 +485,7 @@ class _AstrologyBirthFormPanelState
                 Expanded(
                   child: GlassPanel(
                     padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+                    borderColor: accent.withValues(alpha: 0.5),
                     child: SizedBox.expand(child: fields),
                   ),
                 ),
@@ -359,88 +493,8 @@ class _AstrologyBirthFormPanelState
             ),
           ),
         ),
-        if (showSuggestions)
-          SizedBox(
-            key: const ValueKey('place-suggestions'),
-            height: 78,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(32, 0, 32, 4),
-              child: GlassPanel(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: _searchingPlaces && _suggestions.isEmpty
-                    ? const Center(
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.4),
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: _suggestions.length,
-                        separatorBuilder: (_, _) => Divider(
-                          height: 1,
-                          color: AstrologyColors.line.withValues(alpha: 0.7),
-                        ),
-                        itemBuilder: (context, index) {
-                          final suggestion = _suggestions[index];
-                          return InkWell(
-                            onTap: () => _selectSuggestion(suggestion),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.place_outlined,
-                                    color: AstrologyColors.gold,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          suggestion.label,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.titleSmall
-                                              ?.copyWith(
-                                                color: AstrologyColors.text,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
-                                        if (suggestion.subtitle.isNotEmpty)
-                                          Text(
-                                            suggestion.subtitle,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                                  color: AstrologyColors.muted,
-                                                ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ),
-          ),
         if (showKeyboard)
-          // Keep a usable keyboard; only trim a little when suggestions show.
-          SizedBox(
-            height: showSuggestions ? 148 : 180,
-            child: keyboardTheme,
-          )
+          SizedBox(height: 180, child: keyboardTheme)
         else if (showDate)
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
@@ -470,6 +524,7 @@ class AstrologyCosmicTextField extends StatelessWidget {
     required this.focused,
     required this.onTap,
     this.hint,
+    this.accent = AstrologyColors.gold,
   });
 
   final String label;
@@ -477,6 +532,7 @@ class AstrologyCosmicTextField extends StatelessWidget {
   final bool focused;
   final VoidCallback onTap;
   final String? hint;
+  final Color accent;
 
   static const double height = 50;
 
@@ -494,13 +550,13 @@ class AstrologyCosmicTextField extends StatelessWidget {
           color: AstrologyColors.raised,
           borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
           border: Border.all(
-            color: focused ? AstrologyColors.gold : AstrologyColors.line,
+            color: focused ? accent : AstrologyColors.line,
             width: focused ? 2 : SkpTokens.hairline,
           ),
           boxShadow: focused
               ? [
                   BoxShadow(
-                    color: AstrologyColors.gold.withValues(alpha: 0.22),
+                    color: accent.withValues(alpha: 0.22),
                     blurRadius: 12,
                   ),
                 ]
@@ -516,7 +572,7 @@ class AstrologyCosmicTextField extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: focused ? AstrologyColors.gold : AstrologyColors.muted,
+                color: focused ? accent : AstrologyColors.muted,
                 height: 1.0,
               ),
             ),
@@ -544,10 +600,12 @@ class AstrologyGenderSegment extends StatelessWidget {
     super.key,
     required this.gender,
     required this.onGender,
+    this.accent = AstrologyColors.gold,
   });
 
   final String gender;
   final ValueChanged<String> onGender;
+  final Color accent;
 
   static const double height = 42;
 
@@ -578,7 +636,7 @@ class AstrologyGenderSegment extends StatelessWidget {
                     border: Border(
                       bottom: BorderSide(
                         color: gender == option.$1
-                            ? AstrologyColors.gold
+                            ? accent
                             : Colors.transparent,
                         width: 3,
                       ),
@@ -588,7 +646,7 @@ class AstrologyGenderSegment extends StatelessWidget {
                     option.$2,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: gender == option.$1
-                          ? AstrologyColors.gold
+                          ? accent
                           : AstrologyColors.muted,
                       fontWeight: gender == option.$1
                           ? FontWeight.w700
@@ -610,16 +668,18 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onTap,
+    this.accent = AstrologyColors.gold,
   });
 
   final bool selected;
   final VoidCallback onTap;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: selected
-          ? AstrologyColors.gold.withValues(alpha: 0.14)
+          ? accent.withValues(alpha: 0.14)
           : AstrologyColors.raised,
       borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
       child: InkWell(
@@ -631,7 +691,7 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
             border: Border.all(
-              color: selected ? AstrologyColors.gold : AstrologyColors.line,
+              color: selected ? accent : AstrologyColors.line,
             ),
           ),
           child: Row(
@@ -639,16 +699,14 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
               Icon(
                 selected ? Icons.check_box : Icons.check_box_outline_blank,
                 size: 20,
-                color: selected ? AstrologyColors.gold : AstrologyColors.muted,
+                color: selected ? accent : AstrologyColors.muted,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Birth time unknown',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: selected
-                        ? AstrologyColors.gold
-                        : AstrologyColors.text,
+                    color: selected ? accent : AstrologyColors.text,
                   ),
                 ),
               ),
@@ -665,10 +723,12 @@ class AstrologyStyleSegment extends StatelessWidget {
     super.key,
     required this.style,
     required this.onStyle,
+    this.accent = AstrologyColors.gold,
   });
 
   final String style;
   final ValueChanged<String> onStyle;
+  final Color accent;
 
   static const double height = 42;
 
@@ -697,7 +757,7 @@ class AstrologyStyleSegment extends StatelessWidget {
                       border: Border(
                         bottom: BorderSide(
                           color: style == option.$1
-                              ? AstrologyColors.gold
+                              ? accent
                               : Colors.transparent,
                           width: 3,
                         ),
@@ -707,7 +767,7 @@ class AstrologyStyleSegment extends StatelessWidget {
                       option.$2,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: style == option.$1
-                            ? AstrologyColors.gold
+                            ? accent
                             : AstrologyColors.muted,
                         fontWeight: style == option.$1
                             ? FontWeight.w700

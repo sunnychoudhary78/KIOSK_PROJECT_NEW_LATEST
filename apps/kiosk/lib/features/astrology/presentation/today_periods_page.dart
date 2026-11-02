@@ -10,6 +10,7 @@ import 'package:skp_kiosk/features/astrology/domain/today_periods_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
@@ -232,6 +233,8 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
                   error: state.error,
                   title: 'Birth details',
                   subtitle: 'Panchang for today · current dasha from your chart',
+                  accent: AstrologyColors.today,
+                  emblem: AstrologyReadingKind.today,
                   onFocus: (value) => setState(() {
                     _focus = value;
                     _clampStepperColumn();
@@ -250,6 +253,7 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
             ),
             TodayPeriodsPhase.loading => const AstrologyCastingView(
               key: ValueKey('today-loading'),
+              accent: AstrologyColors.today,
               lines: [
                 'Reading today’s panchang…',
                 'Finding your current dasha…',
@@ -263,6 +267,7 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
               ),
             TodayPeriodsPhase.result => const AstrologyCastingView(
               key: ValueKey('today-result-empty'),
+              accent: AstrologyColors.today,
               lines: ['Preparing periods…'],
             ),
           },
@@ -317,22 +322,41 @@ class TodayPeriodsResultView extends StatelessWidget {
                       child: GlassPanel(
                         key: const ValueKey('today-panchang-card'),
                         padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                        borderColor: AstrologyColors.today.withValues(alpha: 0.45),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text(
-                              'Today’s panchang',
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                color: AstrologyColors.gold,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _asOfLabel(),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: AstrologyColors.muted,
-                              ),
+                            Row(
+                              children: [
+                                const CustomPaint(
+                                  painter: _CrescentPainter(),
+                                  child: SizedBox(width: 36, height: 36),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Today’s panchang',
+                                        style: theme.textTheme.titleLarge
+                                            ?.copyWith(
+                                              color: AstrologyColors.today,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                      Text(
+                                        _asOfLabel(),
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color: AstrologyColors.muted,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 12),
                             Expanded(
@@ -374,22 +398,21 @@ class TodayPeriodsResultView extends StatelessWidget {
                       child: GlassPanel(
                         key: const ValueKey('today-dasha-card'),
                         padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-                        borderColor: AstrologyColors.gold.withValues(
+                        borderColor: AstrologyColors.today.withValues(
                           alpha: 0.55,
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
-                              Icons.auto_graph,
-                              color: AstrologyColors.gold,
-                              size: 42,
+                            const CustomPaint(
+                              painter: _CrescentPainter(),
+                              child: SizedBox(width: 28, height: 28),
                             ),
                             const SizedBox(height: 10),
                             Text(
                               'Current dasha',
                               style: theme.textTheme.titleMedium?.copyWith(
-                                color: AstrologyColors.goldSoft,
+                                color: AstrologyColors.today,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -408,18 +431,12 @@ class TodayPeriodsResultView extends StatelessWidget {
                             ),
                             if (levels.isNotEmpty) ...[
                               const SizedBox(height: 16),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                alignment: WrapAlignment.center,
-                                children: [
-                                  for (var i = 0; i < levels.length; i++)
-                                    _DashaLevelChip(
-                                      label: i == 0 ? 'Maha' : 'Bhukti',
-                                      value: levels[i],
-                                    ),
-                                ],
-                              ),
+                              for (var i = 0; i < levels.length; i++)
+                                _DashaTimelineStep(
+                                  label: i == 0 ? 'Maha' : 'Bhukti',
+                                  value: levels[i],
+                                  last: i == levels.length - 1,
+                                ),
                             ],
                             const SizedBox(height: 18),
                             Text(
@@ -479,7 +496,7 @@ class _PanchangRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: AstrologyColors.goldSoft,
+                color: AstrologyColors.today,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -501,39 +518,95 @@ class _PanchangRow extends StatelessWidget {
   }
 }
 
-class _DashaLevelChip extends StatelessWidget {
-  const _DashaLevelChip({required this.label, required this.value});
+class _DashaTimelineStep extends StatelessWidget {
+  const _DashaTimelineStep({
+    required this.label,
+    required this.value,
+    required this.last,
+  });
 
   final String label;
   final String value;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AstrologyColors.gold.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AstrologyColors.gold.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AstrologyColors.muted,
+          SizedBox(
+            width: 18,
+            child: Column(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AstrologyColors.today,
+                  ),
+                ),
+                if (!last)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: AstrologyColors.today.withValues(alpha: 0.45),
+                    ),
+                  ),
+              ],
             ),
           ),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: AstrologyColors.gold,
-              fontWeight: FontWeight.w800,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: last ? 0 : 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AstrologyColors.muted,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AstrologyColors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _CrescentPainter extends CustomPainter {
+  const _CrescentPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide * 0.38;
+    canvas.saveLayer(
+      Rect.fromCircle(center: center, radius: radius + 1),
+      Paint(),
+    );
+    canvas.drawCircle(center, radius, Paint()..color = AstrologyColors.today);
+    canvas.drawCircle(
+      center.translate(radius * 0.42, -radius * 0.06),
+      radius * 0.76,
+      Paint()..blendMode = BlendMode.dstOut,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _CrescentPainter oldDelegate) => false;
 }

@@ -234,7 +234,7 @@ export function AppShell() {
             </Button>
             <div>
               <p className="text-sm font-semibold">{pageTitle(location.pathname)}</p>
-              <p className="hidden text-xs text-muted-foreground sm:block">Smart Kiosk Platform</p>
+              <p className="hidden text-xs text-muted-foreground sm:block">ATHENA</p>
             </div>
           </div>
 

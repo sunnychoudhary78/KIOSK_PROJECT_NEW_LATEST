@@ -20,7 +20,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Smart Kiosk'), findsOneWidget);
+    expect(find.text('ATHENA'), findsOneWidget);
     expect(find.text('Activate this terminal'), findsOneWidget);
     expect(find.text('Deactivate this device'), findsNothing);
   });

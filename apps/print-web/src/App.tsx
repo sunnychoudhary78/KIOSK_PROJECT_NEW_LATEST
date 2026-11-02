@@ -157,7 +157,7 @@ function AppShell({
   statusTone?: 'ok' | 'danger' | 'spin';
   footer?: ReactNode;
   hero?: boolean;
-  /** Put Smart Kiosk in the body as the hero signal (home). */
+  /** Put ATHENA in the body as the hero signal (home). */
   brandAsHero?: boolean;
   children?: ReactNode;
 }) {
@@ -175,14 +175,14 @@ function AppShell({
       <header className="topbar">
         <div className="brand-lockup">
           <p className="brand-eyebrow">Quick Print</p>
-          {brandAsHero ? null : <p className="brand-wordmark">Smart Kiosk</p>}
+          {brandAsHero ? null : <p className="brand-wordmark">ATHENA</p>}
         </div>
         {step ?? null}
       </header>
       <main className={bodyClass}>
         {status ? <div className={`status-icon ${statusTone ?? ''}`}>{status}</div> : null}
         {brandAsHero ? (
-          <h1 className="display">Smart Kiosk</h1>
+          <h1 className="display">ATHENA</h1>
         ) : hero ? (
           <h1 className="display">{title}</h1>
         ) : (
@@ -362,7 +362,7 @@ function SessionPage() {
           key: order.razorpay_key_id,
           amount: order.payment.amountPaise,
           currency: order.payment.currency,
-          name: 'Smart Kiosk Print',
+          name: 'ATHENA Print',
           description: 'Extra print pages',
           order_id: order.razorpay_order_id!,
           handler: (response) => {
@@ -753,7 +753,7 @@ function HomePage() {
   return (
     <AppShell
       brandAsHero
-      title="Smart Kiosk"
+      title="ATHENA"
       subtitle="Scan the QR on the kiosk to start Quick Print from your phone."
     >
       <div className="hero-mark" aria-hidden="true">

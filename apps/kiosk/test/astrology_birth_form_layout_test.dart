@@ -154,4 +154,79 @@ void main() {
     expect(resolved?.latitude, 26.91);
     expect(resolved?.longitude, 75.78);
   });
+
+  testWidgets(
+    'place suggestions overlay the card with footer and error at 1280x720',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final name = TextEditingController();
+      final place = TextEditingController();
+      addTearDown(name.dispose);
+      addTearDown(place.dispose);
+      ResolvedBirthPlace? resolved;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            astrologyRepositoryProvider.overrideWithValue(
+              _FakePlacesRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            home: KioskShell(
+              title: 'My Kundali',
+              cosmic: true,
+              stepLabel: 'Details',
+              footerLeading: const SizedBox(width: 120, height: 56),
+              footerTrailing: const SizedBox(width: 180, height: 56),
+              body: AstrologyBirthFormPanel(
+                nameController: name,
+                placeController: place,
+                dob: DateTime(1995),
+                birthTime: const TimeOfDay(hour: 12, minute: 0),
+                timeUnknown: false,
+                gender: 'female',
+                focus: 1,
+                error: 'Name and birth place are required',
+                title: 'Birth details',
+                subtitle: 'Accurate birth time · pick chart style',
+                onFocus: (_) {},
+                onDob: (_) {},
+                onTime: (_) {},
+                onTimeUnknown: (_) {},
+                onGender: (_) {},
+                onKey: (_) {},
+                onBackspace: () {},
+                onPlaceResolved: (value) => resolved = value,
+                footer: AstrologyStyleSegment(style: 'north', onStyle: (_) {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      place.text = 'Ja';
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('place-suggestions')), findsOneWidget);
+      expect(find.text('Name and birth place are required'), findsOneWidget);
+      expect(find.text('North Indian'), findsOneWidget);
+
+      await tester.tap(find.text('Jaipur'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(tester.takeException(), isNull);
+      expect(place.text, 'Jaipur, Rajasthan, India');
+      expect(resolved?.latitude, 26.91);
+    },
+  );
 }

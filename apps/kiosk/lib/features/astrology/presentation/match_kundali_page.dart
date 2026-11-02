@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,7 @@ import 'package:skp_kiosk/features/astrology/domain/match_kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
@@ -312,6 +315,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               key: const ValueKey('match-groom'),
               title: 'Groom details',
               subtitle: 'Birth details for Gun Milan',
+              accent: AstrologyColors.matchIndigo,
               name: _groomName,
               place: _groomPlace,
               dob: _groomDob,
@@ -328,6 +332,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               key: const ValueKey('match-bride'),
               title: 'Bride details',
               subtitle: 'Add the second birth chart',
+              accent: AstrologyColors.matchRose,
               name: _brideName,
               place: _bridePlace,
               dob: _brideDob,
@@ -347,6 +352,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
             ),
             MatchKundaliPhase.loading => const AstrologyCastingView(
               key: ValueKey('match-loading'),
+              accent: AstrologyColors.matchRose,
               lines: [
                 'Comparing moon signs…',
                 'Calculating Gun Milan…',
@@ -360,6 +366,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               ),
             MatchKundaliPhase.result => const AstrologyCastingView(
               key: ValueKey('match-result-empty'),
+              accent: AstrologyColors.matchRose,
               lines: ['Preparing compatibility…'],
             ),
           },
@@ -387,6 +394,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
     required ValueChanged<ResolvedBirthPlace?> onPlaceResolved,
     String? error,
     Widget? leading,
+    required Color accent,
   }) {
     return Stack(
       key: key,
@@ -406,6 +414,8 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
           title: title,
           subtitle: subtitle,
           leading: leading,
+          accent: accent,
+          emblem: AstrologyReadingKind.match,
           onFocus: (value) => setState(() => _focus = value),
           onDob: onDob,
           onTime: onTime,
@@ -518,19 +528,32 @@ class MatchKundaliResultView extends StatelessWidget {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
-                              Icons.favorite,
-                              color: AstrologyColors.gold,
-                              size: 46,
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              '${score.total.toStringAsFixed(score.total % 1 == 0 ? 0 : 1)} / ${score.max.toStringAsFixed(0)}',
-                              style: Theme.of(context).textTheme.displayMedium
-                                  ?.copyWith(
-                                    color: tone,
-                                    fontWeight: FontWeight.w900,
+                            SizedBox(
+                              width: 168,
+                              height: 168,
+                              child: CustomPaint(
+                                painter: _ScoreRingPainter(
+                                  progress: score.max == 0
+                                      ? 0
+                                      : (score.total / score.max)
+                                            .clamp(0, 1)
+                                            .toDouble(),
+                                  color: tone,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${score.total.toStringAsFixed(score.total % 1 == 0 ? 0 : 1)} / ${score.max.toStringAsFixed(0)}',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineMedium
+                                        ?.copyWith(
+                                          color: tone,
+                                          fontWeight: FontWeight.w900,
+                                        ),
                                   ),
+                                ),
+                              ),
                             ),
                             const SizedBox(height: 6),
                             Text(
@@ -545,13 +568,35 @@ class MatchKundaliResultView extends StatelessWidget {
                                   ),
                             ),
                             const SizedBox(height: 16),
-                            Text(
-                              '${result.groomName}  ×  ${result.brideName}',
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(color: AstrologyColors.goldSoft),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _PersonNamePill(
+                                    name: result.groomName,
+                                    color: AstrologyColors.matchIndigo,
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  child: Text(
+                                    '×',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                          color: AstrologyColors.goldSoft,
+                                        ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _PersonNamePill(
+                                    name: result.brideName,
+                                    color: AstrologyColors.matchRose,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -662,7 +707,19 @@ class _MatchKutaTile extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    minHeight: 4,
+                    value: kuta.maxPoints <= 0 || kuta.points == null
+                        ? 0
+                        : (kuta.points! / kuta.maxPoints).clamp(0, 1).toDouble(),
+                    backgroundColor: AstrologyColors.line,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text(
                   kuta.verdict,
                   maxLines: 2,
@@ -677,5 +734,65 @@ class _MatchKutaTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _PersonNamePill extends StatelessWidget {
+  const _PersonNamePill({required this.name, required this.color});
+
+  final String name;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.65)),
+      ),
+      child: Text(
+        name,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _ScoreRingPainter extends CustomPainter {
+  const _ScoreRingPainter({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide * 0.42;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final track = Paint()
+      ..color = color.withValues(alpha: 0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, -math.pi / 2, math.pi * 2, false, track);
+    final arc = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, -math.pi / 2, math.pi * 2 * progress, false, arc);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScoreRingPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }

@@ -7,6 +7,7 @@ const envSchema = z.object({
   SKP_DATABASE_URL: z.string().min(1),
   SKP_JWT_SECRET: z.string().min(32),
   SKP_JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  SKP_JWT_ADMIN_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(43_200),
   SKP_CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174'),
   SKP_PRINT_WEB_PUBLIC_URL: z.string().url().default('http://localhost:5174'),
   SKP_OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
@@ -58,6 +59,7 @@ export type AppConfig = {
   auth: {
     jwtSecret: string;
     accessTtlSeconds: number;
+    adminRefreshTtlSeconds: number;
   };
   corsOrigins: string[];
   printWeb: {
@@ -150,6 +152,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
     auth: {
       jwtSecret: data.SKP_JWT_SECRET,
       accessTtlSeconds: data.SKP_JWT_ACCESS_TTL_SECONDS,
+      adminRefreshTtlSeconds: data.SKP_JWT_ADMIN_REFRESH_TTL_SECONDS,
     },
     corsOrigins: data.SKP_CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
     printWeb: {

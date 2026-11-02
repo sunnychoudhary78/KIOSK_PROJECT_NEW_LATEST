@@ -14,6 +14,10 @@ export const adminLoginSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
+export const adminRefreshSchema = z.object({
+  refreshToken: z.string().min(1),
+});
+
 export const deviceTokenSchema = z.object({
   deviceKey: z.string().min(8),
   deviceSecret: z.string().min(8),
@@ -22,4 +26,5 @@ export const deviceTokenSchema = z.object({
 export type CitizenOtpRequestInput = z.infer<typeof citizenOtpRequestSchema>;
 export type CitizenOtpVerifyInput = z.infer<typeof citizenOtpVerifySchema>;
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
+export type AdminRefreshInput = z.infer<typeof adminRefreshSchema>;
 export type DeviceTokenInput = z.infer<typeof deviceTokenSchema>;

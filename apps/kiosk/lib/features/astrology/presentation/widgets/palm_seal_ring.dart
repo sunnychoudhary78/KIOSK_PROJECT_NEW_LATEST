@@ -41,7 +41,7 @@ class _PalmSealRingPainter extends CustomPainter {
         0.62;
 
     final track = Paint()
-      ..color = AstrologyColors.gold.withValues(alpha: 0.18)
+      ..color = AstrologyColors.palm.withValues(alpha: 0.22)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
@@ -53,8 +53,8 @@ class _PalmSealRingPainter extends CustomPainter {
         startAngle: -math.pi / 2,
         endAngle: -math.pi / 2 + sweep,
         colors: [
-          AstrologyColors.gold.withValues(alpha: 0.35),
-          AstrologyColors.gold,
+          AstrologyColors.palm.withValues(alpha: 0.35),
+          AstrologyColors.palm,
           AstrologyColors.goldSoft,
         ],
       ).createShader(Rect.fromCircle(center: center, radius: radius))
@@ -73,7 +73,7 @@ class _PalmSealRingPainter extends CustomPainter {
 
     if (progress >= 0.98) {
       final glow = Paint()
-        ..color = AstrologyColors.gold.withValues(alpha: 0.22)
+        ..color = AstrologyColors.palm.withValues(alpha: 0.28)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 10
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);

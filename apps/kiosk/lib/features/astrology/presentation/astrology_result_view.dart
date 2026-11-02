@@ -108,6 +108,7 @@ class _AstrologyResultViewState extends State<AstrologyResultView>
           body: reading.palm.lifeLine,
           icon: Icons.favorite_border,
           art: AstrologyAssets.palmLife,
+          color: AstrologyColors.lifeLine,
         ),
       if (reading.palm.heartLine.trim().isNotEmpty)
         _PalmLineData(
@@ -115,6 +116,7 @@ class _AstrologyResultViewState extends State<AstrologyResultView>
           body: reading.palm.heartLine,
           icon: Icons.favorite,
           art: AstrologyAssets.palmHeart,
+          color: AstrologyColors.heartLine,
         ),
       if (reading.palm.headLine.trim().isNotEmpty)
         _PalmLineData(
@@ -122,6 +124,7 @@ class _AstrologyResultViewState extends State<AstrologyResultView>
           body: reading.palm.headLine,
           icon: Icons.psychology_outlined,
           art: AstrologyAssets.palmHead,
+          color: AstrologyColors.headLine,
         ),
       if (reading.palm.fateLine.trim().isNotEmpty)
         _PalmLineData(
@@ -129,6 +132,7 @@ class _AstrologyResultViewState extends State<AstrologyResultView>
           body: reading.palm.fateLine,
           icon: Icons.timeline,
           art: AstrologyAssets.palmFate,
+          color: AstrologyColors.fateLine,
         ),
     ];
 
@@ -364,12 +368,12 @@ class _HeroSeal extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: AstrologyColors.gold.withValues(alpha: 0.75),
+                    color: AstrologyColors.palm.withValues(alpha: 0.85),
                     width: 2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AstrologyColors.gold.withValues(alpha: 0.28),
+                      color: AstrologyColors.palm.withValues(alpha: 0.32),
                       blurRadius: 22,
                     ),
                   ],
@@ -745,12 +749,14 @@ class _PalmLineData {
     required this.title,
     required this.body,
     required this.icon,
+    required this.color,
     this.art,
   });
 
   final String title;
   final String body;
   final IconData icon;
+  final Color color;
   final String? art;
 }
 
@@ -799,8 +805,10 @@ class _PalmLineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final line = data.color;
     return GlassPanel(
       padding: const EdgeInsets.all(16),
+      borderColor: line.withValues(alpha: 0.55),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 140),
         child: Column(
@@ -813,10 +821,10 @@ class _PalmLineCard extends StatelessWidget {
                   height: 48,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AstrologyColors.gold.withValues(alpha: 0.16),
+                    color: line.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AstrologyColors.gold.withValues(alpha: 0.35),
+                      color: line.withValues(alpha: 0.45),
                     ),
                   ),
                   clipBehavior: Clip.antiAlias,
@@ -827,14 +835,14 @@ class _PalmLineCard extends StatelessWidget {
                           height: 48,
                           fit: BoxFit.cover,
                         )
-                      : Icon(data.icon, color: AstrologyColors.gold, size: 22),
+                      : Icon(data.icon, color: line, size: 22),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     data.title,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      color: AstrologyColors.gold,
+                      color: line,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

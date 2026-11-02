@@ -18,6 +18,7 @@ class KioskShell extends StatelessWidget {
     this.stepLabel,
     this.footerTrailing,
     this.headerExtra,
+    this.showLogo = false,
     this.cosmic = false,
   });
 
@@ -30,6 +31,7 @@ class KioskShell extends StatelessWidget {
   final String? stepLabel;
   final Widget? footerTrailing;
   final Widget? headerExtra;
+  final bool showLogo;
   final bool cosmic;
 
   bool get _hasFooter =>
@@ -55,8 +57,16 @@ class KioskShell extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
                 children: [
+                  if (showLogo) ...[
+                    Image.asset(
+                      'assets/brand/company_logo.png',
+                      height: 52,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 12),
+                  ],
                   Text(
-                    'Smart Kiosk',
+                    'ATHENA',
                     style: theme.textTheme.titleLarge?.copyWith(
                       letterSpacing: 1.2,
                       fontWeight: FontWeight.w800,

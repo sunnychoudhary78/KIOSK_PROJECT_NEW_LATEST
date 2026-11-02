@@ -6,6 +6,7 @@ import { AppError } from '../../shared/errors.js';
 import { IdentityService } from './identity.service.js';
 import {
   adminLoginSchema,
+  adminRefreshSchema,
   citizenOtpRequestSchema,
   citizenOtpVerifySchema,
   deviceTokenSchema,
@@ -77,6 +78,19 @@ export function registerIdentityModule(router: Router, deps: AppDeps): void {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const result = await service.adminLogin(req.body, req.correlationId);
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/auth/admin/refresh',
+    validateBody(adminRefreshSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await service.adminRefresh(req.body);
         res.json(result);
       } catch (error) {
         next(error);

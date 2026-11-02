@@ -203,36 +203,42 @@ class _ServiceCatalog extends ConsumerWidget {
         icon: Icons.print_outlined,
         title: 'Print',
         subtitle: 'Phone, OTP, or DigiLocker',
+        accent: SkpColors.accent,
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.print),
       ),
       KioskServiceTile(
         icon: Icons.handyman_outlined,
         title: 'Find services',
         subtitle: 'Mechanics, tailors, carpenters, and more',
+        accent: const Color(0xFF1D6FBF),
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.localServices),
       ),
       KioskServiceTile(
         icon: Icons.favorite_outline,
         title: 'Well Being',
         subtitle: 'Heart rate, blood oxygen, and temperature',
+        accent: const Color(0xFFC43B6E),
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
       ),
       KioskServiceTile(
         icon: Icons.battery_charging_full,
         title: 'Phone Charging',
         subtitle: 'Watch a short message, then charge your phone',
+        accent: const Color(0xFFE09A1A),
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.charging),
       ),
       KioskServiceTile(
         icon: Icons.auto_awesome,
         title: 'Astrology',
         subtitle: 'Kundali · Palm · Match · Today',
+        accent: const Color(0xFF6A3D9A),
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
       ),
       KioskServiceTile(
         icon: Icons.local_gas_station_outlined,
         title: 'Fuel stations',
         subtitle: 'Petrol, diesel, CNG, and EV stations nearby',
+        accent: const Color(0xFFE06A2C),
         onTap: () =>
             Navigator.of(context).pushNamed(AppRoutes.fuelStations),
       ),
@@ -326,6 +332,7 @@ class _ServiceCatalog extends ConsumerWidget {
 
     return KioskShell(
       showHome: false,
+      showLogo: true,
       subtitle: auth.deviceName,
       headerExtra: const WeatherHeaderStrip(),
       body: body,

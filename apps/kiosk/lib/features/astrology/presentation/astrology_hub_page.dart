@@ -4,6 +4,7 @@ import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -20,6 +21,7 @@ class AstrologyHubPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tiles = [
       (
+        kind: AstrologyReadingKind.kundali,
         icon: Icons.auto_awesome,
         title: 'My Kundali',
         subtitle: 'North or South Indian chart',
@@ -27,18 +29,21 @@ class AstrologyHubPage extends ConsumerWidget {
             Navigator.of(context).pushNamed(AppRoutes.astrologyKundali),
       ),
       (
+        kind: AstrologyReadingKind.palm,
         icon: Icons.back_hand_outlined,
         title: 'Palm Insights',
         subtitle: 'Photo · Lines · Guidance',
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrologyPalm),
       ),
       (
+        kind: AstrologyReadingKind.match,
         icon: Icons.favorite_outline,
         title: 'Match Kundalis',
         subtitle: 'Gun milan for two people',
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrologyMatch),
       ),
       (
+        kind: AstrologyReadingKind.today,
         icon: Icons.calendar_month_outlined,
         title: 'Today & Periods',
         subtitle: 'Panchang · Current dasha',
@@ -89,22 +94,22 @@ class AstrologyHubPage extends ConsumerWidget {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: KioskServiceTile(
+                                  child: AstrologyReadingCard(
+                                    kind: tiles[row * 2].kind,
                                     icon: tiles[row * 2].icon,
                                     title: tiles[row * 2].title,
                                     subtitle: tiles[row * 2].subtitle,
                                     onTap: tiles[row * 2].onTap,
-                                    tone: KioskServiceTileTone.cosmic,
                                   ),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
-                                  child: KioskServiceTile(
+                                  child: AstrologyReadingCard(
+                                    kind: tiles[row * 2 + 1].kind,
                                     icon: tiles[row * 2 + 1].icon,
                                     title: tiles[row * 2 + 1].title,
                                     subtitle: tiles[row * 2 + 1].subtitle,
                                     onTap: tiles[row * 2 + 1].onTap,
-                                    tone: KioskServiceTileTone.cosmic,
                                   ),
                                 ),
                               ],

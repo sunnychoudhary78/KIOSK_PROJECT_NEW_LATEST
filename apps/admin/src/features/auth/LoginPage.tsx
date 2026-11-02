@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react';
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Monitor } from 'lucide-react';
 import { useAuth } from '../../core/auth/auth-context';
 import { Button } from '../../core/ui/primitives';
@@ -12,11 +12,14 @@ import { Label } from '@/components/ui/label';
 
 export function LoginPage() {
   const auth = useAuth();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('admin@smartkiosk.local');
   const [password, setPassword] = useState('Admin@12345');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const notice =
+    error ?? (searchParams.get('reason') === 'expired' ? 'Your session expired. Sign in again.' : null);
 
   if (auth.token) {
     return <Navigate to="/" replace />;
@@ -55,7 +58,7 @@ export function LoginPage() {
             console.
           </p>
         </div>
-        <p className="relative text-xs text-sidebar-foreground/40">Smart Kiosk Platform</p>
+        <p className="relative text-xs text-sidebar-foreground/40">ATHENA</p>
       </section>
 
       <section className="flex items-center justify-center px-6 py-12">
@@ -102,9 +105,9 @@ export function LoginPage() {
                 </button>
               </div>
             </div>
-            {error ? (
+            {notice ? (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{notice}</AlertDescription>
               </Alert>
             ) : null}
             <Button type="submit" className="w-full" disabled={loading}>

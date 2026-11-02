@@ -585,7 +585,7 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
               top: 28,
               child: IgnorePointer(
                 child: Text(
-                  'SMART KIOSK',
+                  'ATHENA',
                   style: TextStyle(
                     color: Color(0x66F5F1E8),
                     fontSize: 18,

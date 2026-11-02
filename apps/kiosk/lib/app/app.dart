@@ -35,7 +35,7 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Smart Kiosk',
+      title: 'ATHENA',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.kiosk(),
       navigatorKey: kioskNavigatorKey,

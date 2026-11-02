@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'skp_admin_token';
+const REFRESH_KEY = 'skp_admin_refresh_token';
 const EMAIL_KEY = 'skp_admin_email';
 
 export function getAccessToken(): string | null {
@@ -11,6 +12,18 @@ export function setAccessToken(token: string): void {
 
 export function clearAccessToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_KEY);
+}
+
+export function setRefreshToken(token: string): void {
+  localStorage.setItem(REFRESH_KEY, token);
+}
+
+export function clearRefreshToken(): void {
+  localStorage.removeItem(REFRESH_KEY);
 }
 
 export function getAdminEmail(): string | null {

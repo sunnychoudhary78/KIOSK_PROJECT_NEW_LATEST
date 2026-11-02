@@ -4,6 +4,7 @@ import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/local_services/application/local_services_controller.dart';
+import 'package:skp_kiosk/features/local_services/domain/local_service.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -35,22 +36,17 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
         title: 'Find services',
         onHome: _endSession,
         body: Padding(
-          padding: const EdgeInsets.fromLTRB(32, 12, 32, 16),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 'Choose a trade',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Name and phone number. The same list on every kiosk.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Expanded(child: _CategoryBody(state: state)),
             ],
           ),
@@ -64,6 +60,23 @@ class _CategoryBody extends StatelessWidget {
   const _CategoryBody({required this.state});
 
   final LocalServicesState state;
+
+  Widget _cell(BuildContext context, List<LocalServiceCategory> categories, int index) {
+    if (index >= categories.length) {
+      return const SizedBox.expand();
+    }
+    final category = categories[index];
+    final count = category.contacts.length;
+    return _TradeTile(
+      icon: _iconFor(category.slug),
+      title: category.name,
+      subtitle: count == 1 ? '1 number' : '$count numbers',
+      onTap: () => Navigator.of(context).pushNamed(
+        AppRoutes.localServiceContacts,
+        arguments: category,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,27 +95,83 @@ class _CategoryBody extends StatelessWidget {
     if (state.categories.isEmpty) {
       return const Center(child: Text('No services are listed yet.'));
     }
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.7,
-      ),
-      itemCount: state.categories.length,
-      itemBuilder: (context, index) {
-        final category = state.categories[index];
-        final count = category.contacts.length;
-        return KioskServiceTile(
-          icon: _iconFor(category.slug),
-          title: category.name,
-          subtitle: count == 1 ? '1 number' : '$count numbers',
-          onTap: () => Navigator.of(context).pushNamed(
-            AppRoutes.localServiceContacts,
-            arguments: category,
+    const columns = 4;
+    const gap = 8.0;
+    final categories = state.categories;
+    final rowCount = (categories.length / columns).ceil();
+    return Column(
+      children: [
+        for (var row = 0; row < rowCount; row++) ...[
+          if (row > 0) const SizedBox(height: gap),
+          Expanded(
+            child: Row(
+              children: [
+                for (var col = 0; col < columns; col++) ...[
+                  if (col > 0) const SizedBox(width: gap),
+                  Expanded(child: _cell(context, categories, row * columns + col)),
+                ],
+              ],
+            ),
           ),
-        );
-      },
+        ],
+      ],
+    );
+  }
+}
+
+class _TradeTile extends StatelessWidget {
+  const _TradeTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: SkpColors.panel,
+      borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+            border: Border.all(color: SkpColors.line, width: SkpTokens.hairline),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 28, color: SkpColors.accent),
+                  const SizedBox(height: 6),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(color: SkpColors.muted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
