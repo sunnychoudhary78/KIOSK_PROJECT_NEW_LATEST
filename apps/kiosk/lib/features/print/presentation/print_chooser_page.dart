@@ -36,7 +36,7 @@ class PrintChooserPage extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Use your phone here, or enter the OTP from the mobile app.',
+                'Use your phone here, enter an OTP, or print from DigiLocker.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
               ),
               const SizedBox(height: 24),
@@ -44,7 +44,7 @@ class PrintChooserPage extends ConsumerWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     const gap = 16.0;
-                    final tileW = (constraints.maxWidth - gap) / 2;
+                    final tileW = (constraints.maxWidth - gap * 2) / 3;
                     final tileH = constraints.maxHeight;
                     return Row(
                       children: [
@@ -67,6 +67,17 @@ class PrintChooserPage extends ConsumerWidget {
                             title: 'I have an OTP',
                             subtitle: 'Enter the code sent to the mobile app',
                             onTap: () => Navigator.of(context).pushNamed(AppRoutes.otpPrint),
+                          ),
+                        ),
+                        const SizedBox(width: gap),
+                        SizedBox(
+                          width: tileW,
+                          height: tileH,
+                          child: KioskServiceTile(
+                            icon: Icons.account_balance_outlined,
+                            title: 'DigiLocker Print',
+                            subtitle: 'Sign in and print government documents',
+                            onTap: () => Navigator.of(context).pushNamed(AppRoutes.digilockerPrint),
                           ),
                         ),
                       ],

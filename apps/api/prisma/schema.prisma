@@ -661,6 +661,28 @@ model SocietyPhone {
   @@map("society_phones")
 }
 
+model LocalServiceCategory {
+  id        String                @id @default(uuid()) @db.Uuid
+  slug      String                @unique
+  name      String
+  sortOrder Int                   @map("sort_order")
+  contacts  LocalServiceContact[]
+
+  @@map("local_service_categories")
+}
+
+model LocalServiceContact {
+  id         String               @id @default(uuid()) @db.Uuid
+  categoryId String               @map("category_id") @db.Uuid
+  name       String
+  phone      String               @db.VarChar(10)
+  sortOrder  Int                  @map("sort_order")
+  category   LocalServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId, sortOrder])
+  @@map("local_service_contacts")
+}
+
 model AstrologyReading {
   id        String   @id @default(uuid()) @db.Uuid
   deviceId  String   @map("device_id") @db.Uuid

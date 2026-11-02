@@ -8,6 +8,9 @@ import 'package:skp_kiosk/features/charging/presentation/charging_page.dart';
 import 'package:skp_kiosk/features/fuel_stations/presentation/fuel_stations_page.dart';
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_print_page.dart';
 import 'package:skp_kiosk/features/home/presentation/home_page.dart';
+import 'package:skp_kiosk/features/local_services/domain/local_service.dart';
+import 'package:skp_kiosk/features/local_services/presentation/local_service_contacts_page.dart';
+import 'package:skp_kiosk/features/local_services/presentation/local_services_page.dart';
 import 'package:skp_kiosk/features/otp_print/presentation/otp_print_page.dart';
 import 'package:skp_kiosk/features/print/presentation/print_chooser_page.dart';
 import 'package:skp_kiosk/features/quick_print/presentation/quick_print_page.dart';
@@ -30,6 +33,8 @@ class AppRoutes {
   static const astrologyMatch = '/astrology/match';
   static const astrologyToday = '/astrology/today';
   static const fuelStations = '/fuel-stations';
+  static const localServices = '/local-services';
+  static const localServiceContacts = '/local-services/contacts';
   static const serialDebug = '/serial-debug';
 }
 
@@ -60,6 +65,16 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const TodayPeriodsPage());
       case AppRoutes.fuelStations:
         return MaterialPageRoute(builder: (_) => const FuelStationsPage());
+      case AppRoutes.localServices:
+        return MaterialPageRoute(builder: (_) => const LocalServicesPage());
+      case AppRoutes.localServiceContacts:
+        final category = settings.arguments;
+        if (category is! LocalServiceCategory) {
+          return MaterialPageRoute(builder: (_) => const LocalServicesPage());
+        }
+        return MaterialPageRoute(
+          builder: (_) => LocalServiceContactsPage(category: category),
+        );
       case AppRoutes.serialDebug:
         return MaterialPageRoute(builder: (_) => const SerialDebugPage());
       case AppRoutes.home:

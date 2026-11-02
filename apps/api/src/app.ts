@@ -30,6 +30,7 @@ import { registerSurveillanceModule } from './modules/surveillance/index.js';
 import { registerQuickPrintModule } from './modules/quick_print/index.js';
 import { registerPrintQuotaModule } from './modules/print_quota/index.js';
 import { registerSocietyPhonesModule } from './modules/society_phones/index.js';
+import { registerLocalServicesModule } from './modules/local_services/index.js';
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -96,6 +97,7 @@ export function createApp(deps: AppDeps): Express {
   registerQuickPrintModule(v1, deps);
   registerPrintQuotaModule(v1, deps);
   registerSocietyPhonesModule(v1, deps);
+  registerLocalServicesModule(v1, deps);
   registerPaymentsModule(v1, deps);
   registerDigiLockerModule(v1, deps);
   registerAdsModule(v1, deps);

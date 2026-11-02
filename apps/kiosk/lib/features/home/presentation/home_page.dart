@@ -202,15 +202,14 @@ class _ServiceCatalog extends ConsumerWidget {
       KioskServiceTile(
         icon: Icons.print_outlined,
         title: 'Print',
-        subtitle: 'Upload from your phone or enter the app OTP',
+        subtitle: 'Phone, OTP, or DigiLocker',
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.print),
       ),
       KioskServiceTile(
-        icon: Icons.account_balance_outlined,
-        title: 'DigiLocker Print',
-        subtitle: 'Sign in and print government documents',
-        onTap: () =>
-            Navigator.of(context).pushNamed(AppRoutes.digilockerPrint),
+        icon: Icons.handyman_outlined,
+        title: 'Find services',
+        subtitle: 'Mechanics, tailors, carpenters, and more',
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.localServices),
       ),
       KioskServiceTile(
         icon: Icons.favorite_outline,
