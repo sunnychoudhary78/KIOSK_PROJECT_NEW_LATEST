@@ -9,6 +9,7 @@ import { normalizePhone } from '../../shared/otp.js';
 import type { DevicePrintLimits } from '../devices/device_print_limits.js';
 import { printLimitsFromDevice } from '../devices/device_print_limits.js';
 import type { PrintColorMode as QuoteColorMode } from '../otp_print/otp_print.quote.js';
+import type { PrintFreeQuotaConfig } from '../platform_settings/platform_settings.defaults.js';
 import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { isWithinLocalTimeWindow, periodKeyFor } from './print_quota.time.js';
@@ -35,6 +36,19 @@ function toPrismaColorMode(mode: QuoteColorMode): PrintColorMode {
   return mode === 'color' ? PrintColorMode.color : PrintColorMode.bw;
 }
 
+type ResolvedQuota = {
+  config: PrintFreeQuotaConfig;
+  society: boolean;
+};
+
+type RemainingQuota = {
+  remaining: number;
+  periodLimit: number;
+  periodKey: string;
+  period: PrintFreeQuotaConfig['period'];
+  society: boolean;
+};
+
 export class PrintQuotaService {
   private readonly settings: PlatformSettingsService;
 
@@ -54,14 +68,30 @@ export class PrintQuotaService {
     );
   }
 
+  private async resolveQuota(phone: string, db: DbClient | TxClient): Promise<ResolvedQuota> {
+    const globalConfig = await this.settings.getPrintFreeQuotaConfig();
+    const normalized = normalizePhone(phone);
+    const listed = await db.societyPhone.findUnique({
+      where: { phone: normalized },
+      select: { id: true },
+    });
+    if (!listed) {
+      return { config: globalConfig, society: false };
+    }
+    return {
+      config: await this.settings.getSocietyFreeQuotaConfig(),
+      society: true,
+    };
+  }
+
   async getRemaining(
     phone: string,
     mode: QuoteColorMode,
     now: Date = new Date(),
     tx?: TxClient,
-  ): Promise<{ remaining: number; periodLimit: number; periodKey: string }> {
+  ): Promise<RemainingQuota> {
     const db = tx ?? this.db;
-    const config = await this.settings.getPrintFreeQuotaConfig();
+    const { config, society } = await this.resolveQuota(phone, db);
     const periodKey = periodKeyFor(now, config.period);
     const periodLimit = mode === 'color' ? config.freeColorPages : config.freeBwPages;
     const normalized = normalizePhone(phone);
@@ -81,6 +111,8 @@ export class PrintQuotaService {
       remaining: Math.max(0, periodLimit - used),
       periodLimit,
       periodKey,
+      period: config.period,
+      society,
     };
   }
 
@@ -97,37 +129,31 @@ export class PrintQuotaService {
     const kioskCap =
       input.mode === 'color' ? limits.freeColorPagesPerSession : limits.freePagesPerSession;
     const freeDisabledNow = this.isFreeDisabledNow(input.device, now);
-    const config = await this.settings.getPrintFreeQuotaConfig();
-    const periodKey = periodKeyFor(now, config.period);
-    const periodLimit = input.mode === 'color' ? config.freeColorPages : config.freeBwPages;
 
-    if (freeDisabledNow || !input.phone) {
+    if (!input.phone) {
+      const config = await this.settings.getPrintFreeQuotaConfig();
+      const periodLimit = input.mode === 'color' ? config.freeColorPages : config.freeBwPages;
       return {
         freePages: 0,
-        remainingBefore: input.phone
-          ? (await this.getRemaining(input.phone, input.mode, now, input.tx)).remaining
-          : periodLimit,
+        remainingBefore: periodLimit,
         periodLimit,
-        periodKey,
+        periodKey: periodKeyFor(now, config.period),
         freeDisabledNow,
         kioskCap,
-        phone: input.phone ? normalizePhone(input.phone) : null,
+        phone: null,
       };
     }
 
-    const { remaining, periodKey: key } = await this.getRemaining(
-      input.phone,
-      input.mode,
-      now,
-      input.tx,
-    );
-    const freePages = Math.min(remaining, kioskCap, Math.max(0, input.pageCount));
+    const quota = await this.getRemaining(input.phone, input.mode, now, input.tx);
+    const freePages = freeDisabledNow
+      ? 0
+      : Math.min(quota.remaining, kioskCap, Math.max(0, input.pageCount));
     return {
       freePages,
-      remainingBefore: remaining,
-      periodLimit,
-      periodKey: key,
-      freeDisabledNow: false,
+      remainingBefore: quota.remaining,
+      periodLimit: quota.periodLimit,
+      periodKey: quota.periodKey,
+      freeDisabledNow,
       kioskCap,
       phone: normalizePhone(input.phone),
     };
@@ -270,11 +296,10 @@ export class PrintQuotaService {
       this.getRemaining(input.phone, 'bw', now),
       this.getRemaining(input.phone, 'color', now),
     ]);
-    const config = await this.settings.getPrintFreeQuotaConfig();
     return {
       phoneVerified: true,
       freeDisabledNow,
-      period: config.period,
+      period: bw.period,
       remainingBw: freeDisabledNow ? 0 : bw.remaining,
       remainingColor: freeDisabledNow ? 0 : color.remaining,
       // hint for current mode UI
@@ -299,16 +324,24 @@ export class PrintQuotaService {
     const limit = Math.min(200, Math.max(1, Math.floor(input.limit ?? 50)));
     const config = await this.settings.getPrintFreeQuotaConfig();
     const periodKey = periodKeyFor(now, config.period);
+    const societyRows = await this.db.societyPhone.findMany({ select: { phone: true } });
+    const societySet = new Set(societyRows.map((row) => row.phone));
+    const societyConfig = societySet.size
+      ? await this.settings.getSocietyFreeQuotaConfig()
+      : config;
+    const societyKey = societySet.size ? periodKeyFor(now, societyConfig.period) : periodKey;
+    const periodKeys = [...new Set([periodKey, societyKey])];
 
     const rows = await this.db.phoneFreePageLedger.findMany({
       where: {
-        periodKey,
+        periodKey: periodKeys.length === 1 ? (periodKeys[0] ?? periodKey) : { in: periodKeys },
         status: { in: [FreePageLedgerStatus.reserved, FreePageLedgerStatus.consumed] },
       },
       select: {
         phone: true,
         printColorMode: true,
         pages: true,
+        periodKey: true,
         updatedAt: true,
       },
       orderBy: { updatedAt: 'desc' },
@@ -316,13 +349,15 @@ export class PrintQuotaService {
 
     const byPhone = new Map<
       string,
-      { bwUsed: number; colorUsed: number; lastActivityAt: Date | null }
+      { bwUsed: number; colorUsed: number; lastActivityAt: Date | null; society: boolean }
     >();
 
     for (const row of rows) {
+      const society = societySet.has(row.phone);
+      if (row.periodKey !== (society ? societyKey : periodKey)) continue;
       let entry = byPhone.get(row.phone);
       if (!entry) {
-        entry = { bwUsed: 0, colorUsed: 0, lastActivityAt: null };
+        entry = { bwUsed: 0, colorUsed: 0, lastActivityAt: null, society };
         byPhone.set(row.phone, entry);
       }
       if (row.printColorMode === PrintColorMode.color) {
@@ -336,14 +371,20 @@ export class PrintQuotaService {
     }
 
     const searchDigits = (input.q ?? '').replace(/\D/g, '');
-    let items = Array.from(byPhone.entries()).map(([phone, stats]) => ({
-      phone,
-      bwUsed: stats.bwUsed,
-      bwRemaining: Math.max(0, config.freeBwPages - stats.bwUsed),
-      colorUsed: stats.colorUsed,
-      colorRemaining: Math.max(0, config.freeColorPages - stats.colorUsed),
-      lastActivityAt: stats.lastActivityAt?.toISOString() ?? null,
-    }));
+    let items = Array.from(byPhone.entries()).map(([phone, stats]) => {
+      const limits = stats.society ? societyConfig : config;
+      return {
+        phone,
+        society: stats.society,
+        bwUsed: stats.bwUsed,
+        bwRemaining: Math.max(0, limits.freeBwPages - stats.bwUsed),
+        colorUsed: stats.colorUsed,
+        colorRemaining: Math.max(0, limits.freeColorPages - stats.colorUsed),
+        bwLimit: limits.freeBwPages,
+        colorLimit: limits.freeColorPages,
+        lastActivityAt: stats.lastActivityAt?.toISOString() ?? null,
+      };
+    });
 
     if (searchDigits) {
       items = items.filter((item) => item.phone.replace(/\D/g, '').includes(searchDigits));
@@ -368,15 +409,13 @@ export class PrintQuotaService {
 
   async getPhoneUsageDetail(phoneRaw: string, now: Date = new Date()) {
     const phone = this.requireNormalizedPhone(phoneRaw);
-    const config = await this.settings.getPrintFreeQuotaConfig();
-    const periodKey = periodKeyFor(now, config.period);
     const [bw, color] = await Promise.all([
       this.getRemaining(phone, 'bw', now),
       this.getRemaining(phone, 'color', now),
     ]);
 
     const entries = await this.db.phoneFreePageLedger.findMany({
-      where: { phone, periodKey },
+      where: { phone, periodKey: bw.periodKey },
       orderBy: { updatedAt: 'desc' },
       take: 50,
       select: {
@@ -395,16 +434,17 @@ export class PrintQuotaService {
 
     return {
       phone,
-      period: config.period,
-      periodKey,
+      society: bw.society,
+      period: bw.period,
+      periodKey: bw.periodKey,
       limits: {
-        freeBwPages: config.freeBwPages,
-        freeColorPages: config.freeColorPages,
+        freeBwPages: bw.periodLimit,
+        freeColorPages: color.periodLimit,
       },
       summary: {
-        bwUsed: config.freeBwPages - bw.remaining,
+        bwUsed: bw.periodLimit - bw.remaining,
         bwRemaining: bw.remaining,
-        colorUsed: config.freeColorPages - color.remaining,
+        colorUsed: color.periodLimit - color.remaining,
         colorRemaining: color.remaining,
       },
       entries: entries.map((entry) => ({

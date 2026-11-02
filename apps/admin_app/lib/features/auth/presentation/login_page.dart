@@ -31,60 +31,91 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget build(BuildContext context) {
     final auth = ref.watch(staffAuthProvider);
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Icon(Icons.storefront_outlined, size: 40, color: AdminColors.accent),
-                  const SizedBox(height: 12),
-                  Text('Kiosk Admin', style: Theme.of(context).textTheme.headlineMedium),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Sign in with your staff account',
-                    style: TextStyle(color: AdminColors.muted),
-                  ),
-                  const SizedBox(height: 28),
-                  TextField(
-                    controller: _email,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _password,
-                    obscureText: _obscure,
-                    autofillHints: const [AutofillHints.password],
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _submit(),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      suffixIcon: IconButton(
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                        icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            color: AdminColors.accent,
+            child: const SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24, 28, 24, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kiosk Admin',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.6,
                       ),
                     ),
-                  ),
-                  if (auth.error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(auth.error!, style: const TextStyle(color: AdminColors.danger)),
+                    SizedBox(height: 6),
+                    Text(
+                      'Sign in with your staff account',
+                      style: TextStyle(color: Color(0xD9FFFFFF), fontSize: 15),
+                    ),
                   ],
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: auth.loading ? null : _submit,
-                    child: Text(auth.loading ? 'Signing in…' : 'Sign in'),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.email],
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(labelText: 'Email'),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _password,
+                            obscureText: _obscure,
+                            autofillHints: const [AutofillHints.password],
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(() => _obscure = !_obscure),
+                                icon: Icon(
+                                  _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (auth.error != null) ...[
+                            const SizedBox(height: 12),
+                            Text(auth.error!, style: const TextStyle(color: AdminColors.danger)),
+                          ],
+                          const SizedBox(height: 20),
+                          FilledButton(
+                            onPressed: auth.loading ? null : _submit,
+                            child: Text(auth.loading ? 'Signing in…' : 'Sign in'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

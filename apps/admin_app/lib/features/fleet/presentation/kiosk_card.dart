@@ -29,56 +29,66 @@ class KioskCard extends StatelessWidget {
     final nextStatus = device.status == 'inactive' ? 'active' : 'inactive';
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
         onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      device.name,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
+              Container(width: 3, color: toneColor(summary.tone)),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              device.name,
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          StatusChip(status: device.status),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${device.siteName} · ${device.locationLabel}',
+                        style: const TextStyle(color: AdminColors.muted),
+                      ),
+                      const SizedBox(height: 10),
+                      ToneText(label: summary.label, tone: summary.tone),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Pages left ${device.pagesLeft ?? '—'} · ${formatTimestamp(device.lastHeartbeatAt)}',
+                        style: const TextStyle(color: AdminColors.muted),
+                      ),
+                      const SizedBox(height: 4),
+                      ToneText(label: recording.label, tone: recording.tone),
+                      if (paused != null && paused.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Printing paused',
+                          style: TextStyle(color: AdminColors.danger, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                      if (canWrite) ...[
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton(
+                            onPressed: submitting ? null : () => onSetStatus(nextStatus),
+                            child: Text(nextStatus == 'active' ? 'Start' : 'Stop'),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  StatusChip(status: device.status),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${device.siteName} · ${device.locationLabel}',
-                style: const TextStyle(color: AdminColors.muted),
-              ),
-              const SizedBox(height: 10),
-              ToneText(label: summary.label, tone: summary.tone),
-              const SizedBox(height: 4),
-              Text(
-                'Pages left ${device.pagesLeft ?? '—'} · ${formatTimestamp(device.lastHeartbeatAt)}',
-                style: const TextStyle(color: AdminColors.muted),
-              ),
-              const SizedBox(height: 4),
-              ToneText(label: recording.label, tone: recording.tone),
-              if (paused != null && paused.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Printing paused',
-                  style: TextStyle(color: AdminColors.danger, fontWeight: FontWeight.w600),
                 ),
-              ],
-              if (canWrite) ...[
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton(
-                    onPressed: submitting ? null : () => onSetStatus(nextStatus),
-                    child: Text(nextStatus == 'active' ? 'Start' : 'Stop'),
-                  ),
-                ),
-              ],
+              ),
             ],
           ),
         ),

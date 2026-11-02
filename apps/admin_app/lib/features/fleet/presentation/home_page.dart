@@ -45,6 +45,9 @@ class HomePage extends ConsumerWidget {
                   child: _StatCard(
                     label: 'Need attention',
                     value: fleet.loading ? '…' : '${attention.length}',
+                    mark: !fleet.loading && attention.isNotEmpty
+                        ? AdminColors.warning
+                        : AdminColors.accent,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -52,12 +55,16 @@ class HomePage extends ConsumerWidget {
                   child: _StatCard(
                     label: 'Open support',
                     value: support.loading && support.items.isEmpty ? '…' : '${support.openCount}',
+                    mark: AdminColors.accent,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            Text('Needs attention', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Needs attention',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AdminColors.muted),
+            ),
             const SizedBox(height: 8),
             if (fleet.loading && fleet.devices.isEmpty)
               const Padding(
@@ -96,10 +103,11 @@ class HomePage extends ConsumerWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value});
+  const _StatCard({required this.label, required this.value, required this.mark});
 
   final String label;
   final String value;
+  final Color mark;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +117,21 @@ class _StatCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value, style: Theme.of(context).textTheme.headlineMedium),
+            Container(
+              width: 28,
+              height: 4,
+              decoration: BoxDecoration(
+                color: mark,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: mark == AdminColors.warning ? AdminColors.warning : AdminColors.ink,
+              ),
+            ),
             const SizedBox(height: 4),
             Text(label, style: const TextStyle(color: AdminColors.muted)),
           ],

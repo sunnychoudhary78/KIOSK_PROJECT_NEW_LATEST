@@ -653,6 +653,14 @@ model PhoneFreePageLedger {
   @@map("phone_free_page_ledger")
 }
 
+model SocietyPhone {
+  id        String   @id @default(uuid()) @db.Uuid
+  phone     String   @unique @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("society_phones")
+}
+
 model AstrologyReading {
   id        String   @id @default(uuid()) @db.Uuid
   deviceId  String   @map("device_id") @db.Uuid

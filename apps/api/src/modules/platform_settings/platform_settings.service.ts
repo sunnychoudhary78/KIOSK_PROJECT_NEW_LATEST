@@ -8,9 +8,11 @@ import {
   DEFAULT_OTP_PRINT_CONFIG,
   DEFAULT_PRINT_FREE_QUOTA_CONFIG,
   DEFAULT_QUICK_PRINT_CONFIG,
+  DEFAULT_SOCIETY_FREE_QUOTA_CONFIG,
   OTP_PRINT_CONFIG_KEY,
   PRINT_FREE_QUOTA_CONFIG_KEY,
   QUICK_PRINT_CONFIG_KEY,
+  SOCIETY_FREE_QUOTA_CONFIG_KEY,
   SMS_CONFIG_KEY,
   type CitizenAuthConfig,
   type OtpPrintConfig,
@@ -101,6 +103,18 @@ export class PlatformSettingsService {
     return parsed.success ? parsed.data : { ...DEFAULT_PRINT_FREE_QUOTA_CONFIG };
   }
 
+  async getSocietyFreeQuotaConfig(): Promise<PrintFreeQuotaConfig> {
+    const row = await this.getRaw(SOCIETY_FREE_QUOTA_CONFIG_KEY);
+    if (!row) {
+      return { ...DEFAULT_SOCIETY_FREE_QUOTA_CONFIG };
+    }
+    const parsed = printFreeQuotaConfigSchema.safeParse({
+      ...DEFAULT_SOCIETY_FREE_QUOTA_CONFIG,
+      ...asObject(row.settingValue),
+    });
+    return parsed.success ? parsed.data : { ...DEFAULT_SOCIETY_FREE_QUOTA_CONFIG };
+  }
+
   async update(
     settingKey: string,
     input: UpdatePlatformSettingInput,
@@ -189,15 +203,19 @@ export class PlatformSettingsService {
       }
       return parsed.data;
     }
-    if (settingKey === PRINT_FREE_QUOTA_CONFIG_KEY) {
+    if (settingKey === PRINT_FREE_QUOTA_CONFIG_KEY || settingKey === SOCIETY_FREE_QUOTA_CONFIG_KEY) {
+      const defaults =
+        settingKey === SOCIETY_FREE_QUOTA_CONFIG_KEY
+          ? DEFAULT_SOCIETY_FREE_QUOTA_CONFIG
+          : DEFAULT_PRINT_FREE_QUOTA_CONFIG;
       const parsed = printFreeQuotaConfigSchema.safeParse({
-        ...DEFAULT_PRINT_FREE_QUOTA_CONFIG,
+        ...defaults,
         ...asObject(raw),
       });
       if (!parsed.success) {
         throw new AppError(
           'validation_error',
-          parsed.error.issues[0]?.message ?? 'Invalid print_free_quota_config',
+          parsed.error.issues[0]?.message ?? `Invalid ${settingKey}`,
           400,
         );
       }

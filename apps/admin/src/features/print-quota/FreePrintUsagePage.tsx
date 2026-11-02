@@ -5,10 +5,13 @@ import { Button, EmptyState, Input, PageHeader, Panel, StatusBadge } from '../..
 
 type UsageItem = {
   phone: string;
+  society?: boolean;
   bwUsed: number;
   bwRemaining: number;
   colorUsed: number;
   colorRemaining: number;
+  bwLimit?: number;
+  colorLimit?: number;
   lastActivityAt: string | null;
 };
 
@@ -35,6 +38,7 @@ type UsageEntry = {
 
 type UsageDetailResponse = {
   phone: string;
+  society?: boolean;
   period: string;
   periodKey: string;
   limits: { freeBwPages: number; freeColorPages: number };
@@ -162,7 +166,18 @@ export function FreePrintUsagePage() {
               {data.items.map((item) => (
                 <Fragment key={item.phone}>
                   <tr>
-                    <td className="font-medium font-mono text-sm">{item.phone}</td>
+                    <td>
+                      <div className="font-medium font-mono text-sm">{item.phone}</div>
+                      {item.society ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <StatusBadge status="society" />
+                          <span>
+                            B/W {item.bwLimit ?? item.bwUsed + item.bwRemaining} · Color{' '}
+                            {item.colorLimit ?? item.colorUsed + item.colorRemaining}
+                          </span>
+                        </div>
+                      ) : null}
+                    </td>
                     <td>{item.bwUsed}</td>
                     <td>{item.bwRemaining}</td>
                     <td>{item.colorUsed}</td>

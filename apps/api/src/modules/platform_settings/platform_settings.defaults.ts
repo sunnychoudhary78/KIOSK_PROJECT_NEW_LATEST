@@ -3,6 +3,7 @@ export const OTP_PRINT_CONFIG_KEY = 'otp_print_config';
 export const QUICK_PRINT_CONFIG_KEY = 'quick_print_config';
 export const CITIZEN_AUTH_CONFIG_KEY = 'citizen_auth_config';
 export const PRINT_FREE_QUOTA_CONFIG_KEY = 'print_free_quota_config';
+export const SOCIETY_FREE_QUOTA_CONFIG_KEY = 'society_free_quota_config';
 
 export type OtpPrintConfig = {
   ttlSeconds: number;
@@ -51,6 +52,13 @@ export const DEFAULT_CITIZEN_AUTH_CONFIG: CitizenAuthConfig = {
 };
 
 export const DEFAULT_PRINT_FREE_QUOTA_CONFIG: PrintFreeQuotaConfig = {
+  period: 'daily',
+  freeBwPages: 5,
+  freeColorPages: 0,
+};
+
+/** Same shape as the global quota so a listed phone is not reduced before an admin edits it. */
+export const DEFAULT_SOCIETY_FREE_QUOTA_CONFIG: PrintFreeQuotaConfig = {
   period: 'daily',
   freeBwPages: 5,
   freeColorPages: 0,

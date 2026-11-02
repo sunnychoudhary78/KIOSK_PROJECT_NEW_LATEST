@@ -17,14 +17,56 @@ class StatusChip extends StatelessWidget {
       _ => AdminColors.muted,
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         statusLabel(status),
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
+}
+
+Color toneColor(PrinterRowTone tone) {
+  return switch (tone) {
+    PrinterRowTone.ok => AdminColors.success,
+    PrinterRowTone.amber => AdminColors.warning,
+    PrinterRowTone.alert => AdminColors.danger,
+    PrinterRowTone.muted => AdminColors.line,
+  };
+}
+
+class ToneChip extends StatelessWidget {
+  const ToneChip({super.key, required this.label, required this.tone});
+
+  final String label;
+  final PrinterRowTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = tone == PrinterRowTone.muted ? AdminColors.muted : toneColor(tone);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.1,
+        ),
       ),
     );
   }
@@ -38,12 +80,7 @@ class ToneText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (tone) {
-      PrinterRowTone.ok => AdminColors.success,
-      PrinterRowTone.amber => AdminColors.warning,
-      PrinterRowTone.alert => AdminColors.danger,
-      PrinterRowTone.muted => AdminColors.muted,
-    };
+    final color = tone == PrinterRowTone.muted ? AdminColors.muted : toneColor(tone);
     return Text(
       label,
       style: TextStyle(color: color, fontWeight: FontWeight.w600),

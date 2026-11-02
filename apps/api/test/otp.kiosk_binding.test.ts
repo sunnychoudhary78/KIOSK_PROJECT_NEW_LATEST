@@ -39,7 +39,10 @@ function makeConfig(): AppConfig {
 describe('OtpPrintService kiosk binding', () => {
   it('rejects create without a deviceId', async () => {
     const service = new OtpPrintService(
-      { platformSetting: { findUnique: vi.fn() } } as unknown as DbClient,
+      {
+        platformSetting: { findUnique: vi.fn() },
+        societyPhone: { findUnique: vi.fn(async () => null) },
+      } as unknown as DbClient,
       makeConfig(),
       { record: vi.fn() } as unknown as AuditService,
       {} as PrintingService,
@@ -104,6 +107,7 @@ describe('OtpPrintService kiosk binding', () => {
       device: { findUnique: vi.fn(async () => deviceProps()) },
       user: { findUnique: vi.fn(async () => ({ id: userId, phone: '+919999999999' })) },
       platformSetting: { findUnique: vi.fn(async () => null) },
+      societyPhone: { findUnique: vi.fn(async () => null) },
       otpChallenge: { create: vi.fn(async () => created) },
       phoneFreePageLedger: {
         findMany: vi.fn(async () => []),

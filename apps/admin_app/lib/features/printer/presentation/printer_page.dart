@@ -51,6 +51,11 @@ class _PrinterPageState extends ConsumerState<PrinterPage> {
     final maintenance = resolvePrinterMaintenance(device.printerHealth);
     final errors = resolvePrinterErrorHistory(device.printerHealth);
     final status = resolvePrinterStatus(device.printerHealth);
+    final statusTone = status.fault
+        ? (device.printerHealth?.snmpOk == false ? PrinterRowTone.amber : PrinterRowTone.alert)
+        : status.kind == PrinterStatusKind.ready || status.kind == PrinterStatusKind.printing
+        ? PrinterRowTone.ok
+        : PrinterRowTone.muted;
     final stale = maintenance is MaintenanceShown && maintenance.stale ||
         errors is ErrorHistoryShown && errors.stale;
     final staleTitle = maintenance is MaintenanceShown
@@ -81,31 +86,17 @@ class _PrinterPageState extends ConsumerState<PrinterPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Text('Status', style: TextStyle(color: AdminColors.muted)),
-              const SizedBox(width: 8),
-              ToneText(
-                label: status.label,
-                tone: status.fault
-                    ? (device.printerHealth?.snmpOk == false
-                          ? PrinterRowTone.amber
-                          : PrinterRowTone.alert)
-                    : status.kind == PrinterStatusKind.ready ||
-                          status.kind == PrinterStatusKind.printing
-                    ? PrinterRowTone.ok
-                    : PrinterRowTone.muted,
-              ),
-              if (stale) ...[
-                const SizedBox(width: 8),
+              ToneChip(label: status.label, tone: statusTone),
+              if (stale)
                 Tooltip(
                   message: staleTitle ?? 'The last USB reading is stale',
-                  child: const Text(
-                    'Stale',
-                    style: TextStyle(color: AdminColors.warning, fontWeight: FontWeight.w600),
-                  ),
+                  child: const ToneChip(label: 'Stale', tone: PrinterRowTone.amber),
                 ),
-              ],
             ],
           ),
           if (actions.refreshNote != null) ...[
@@ -303,7 +294,7 @@ class _Section extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(title, style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             child,
           ],
@@ -326,7 +317,7 @@ class _Metric extends StatelessWidget {
       width: 140,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AdminColors.paper,
+        color: AdminColors.accentSoft,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(

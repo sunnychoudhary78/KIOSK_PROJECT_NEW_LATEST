@@ -65,6 +65,10 @@ function makeService(db: unknown) {
 function txPassthrough(db: Record<string, unknown>) {
   const client: Record<string, unknown> = {
     ...db,
+    societyPhone: db.societyPhone ?? {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     phoneFreePageLedger: {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(null),

@@ -32,6 +32,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (index) => setState(() => _index = index),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: [
           const NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
           const NavigationDestination(icon: Icon(Icons.devices_outlined), label: 'Kiosks'),

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import { Button, Input, PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
@@ -499,7 +500,8 @@ export function PlatformSettingsPage() {
           </div>
           <p className="muted" style={{ margin: '0.75rem 0 0' }}>
             Shared across mobile OTP print and Quick Print web for the same phone. Each kiosk still
-            has its own per-session free cap and optional night free-disabled window.
+            has its own per-session free cap and optional night free-disabled window. Society numbers
+            use a separate limit on the <Link to="/society-phones">Society phones</Link> page.
           </p>
         </Panel>
 

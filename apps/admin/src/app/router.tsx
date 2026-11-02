@@ -8,6 +8,7 @@ import { FuelStationsPage } from '../features/fuel_stations/FuelStationsPage';
 import { PrintJobsPage } from '../features/print-jobs/PrintJobsPage';
 import { SupportPage } from '../features/support/SupportPage';
 import { FreePrintUsagePage } from '../features/print-quota/FreePrintUsagePage';
+import { SocietyPhonesPage } from '../features/society-phones/SocietyPhonesPage';
 import { DigiLockerPage } from '../features/digilocker/DigiLockerPage';
 import { AuditLogsPage } from '../features/audit-logs/AuditLogsPage';
 import { RecordingsPage } from '../features/surveillance/RecordingsPage';
@@ -39,6 +40,7 @@ export function AppRouter() {
             <Route path="print-jobs" element={<PrintJobsPage />} />
             <Route path="support" element={<SupportPage />} />
             <Route path="print-quota" element={<FreePrintUsagePage />} />
+            <Route path="society-phones" element={<SocietyPhonesPage />} />
             <Route path="digilocker" element={<DigiLockerPage />} />
             <Route path="recordings" element={<RecordingsPage />} />
             <Route path="audit-logs" element={<AuditLogsPage />} />

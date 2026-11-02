@@ -162,7 +162,20 @@ h1 {
   line-height: 1.35;
   color: #1A2430;
 }
-.layout-compact .intro { font-size: 9.6pt; margin-top: 2.6mm; margin-bottom: 2.2mm; }
+.layout-compact .promise { color: #fff; font-size: 14pt; }
+.layout-compact h1 { font-size: 30pt; }
+.layout-compact .intro { font-size: 12pt; line-height: 1.4; margin-top: 3.4mm; margin-bottom: 3mm; }
+.layout-compact .kicker { font-size: 10pt; margin-bottom: 2.2mm; }
+.layout-compact h2 { font-size: 14.5pt; }
+.layout-compact .num { font-size: 10pt; }
+.layout-compact .card p,
+.layout-compact .wide p { font-size: 11.5pt; line-height: 1.38; }
+.layout-compact .grid { gap: 3.4mm; }
+.layout-compact .card { min-height: 46mm; padding: 3.4mm 3.6mm; }
+.layout-compact .wide { margin-top: 3.4mm; min-height: 32mm; padding: 4mm 4.2mm; }
+.layout-compact .footer { margin-top: 3.5mm; }
+.layout-compact .icon { width: 10mm; height: 10mm; flex-basis: 10mm; }
+.layout-compact .icon svg { width: 6mm; height: 6mm; }
 .trade { display: flex; align-items: center; }
 .kicker {
   margin: 0 1mm 1.4mm;
@@ -212,14 +225,12 @@ h2 {
   font-size: 12pt;
   line-height: 1.15;
 }
-.layout-compact h2 { font-size: 11pt; }
 .card p, .wide p, .pub p, .step p {
   margin: .7mm 0 0;
   font-size: 9pt;
   line-height: 1.32;
   color: #1A2430;
 }
-.layout-compact .card p { font-size: 8.35pt; line-height: 1.28; }
 .more { color: #5C6B76 !important; }
 .wide {
   margin-top: 2.4mm;
@@ -354,12 +365,13 @@ def footer(page: str, pages: str) -> str:
 
 
 def hero(compact: bool) -> str:
+    eyebrow = "" if compact else '<p class="eyebrow">DESKTOP KIOSK</p>'
     tag = "" if compact else '<p class="tagline">Empowering Businesses with Smart IT Solutions</p>'
     return f"""
     <header class="hero">
       <div class="logo-wrap"><img src="image.png" alt="Company logo"></div>
       <div>
-        <p class="eyebrow">DESKTOP KIOSK</p>
+        {eyebrow}
         <h1>Smart Kiosk</h1>
         <p class="promise">Services in one touch</p>
         {tag}
@@ -387,7 +399,6 @@ def one_page() -> str:
         <p>Look up help for {trades}. Each listing shows the name, phone number, and location.</p>
       </div>
     </article>
-    {public_block()}
     {footer("1", "1")}
   </section>
 </body></html>"""

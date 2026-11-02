@@ -12,29 +12,44 @@ const PERIOD_KEY = periodKeyFor(NOW, 'daily');
 const PHONE_A = '+919876543210';
 const PHONE_B = '+919123456789';
 
-function setup(ledgerRows: Array<{
-  phone: string;
-  printColorMode: PrintColorMode;
-  pages: number;
-  updatedAt: Date;
-  status?: FreePageLedgerStatus;
-  id?: string;
-  periodKey?: string;
-  otpChallengeId?: string | null;
-  quickPrintSessionId?: string | null;
-  printJobId?: string | null;
-  createdAt?: Date;
-}> = []) {
-  const configRow = {
+function setup(
+  ledgerRows: Array<{
+    phone: string;
+    printColorMode: PrintColorMode;
+    pages: number;
+    updatedAt: Date;
+    status?: FreePageLedgerStatus;
+    id?: string;
+    periodKey?: string;
+    otpChallengeId?: string | null;
+    quickPrintSessionId?: string | null;
+    printJobId?: string | null;
+    createdAt?: Date;
+  }> = [],
+  options: {
+    societyPhones?: string[];
+    societyConfig?: { period: 'daily' | 'weekly' | 'monthly'; freeBwPages: number; freeColorPages: number };
+  } = {},
+) {
+  const globalConfig = {
     settingKey: 'print_free_quota_config',
     settingValue: {
-      period: 'daily',
+      period: 'daily' as const,
       freeBwPages: 5,
       freeColorPages: 2,
     },
   };
+  const societyConfig = {
+    settingKey: 'society_free_quota_config',
+    settingValue: options.societyConfig ?? {
+      period: 'daily' as const,
+      freeBwPages: 5,
+      freeColorPages: 0,
+    },
+  };
+  const societyPhones = new Set(options.societyPhones ?? []);
 
-  const findMany = vi.fn(async (args: { where?: { phone?: string; periodKey?: string; status?: unknown } }) => {
+  const findMany = vi.fn(async (args: { where?: { phone?: string; periodKey?: string | { in: string[] }; status?: unknown } }) => {
     let rows = ledgerRows.map((row) => ({
       id: row.id ?? 'ledger-1',
       phone: row.phone,
@@ -49,8 +64,11 @@ function setup(ledgerRows: Array<{
       updatedAt: row.updatedAt,
     }));
 
-    if (args.where?.periodKey) {
-      rows = rows.filter((r) => r.periodKey === args.where!.periodKey);
+    const periodKey = args.where?.periodKey;
+    if (typeof periodKey === 'string') {
+      rows = rows.filter((r) => r.periodKey === periodKey);
+    } else if (periodKey && typeof periodKey === 'object' && 'in' in periodKey) {
+      rows = rows.filter((r) => periodKey.in.includes(r.periodKey));
     }
     if (args.where?.phone) {
       rows = rows.filter((r) => r.phone === args.where!.phone);
@@ -64,7 +82,18 @@ function setup(ledgerRows: Array<{
 
   const db = {
     platformSetting: {
-      findUnique: vi.fn(async () => configRow),
+      findUnique: vi.fn(async (args: { where?: { settingKey?: string } }) => {
+        if (args.where?.settingKey === 'society_free_quota_config') return societyConfig;
+        if (args.where?.settingKey === 'print_free_quota_config') return globalConfig;
+        return null;
+      }),
+    },
+    societyPhone: {
+      findUnique: vi.fn(async (args: { where?: { phone?: string } }) => {
+        const phone = args.where?.phone;
+        return phone && societyPhones.has(phone) ? { id: 'society-1', phone } : null;
+      }),
+      findMany: vi.fn(async () => [...societyPhones].map((phone) => ({ phone }))),
     },
     phoneFreePageLedger: {
       findMany,
@@ -158,6 +187,51 @@ describe('PrintQuotaService.listUsage', () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.phone).toBe(PHONE_A);
   });
+
+  it('counts a society phone against its own period limit', async () => {
+    const monthlyKey = periodKeyFor(NOW, 'monthly');
+    const { service } = setup(
+      [
+        {
+          phone: PHONE_A,
+          printColorMode: PrintColorMode.bw,
+          pages: 2,
+          periodKey: monthlyKey,
+          updatedAt: new Date('2026-04-15T09:00:00.000Z'),
+        },
+        {
+          phone: PHONE_A,
+          printColorMode: PrintColorMode.bw,
+          pages: 10,
+          periodKey: PERIOD_KEY,
+          updatedAt: new Date('2026-04-15T09:10:00.000Z'),
+        },
+        {
+          phone: PHONE_B,
+          printColorMode: PrintColorMode.bw,
+          pages: 1,
+          periodKey: PERIOD_KEY,
+          updatedAt: new Date('2026-04-15T08:00:00.000Z'),
+        },
+      ],
+      {
+        societyPhones: [PHONE_A],
+        societyConfig: { period: 'monthly', freeBwPages: 30, freeColorPages: 1 },
+      },
+    );
+
+    const result = await service.listUsage({ now: NOW });
+    expect(result.period).toBe('daily');
+    expect(result.limits).toEqual({ freeBwPages: 5, freeColorPages: 2 });
+    const society = result.items.find((item) => item.phone === PHONE_A);
+    const publicPhone = result.items.find((item) => item.phone === PHONE_B);
+    expect(society?.society).toBe(true);
+    expect(society?.bwUsed).toBe(2);
+    expect(society?.bwRemaining).toBe(28);
+    expect(society?.bwLimit).toBe(30);
+    expect(publicPhone?.society).toBe(false);
+    expect(publicPhone?.bwRemaining).toBe(4);
+  });
 });
 
 describe('PrintQuotaService.getPhoneUsageDetail', () => {
@@ -181,6 +255,47 @@ describe('PrintQuotaService.getPhoneUsageDetail', () => {
     expect(detail.summary.bwRemaining).toBe(3);
     expect(detail.entries).toHaveLength(1);
     expect(detail.entries[0]?.source).toBe('otp_print');
+    expect(detail.society).toBe(false);
+  });
+
+  it('uses the society limit and period for a listed phone', async () => {
+    const monthlyKey = periodKeyFor(NOW, 'monthly');
+    const { service } = setup(
+      [
+        {
+          id: 'e-society',
+          phone: PHONE_A,
+          printColorMode: PrintColorMode.bw,
+          pages: 4,
+          periodKey: monthlyKey,
+          status: FreePageLedgerStatus.consumed,
+          updatedAt: new Date('2026-04-15T09:00:00.000Z'),
+        },
+        {
+          id: 'e-other-period',
+          phone: PHONE_A,
+          printColorMode: PrintColorMode.bw,
+          pages: 9,
+          periodKey: PERIOD_KEY,
+          status: FreePageLedgerStatus.consumed,
+          updatedAt: new Date('2026-04-15T08:00:00.000Z'),
+        },
+      ],
+      {
+        societyPhones: [PHONE_A],
+        societyConfig: { period: 'monthly', freeBwPages: 30, freeColorPages: 4 },
+      },
+    );
+
+    const detail = await service.getPhoneUsageDetail(PHONE_A, NOW);
+    expect(detail.society).toBe(true);
+    expect(detail.period).toBe('monthly');
+    expect(detail.periodKey).toBe(monthlyKey);
+    expect(detail.limits).toEqual({ freeBwPages: 30, freeColorPages: 4 });
+    expect(detail.summary.bwUsed).toBe(4);
+    expect(detail.summary.bwRemaining).toBe(26);
+    expect(detail.entries).toHaveLength(1);
+    expect(detail.entries[0]?.periodKey).toBe(monthlyKey);
   });
 
   it('rejects invalid phone', async () => {
