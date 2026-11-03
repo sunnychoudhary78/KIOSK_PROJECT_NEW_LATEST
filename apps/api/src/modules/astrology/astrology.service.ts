@@ -780,7 +780,7 @@ export class AstrologyService {
       return (await this.db.payment.update({
         where: { id: payment.id },
         data: { status: PaymentStatus.EXPIRED },
-      })) as T;
+      })) as unknown as T;
     }
     return payment;
   }
