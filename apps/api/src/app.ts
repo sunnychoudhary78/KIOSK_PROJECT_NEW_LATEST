@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import type { AppDeps } from './types/deps.js';
 import { correlationIdMiddleware } from './infrastructure/http/correlation.js';
 import { errorHandler } from './infrastructure/http/error-handler.js';
+import { contentDispositionInline } from './shared/content_disposition.js';
 import { requireDevice } from './shared/device-guard.js';
 import { AppError } from './shared/errors.js';
 import { requireParam } from './shared/params.js';
@@ -128,7 +129,7 @@ export function createApp(deps: AppDeps): Express {
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
           'Content-Disposition',
-          `inline; filename="${meta.title.replace(/"/g, '')}.pdf"`,
+          contentDispositionInline(meta.title, true),
         );
         res.send(bytes);
       } catch (error) {

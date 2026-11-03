@@ -5,6 +5,7 @@ import type { AppDeps } from '../../types/deps.js';
 import { authRequired } from '../../shared/auth.js';
 import { requireDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
+import { contentDispositionInline } from '../../shared/content_disposition.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { PrintingService } from '../printing/printing.service.js';
@@ -146,7 +147,7 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
         res.setHeader('Content-Type', doc.contentType || 'application/pdf');
         res.setHeader(
           'Content-Disposition',
-          `inline; filename="${doc.fileName.replace(/"/g, '')}"`,
+          contentDispositionInline(doc.fileName),
         );
         res.send(bytes);
       } catch (error) {
