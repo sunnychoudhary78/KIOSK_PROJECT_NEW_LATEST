@@ -55,7 +55,11 @@ async function main() {
     logger,
     digiLocker: createDigiLockerClient(config, logger),
     sms,
-    vedastro: createVedAstroClient({ baseUrl: config.vedastro.baseUrl, logger }),
+    vedastro: createVedAstroClient({
+      baseUrl: config.vedastro.baseUrl,
+      apiKey: config.vedastro.apiKey,
+      logger,
+    }),
     astrologyLlm,
     auditService,
     objectStorage: createObjectStorageClient(config),

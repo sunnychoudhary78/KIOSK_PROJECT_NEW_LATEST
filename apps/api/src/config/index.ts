@@ -39,6 +39,7 @@ const envSchema = z.object({
   SKP_RAZORPAY_WEBHOOK_SECRET: z.string().optional().default(''),
   SKP_PAYMENT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
   SKP_VEDASTRO_BASE_URL: z.string().url().default('https://api.vedastro.org/api'),
+  SKP_VEDASTRO_API_KEY: z.string().optional().default(''),
   SKP_AI_PROVIDER: z.enum(['openai', 'noop']).default('noop'),
   SKP_OPENAI_API_KEY: z.string().optional().default(''),
   SKP_OPENAI_MODEL: z.string().min(1).default('gpt-4o'),
@@ -105,6 +106,7 @@ export type AppConfig = {
   };
   vedastro: {
     baseUrl: string;
+    apiKey: string;
   };
   aiProvider: z.infer<typeof envSchema>['SKP_AI_PROVIDER'];
   openai: {
@@ -198,6 +200,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
     },
     vedastro: {
       baseUrl: data.SKP_VEDASTRO_BASE_URL.replace(/\/$/, ''),
+      apiKey: data.SKP_VEDASTRO_API_KEY.trim(),
     },
     aiProvider: data.SKP_AI_PROVIDER,
     openai: {

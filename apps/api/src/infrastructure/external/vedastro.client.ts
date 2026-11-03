@@ -636,15 +636,24 @@ export function mapVedAstroChart(parts: {
 export function createVedAstroClient(options: {
   baseUrl: string;
   logger: Logger;
+  apiKey?: string;
   fetchImpl?: FetchLike;
 }): VedAstroClient {
   const fetchImpl = options.fetchImpl ?? fetch;
   const baseUrl = normalizeVedAstroBaseUrl(options.baseUrl);
+  const apiKey = options.apiKey?.trim() ?? '';
+
+  function vedastroHeaders(base: Record<string, string>): Record<string, string> {
+    if (!apiKey) {
+      return base;
+    }
+    return { ...base, 'x-api-key': apiKey };
+  }
 
   async function getJson(url: string): Promise<unknown> {
     const response = await fetchImpl(url, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: vedastroHeaders({ Accept: 'application/json' }),
       signal: AbortSignal.timeout(VEDASTRO_FETCH_TIMEOUT_MS),
     });
     let body: unknown = null;
@@ -674,7 +683,10 @@ export function createVedAstroClient(options: {
   async function postJson(url: string, payload: unknown): Promise<unknown> {
     const response = await fetchImpl(url, {
       method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      headers: vedastroHeaders({
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      }),
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(VEDASTRO_FETCH_TIMEOUT_MS),
     });
@@ -789,10 +801,10 @@ export function createVedAstroClient(options: {
   async function postKundaliBody(url: string, payload: unknown): Promise<unknown> {
     const response = await fetchImpl(url, {
       method: 'POST',
-      headers: {
+      headers: vedastroHeaders({
         Accept: 'application/json, image/svg+xml, text/plain, */*',
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(VEDASTRO_FETCH_TIMEOUT_MS),
     });
@@ -828,7 +840,9 @@ export function createVedAstroClient(options: {
   async function getKundaliBody(url: string): Promise<unknown> {
     const response = await fetchImpl(url, {
       method: 'GET',
-      headers: { Accept: 'application/json, image/svg+xml, text/plain, */*' },
+      headers: vedastroHeaders({
+        Accept: 'application/json, image/svg+xml, text/plain, */*',
+      }),
       signal: AbortSignal.timeout(VEDASTRO_FETCH_TIMEOUT_MS),
     });
     const contentType = (response.headers.get('content-type') ?? '').toLowerCase();

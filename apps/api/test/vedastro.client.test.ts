@@ -306,6 +306,91 @@ describe('createVedAstroClient', () => {
     );
   }
 
+  it('sends x-api-key on VedAstro Calculate calls when apiKey is set', async () => {
+    const headersByUrl: Array<{ href: string; apiKey?: string }> = [];
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      const headers = new Headers(init?.headers);
+      headersByUrl.push({ href, apiKey: headers.get('x-api-key') ?? undefined });
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      if (href.endsWith('/Calculate/AllPlanetData')) {
+        return new Response(
+          JSON.stringify({
+            Status: 'Pass',
+            Payload: {
+              Sun: { ZodiacSign: { Name: 'Cancer' } },
+              Moon: { ZodiacSign: { Name: 'Gemini' }, Nakshatra: { Name: 'Punarvasu - 1' } },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (href.endsWith('/Calculate/AllHouseData')) {
+        return new Response(JSON.stringify({ Status: 'Pass', Payload: {} }), { status: 200 });
+      }
+      return new Response('nope', { status: 500 });
+    });
+
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      apiKey: 'sk_live_test_key',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await client.getChart({
+      dateOfBirth: '1991-06-02',
+      birthTime: '08:15',
+      birthPlace: 'Pune',
+    });
+
+    const geo = headersByUrl.find((entry) => entry.href.includes('open-meteo'));
+    const planets = headersByUrl.find((entry) => entry.href.includes('/Calculate/AllPlanetData'));
+    expect(geo?.apiKey).toBeUndefined();
+    expect(planets?.apiKey).toBe('sk_live_test_key');
+  });
+
+  it('omits x-api-key when apiKey is empty', async () => {
+    let planetApiKey: string | null = 'unset';
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes('geocoding-api.open-meteo.com')) {
+        return geoOk('Pune', 18.52, 73.85);
+      }
+      if (href.endsWith('/Calculate/AllPlanetData')) {
+        planetApiKey = new Headers(init?.headers).get('x-api-key');
+        return new Response(
+          JSON.stringify({
+            Status: 'Pass',
+            Payload: {
+              Sun: { ZodiacSign: { Name: 'Cancer' } },
+              Moon: { ZodiacSign: { Name: 'Gemini' } },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (href.endsWith('/Calculate/AllHouseData')) {
+        return new Response(JSON.stringify({ Status: 'Pass', Payload: {} }), { status: 200 });
+      }
+      return new Response('nope', { status: 500 });
+    });
+
+    const client = createVedAstroClient({
+      baseUrl: 'https://api.vedastro.org',
+      apiKey: '',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await client.getChart({
+      dateOfBirth: '1991-06-02',
+      birthTime: '08:15',
+      birthPlace: 'Pune',
+    });
+    expect(planetApiKey).toBeNull();
+  });
+
   it('returns a compact chart from AllPlanetData even if houses fail', async () => {
     let planetBody: Record<string, unknown> | undefined;
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
