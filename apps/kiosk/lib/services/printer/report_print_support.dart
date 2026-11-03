@@ -11,6 +11,7 @@ import 'package:skp_kiosk/services/printer/print_status_body.dart';
 enum ReportPrintPhase {
   idle,
   preparingPreview,
+  awaitingPayment,
   previewing,
   printing,
   printResult,
@@ -27,6 +28,10 @@ class ReportPrintSnapshot {
     this.printFailures = 0,
     this.printConfirmed = false,
     this.paperOut = false,
+    this.paymentRequired = false,
+    this.amountPaise = 0,
+    this.checkoutUrl,
+    this.checkoutToken,
     this.message,
     this.error,
   });
@@ -40,6 +45,10 @@ class ReportPrintSnapshot {
   final int printFailures;
   final bool printConfirmed;
   final bool paperOut;
+  final bool paymentRequired;
+  final int amountPaise;
+  final String? checkoutUrl;
+  final String? checkoutToken;
   final String? message;
   final String? error;
 
@@ -55,6 +64,12 @@ class ReportPrintSnapshot {
     int? printFailures,
     bool? printConfirmed,
     bool? paperOut,
+    bool? paymentRequired,
+    int? amountPaise,
+    String? checkoutUrl,
+    bool clearCheckoutUrl = false,
+    String? checkoutToken,
+    bool clearCheckoutToken = false,
     String? message,
     bool clearMessage = false,
     String? error,
@@ -70,6 +85,11 @@ class ReportPrintSnapshot {
       printFailures: printFailures ?? this.printFailures,
       printConfirmed: printConfirmed ?? this.printConfirmed,
       paperOut: paperOut ?? this.paperOut,
+      paymentRequired: paymentRequired ?? this.paymentRequired,
+      amountPaise: amountPaise ?? this.amountPaise,
+      checkoutUrl: clearCheckoutUrl ? null : (checkoutUrl ?? this.checkoutUrl),
+      checkoutToken:
+          clearCheckoutToken ? null : (checkoutToken ?? this.checkoutToken),
       message: clearMessage ? null : (message ?? this.message),
       error: clearError ? null : (error ?? this.error),
     );
@@ -100,6 +120,10 @@ class ReportPrintSupport {
       final pagesExpected = (job['pagesExpected'] as num?)?.toInt() ??
           (job['pageCount'] as num?)?.toInt() ??
           1;
+      final paymentRequired = job['paymentRequired'] == true;
+      final amountPaise = (job['amountPaise'] as num?)?.toInt() ?? 0;
+      final checkoutUrl = job['checkoutUrl'] as String?;
+      final checkoutToken = job['checkoutToken'] as String?;
       final bytes = await _api.getBytes('/print-jobs/$jobId/content');
 
       final dir = Directory(p.join(Directory.systemTemp.path, tempFolderName));
@@ -108,13 +132,19 @@ class ReportPrintSupport {
       await File(filePath).writeAsBytes(bytes, flush: true);
 
       return ReportPrintSnapshot(
-        phase: ReportPrintPhase.previewing,
+        phase: paymentRequired
+            ? ReportPrintPhase.awaitingPayment
+            : ReportPrintPhase.previewing,
         previewTitle: title,
         previewBytes: bytes,
         previewFilePath: filePath,
         previewJobId: jobId,
         pagesExpected: pagesExpected,
         printFailures: previous.printFailures,
+        paymentRequired: paymentRequired,
+        amountPaise: amountPaise,
+        checkoutUrl: checkoutUrl,
+        checkoutToken: checkoutToken,
       );
     } catch (error) {
       final message = userFacingError(error);
@@ -128,6 +158,38 @@ class ReportPrintSupport {
         error: message,
         paperOut: error is ApiException && error.code == 'printing_paused',
       );
+    }
+  }
+
+  /// Poll device payment status for a prepared kundali print job.
+  Future<ReportPrintSnapshot> pollPayment(ReportPrintSnapshot current) async {
+    final jobId = current.previewJobId;
+    if (jobId == null ||
+        current.phase != ReportPrintPhase.awaitingPayment ||
+        !current.paymentRequired) {
+      return current;
+    }
+    try {
+      final body = await _api.get('/astrology/print-jobs/$jobId/payment');
+      final status = body['status'] as String? ?? '';
+      if (status == 'PAID') {
+        return current.copyWith(
+          phase: ReportPrintPhase.previewing,
+          clearError: true,
+          clearMessage: true,
+        );
+      }
+      if (status == 'EXPIRED' || status == 'CANCELLED') {
+        return current.copyWith(
+          phase: ReportPrintPhase.printResult,
+          printConfirmed: false,
+          error: 'Payment window expired. Tap Print again.',
+          message: 'Payment window expired. Tap Print again.',
+        );
+      }
+      return current;
+    } catch (error) {
+      return current.copyWith(error: userFacingError(error));
     }
   }
 
@@ -164,6 +226,8 @@ class ReportPrintSupport {
           pagesExpected: current.pagesExpected,
           printConfirmed: outcome.isSuccess,
           message: outcome.userMessage,
+          paymentRequired: current.paymentRequired,
+          amountPaise: current.amountPaise,
         );
       }
       if (outcome.reconcileDetail == 'paper_out') {

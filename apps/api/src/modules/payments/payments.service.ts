@@ -262,10 +262,19 @@ export class PaymentsService {
     }
 
     if (payment.status === PaymentStatus.PAID) {
-    if (payment.quickPrintSessionId) {
-      await this.markQuickPrintReady(payment.quickPrintSessionId, payment.id, input.correlationId);
-      return {
-        alreadyPaid: true,
+      if (payment.printJobId) {
+        return {
+          alreadyPaid: true,
+          otpSent: false,
+          sessionReady: true,
+          printReady: true,
+          payment: this.toPublicPayment(payment),
+        };
+      }
+      if (payment.quickPrintSessionId) {
+        await this.markQuickPrintReady(payment.quickPrintSessionId, payment.id, input.correlationId);
+        return {
+          alreadyPaid: true,
           otpSent: false,
           sessionReady: true,
           payment: this.toPublicPayment(payment),
@@ -322,9 +331,29 @@ export class PaymentsService {
       metadata: {
         challengeId: payment.challengeId,
         quickPrintSessionId: payment.quickPrintSessionId,
+        printJobId: payment.printJobId,
         razorpayOrderId: input.razorpayOrderId,
       },
     });
+
+    if (payment.printJobId) {
+      await this.audit.record({
+        action: 'astrology.kundali_print_paid',
+        principalType: 'system',
+        principalId: payment.printJobId,
+        resourceType: 'print_job',
+        resourceId: payment.printJobId,
+        correlationId: input.correlationId,
+        metadata: { paymentId: payment.id, razorpayOrderId: input.razorpayOrderId },
+      });
+      return {
+        alreadyPaid: false,
+        otpSent: false,
+        sessionReady: true,
+        printReady: true,
+        payment: this.toPublicPayment(updated),
+      };
+    }
 
     if (payment.quickPrintSessionId) {
       await this.markQuickPrintReady(payment.quickPrintSessionId, payment.id, input.correlationId);

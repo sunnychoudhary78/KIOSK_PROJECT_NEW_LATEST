@@ -246,6 +246,8 @@ model Device {
   extraPageChargeRupees      Int @default(10) @map("extra_page_charge_rupees")
   freeColorPagesPerSession   Int @default(0) @map("free_color_pages_per_session")
   extraColorPageChargeRupees Int @default(20) @map("extra_color_page_charge_rupees")
+  /// Flat fee (₹) for one color My Kundali print. 0 = free.
+  kundaliColorPrintChargeRupees Int @default(0) @map("kundali_color_print_charge_rupees")
   /// Local Asia/Kolkata wall time HH:mm; both null = no free-disabled window.
   freeDisabledFromLocal      String? @map("free_disabled_from_local") @db.VarChar(5)
   freeDisabledToLocal        String? @map("free_disabled_to_local") @db.VarChar(5)
@@ -459,6 +461,7 @@ model Payment {
   id                  String         @id @default(uuid()) @db.Uuid
   challengeId         String?        @unique @map("challenge_id") @db.Uuid
   quickPrintSessionId String?        @unique @map("quick_print_session_id") @db.Uuid
+  printJobId          String?        @unique @map("print_job_id") @db.Uuid
   userId              String?        @map("user_id") @db.Uuid
   status              PaymentStatus  @default(PENDING)
   pageCount           Int            @map("page_count")
@@ -470,6 +473,8 @@ model Payment {
   razorpayOrderId     String?        @unique @map("razorpay_order_id")
   razorpayPaymentId   String?        @map("razorpay_payment_id")
   razorpaySignature   String?        @map("razorpay_signature")
+  /// Public token for phone checkout URL (astrology print QR).
+  checkoutToken       String?        @unique @map("checkout_token") @db.VarChar(64)
   failureReason       String?        @map("failure_reason")
   paidAt              DateTime?      @map("paid_at")
   expiresAt           DateTime       @map("expires_at")
@@ -478,6 +483,7 @@ model Payment {
 
   challenge         OtpChallenge?      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   quickPrintSession QuickPrintSession? @relation(fields: [quickPrintSessionId], references: [id], onDelete: Cascade)
+  printJob          PrintJob?          @relation(fields: [printJobId], references: [id], onDelete: Cascade)
   user              User?              @relation(fields: [userId], references: [id])
   supportQuery      SupportQuery?
 
@@ -625,6 +631,7 @@ model PrintJob {
   digiLockerSession DigiLockerSession? @relation(fields: [digiLockerSessionId], references: [id])
   otpChallenge      OtpChallenge?
   quickPrintSession QuickPrintSession?
+  payment           Payment?
   freePageLedgerEntries PhoneFreePageLedger[]
   supportQuery      SupportQuery?
 

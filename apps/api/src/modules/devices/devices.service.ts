@@ -63,6 +63,7 @@ function mapDevice(device: {
   extraPageChargeRupees?: number;
   freeColorPagesPerSession?: number;
   extraColorPageChargeRupees?: number;
+  kundaliColorPrintChargeRupees?: number;
   freeDisabledFromLocal?: string | null;
   freeDisabledToLocal?: string | null;
   bannerHorizontalEnabled?: boolean;
@@ -318,6 +319,7 @@ export class DevicesService {
         extraPageChargeRupees: input.extraPageChargeRupees,
         freeColorPagesPerSession: input.freeColorPagesPerSession,
         extraColorPageChargeRupees: input.extraColorPageChargeRupees,
+        kundaliColorPrintChargeRupees: input.kundaliColorPrintChargeRupees,
         ...(input.freeDisabledFromLocal !== undefined
           ? { freeDisabledFromLocal: input.freeDisabledFromLocal }
           : {}),

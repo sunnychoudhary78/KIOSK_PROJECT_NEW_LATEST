@@ -1,8 +1,15 @@
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import type { NextFunction, Request, Response, Router } from 'express';
 import type { AppDeps } from '../../types/deps.js';
+import { validateBody } from '../../infrastructure/http/validate.js';
 import { requireDevice } from '../../shared/device-guard.js';
 import { AppError } from '../../shared/errors.js';
+import { requireParam } from '../../shared/params.js';
+import { OtpPrintService } from '../otp_print/otp_print.service.js';
+import { PaymentsService } from '../payments/payments.service.js';
+import { RazorpayClient } from '../payments/razorpay.client.js';
+import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { createPlacesClient } from '../../infrastructure/external/places.client.js';
 import {
@@ -16,6 +23,7 @@ import {
   printMatchBodySchema,
   printReadingBodySchema,
   printTodayBodySchema,
+  verifyAstrologyPrintPaymentSchema,
   type UploadedPalm,
 } from './astrology.schemas.js';
 import { AstrologyService } from './astrology.service.js';
@@ -27,6 +35,23 @@ const upload = multer({
 
 export function registerAstrologyModule(router: Router, deps: AppDeps): void {
   const services = new ServicesCatalogService(deps.db, deps.auditService);
+  const printing = new PrintingService(deps.db, deps.auditService);
+  const razorpay = new RazorpayClient(deps.config);
+  const otpPrint = new OtpPrintService(
+    deps.db,
+    deps.config,
+    deps.auditService,
+    printing,
+    services,
+    deps.sms,
+  );
+  const payments = new PaymentsService(
+    deps.db,
+    deps.config,
+    razorpay,
+    otpPrint,
+    deps.auditService,
+  );
   const service = new AstrologyService(
     deps.db,
     deps.vedastro,
@@ -34,10 +59,25 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
     deps.auditService,
     services,
     deps.logger,
+    deps.config,
+    razorpay,
+    payments,
   );
   const places = createPlacesClient({
     apiKey: process.env.SKP_GOOGLE_PLACES_API_KEY,
     logger: deps.logger,
+  });
+  const publicLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 40,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip ?? 'unknown',
+    message: {
+      code: 'rate_limited',
+      message: 'Too many requests',
+      correlationId: 'rate_limited',
+    },
   });
 
   router.get(
@@ -324,6 +364,64 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
           req.correlationId,
         );
         res.status(200).json(job);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/astrology/print-jobs/:jobId/payment',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const jobId = requireParam(req.params.jobId, 'jobId');
+        res.json(await service.getPrintJobPayment(req.principal.deviceId, jobId));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/astrology/print-checkout/:token',
+    publicLimiter,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const token = requireParam(req.params.token, 'token');
+        res.json(await service.getPrintCheckout(token));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/print-checkout/:token/razorpay/order',
+    publicLimiter,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const token = requireParam(req.params.token, 'token');
+        res.status(201).json(await service.createPrintCheckoutOrder(token, req.correlationId));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/print-checkout/:token/razorpay/verify',
+    publicLimiter,
+    validateBody(verifyAstrologyPrintPaymentSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const token = requireParam(req.params.token, 'token');
+        res.json(
+          await service.verifyPrintCheckoutPayment(token, req.body, req.correlationId),
+        );
       } catch (error) {
         next(error);
       }

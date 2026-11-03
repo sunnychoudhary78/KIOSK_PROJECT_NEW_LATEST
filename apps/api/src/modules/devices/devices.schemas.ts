@@ -173,6 +173,7 @@ export const setDevicePrintLimitsSchema = z
     extraPageChargeRupees: z.number().int().min(0).max(1000),
     freeColorPagesPerSession: z.number().int().min(0).max(100),
     extraColorPageChargeRupees: z.number().int().min(0).max(1000),
+    kundaliColorPrintChargeRupees: z.number().int().min(0).max(1000),
     freeDisabledFromLocal: localTimeHmm.optional(),
     freeDisabledToLocal: localTimeHmm.optional(),
     bannerHorizontalEnabled: z.boolean().optional(),

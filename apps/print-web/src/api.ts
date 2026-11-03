@@ -197,6 +197,60 @@ export async function verifyPayment(
   return (await response.json()) as { sessionReady?: boolean };
 }
 
+export type AstrologyPrintCheckout = {
+  id: string;
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+  amountPaise: number;
+  currency: string;
+  expiresAt: string;
+  paidAt: string | null;
+  printJobId: string | null;
+  title: string;
+};
+
+export async function getAstrologyPrintCheckout(token: string): Promise<AstrologyPrintCheckout> {
+  const response = await fetch(
+    `${API_BASE}/astrology/print-checkout/${encodeURIComponent(token)}`,
+  );
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as AstrologyPrintCheckout;
+}
+
+export async function createAstrologyPrintOrder(token: string): Promise<RazorpayOrder> {
+  const response = await fetch(
+    `${API_BASE}/astrology/print-checkout/${encodeURIComponent(token)}/razorpay/order`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as RazorpayOrder;
+}
+
+export async function verifyAstrologyPrintPayment(
+  token: string,
+  input: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  },
+): Promise<{ printReady?: boolean; alreadyPaid?: boolean }> {
+  const response = await fetch(
+    `${API_BASE}/astrology/print-checkout/${encodeURIComponent(token)}/razorpay/verify`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as { printReady?: boolean; alreadyPaid?: boolean };
+}
+
 export function loadRazorpay(): Promise<void> {
   if (window.Razorpay) {
     return Promise.resolve();

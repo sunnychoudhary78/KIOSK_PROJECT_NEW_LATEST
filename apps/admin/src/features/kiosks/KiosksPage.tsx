@@ -52,6 +52,7 @@ type Device = {
   extraPageChargeRupees: number;
   freeColorPagesPerSession: number;
   extraColorPageChargeRupees: number;
+  kundaliColorPrintChargeRupees: number;
   freeDisabledFromLocal?: string | null;
   freeDisabledToLocal?: string | null;
   bannerHorizontalEnabled?: boolean;
@@ -368,6 +369,7 @@ type PrintLimitsForm = {
   extraPageChargeRupees: number;
   freeColorPagesPerSession: number;
   extraColorPageChargeRupees: number;
+  kundaliColorPrintChargeRupees: number;
   freeDisabledFromLocal: string;
   freeDisabledToLocal: string;
   bannerHorizontalEnabled: boolean;
@@ -380,6 +382,7 @@ const DEFAULT_PRINT_LIMITS: PrintLimitsForm = {
   extraPageChargeRupees: 10,
   freeColorPagesPerSession: 0,
   extraColorPageChargeRupees: 20,
+  kundaliColorPrintChargeRupees: 0,
   freeDisabledFromLocal: '',
   freeDisabledToLocal: '',
   bannerHorizontalEnabled: true,
@@ -395,6 +398,8 @@ function printLimitsFromDevice(device: Device): PrintLimitsForm {
       device.freeColorPagesPerSession ?? DEFAULT_PRINT_LIMITS.freeColorPagesPerSession,
     extraColorPageChargeRupees:
       device.extraColorPageChargeRupees ?? DEFAULT_PRINT_LIMITS.extraColorPageChargeRupees,
+    kundaliColorPrintChargeRupees:
+      device.kundaliColorPrintChargeRupees ?? DEFAULT_PRINT_LIMITS.kundaliColorPrintChargeRupees,
     freeDisabledFromLocal: device.freeDisabledFromLocal ?? '',
     freeDisabledToLocal: device.freeDisabledToLocal ?? '',
     bannerHorizontalEnabled: device.bannerHorizontalEnabled !== false,
@@ -633,6 +638,7 @@ export function KiosksPage() {
           extraPageChargeRupees: Number(printLimits.extraPageChargeRupees),
           freeColorPagesPerSession: Number(printLimits.freeColorPagesPerSession),
           extraColorPageChargeRupees: Number(printLimits.extraColorPageChargeRupees),
+          kundaliColorPrintChargeRupees: Number(printLimits.kundaliColorPrintChargeRupees),
           freeDisabledFromLocal: from || null,
           freeDisabledToLocal: to || null,
           bannerHorizontalEnabled: printLimits.bannerHorizontalEnabled,
@@ -1119,6 +1125,21 @@ export function KiosksPage() {
                 setPrintLimits((s) => ({
                   ...s,
                   extraColorPageChargeRupees: Number(e.target.value),
+                }))
+              }
+            />
+          </label>
+          <label>
+            Kundali color print (₹)
+            <Input
+              type="number"
+              min={0}
+              max={1000}
+              value={printLimits.kundaliColorPrintChargeRupees}
+              onChange={(e) =>
+                setPrintLimits((s) => ({
+                  ...s,
+                  kundaliColorPrintChargeRupees: Number(e.target.value),
                 }))
               }
             />

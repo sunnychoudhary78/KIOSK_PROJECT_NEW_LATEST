@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
@@ -46,8 +48,13 @@ class MyKundaliUiState {
 }
 
 class MyKundaliController extends Notifier<MyKundaliUiState> {
+  Timer? _paymentPoll;
+
   @override
-  MyKundaliUiState build() => const MyKundaliUiState();
+  MyKundaliUiState build() {
+    ref.onDispose(() => _stopPaymentPoll());
+    return const MyKundaliUiState();
+  }
 
   AstrologyRepository get _repository => ref.read(astrologyRepositoryProvider);
 
@@ -57,7 +64,37 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
         tempFolderName: 'skp_astrology',
       );
 
+  void _stopPaymentPoll() {
+    _paymentPoll?.cancel();
+    _paymentPoll = null;
+  }
+
+  void _startPaymentPoll() {
+    _stopPaymentPoll();
+    _paymentPoll = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!ref.mounted) {
+        _stopPaymentPoll();
+        return;
+      }
+      if (state.print.phase != ReportPrintPhase.awaitingPayment) {
+        _stopPaymentPoll();
+        return;
+      }
+      final next = await _printSupport.pollPayment(state.print);
+      if (!ref.mounted) return;
+      if (next.phase != ReportPrintPhase.awaitingPayment) {
+        _stopPaymentPoll();
+      }
+      state = state.copyWith(
+        print: next,
+        error: next.error,
+        clearError: next.error == null,
+      );
+    });
+  }
+
   void reset() {
+    _stopPaymentPoll();
     state = const MyKundaliUiState();
   }
 
@@ -210,6 +247,9 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     );
     if (!ref.mounted) return;
     state = state.copyWith(print: next, error: next.error, clearError: next.error == null);
+    if (next.phase == ReportPrintPhase.awaitingPayment) {
+      _startPaymentPoll();
+    }
   }
 
   Future<void> confirmPrint() async {
@@ -234,6 +274,7 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
   }
 
   Future<void> cancelPrintPreview() async {
+    _stopPaymentPoll();
     await _printSupport.abandonRetry(state.print);
     if (!ref.mounted) return;
     state = state.copyWith(print: const ReportPrintSnapshot());
@@ -250,6 +291,7 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
   }
 
   void clearPrintResult() {
+    _stopPaymentPoll();
     state = state.copyWith(print: const ReportPrintSnapshot());
   }
 }

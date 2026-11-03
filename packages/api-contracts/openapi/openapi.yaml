@@ -860,15 +860,139 @@ paths:
                   type: string
       responses:
         '200':
-          description: Print job ready for download
+          description: Print job ready for download (may require payment before physical print)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PrintJob'
+                allOf:
+                  - $ref: '#/components/schemas/PrintJob'
+                  - type: object
+                    properties:
+                      paymentRequired:
+                        type: boolean
+                      amountPaise:
+                        type: integer
+                      currency:
+                        type: string
+                      paymentId:
+                        type: string
+                        nullable: true
+                      checkoutToken:
+                        type: string
+                        nullable: true
+                      checkoutUrl:
+                        type: string
+                        nullable: true
         '400':
           description: Validation failed
         '403':
           description: Service disabled or printing paused
+        '503':
+          description: Payments not configured while charge is enabled
+
+  /astrology/print-jobs/{jobId}/payment:
+    get:
+      tags: [Astrology]
+      summary: Poll Kundali print payment status (device)
+      operationId: getAstrologyPrintJobPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Payment status for the print job
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  paymentRequired:
+                    type: boolean
+                  status:
+                    type: string
+                  amountPaise:
+                    type: integer
+                  currency:
+                    type: string
+                  paidAt:
+                    type: string
+                    nullable: true
+                  expiresAt:
+                    type: string
+                    nullable: true
+                  checkoutToken:
+                    type: string
+                    nullable: true
+                  checkoutUrl:
+                    type: string
+                    nullable: true
+
+  /astrology/print-checkout/{token}:
+    get:
+      tags: [Astrology]
+      summary: Public Kundali print checkout details
+      operationId: getAstrologyPrintCheckout
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Checkout details
+        '404':
+          description: Checkout not found
+
+  /astrology/print-checkout/{token}/razorpay/order:
+    post:
+      tags: [Astrology]
+      summary: Create or reuse Razorpay order for Kundali print checkout
+      operationId: createAstrologyPrintCheckoutOrder
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Razorpay order ready
+
+  /astrology/print-checkout/{token}/razorpay/verify:
+    post:
+      tags: [Astrology]
+      summary: Verify Razorpay payment for Kundali print checkout
+      operationId: verifyAstrologyPrintCheckoutPayment
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [razorpay_order_id, razorpay_payment_id, razorpay_signature]
+              properties:
+                razorpay_order_id:
+                  type: string
+                razorpay_payment_id:
+                  type: string
+                razorpay_signature:
+                  type: string
+      responses:
+        '200':
+          description: Payment verified
 
   /astrology/match/print:
     post:

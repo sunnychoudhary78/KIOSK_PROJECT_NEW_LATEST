@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
@@ -39,6 +41,78 @@ class AstrologyPrintShell extends StatelessWidget {
           onHome: onHome,
           stepLabel: 'Print',
           body: const KioskWaitAds(message: 'Preparing print preview…'),
+        ),
+      );
+    }
+
+    if (print.phase == ReportPrintPhase.awaitingPayment) {
+      final rupees = (print.amountPaise / 100).round();
+      final url = print.checkoutUrl ?? '';
+      return VisitorSessionPopScope(
+        endSessionOnPop: false,
+        child: KioskShell(
+          title: title,
+          onHome: onHome,
+          stepLabel: 'Pay',
+          footerLeading: KioskGhostButton(
+            label: 'Back',
+            icon: Icons.arrow_back,
+            onPressed: onBackFromPreview,
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Pay to print',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Scan this QR with your phone and pay ₹$rupees for a color Kundali print.',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Printing starts after payment is confirmed.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      if (print.error != null && print.error!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        KioskStatusBanner(
+                          message: print.error!,
+                          tone: KioskBannerTone.danger,
+                          icon: Icons.error_outline,
+                        ),
+                      ],
+                      const Spacer(),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  width: 320,
+                  height: 320,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+                  ),
+                  child: url.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : QrImageView(
+                          data: url,
+                          version: QrVersions.auto,
+                          backgroundColor: Colors.white,
+                        ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -159,7 +233,8 @@ Widget? astrologyPausedShell({
 
 void holdSessionForAstrologyPrint(WidgetRef ref, ReportPrintSnapshot print) {
   ref.read(kioskSessionHoldProvider.notifier).set(
-        printing: print.phase == ReportPrintPhase.printing,
+        printing: print.phase == ReportPrintPhase.printing ||
+            print.phase == ReportPrintPhase.awaitingPayment,
       );
 }
 

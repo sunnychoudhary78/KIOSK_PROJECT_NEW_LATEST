@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AppConfig } from '../src/config/index.js';
 import { AstrologyService } from '../src/modules/astrology/astrology.service.js';
 import { ASTROLOGY_DISCLAIMER, sniffPalmImageMime } from '../src/modules/astrology/astrology.schemas.js';
 import {
@@ -10,11 +11,49 @@ import {
 import { AppError } from '../src/shared/errors.js';
 import type { DbClient } from '../src/infrastructure/database/prisma.js';
 import type { AuditService } from '../src/modules/audit/audit.service.js';
+import type { PaymentsService } from '../src/modules/payments/payments.service.js';
+import type { RazorpayClient } from '../src/modules/payments/razorpay.client.js';
 import type { ServicesCatalogService } from '../src/modules/services/services.service.js';
 import type { Logger } from '../src/infrastructure/logging/logger.js';
 import type { VedAstroClient } from '../src/infrastructure/external/vedastro.client.js';
 
 const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+
+const testConfig = {
+  razorpay: { keyId: '', keySecret: '', webhookSecret: '' },
+  payments: { windowMinutes: 15 },
+  printWeb: { publicUrl: 'http://localhost:5174' },
+} as AppConfig;
+
+const testRazorpay = {
+  getKeyId: () => 'rzp_test',
+  getKeySecret: () => 'secret',
+  createOrder: vi.fn(),
+} as unknown as RazorpayClient;
+
+const testPayments = {
+  fulfillRazorpayPayment: vi.fn(),
+} as unknown as PaymentsService;
+
+function makeAstrologyService(
+  db: DbClient,
+  vedastro: VedAstroClient,
+  llm: AstrologyLlmClient,
+  audit: AuditService,
+  services: ServicesCatalogService,
+) {
+  return new AstrologyService(
+    db,
+    vedastro,
+    llm,
+    audit,
+    services,
+    silentLogger,
+    testConfig,
+    testRazorpay,
+    testPayments,
+  );
+}
 
 function mockLlm(overrides?: Partial<AstrologyLlmClient>): AstrologyLlmClient {
   return {
@@ -93,14 +132,7 @@ describe('AstrologyService.createReading', () => {
       }),
     };
 
-    const service = new AstrologyService(
-      db as unknown as DbClient,
-      vedastro,
-      llm,
-      audit as unknown as AuditService,
-      services as unknown as ServicesCatalogService,
-      silentLogger,
-    );
+    const service = makeAstrologyService(db as unknown as DbClient, vedastro, llm, audit as unknown as AuditService, services as unknown as ServicesCatalogService);
     return { service, db, vedastro, llm, audit, services };
   }
 
@@ -234,14 +266,7 @@ describe('AstrologyService.createKundali', () => {
         }
       }),
     };
-    const service = new AstrologyService(
-      db as unknown as DbClient,
-      vedastro,
-      llm,
-      audit as unknown as AuditService,
-      services as unknown as ServicesCatalogService,
-      silentLogger,
-    );
+    const service = makeAstrologyService(db as unknown as DbClient, vedastro, llm, audit as unknown as AuditService, services as unknown as ServicesCatalogService);
     return { service, db, vedastro, llm, audit };
   }
 
@@ -381,14 +406,7 @@ describe('AstrologyService.createMatch', () => {
     const audit = { record: vi.fn(async () => undefined) };
     const services = { assertEnabled: vi.fn(async () => undefined) };
     const llm = mockLlm();
-    const service = new AstrologyService(
-      db as unknown as DbClient,
-      vedastro as unknown as VedAstroClient,
-      llm,
-      audit as unknown as AuditService,
-      services as unknown as ServicesCatalogService,
-      silentLogger,
-    );
+    const service = makeAstrologyService(db as unknown as DbClient, vedastro as unknown as VedAstroClient, llm, audit as unknown as AuditService, services as unknown as ServicesCatalogService);
 
     const result = await service.createMatch('device-1', fields, 'corr-match');
 
@@ -428,13 +446,12 @@ describe('AstrologyService.createMatch', () => {
         throw new Error('llm down');
       }),
     });
-    const service = new AstrologyService(
+    const service = makeAstrologyService(
       { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
       vedastro as unknown as VedAstroClient,
       llm,
       { record: vi.fn() } as unknown as AuditService,
       { assertEnabled: vi.fn(async () => undefined) } as unknown as ServicesCatalogService,
-      silentLogger,
     );
     const result = await service.createMatch('device-1', fields);
     expect(result.score.total).toBe(18);
@@ -449,7 +466,7 @@ describe('AstrologyService.createMatch', () => {
       getMatchReport: vi.fn(),
       getPanchangaTable: vi.fn(),
     };
-    const service = new AstrologyService(
+    const service = makeAstrologyService(
       { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
       vedastro as unknown as VedAstroClient,
       mockLlm(),
@@ -459,7 +476,6 @@ describe('AstrologyService.createMatch', () => {
           throw new AppError('service_disabled', 'Service astrology is disabled for this device', 403);
         }),
       } as unknown as ServicesCatalogService,
-      silentLogger,
     );
     await expect(service.createMatch('device-1', fields)).rejects.toMatchObject({
       code: 'service_disabled',
@@ -507,14 +523,7 @@ describe('AstrologyService.createToday', () => {
     const audit = { record: vi.fn(async () => undefined) };
     const services = { assertEnabled: vi.fn(async () => undefined) };
     const llm = mockLlm();
-    const service = new AstrologyService(
-      db as unknown as DbClient,
-      vedastro as unknown as VedAstroClient,
-      llm,
-      audit as unknown as AuditService,
-      services as unknown as ServicesCatalogService,
-      silentLogger,
-    );
+    const service = makeAstrologyService(db as unknown as DbClient, vedastro as unknown as VedAstroClient, llm, audit as unknown as AuditService, services as unknown as ServicesCatalogService);
 
     const result = await service.createToday('device-1', fields, 'corr-today');
 
@@ -543,7 +552,7 @@ describe('AstrologyService.createToday', () => {
       getMatchReport: vi.fn(),
       getPanchangaTable: vi.fn(),
     };
-    const service = new AstrologyService(
+    const service = makeAstrologyService(
       { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
       vedastro as unknown as VedAstroClient,
       mockLlm(),
@@ -553,7 +562,6 @@ describe('AstrologyService.createToday', () => {
           throw new AppError('service_disabled', 'Service astrology is disabled for this device', 403);
         }),
       } as unknown as ServicesCatalogService,
-      silentLogger,
     );
     await expect(service.createToday('device-1', fields)).rejects.toMatchObject({
       code: 'service_disabled',

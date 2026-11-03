@@ -1,4 +1,5 @@
 import {
+  PaymentStatus,
   PrintColorMode,
   PrintJobReconcileStatus,
   PrintJobSource,
@@ -184,7 +185,10 @@ export class PrintingService {
     deviceId: string,
     correlationId?: string,
   ) {
-    const job = await this.db.printJob.findUnique({ where: { id: jobId } });
+    const job = await this.db.printJob.findUnique({
+      where: { id: jobId },
+      include: { payment: true },
+    });
     if (!job) {
       throw new AppError('not_found', 'Print job not found', 404);
     }
@@ -193,6 +197,20 @@ export class PrintingService {
     }
 
     const status = input.status as PrintJobStatus;
+    if (status === PrintJobStatus.printing) {
+      const payment = job.payment;
+      if (payment && payment.amountPaise > 0 && payment.status !== PaymentStatus.PAID) {
+        if (payment.status === PaymentStatus.PENDING && payment.expiresAt.getTime() < Date.now()) {
+          await this.db.payment.update({
+            where: { id: payment.id },
+            data: { status: PaymentStatus.EXPIRED },
+          });
+          throw new AppError('payment_expired', 'Payment window has expired', 400);
+        }
+        throw new AppError('payment_required', 'Payment is not complete yet', 402);
+      }
+    }
+
     const reconcileStatus =
       toReconcileStatus(input.reconcileStatus) ?? job.reconcileStatus;
     const pagesExpected = job.pagesExpected > 0 ? job.pagesExpected : job.pageCount;

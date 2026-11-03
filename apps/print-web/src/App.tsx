@@ -2,14 +2,18 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import {
   ApiError,
+  createAstrologyPrintOrder,
   createOrder,
+  getAstrologyPrintCheckout,
   getSession,
   loadRazorpay,
   requestPhoneOtp,
   sendSupportNote,
   uploadDocuments,
+  verifyAstrologyPrintPayment,
   verifyPayment,
   verifyPhoneOtp,
+  type AstrologyPrintCheckout,
   type QuickPrintSession,
 } from './api';
 
@@ -772,11 +776,126 @@ function HomePage() {
   );
 }
 
+function AstrologyPrintPage() {
+  const { token = '' } = useParams();
+  const [checkout, setCheckout] = useState<AstrologyPrintCheckout | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await getAstrologyPrintCheckout(token);
+        if (cancelled) return;
+        setCheckout(next);
+        if (next.status === 'PAID') setDone(true);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof ApiError ? err.message : 'Checkout not found.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  async function onPay() {
+    setBusy(true);
+    setError(null);
+    try {
+      const order = await createAstrologyPrintOrder(token);
+      if (order.alreadyPaid) {
+        setDone(true);
+        return;
+      }
+      if (!order.razorpay_order_id) {
+        throw new Error('Payment order was not created');
+      }
+      await loadRazorpay();
+      await new Promise<void>((resolve, reject) => {
+        const checkoutWindow = new window.Razorpay({
+          key: order.razorpay_key_id,
+          amount: order.payment.amountPaise,
+          currency: order.payment.currency,
+          name: 'ATHENA Kundali',
+          description: 'Color Kundali print',
+          order_id: order.razorpay_order_id!,
+          handler: (response) => {
+            void verifyAstrologyPrintPayment(token, response)
+              .then(() => {
+                setDone(true);
+                resolve();
+              })
+              .catch(reject);
+          },
+          modal: {
+            ondismiss: () => reject(new Error('Payment cancelled')),
+          },
+        });
+        checkoutWindow.open();
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Payment failed. You can try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error && !checkout) {
+    return (
+      <AppShell title="ATHENA" subtitle="Kundali print payment">
+        <p className="banner error">{error}</p>
+      </AppShell>
+    );
+  }
+
+  if (!checkout) {
+    return (
+      <AppShell title="ATHENA" subtitle="Kundali print payment">
+        <p>Loading…</p>
+      </AppShell>
+    );
+  }
+
+  if (done || checkout.status === 'PAID') {
+    return (
+      <AppShell title="ATHENA" subtitle="Payment complete">
+        <p className="banner">Paid. Return to the kiosk to print your Kundali.</p>
+      </AppShell>
+    );
+  }
+
+  if (checkout.status === 'EXPIRED' || checkout.status === 'CANCELLED') {
+    return (
+      <AppShell title="ATHENA" subtitle="Payment unavailable">
+        <p className="banner error">This payment window has expired. Start print again on the kiosk.</p>
+      </AppShell>
+    );
+  }
+
+  return (
+    <AppShell title="ATHENA" subtitle="Kundali color print">
+      <div className="pay-card">
+        <h2>{checkout.title}</h2>
+        <p className="amount">{formatMoney(checkout.amountPaise)}</p>
+        <button type="button" className="primary" disabled={busy} onClick={() => void onPay()}>
+          {busy ? 'Opening payment…' : error ? 'Pay again' : 'Pay now'}
+        </button>
+        {error ? <p className="banner error">{error}</p> : null}
+      </div>
+    </AppShell>
+  );
+}
+
 export function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/s/:token" element={<SessionPage />} />
+      <Route path="/astrology-print/:token" element={<AstrologyPrintPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
