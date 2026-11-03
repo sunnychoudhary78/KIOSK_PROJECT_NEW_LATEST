@@ -471,10 +471,13 @@ model Payment {
   amountPaise         Int            @map("amount_paise")
   currency            String         @default("INR")
   razorpayOrderId     String?        @unique @map("razorpay_order_id")
+  razorpayQrCodeId    String?        @unique @map("razorpay_qr_code_id")
   razorpayPaymentId   String?        @map("razorpay_payment_id")
   razorpaySignature   String?        @map("razorpay_signature")
-  /// Public token for phone checkout URL (astrology print QR).
+  /// Public token for phone checkout URL (legacy astrology Checkout flow).
   checkoutToken       String?        @unique @map("checkout_token") @db.VarChar(64)
+  /// Razorpay UPI QR image URL for kiosk display (Kundali color print).
+  qrImageUrl          String?        @map("qr_image_url") @db.VarChar(500)
   failureReason       String?        @map("failure_reason")
   paidAt              DateTime?      @map("paid_at")
   expiresAt           DateTime       @map("expires_at")

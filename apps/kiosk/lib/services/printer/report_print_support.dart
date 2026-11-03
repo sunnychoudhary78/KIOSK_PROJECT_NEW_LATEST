@@ -32,6 +32,7 @@ class ReportPrintSnapshot {
     this.amountPaise = 0,
     this.checkoutUrl,
     this.checkoutToken,
+    this.qrImageUrl,
     this.message,
     this.error,
   });
@@ -49,6 +50,8 @@ class ReportPrintSnapshot {
   final int amountPaise;
   final String? checkoutUrl;
   final String? checkoutToken;
+  /// Razorpay UPI QR bitmap URL (preferred over [checkoutUrl]).
+  final String? qrImageUrl;
   final String? message;
   final String? error;
 
@@ -70,6 +73,8 @@ class ReportPrintSnapshot {
     bool clearCheckoutUrl = false,
     String? checkoutToken,
     bool clearCheckoutToken = false,
+    String? qrImageUrl,
+    bool clearQrImageUrl = false,
     String? message,
     bool clearMessage = false,
     String? error,
@@ -90,6 +95,7 @@ class ReportPrintSnapshot {
       checkoutUrl: clearCheckoutUrl ? null : (checkoutUrl ?? this.checkoutUrl),
       checkoutToken:
           clearCheckoutToken ? null : (checkoutToken ?? this.checkoutToken),
+      qrImageUrl: clearQrImageUrl ? null : (qrImageUrl ?? this.qrImageUrl),
       message: clearMessage ? null : (message ?? this.message),
       error: clearError ? null : (error ?? this.error),
     );
@@ -124,6 +130,7 @@ class ReportPrintSupport {
       final amountPaise = (job['amountPaise'] as num?)?.toInt() ?? 0;
       final checkoutUrl = job['checkoutUrl'] as String?;
       final checkoutToken = job['checkoutToken'] as String?;
+      final qrImageUrl = job['qrImageUrl'] as String?;
       final bytes = await _api.getBytes('/print-jobs/$jobId/content');
 
       final dir = Directory(p.join(Directory.systemTemp.path, tempFolderName));
@@ -145,6 +152,7 @@ class ReportPrintSupport {
         amountPaise: amountPaise,
         checkoutUrl: checkoutUrl,
         checkoutToken: checkoutToken,
+        qrImageUrl: qrImageUrl,
       );
     } catch (error) {
       final message = userFacingError(error);

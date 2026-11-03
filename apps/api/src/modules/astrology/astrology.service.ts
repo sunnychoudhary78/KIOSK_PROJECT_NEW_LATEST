@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { PaymentStatus, PrintColorMode, PrintJobSource, type Prisma } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
@@ -559,23 +558,33 @@ export class AstrologyService {
         paymentId: null,
         checkoutToken: null,
         checkoutUrl: null,
+        qrImageUrl: null,
       };
     }
 
     const amountPaise = chargeRupees * 100;
-    const checkoutToken = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + this.config.payments.windowMinutes * 60_000);
+    const nowMs = Date.now();
+    const windowMs = this.config.payments.windowMinutes * 60_000;
+    // Razorpay single-use QR: close_by between +2 minutes and +2 hours.
+    const closeByMs = Math.min(
+      Math.max(nowMs + windowMs, nowMs + 2 * 60_000),
+      nowMs + 2 * 60 * 60_000,
+    );
+    const closeByUnix = Math.floor(closeByMs / 1000);
 
-    const order = await this.razorpay.createOrder({
+    const qr = await this.razorpay.createUpiQrCode({
       amountPaise,
-      currency: 'INR',
-      receipt: job.id.slice(0, 40),
+      description: `Kundali color print - ${input.subject.name}`.slice(0, 512),
+      name: 'Kundali color print',
+      closeByUnix,
       notes: {
         print_job_id: job.id,
         device_id: deviceId,
         kind: 'kundali_color_print',
       },
     });
+
+    const expiresAt = new Date((qr.closeBy || closeByUnix) * 1000);
 
     const payment = await this.db.payment.create({
       data: {
@@ -587,14 +596,14 @@ export class AstrologyService {
         printColorMode: PrintColorMode.color,
         amountPaise,
         currency: 'INR',
-        razorpayOrderId: order.id,
-        checkoutToken,
+        razorpayQrCodeId: qr.id,
+        qrImageUrl: qr.imageUrl,
         expiresAt,
       },
     });
 
     await this.audit.record({
-      action: 'payment.order_created',
+      action: 'payment.qr_created',
       principalType: 'device',
       principalId: deviceId,
       resourceType: 'payment',
@@ -602,7 +611,7 @@ export class AstrologyService {
       correlationId,
       metadata: {
         printJobId: job.id,
-        razorpayOrderId: order.id,
+        razorpayQrCodeId: qr.id,
         amountPaise,
       },
     });
@@ -613,8 +622,9 @@ export class AstrologyService {
       amountPaise,
       currency: 'INR',
       paymentId: payment.id,
-      checkoutToken,
-      checkoutUrl: `${this.config.printWeb.publicUrl}/astrology-print/${checkoutToken}`,
+      checkoutToken: null,
+      checkoutUrl: null,
+      qrImageUrl: qr.imageUrl,
     };
   }
 
@@ -653,6 +663,7 @@ export class AstrologyService {
       checkoutUrl: payment.checkoutToken
         ? `${this.config.printWeb.publicUrl}/astrology-print/${payment.checkoutToken}`
         : null,
+      qrImageUrl: payment.qrImageUrl ?? null,
     };
   }
 
@@ -773,10 +784,18 @@ export class AstrologyService {
     return payment;
   }
 
-  private async expireIfNeeded<T extends { id: string; status: PaymentStatus; expiresAt: Date }>(
-    payment: T,
-  ): Promise<T> {
+  private async expireIfNeeded<
+    T extends {
+      id: string;
+      status: PaymentStatus;
+      expiresAt: Date;
+      razorpayQrCodeId?: string | null;
+    },
+  >(payment: T): Promise<T> {
     if (payment.status === PaymentStatus.PENDING && payment.expiresAt.getTime() < Date.now()) {
+      if (payment.razorpayQrCodeId) {
+        await this.razorpay.closeQrCode(payment.razorpayQrCodeId);
+      }
       return (await this.db.payment.update({
         where: { id: payment.id },
         data: { status: PaymentStatus.EXPIRED },

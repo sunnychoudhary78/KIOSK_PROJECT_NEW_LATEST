@@ -95,6 +95,12 @@ type WebhookPayload = {
         status?: string;
       };
     };
+    qr_code?: {
+      entity?: {
+        id?: string;
+        status?: string;
+      };
+    };
   };
 };
 
@@ -455,6 +461,20 @@ export class PaymentsService {
     const razorpayOrderId = entity?.order_id;
     const razorpayPaymentId = entity?.id;
 
+    if (event.event === 'qr_code.credited') {
+      const qrCodeId = event.payload?.qr_code?.entity?.id;
+      if (qrCodeId) {
+        await this.fulfillRazorpayQrPayment({
+          razorpayQrCodeId: qrCodeId,
+          razorpayPaymentId,
+          amountPaise: entity?.amount,
+          allowExpiredFulfillment: true,
+          correlationId,
+        });
+      }
+      return { status: 'ok' as const };
+    }
+
     if (event.event === 'payment.captured' && razorpayOrderId) {
       try {
         await this.fulfillRazorpayPayment({
@@ -479,6 +499,95 @@ export class PaymentsService {
     }
 
     return { status: 'ok' as const };
+  }
+
+  async fulfillRazorpayQrPayment(input: {
+    razorpayQrCodeId: string;
+    razorpayPaymentId?: string;
+    amountPaise?: number;
+    allowExpiredFulfillment: boolean;
+    correlationId?: string;
+  }) {
+    const payment = await this.db.payment.findUnique({
+      where: { razorpayQrCodeId: input.razorpayQrCodeId },
+    });
+    if (!payment) {
+      throw new AppError('not_found', 'Payment not found for QR code', 404);
+    }
+
+    if (
+      input.amountPaise != null &&
+      Number(input.amountPaise) !== payment.amountPaise
+    ) {
+      throw new AppError('amount_mismatch', 'Captured amount does not match the order', 400);
+    }
+
+    if (payment.status === PaymentStatus.PAID) {
+      return {
+        alreadyPaid: true,
+        printReady: Boolean(payment.printJobId),
+        payment: this.toPublicPayment(payment),
+      };
+    }
+
+    if (payment.status !== PaymentStatus.PENDING && payment.status !== PaymentStatus.FAILED) {
+      throw new AppError('payment_unavailable', 'Payment cannot be fulfilled', 400);
+    }
+
+    if (!input.allowExpiredFulfillment && payment.expiresAt.getTime() < Date.now()) {
+      await this.db.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.EXPIRED },
+      });
+      if (payment.razorpayQrCodeId) {
+        await this.razorpay.closeQrCode(payment.razorpayQrCodeId);
+      }
+      throw new AppError('payment_expired', 'Payment window has expired', 400);
+    }
+
+    const updated = await this.db.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: PaymentStatus.PAID,
+        razorpayPaymentId: input.razorpayPaymentId ?? payment.razorpayPaymentId,
+        paidAt: new Date(),
+        failureReason: null,
+      },
+    });
+
+    await this.audit.record({
+      action: 'payment.paid',
+      principalType: 'system',
+      resourceType: 'payment',
+      resourceId: payment.id,
+      correlationId: input.correlationId,
+      metadata: {
+        printJobId: payment.printJobId,
+        razorpayQrCodeId: input.razorpayQrCodeId,
+        razorpayPaymentId: input.razorpayPaymentId,
+      },
+    });
+
+    if (payment.printJobId) {
+      await this.audit.record({
+        action: 'astrology.kundali_print_paid',
+        principalType: 'system',
+        principalId: payment.printJobId,
+        resourceType: 'print_job',
+        resourceId: payment.printJobId,
+        correlationId: input.correlationId,
+        metadata: {
+          paymentId: payment.id,
+          razorpayQrCodeId: input.razorpayQrCodeId,
+        },
+      });
+    }
+
+    return {
+      alreadyPaid: false,
+      printReady: Boolean(payment.printJobId),
+      payment: this.toPublicPayment(updated),
+    };
   }
 
   async getSupportQuery(userId: string, challengeId: string) {

@@ -5,13 +5,15 @@ import type { DbClient } from '../src/infrastructure/database/prisma.js';
 import type { Logger } from '../src/infrastructure/logging/logger.js';
 import type { VedAstroClient } from '../src/infrastructure/external/vedastro.client.js';
 import type { AstrologyLlmClient } from '../src/infrastructure/external/openai.client.js';
-import { AppError } from '../src/shared/errors.js';
 import type { AuditService } from '../src/modules/audit/audit.service.js';
 import { AstrologyService } from '../src/modules/astrology/astrology.service.js';
-import type { PaymentsService } from '../src/modules/payments/payments.service.js';
+import { PaymentsService } from '../src/modules/payments/payments.service.js';
 import type { RazorpayClient } from '../src/modules/payments/razorpay.client.js';
 import type { ServicesCatalogService } from '../src/modules/services/services.service.js';
+import type { OtpPrintService } from '../src/modules/otp_print/otp_print.service.js';
 import { PrintingService } from '../src/modules/printing/printing.service.js';
+import { verifyWebhookSignature } from '../src/modules/payments/razorpay.client.js';
+import crypto from 'node:crypto';
 
 vi.mock('../src/modules/astrology/astrology_report_pdf.js', () => ({
   buildKundaliReportPdf: vi.fn(async () => Buffer.from('%PDF-1.4 mock')),
@@ -29,7 +31,7 @@ vi.mock('../src/modules/printing/report_pdf.js', () => ({
 
 const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
 
-describe('AstrologyService.printKundali payment', () => {
+describe('AstrologyService.printKundali UPI QR payment', () => {
   const subject = {
     name: 'Asha',
     gender: 'female' as const,
@@ -49,15 +51,18 @@ describe('AstrologyService.printKundali payment', () => {
     const razorpay = {
       getKeyId: () => 'rzp_test',
       getKeySecret: () => 'secret',
-      createOrder: vi.fn(async () => ({
-        id: 'order_1',
-        amount: chargeRupees * 100,
-        currency: 'INR',
+      createOrder: vi.fn(),
+      createUpiQrCode: vi.fn(async () => ({
+        id: 'qr_1',
+        imageUrl: 'https://rzp.io/i/test-qr',
+        closeBy: Math.floor(Date.now() / 1000) + 900,
       })),
+      closeQrCode: vi.fn(async () => undefined),
     } as unknown as RazorpayClient;
 
     const payments = {
       fulfillRazorpayPayment: vi.fn(),
+      fulfillRazorpayQrPayment: vi.fn(),
     } as unknown as PaymentsService;
 
     const db = {
@@ -155,12 +160,12 @@ describe('AstrologyService.printKundali payment', () => {
     });
     expect(result.paymentRequired).toBe(false);
     expect(result.amountPaise).toBe(0);
-    expect(result.checkoutUrl).toBeNull();
+    expect(result.qrImageUrl).toBeNull();
     expect(db.payment.create).not.toHaveBeenCalled();
-    expect(razorpay.createOrder).not.toHaveBeenCalled();
+    expect(razorpay.createUpiQrCode).not.toHaveBeenCalled();
   });
 
-  it('creates payment and checkout URL when charge is 50', async () => {
+  it('creates UPI QR and returns qrImageUrl when charge is 50', async () => {
     const { service, db, razorpay } = setup(50);
     const result = await service.printKundali('device-1', {
       subject,
@@ -170,9 +175,18 @@ describe('AstrologyService.printKundali payment', () => {
     });
     expect(result.paymentRequired).toBe(true);
     expect(result.amountPaise).toBe(5000);
-    expect(result.checkoutUrl).toContain('/astrology-print/');
-    expect(db.payment.create).toHaveBeenCalledOnce();
-    expect(razorpay.createOrder).toHaveBeenCalledOnce();
+    expect(result.qrImageUrl).toBe('https://rzp.io/i/test-qr');
+    expect(result.checkoutUrl).toBeNull();
+    expect(razorpay.createUpiQrCode).toHaveBeenCalledOnce();
+    expect(db.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          razorpayQrCodeId: 'qr_1',
+          qrImageUrl: 'https://rzp.io/i/test-qr',
+          amountPaise: 5000,
+        }),
+      }),
+    );
   });
 
   it('rejects paid print when Razorpay is not configured', async () => {
@@ -208,6 +222,119 @@ describe('AstrologyService.printKundali payment', () => {
         charts: [{ key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg: '<svg/>' }],
       }),
     ).rejects.toMatchObject({ code: 'payments_not_configured' });
+  });
+});
+
+describe('PaymentsService.fulfillRazorpayQrPayment', () => {
+  it('marks linked payment PAID on qr credit', async () => {
+    const pending = {
+      id: 'pay-1',
+      printJobId: 'job-1',
+      status: PaymentStatus.PENDING,
+      amountPaise: 5000,
+      currency: 'INR',
+      pageCount: 1,
+      freePages: 0,
+      extraPages: 1,
+      razorpayOrderId: null,
+      razorpayQrCodeId: 'qr_1',
+      razorpayPaymentId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      paidAt: null,
+    };
+    const db = {
+      payment: {
+        findUnique: vi.fn(async () => pending),
+        update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          ...pending,
+          ...data,
+          status: PaymentStatus.PAID,
+          paidAt: new Date(),
+        })),
+      },
+    };
+    const razorpay = {
+      getWebhookSecret: () => 'whsec',
+      closeQrCode: vi.fn(),
+    } as unknown as RazorpayClient;
+    const service = new PaymentsService(
+      db as unknown as DbClient,
+      {} as AppConfig,
+      razorpay,
+      {} as OtpPrintService,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+
+    const result = await service.fulfillRazorpayQrPayment({
+      razorpayQrCodeId: 'qr_1',
+      razorpayPaymentId: 'pay_rzp_1',
+      amountPaise: 5000,
+      allowExpiredFulfillment: true,
+    });
+
+    expect(result.alreadyPaid).toBe(false);
+    expect(result.printReady).toBe(true);
+    expect(db.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: PaymentStatus.PAID }),
+      }),
+    );
+  });
+
+  it('fulfills via qr_code.credited webhook', async () => {
+    const pending = {
+      id: 'pay-1',
+      printJobId: 'job-1',
+      status: PaymentStatus.PENDING,
+      amountPaise: 5000,
+      currency: 'INR',
+      pageCount: 1,
+      freePages: 0,
+      extraPages: 1,
+      razorpayOrderId: null,
+      razorpayQrCodeId: 'qr_1',
+      razorpayPaymentId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      paidAt: null,
+    };
+    const db = {
+      payment: {
+        findUnique: vi.fn(async () => pending),
+        update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          ...pending,
+          ...data,
+          status: PaymentStatus.PAID,
+          paidAt: new Date(),
+        })),
+      },
+    };
+    const secret = 'whsec';
+    const body = Buffer.from(
+      JSON.stringify({
+        event: 'qr_code.credited',
+        payload: {
+          payment: { entity: { id: 'pay_rzp_1', amount: 5000, order_id: null } },
+          qr_code: { entity: { id: 'qr_1' } },
+        },
+      }),
+    );
+    const signature = crypto.createHmac('sha256', secret).update(body).digest('hex');
+    expect(verifyWebhookSignature({ rawBody: body, signature, webhookSecret: secret })).toBe(true);
+
+    const razorpay = {
+      getWebhookSecret: () => secret,
+      closeQrCode: vi.fn(),
+    } as unknown as RazorpayClient;
+    const service = new PaymentsService(
+      db as unknown as DbClient,
+      {} as AppConfig,
+      razorpay,
+      {} as OtpPrintService,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+
+    await service.handleWebhook(body, signature);
+    expect(db.payment.update).toHaveBeenCalled();
   });
 });
 

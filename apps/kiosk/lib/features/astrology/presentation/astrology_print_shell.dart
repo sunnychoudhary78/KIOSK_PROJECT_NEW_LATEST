@@ -47,7 +47,8 @@ class AstrologyPrintShell extends StatelessWidget {
 
     if (print.phase == ReportPrintPhase.awaitingPayment) {
       final rupees = (print.amountPaise / 100).round();
-      final url = print.checkoutUrl ?? '';
+      final qrImageUrl = print.qrImageUrl?.trim() ?? '';
+      final fallbackUrl = print.checkoutUrl?.trim() ?? '';
       return VisitorSessionPopScope(
         endSessionOnPop: false,
         child: KioskShell(
@@ -73,7 +74,7 @@ class AstrologyPrintShell extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Scan this QR with your phone and pay ₹$rupees for a color Kundali print.',
+                        'Scan with any UPI app to pay ₹$rupees for a color Kundali print.',
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
                       const SizedBox(height: 16),
@@ -102,13 +103,21 @@ class AstrologyPrintShell extends StatelessWidget {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
                   ),
-                  child: url.isEmpty
-                      ? const Center(child: CircularProgressIndicator())
-                      : QrImageView(
-                          data: url,
-                          version: QrVersions.auto,
-                          backgroundColor: Colors.white,
-                        ),
+                  child: qrImageUrl.isNotEmpty
+                      ? Image.network(
+                          qrImageUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(Icons.qr_code_2, size: 64),
+                          ),
+                        )
+                      : fallbackUrl.isEmpty
+                          ? const Center(child: CircularProgressIndicator())
+                          : QrImageView(
+                              data: fallbackUrl,
+                              version: QrVersions.auto,
+                              backgroundColor: Colors.white,
+                            ),
                 ),
               ],
             ),
