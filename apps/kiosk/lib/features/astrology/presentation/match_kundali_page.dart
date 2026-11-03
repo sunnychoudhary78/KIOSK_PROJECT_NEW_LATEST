@@ -329,7 +329,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               label: 'Print',
               icon: Icons.print,
               expand: false,
-              onPressed: () => controller.preparePrint(locale: _insightLocale),
+              onPressed: () => controller.preparePrint(),
             ),
           ],
         );

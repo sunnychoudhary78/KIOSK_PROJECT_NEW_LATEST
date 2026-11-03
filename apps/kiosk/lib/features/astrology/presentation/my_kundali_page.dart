@@ -248,10 +248,8 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
               label: 'Print',
               icon: Icons.print,
               expand: false,
-              onPressed: () => controller.preparePrint(
-                locale: _insightLocale,
-                chartKey: _selectedChartKey,
-              ),
+              onPressed: () =>
+                  controller.preparePrint(chartKey: _selectedChartKey),
             ),
           ],
         );

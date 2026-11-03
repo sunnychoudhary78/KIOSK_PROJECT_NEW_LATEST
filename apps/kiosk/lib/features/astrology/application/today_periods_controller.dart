@@ -129,9 +129,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
     }
   }
 
-  Future<void> preparePrint({
-    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
-  }) async {
+  /// Print always uses English insights (Helvetica/WinAnsi cannot render Hindi).
+  Future<void> preparePrint() async {
     final result = state.result;
     final subject = state.subject;
     if (result == null ||
@@ -140,7 +139,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
       return;
     }
 
-    final bullets = result.insights.forLocale(locale);
+    const printLocale = AstrologyInsightLocale.en;
+    final bullets = result.insights.forLocale(printLocale);
 
     state = state.copyWith(
       clearError: true,
@@ -176,7 +176,7 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
         },
         if (result.accuracyNote != null) 'accuracyNote': result.accuracyNote,
         'disclaimer': result.disclaimer,
-        'locale': locale.apiValue,
+        'locale': printLocale.apiValue,
         if (bullets.isNotEmpty) 'insightBullets': bullets,
       },
       previous: state.print,

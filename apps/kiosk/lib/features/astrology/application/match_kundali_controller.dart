@@ -115,9 +115,8 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
     };
   }
 
-  Future<void> preparePrint({
-    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
-  }) async {
+  /// Print always uses English insights (Helvetica/WinAnsi cannot render Hindi).
+  Future<void> preparePrint() async {
     final result = state.result;
     final groom = state.groom;
     final bride = state.bride;
@@ -128,7 +127,8 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
       return;
     }
 
-    final bullets = result.insights.forLocale(locale);
+    const printLocale = AstrologyInsightLocale.en;
+    final bullets = result.insights.forLocale(printLocale);
 
     state = state.copyWith(
       clearError: true,
@@ -163,7 +163,7 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
         ],
         if (result.accuracyNote != null) 'accuracyNote': result.accuracyNote,
         'disclaimer': result.disclaimer,
-        'locale': locale.apiValue,
+        'locale': printLocale.apiValue,
         if (bullets.isNotEmpty) 'insightBullets': bullets,
       },
       previous: state.print,

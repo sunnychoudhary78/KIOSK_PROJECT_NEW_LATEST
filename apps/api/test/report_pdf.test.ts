@@ -1,6 +1,12 @@
+import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import { buildReportPdf, countPdfPages, svgToPng } from '../src/modules/printing/report_pdf.js';
+import {
+  buildReportPdf,
+  countPdfPages,
+  sanitizePdfText,
+  svgToPng,
+} from '../src/modules/printing/report_pdf.js';
 import { buildHealthReportPdf } from '../src/modules/well_being/well_being_report_pdf.js';
 import {
   buildKundaliReportPdf,
@@ -8,6 +14,25 @@ import {
   buildPalmReportPdf,
   buildTodayReportPdf,
 } from '../src/modules/astrology/astrology_report_pdf.js';
+
+/** Inflate FlateDecode streams and decode hex `<...> Tj` text (pdf-lib Helvetica). */
+function pdfDrawnText(bytes: Uint8Array): string {
+  const raw = Buffer.from(bytes).toString('latin1');
+  const parts: string[] = [];
+  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  for (const match of raw.matchAll(re)) {
+    let content: string;
+    try {
+      content = inflateSync(Buffer.from(match[1], 'latin1')).toString('latin1');
+    } catch {
+      continue;
+    }
+    for (const hexMatch of content.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
+      parts.push(Buffer.from(hexMatch[1], 'hex').toString('latin1'));
+    }
+  }
+  return parts.join('\n');
+}
 
 const subject = {
   name: 'Asha',
@@ -17,6 +42,18 @@ const subject = {
   birthPlace: 'Jaipur',
   birthTimeUnknown: true,
 };
+
+describe('sanitizePdfText', () => {
+  it('maps middle dots and bullets to ASCII instead of question marks', () => {
+    expect(sanitizePdfText('A · B')).toBe('A | B');
+    expect(sanitizePdfText('• tip')).toBe('- tip');
+    expect(sanitizePdfText('Kundali — Asha')).toBe('Kundali - Asha');
+  });
+
+  it('still replaces unsupported scripts with question marks', () => {
+    expect(sanitizePdfText('नमस्ते')).toMatch(/^\?+$/);
+  });
+});
 
 describe('report PDF builders', () => {
   it('builds a multi-line ATHENA report PDF', async () => {
@@ -76,10 +113,18 @@ describe('report PDF builders', () => {
           bullets: ['Steady growth', 'Clear habits', 'Finish started work'],
         },
       ],
+      locale: 'en',
     });
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBe(1);
+
+    const drawn = pdfDrawnText(bytes);
+    expect(drawn).toContain('Steady growth');
+    expect(drawn).toContain('AI insights');
+    expect(drawn).toContain(' | ');
+    expect(drawn).not.toContain('AI insights (HI)');
+    expect(drawn.includes('?')).toBe(false);
   });
 
   it('builds match, palm, and today report PDFs', async () => {

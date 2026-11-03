@@ -140,8 +140,8 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     }
   }
 
+  /// Print always uses English insights (Helvetica/WinAnsi cannot render Hindi).
   Future<void> preparePrint({
-    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
     String chartKey = 'RasiD1',
   }) async {
     final result = state.result;
@@ -165,8 +165,10 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
       },
     ];
 
+    const printLocale = AstrologyInsightLocale.en;
     final bullets =
-        result.insights.forChart(selected.key)?.forLocale(locale) ?? const [];
+        result.insights.forChart(selected.key)?.forLocale(printLocale) ??
+            const [];
     final insightSections = bullets.isEmpty
         ? const <Map<String, dynamic>>[]
         : [
@@ -201,7 +203,7 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
         },
         'charts': charts,
         'disclaimer': result.disclaimer,
-        'locale': locale.apiValue,
+        'locale': printLocale.apiValue,
         if (insightSections.isNotEmpty) 'insights': insightSections,
       },
       previous: state.print,

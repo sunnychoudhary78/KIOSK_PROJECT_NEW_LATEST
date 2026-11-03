@@ -15,8 +15,8 @@ export async function buildHealthReportPdf(input: WellBeingPrintBody): Promise<B
       label: 'Heart rate',
       value:
         input.heartRate == null
-          ? '—'
-          : `${Math.round(input.heartRate)} BPM${input.heartRateInterpretation ? ` · ${input.heartRateInterpretation}` : ''}`,
+          ? '-'
+          : `${Math.round(input.heartRate)} BPM${input.heartRateInterpretation ? ` | ${input.heartRateInterpretation}` : ''}`,
     });
     lines.push({
       kind: 'kv',
@@ -24,7 +24,7 @@ export async function buildHealthReportPdf(input: WellBeingPrintBody): Promise<B
       value:
         input.spo2 == null
           ? '-'
-          : `${Math.round(input.spo2)}%${input.spo2Interpretation ? ` · ${input.spo2Interpretation}` : ''}`,
+          : `${Math.round(input.spo2)}%${input.spo2Interpretation ? ` | ${input.spo2Interpretation}` : ''}`,
     });
   } else {
     lines.push({ kind: 'heading', text: 'Body temperature' });
@@ -33,10 +33,10 @@ export async function buildHealthReportPdf(input: WellBeingPrintBody): Promise<B
       label: 'Temperature',
       value:
         input.tempC == null
-          ? '—'
-          : `${input.tempC.toFixed(1)} °C${
-              input.tempF != null ? ` (${input.tempF.toFixed(1)} °F)` : ''
-            }${input.temperatureInterpretation ? ` · ${input.temperatureInterpretation}` : ''}`,
+          ? '-'
+          : `${input.tempC.toFixed(1)} deg C${
+              input.tempF != null ? ` (${input.tempF.toFixed(1)} deg F)` : ''
+            }${input.temperatureInterpretation ? ` | ${input.temperatureInterpretation}` : ''}`,
     });
   }
 

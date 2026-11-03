@@ -39,7 +39,7 @@ function insightLines(
     { kind: 'heading', text: heading },
   ];
   for (const bullet of bullets) {
-    lines.push({ kind: 'body', text: `• ${bullet}` });
+    lines.push({ kind: 'body', text: `- ${bullet}` });
   }
   return lines;
 }
@@ -68,11 +68,11 @@ export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promis
     lines.push({
       kind: 'kv',
       label: 'Birth',
-      value: `${input.subject.dateOfBirth} · ${
+      value: `${input.subject.dateOfBirth} | ${
         input.subject.birthTimeUnknown
           ? `${input.subject.birthTime} (approx.)`
           : input.subject.birthTime
-      } · ${input.subject.birthPlace}`,
+      } | ${input.subject.birthPlace}`,
     });
     lines.push({
       kind: 'kv',
@@ -87,11 +87,11 @@ export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promis
       input.chart.currentDasha ? `Dasha ${input.chart.currentDasha}` : null,
     ].filter(Boolean);
     if (summaryBits.length > 0) {
-      lines.push({ kind: 'kv', label: 'Chart', value: summaryBits.join(' · ') });
+      lines.push({ kind: 'kv', label: 'Chart', value: summaryBits.join(' | ') });
     }
     lines.push({ kind: 'spacer', height: 4 });
     if (primary) {
-      lines.push({ kind: 'heading', text: `${primary.title} · ${primary.subtitle}` });
+      lines.push({ kind: 'heading', text: `${primary.title} | ${primary.subtitle}` });
     }
   } else {
     lines.push(...subjectLines(input.subject));
@@ -111,7 +111,7 @@ export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promis
     try {
       const png = svgToPng(chart.svg, singleChart ? 1100 : 1000);
       if (!singleChart) {
-        lines.push({ kind: 'subheading', text: `${chart.title} · ${chart.subtitle}` });
+        lines.push({ kind: 'subheading', text: `${chart.title} | ${chart.subtitle}` });
       }
       lines.push({
         kind: 'image',
@@ -128,7 +128,8 @@ export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promis
   }
 
   if (hasInsights) {
-    const insightHeading = input.locale === 'hi' ? 'AI insights (HI)' : 'AI insights';
+    // Print always uses English bullets (Helvetica/WinAnsi); ignore locale for heading.
+    const insightHeading = 'AI insights';
     if (singleChart) {
       const bullets = (input.insights ?? []).flatMap((section) => section.bullets);
       lines.push(...insightLines(bullets, insightHeading));
@@ -139,7 +140,7 @@ export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promis
         if (section.bullets.length === 0) continue;
         lines.push({ kind: 'subheading', text: section.title });
         for (const bullet of section.bullets) {
-          lines.push({ kind: 'body', text: `• ${bullet}` });
+          lines.push({ kind: 'body', text: `- ${bullet}` });
         }
       }
     }
@@ -148,7 +149,7 @@ export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promis
   const subtitle = primary ? `${primary.title} chart report` : 'Birth chart report';
 
   return buildReportPdf({
-    title: `Kundali — ${input.subject.name}`,
+    title: `Kundali - ${input.subject.name}`,
     subtitle,
     lines,
     disclaimer: input.disclaimer ?? ASTROLOGY_DISCLAIMER,
@@ -190,22 +191,17 @@ export async function buildMatchReportPdf(input: MatchPrintPdfInput): Promise<Bu
   ];
 
   for (const kuta of input.kutas) {
-    const points = kuta.points == null ? '—' : String(kuta.points);
+    const points = kuta.points == null ? '-' : String(kuta.points);
     lines.push({
       kind: 'kv',
       label: kuta.name,
-      value: `${points} / ${kuta.maxPoints}${kuta.verdict ? ` · ${kuta.verdict}` : ''}${
+      value: `${points} / ${kuta.maxPoints}${kuta.verdict ? ` | ${kuta.verdict}` : ''}${
         kuta.nature ? ` (${kuta.nature})` : ''
       }`,
     });
   }
 
-  lines.push(
-    ...insightLines(
-      input.insightBullets,
-      input.locale === 'hi' ? 'AI insights (HI)' : 'AI insights',
-    ),
-  );
+  lines.push(...insightLines(input.insightBullets, 'AI insights'));
 
   if (input.accuracyNote) {
     lines.push({ kind: 'spacer', height: 8 });
@@ -213,7 +209,7 @@ export async function buildMatchReportPdf(input: MatchPrintPdfInput): Promise<Bu
   }
 
   return buildReportPdf({
-    title: `Match Kundali — ${input.groom.name} & ${input.bride.name}`,
+    title: `Match Kundali - ${input.groom.name} & ${input.bride.name}`,
     subtitle: 'Compatibility report',
     lines,
     disclaimer: input.disclaimer ?? ASTROLOGY_DISCLAIMER,
@@ -300,7 +296,7 @@ export async function buildPalmReportPdf(input: PalmPrintPdfInput): Promise<Buff
   lines.push({ kind: 'body', text: input.reading.period });
 
   return buildReportPdf({
-    title: `Palm Reading — ${input.subject.name}`,
+    title: `Palm Reading - ${input.subject.name}`,
     subtitle: 'Palm insights report',
     lines,
     disclaimer: input.disclaimer ?? ASTROLOGY_DISCLAIMER,
@@ -346,17 +342,12 @@ export async function buildTodayReportPdf(input: TodayPrintPdfInput): Promise<Bu
 
   lines.push({ kind: 'spacer', height: 8 });
   lines.push({ kind: 'heading', text: 'Current dasha' });
-  lines.push({ kind: 'kv', label: 'Period', value: input.dasha.label || '—' });
+  lines.push({ kind: 'kv', label: 'Period', value: input.dasha.label || '-' });
   for (const level of input.dasha.levels) {
-    lines.push({ kind: 'body', text: `• ${level}` });
+    lines.push({ kind: 'body', text: `- ${level}` });
   }
 
-  lines.push(
-    ...insightLines(
-      input.insightBullets,
-      input.locale === 'hi' ? 'AI insights (HI)' : 'AI insights',
-    ),
-  );
+  lines.push(...insightLines(input.insightBullets, 'AI insights'));
 
   if (input.accuracyNote) {
     lines.push({ kind: 'spacer', height: 8 });
@@ -364,7 +355,7 @@ export async function buildTodayReportPdf(input: TodayPrintPdfInput): Promise<Bu
   }
 
   return buildReportPdf({
-    title: `Today & Panchang — ${input.subject.name}`,
+    title: `Today & Panchang - ${input.subject.name}`,
     subtitle: 'Daily periods report',
     lines,
     disclaimer: input.disclaimer ?? ASTROLOGY_DISCLAIMER,

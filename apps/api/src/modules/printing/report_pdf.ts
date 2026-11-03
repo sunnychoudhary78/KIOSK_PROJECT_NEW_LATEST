@@ -37,6 +37,8 @@ export function sanitizePdfText(text: string): string {
     .replace(/\u2082/g, '2') // ₂
     .replace(/\u00b0/g, ' deg') // °
     .replace(/[–—]/g, '-')
+    .replace(/\u00b7/g, '|') // · middle dot
+    .replace(/•/g, '-')
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/\u2026/g, '...')
@@ -177,7 +179,7 @@ export async function buildReportPdf(input: BuildReportPdfInput): Promise<Buffer
           font: bold,
           color: rgb(0.12, 0.14, 0.18),
         });
-        page.drawText(valueRows[0] ?? '—', {
+        page.drawText(valueRows[0] ?? '-', {
           x: MARGIN + labelWidth,
           y: y - 11,
           size: 11,
@@ -241,7 +243,7 @@ export async function buildReportPdf(input: BuildReportPdfInput): Promise<Buffer
       thickness: 0.5,
       color: rgb(0.82, 0.84, 0.88),
     });
-    p.drawText('Printed at ATHENA kiosk · For personal reference only', {
+    p.drawText('Printed at ATHENA kiosk | For personal reference only', {
       x: MARGIN,
       y: MARGIN + 12,
       size: 8,
