@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/app/router.dart';
+import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
-import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
-import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -52,77 +51,76 @@ class AstrologyHubPage extends ConsumerWidget {
     ];
 
     return VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
         title: 'Astrology',
-        cosmic: true,
         onHome: () => _endSession(ref),
         stepLabel: 'Choose',
         footerLeading: KioskGhostButton(
-          label: 'Cancel',
+          label: 'Back',
+          icon: Icons.arrow_back,
           onPressed: () => _endSession(ref),
         ),
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            const CosmicBackdrop(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Choose a reading',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: AstrologyColors.gold,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Kundali, palm, matching, and daily periods',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AstrologyColors.muted,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        for (var row = 0; row < 2; row++) ...[
-                          if (row > 0) const SizedBox(height: 16),
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: AstrologyReadingCard(
-                                    kind: tiles[row * 2].kind,
-                                    icon: tiles[row * 2].icon,
-                                    title: tiles[row * 2].title,
-                                    subtitle: tiles[row * 2].subtitle,
-                                    onTap: tiles[row * 2].onTap,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: AstrologyReadingCard(
-                                    kind: tiles[row * 2 + 1].kind,
-                                    icon: tiles[row * 2 + 1].icon,
-                                    title: tiles[row * 2 + 1].title,
-                                    subtitle: tiles[row * 2 + 1].subtitle,
-                                    onTap: tiles[row * 2 + 1].onTap,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Choose a reading',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                'Kundali, palm, matching, and daily periods',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: SkpColors.muted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const KioskDisclaimer(
+                message: KioskDisclaimerCopy.astrology,
+                compact: true,
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    for (var row = 0; row < 2; row++) ...[
+                      if (row > 0) const SizedBox(height: 16),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: AstrologyReadingCard(
+                                kind: tiles[row * 2].kind,
+                                icon: tiles[row * 2].icon,
+                                title: tiles[row * 2].title,
+                                subtitle: tiles[row * 2].subtitle,
+                                onTap: tiles[row * 2].onTap,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: AstrologyReadingCard(
+                                kind: tiles[row * 2 + 1].kind,
+                                icon: tiles[row * 2 + 1].icon,
+                                title: tiles[row * 2 + 1].title,
+                                subtitle: tiles[row * 2 + 1].subtitle,
+                                onTap: tiles[row * 2 + 1].onTap,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

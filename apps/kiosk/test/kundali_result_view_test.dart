@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skp_kiosk/core/ui/kiosk_shell.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
@@ -51,12 +52,13 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: KioskShell(
-          title: 'My Kundali',
-          cosmic: true,
-          stepLabel: 'Result',
-          body: KundaliResultView(result: _result()),
+      ProviderScope(
+        child: MaterialApp(
+          home: KioskShell(
+            title: 'My Kundali',
+            stepLabel: 'Result',
+            body: KundaliResultView(result: _result()),
+          ),
         ),
       ),
     );

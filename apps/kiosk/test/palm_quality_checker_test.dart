@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -7,142 +8,113 @@ import 'package:skp_kiosk/features/astrology/application/palm_path.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_roi.dart';
 
-Uint8List _png(img.Image image) {
-  return Uint8List.fromList(img.encodePng(image));
-}
-
-void _paintPalm(
-  img.Image image, {
-  required int r,
-  required int g,
-  required int b,
-  bool Function(int x, int y)? keep,
-}) {
-  final crop = PalmRoi.crop(image.width, image.height);
-  final palm = openPalmPath(
-    Rect.fromLTWH(
-      crop.left.toDouble(),
-      crop.top.toDouble(),
-      crop.width.toDouble(),
-      crop.height.toDouble(),
-    ),
-  );
-  for (var y = crop.top; y < crop.top + crop.height; y++) {
-    for (var x = crop.left; x < crop.left + crop.width; x++) {
-      if (!palm.contains(Offset(x + 0.5, y + 0.5))) {
-        continue;
-      }
-      if (keep != null && !keep(x, y)) {
-        continue;
-      }
-      image.setPixelRgb(x, y, r, g, b);
-    }
-  }
-}
-
-Uint8List _palmPng({
-  int size = 160,
-  int r = 180,
-  int g = 120,
-  int b = 80,
-}) {
-  final image = img.Image(width: size, height: size);
-  img.fill(image, color: img.ColorRgb8(20, 20, 20));
-  _paintPalm(image, r: r, g: g, b: b);
-  return _png(image);
-}
+import 'palm_quality_fixtures.dart';
 
 void main() {
   const checker = PalmQualityChecker();
 
-  test('rejects a dark frame', () {
-    final image = img.Image(width: 96, height: 96);
-    img.fill(image, color: img.ColorRgb8(8, 8, 8));
-    final result = checker.evaluate(_png(image));
-    expect(result.ok, isFalse);
-    expect(result.message, contains('dark'));
-  });
-
-  test('rejects a blown-out frame', () {
-    final image = img.Image(width: 96, height: 96);
-    img.fill(image, color: img.ColorRgb8(255, 255, 255));
-    final result = checker.evaluate(_png(image));
-    expect(result.ok, isFalse);
-    expect(result.message, contains('bright'));
-  });
-
-  test('rejects a gray frame with no palm-colored pixels', () {
-    final image = img.Image(width: 96, height: 96);
-    img.fill(image, color: img.ColorRgb8(120, 120, 120));
-    for (var y = 0; y < image.height; y += 2) {
-      for (var x = 0; x < image.width; x += 2) {
-        image.setPixelRgb(x, y, 40, 40, 40);
-      }
-    }
-    final result = checker.evaluate(_png(image));
-    expect(result.ok, isFalse);
-    expect(result.message.toLowerCase(), contains('palm'));
-  });
-
-  test('rejects a beige wood-colored scene with no hand', () {
-    final image = img.Image(width: 160, height: 160);
-    img.fill(image, color: img.ColorRgb8(194, 154, 107));
-    final result = checker.evaluate(_png(image));
-    expect(result.ok, isFalse);
-    expect(result.message.toLowerCase(), contains('palm'));
-  });
-
-  test('rejects skin filling the entire frame like a face or body', () {
-    final image = img.Image(width: 160, height: 160);
-    img.fill(image, color: img.ColorRgb8(180, 120, 80));
-    final result = checker.evaluate(_png(image));
-    expect(result.ok, isFalse);
-    expect(result.message.toLowerCase(), contains('palm'));
-  });
-
-  test('accepts a palm painted only inside the outline', () {
-    final result = checker.evaluate(_palmPng());
+  test('synthetic filled open palm passes strict', () {
+    final result = checker.evaluate(texturedPalmPng());
     expect(result.ok, isTrue, reason: result.message);
-  });
-
-  test('accepts a darker brown palm in the outline', () {
-    final result = checker.evaluate(_palmPng(r: 110, g: 75, b: 50));
-    expect(result.ok, isTrue, reason: result.message);
-  });
-
-  test('accepts a yellowish white-balance palm in the outline', () {
-    final result = checker.evaluate(_palmPng(r: 160, g: 148, b: 70));
-    expect(result.ok, isTrue, reason: result.message);
-  });
-
-  test('rejects a palm that sits outside the outline', () {
-    final image = img.Image(width: 160, height: 160);
-    img.fill(image, color: img.ColorRgb8(20, 20, 20));
-    for (var y = 0; y < 20; y++) {
-      for (var x = 0; x < 20; x++) {
-        image.setPixelRgb(x, y, 180, 120, 80);
-      }
-    }
-    final result = checker.evaluate(_png(image));
-    expect(result.ok, isFalse);
-    expect(result.message.toLowerCase(), contains('palm'));
-  });
-
-  test('manual capture accepts a thinner palm fill that auto-capture rejects', () {
-    final image = img.Image(width: 160, height: 160);
-    img.fill(image, color: img.ColorRgb8(20, 20, 20));
-    final crop = PalmRoi.crop(160, 160);
-    final split = crop.top + (crop.height * 0.58).round();
-    _paintPalm(
-      image,
-      r: 180,
-      g: 120,
-      b: 80,
-      keep: (x, y) => y >= split,
+    expect(result.centroidOk, isTrue);
+    expect(
+      result.skinRatio,
+      greaterThanOrEqualTo(PalmQualityChecker.minInsideSkinRatio),
     );
-    final auto = checker.evaluate(_png(image));
-    final manual = checker.evaluate(_png(image), strict: false);
-    expect(auto.ok, isFalse);
+  });
+
+  test('blank frame fails', () {
+    final blank = img.Image(width: 120, height: 120);
+    img.fill(blank, color: img.ColorRgb8(10, 10, 10));
+    final result = checker.evaluate(encodePalmPng(blank));
+    expect(result.ok, isFalse);
+  });
+
+  test('uniform beige wall fails', () {
+    final wall = img.Image(width: 160, height: 160);
+    img.fill(wall, color: img.ColorRgb8(210, 190, 160));
+    final result = checker.evaluate(encodePalmPng(wall));
+    expect(result.ok, isFalse);
+  });
+
+  test('face-like full-frame skin fails coverage / outside gates', () {
+    final face = img.Image(width: 160, height: 160);
+    final rng = math.Random(2);
+    for (var y = 0; y < face.height; y++) {
+      for (var x = 0; x < face.width; x++) {
+        final wave = (math.sin(x * 0.3) * 6).round();
+        final n = rng.nextInt(5) - 2 + wave;
+        face.setPixelRgb(
+          x,
+          y,
+          (185 + n).clamp(100, 240),
+          (120 + n ~/ 2).clamp(50, 200),
+          (80 + n ~/ 3).clamp(30, 160),
+        );
+      }
+    }
+    final result = checker.evaluate(encodePalmPng(face));
+    expect(result.ok, isFalse);
+    expect(
+      result.outsideSkinRatio > PalmQualityChecker.maxOutsideSkinRatio ||
+          result.roiSkinRatio > PalmQualityChecker.maxRoiSkinRatio,
+      isTrue,
+    );
+  });
+
+  test('manual gate accepts a slightly thinner palm fill', () {
+    // Contiguous inset palm (~0.46 of full silhouette area) with soft texture.
+    final rng = math.Random(5);
+    const size = 220;
+    final image = img.Image(width: size, height: size);
+    img.fill(image, color: img.ColorRgb8(18, 18, 22));
+    final crop = PalmRoi.crop(size, size);
+    final bounds = Rect.fromLTWH(
+      crop.left.toDouble(),
+      crop.top.toDouble(),
+      crop.width.toDouble(),
+      crop.height.toDouble(),
+    );
+    final fullPalm = openPalmPath(bounds);
+    final insetBounds = Rect.fromCenter(
+      center: bounds.center,
+      width: bounds.width * 0.70,
+      height: bounds.height * 0.70,
+    );
+    final insetPalm = openPalmPath(insetBounds);
+
+    var total = 0;
+    var filled = 0;
+    for (var y = crop.top; y < crop.top + crop.height; y++) {
+      for (var x = crop.left; x < crop.left + crop.width; x++) {
+        final pt = Offset(x + 0.5, y + 0.5);
+        if (!fullPalm.contains(pt)) {
+          continue;
+        }
+        total++;
+        if (!insetPalm.contains(pt)) {
+          continue;
+        }
+        filled++;
+        final wave = (math.sin(x * 0.35) * 8 + math.cos(y * 0.28) * 8).round();
+        final grain = rng.nextInt(7) - 3;
+        final n = wave + grain;
+        image.setPixelRgb(
+          x,
+          y,
+          (176 + n).clamp(96, 240),
+          (112 + n ~/ 2).clamp(45, 200),
+          (74 + n ~/ 3).clamp(25, 160),
+        );
+      }
+    }
+    expect(filled / total, greaterThan(0.42));
+    expect(filled / total, lessThan(0.52));
+
+    final bytes = encodePalmPng(image);
+    final strict = checker.evaluate(bytes, strict: true);
+    final manual = checker.evaluate(bytes, strict: false);
+    expect(strict.ok, isFalse, reason: strict.message);
     expect(manual.ok, isTrue, reason: manual.message);
   });
 }

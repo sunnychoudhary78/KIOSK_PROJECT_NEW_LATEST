@@ -26,6 +26,7 @@ tags:
   - name: Audit
   - name: PlatformSettings
   - name: Astrology
+  - name: WellBeing
   - name: Ads
 paths:
   /health:
@@ -816,6 +817,251 @@ paths:
           description: Service disabled for this device
         '502':
           description: VedAstro or geocoding failed
+
+  /astrology/kundali/print:
+    post:
+      tags: [Astrology]
+      summary: Create a printable kundali PDF print job from the on-screen result
+      operationId: printAstrologyKundali
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, style, charts]
+              properties:
+                subject:
+                  $ref: '#/components/schemas/AstrologyReadingSubject'
+                style:
+                  type: string
+                  enum: [north, south]
+                chart:
+                  $ref: '#/components/schemas/AstrologyChartSummary'
+                charts:
+                  type: array
+                  items:
+                    type: object
+                    required: [key, title, subtitle, svg]
+                    properties:
+                      key:
+                        type: string
+                      title:
+                        type: string
+                      subtitle:
+                        type: string
+                      svg:
+                        type: string
+                disclaimer:
+                  type: string
+                idempotencyKey:
+                  type: string
+      responses:
+        '200':
+          description: Print job ready for download
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+        '400':
+          description: Validation failed
+        '403':
+          description: Service disabled or printing paused
+
+  /astrology/match/print:
+    post:
+      tags: [Astrology]
+      summary: Create a printable Gun Milan PDF print job
+      operationId: printAstrologyMatch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [groom, bride, score, kutas]
+              properties:
+                groom:
+                  $ref: '#/components/schemas/AstrologyReadingSubject'
+                bride:
+                  $ref: '#/components/schemas/AstrologyReadingSubject'
+                score:
+                  type: object
+                  required: [total, summary, tone]
+                  properties:
+                    total:
+                      type: number
+                    max:
+                      type: number
+                    summary:
+                      type: string
+                    tone:
+                      type: string
+                kutas:
+                  type: array
+                  items:
+                    type: object
+                accuracyNote:
+                  type: string
+                disclaimer:
+                  type: string
+                idempotencyKey:
+                  type: string
+      responses:
+        '200':
+          description: Print job ready for download
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+        '400':
+          description: Validation failed
+        '403':
+          description: Service disabled or printing paused
+
+  /astrology/readings/print:
+    post:
+      tags: [Astrology]
+      summary: Create a printable palm reading PDF print job
+      operationId: printAstrologyReading
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, palm, reading]
+              properties:
+                subject:
+                  $ref: '#/components/schemas/AstrologyReadingSubject'
+                chart:
+                  $ref: '#/components/schemas/AstrologyChartSummary'
+                palm:
+                  type: object
+                reading:
+                  type: object
+                palmJpegBase64:
+                  type: string
+                disclaimer:
+                  type: string
+                idempotencyKey:
+                  type: string
+      responses:
+        '200':
+          description: Print job ready for download
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+        '400':
+          description: Validation failed
+        '403':
+          description: Service disabled or printing paused
+
+  /astrology/today/print:
+    post:
+      tags: [Astrology]
+      summary: Create a printable today/panchang PDF print job
+      operationId: printAstrologyToday
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, asOf, dasha]
+              properties:
+                subject:
+                  $ref: '#/components/schemas/AstrologyReadingSubject'
+                asOf:
+                  type: string
+                panchang:
+                  type: object
+                  additionalProperties:
+                    type: string
+                dasha:
+                  type: object
+                  properties:
+                    label:
+                      type: string
+                    levels:
+                      type: array
+                      items:
+                        type: string
+                accuracyNote:
+                  type: string
+                disclaimer:
+                  type: string
+                idempotencyKey:
+                  type: string
+      responses:
+        '200':
+          description: Print job ready for download
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+        '400':
+          description: Validation failed
+        '403':
+          description: Service disabled or printing paused
+
+  /well-being/print:
+    post:
+      tags: [WellBeing]
+      summary: Create a printable health report PDF print job
+      operationId: printWellBeingReport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  enum: [oxi, temp]
+                heartRate:
+                  type: number
+                spo2:
+                  type: number
+                tempC:
+                  type: number
+                tempF:
+                  type: number
+                heartRateInterpretation:
+                  type: string
+                spo2Interpretation:
+                  type: string
+                temperatureInterpretation:
+                  type: string
+                measuredAt:
+                  type: string
+                  format: date-time
+                idempotencyKey:
+                  type: string
+      responses:
+        '200':
+          description: Print job ready for download
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+        '400':
+          description: Validation failed
+        '403':
+          description: Printing paused
 
   /astrology/places:
     get:
@@ -3350,7 +3596,7 @@ components:
           enum: [created, ready, printing, completed, failed, expired]
         source:
           type: string
-          enum: [otp_print, digilocker_print, quick_print]
+          enum: [otp_print, digilocker_print, quick_print, well_being_print, astrology_print]
         title:
           type: string
         pageCount:
@@ -3462,6 +3708,39 @@ components:
           type: string
           format: date-time
 
+    AstrologyReadingSubject:
+      type: object
+      required: [name, gender, dateOfBirth, birthTime, birthPlace, birthTimeUnknown]
+      properties:
+        name:
+          type: string
+        gender:
+          type: string
+          enum: [male, female, other]
+        dateOfBirth:
+          type: string
+          format: date
+        birthTime:
+          type: string
+        birthPlace:
+          type: string
+        birthTimeUnknown:
+          type: boolean
+
+    AstrologyChartSummary:
+      type: object
+      properties:
+        lagna:
+          type: string
+        sunSign:
+          type: string
+        moonSign:
+          type: string
+        nakshatra:
+          type: string
+        currentDasha:
+          type: string
+
     AstrologyReadingResponse:
       type: object
       required: [id, disclaimer, subject, chart, palm, reading]
@@ -3472,36 +3751,9 @@ components:
         disclaimer:
           type: string
         subject:
-          type: object
-          required: [name, gender, dateOfBirth, birthTime, birthPlace, birthTimeUnknown]
-          properties:
-            name:
-              type: string
-            gender:
-              type: string
-              enum: [male, female, other]
-            dateOfBirth:
-              type: string
-              format: date
-            birthTime:
-              type: string
-            birthPlace:
-              type: string
-            birthTimeUnknown:
-              type: boolean
+          $ref: '#/components/schemas/AstrologyReadingSubject'
         chart:
-          type: object
-          properties:
-            lagna:
-              type: string
-            sunSign:
-              type: string
-            moonSign:
-              type: string
-            nakshatra:
-              type: string
-            currentDasha:
-              type: string
+          $ref: '#/components/schemas/AstrologyChartSummary'
         palm:
           type: object
           required: [summary, lifeLine, heartLine, headLine, fateLine]

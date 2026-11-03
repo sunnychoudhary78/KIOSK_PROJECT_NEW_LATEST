@@ -8,10 +8,10 @@ import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
-import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -45,6 +45,10 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
     return ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
+  }
+
+  void _goBack() {
+    Navigator.of(context).pop();
   }
 
   String _formatDob(DateTime date) {
@@ -178,6 +182,32 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(todayPeriodsControllerProvider);
+    final controller = ref.read(todayPeriodsControllerProvider.notifier);
+
+    ref.listen(todayPeriodsControllerProvider, (previous, next) {
+      holdSessionForAstrologyPrint(ref, next.print);
+    });
+
+    final paused = astrologyPausedShell(
+      ref: ref,
+      print: state.print,
+      title: 'Today & Periods',
+      onHome: _endSession,
+    );
+    if (paused != null) return paused;
+
+    if (astrologyPrintIsActive(state.print)) {
+      return AstrologyPrintShell(
+        title: 'Today & Periods',
+        print: state.print,
+        onHome: _endSession,
+        onBackFromPreview: controller.cancelPrintPreview,
+        onConfirmPrint: controller.confirmPrint,
+        onTellStaff: controller.tellStaffPrint,
+        onClearResult: controller.clearPrintResult,
+        onReportMissing: controller.reportPrintPagesMissing,
+      );
+    }
 
     Widget? leading;
     Widget? trailing;
@@ -186,11 +216,11 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
       case TodayPeriodsPhase.form:
         leading = KioskGhostButton(
           label: 'Back',
-          onPressed: () => Navigator.of(context).maybePop(),
+          icon: Icons.arrow_back,
+          onPressed: _goBack,
         );
         trailing = KioskPrimaryButton(
           label: "Get today's reading",
-          gold: true,
           onPressed: _submit,
         );
         step = 'Details';
@@ -198,18 +228,25 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
         step = 'Reading';
       case TodayPeriodsPhase.result:
         leading = KioskGhostButton(label: 'New reading', onPressed: _resetForm);
-        trailing = KioskPrimaryButton(
-          label: 'Done',
-          gold: true,
-          onPressed: _endSession,
+        trailing = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            KioskGhostButton(label: 'Done', onPressed: _endSession),
+            const SizedBox(width: 12),
+            KioskPrimaryButton(
+              label: 'Print',
+              icon: Icons.print,
+              onPressed: controller.preparePrint,
+            ),
+          ],
         );
         step = 'Today';
     }
 
     Widget page = VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
         title: 'Today & Periods',
-        cosmic: true,
         onHome: _endSession,
         stepLabel: step,
         footerLeading: leading,
@@ -221,7 +258,6 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
               key: const ValueKey('today-form'),
               fit: StackFit.expand,
               children: [
-                const CosmicBackdrop(),
                 AstrologyBirthFormPanel(
                   nameController: _name,
                   placeController: _place,
@@ -308,7 +344,6 @@ class TodayPeriodsResultView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        const CosmicBackdrop(),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
           child: Column(

@@ -12,6 +12,10 @@ import {
   createTodayBodySchema,
   placeIdParamSchema,
   placesQuerySchema,
+  printKundaliBodySchema,
+  printMatchBodySchema,
+  printReadingBodySchema,
+  printTodayBodySchema,
   type UploadedPalm,
 } from './astrology.schemas.js';
 import { AstrologyService } from './astrology.service.js';
@@ -204,6 +208,122 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
           req.correlationId,
         );
         res.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/kundali/print',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const parsed = printKundaliBodySchema.safeParse(req.body);
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_error',
+            'Request validation failed',
+            400,
+            parsed.error.flatten(),
+          );
+        }
+        const job = await service.printKundali(
+          req.principal.deviceId,
+          parsed.data,
+          req.correlationId,
+        );
+        res.status(200).json(job);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/match/print',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const parsed = printMatchBodySchema.safeParse(req.body);
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_error',
+            'Request validation failed',
+            400,
+            parsed.error.flatten(),
+          );
+        }
+        const job = await service.printMatch(
+          req.principal.deviceId,
+          parsed.data,
+          req.correlationId,
+        );
+        res.status(200).json(job);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/readings/print',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const parsed = printReadingBodySchema.safeParse(req.body);
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_error',
+            'Request validation failed',
+            400,
+            parsed.error.flatten(),
+          );
+        }
+        const job = await service.printReading(
+          req.principal.deviceId,
+          parsed.data,
+          req.correlationId,
+        );
+        res.status(200).json(job);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/today/print',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const parsed = printTodayBodySchema.safeParse(req.body);
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_error',
+            'Request validation failed',
+            400,
+            parsed.error.flatten(),
+          );
+        }
+        const job = await service.printToday(
+          req.principal.deviceId,
+          parsed.data,
+          req.correlationId,
+        );
+        res.status(200).json(job);
       } catch (error) {
         next(error);
       }

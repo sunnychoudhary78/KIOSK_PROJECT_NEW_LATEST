@@ -129,6 +129,13 @@ function IconArrow() {
   );
 }
 
+const PRIVACY_NO_SAVE_DOCS =
+  'We do not save your documents. Files are used only for this print session, then removed from the kiosk.';
+
+function PrivacyNote() {
+  return <p className="banner privacy">{PRIVACY_NO_SAVE_DOCS}</p>;
+}
+
 function StepRail({ active }: { active: 'upload' | 'pay' }) {
   return (
     <div className="step-rail" aria-label="Progress">
@@ -520,6 +527,7 @@ function SessionPage() {
           </>
         }
       >
+        <PrivacyNote />
         <div className="auth-panel">
           {!otpSent ? (
             <label className="field">
@@ -694,6 +702,7 @@ function SessionPage() {
         </>
       }
     >
+      <PrivacyNote />
       <div className="meter" aria-label="Print limits">
         <div className="meter-cell">
           <span className="meter-label">Free</span>

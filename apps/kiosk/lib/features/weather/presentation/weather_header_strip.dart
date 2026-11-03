@@ -15,48 +15,41 @@ class WeatherHeaderStrip extends ConsumerWidget {
 
     return Padding(
       padding: const EdgeInsets.only(right: 12),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          reverse: true,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (snapshot.temperatureC != null)
-                _WeatherChip(
-                  icon: _conditionIcon(snapshot.weatherCode),
-                  label: '${snapshot.temperatureC!.round()}°',
-                  tooltip: snapshot.weatherLabel ?? 'Temperature',
-                ),
-              if (snapshot.humidityPct != null)
-                _WeatherChip(
-                  icon: Icons.water_drop_outlined,
-                  label: '${snapshot.humidityPct}%',
-                  tooltip: 'Humidity',
-                ),
-              if (snapshot.windKmh != null)
-                _WeatherChip(
-                  icon: Icons.air,
-                  label: '${snapshot.windKmh!.round()} km/h',
-                  tooltip: 'Wind',
-                ),
-              if (snapshot.uvIndex != null)
-                _WeatherChip(
-                  icon: Icons.wb_sunny_outlined,
-                  label: 'UV ${snapshot.uvIndex!.round()}',
-                  tooltip: 'UV index',
-                ),
-              if (snapshot.aqi != null)
-                _WeatherChip(
-                  icon: Icons.air_outlined,
-                  label: 'AQI ${snapshot.aqi}',
-                  tooltip: snapshot.aqiLabel ?? 'Air quality',
-                  tint: _aqiColor(snapshot.aqi!),
-                ),
-            ],
-          ),
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (snapshot.temperatureC != null)
+            _WeatherChip(
+              icon: _conditionIcon(snapshot.weatherCode),
+              label: '${snapshot.temperatureC!.round()}°',
+              tooltip: snapshot.weatherLabel ?? 'Temperature',
+            ),
+          if (snapshot.humidityPct != null)
+            _WeatherChip(
+              icon: Icons.water_drop_outlined,
+              label: '${snapshot.humidityPct}%',
+              tooltip: 'Humidity',
+            ),
+          if (snapshot.windKmh != null)
+            _WeatherChip(
+              icon: Icons.air,
+              label: '${snapshot.windKmh!.round()} km/h',
+              tooltip: 'Wind',
+            ),
+          if (snapshot.uvIndex != null)
+            _WeatherChip(
+              icon: Icons.wb_sunny_outlined,
+              label: 'UV ${snapshot.uvIndex!.round()}',
+              tooltip: 'UV index',
+            ),
+          if (snapshot.aqi != null)
+            _WeatherChip(
+              icon: Icons.air_outlined,
+              label: 'AQI ${snapshot.aqi}',
+              tooltip: snapshot.aqiLabel ?? 'Air quality',
+              tint: _aqiColor(snapshot.aqi!),
+            ),
+        ],
       ),
     );
   }

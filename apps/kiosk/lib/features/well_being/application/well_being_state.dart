@@ -1,6 +1,7 @@
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
+import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
 /// UI state for the dual-sensor Well Being measurement flow.
 class WellBeingUiState {
@@ -25,6 +26,7 @@ class WellBeingUiState {
     this.finalTempC,
     this.finalTempF,
     this.statusMessage,
+    this.print = const ReportPrintSnapshot(),
   });
 
   final WellBeingPhase phase;
@@ -47,6 +49,7 @@ class WellBeingUiState {
   final double? finalTempC;
   final double? finalTempF;
   final String? statusMessage;
+  final ReportPrintSnapshot print;
 
   bool get isConnected =>
       connectionStatus == SerialConnectionStatus.connected;
@@ -138,6 +141,7 @@ class WellBeingUiState {
     bool clearFinalTempF = false,
     String? statusMessage,
     bool clearStatusMessage = false,
+    ReportPrintSnapshot? print,
   }) {
     return WellBeingUiState(
       phase: phase ?? this.phase,
@@ -164,6 +168,7 @@ class WellBeingUiState {
       finalTempF: clearFinalTempF ? null : (finalTempF ?? this.finalTempF),
       statusMessage:
           clearStatusMessage ? null : (statusMessage ?? this.statusMessage),
+      print: print ?? this.print,
     );
   }
 

@@ -5,7 +5,7 @@ import 'package:skp_kiosk/core/ui/kiosk_clock.dart';
 import 'package:skp_kiosk/core/ui/kiosk_scaffold.dart';
 import 'package:skp_kiosk/features/surveillance/presentation/surveillance_status_chip.dart';
 
-/// Persistent ATM chrome: wordmark + clock + Home, optional footer CTAs.
+/// Persistent ATM chrome: brand lockup + clock + Home, optional footer CTAs.
 class KioskShell extends StatelessWidget {
   const KioskShell({
     super.key,
@@ -31,6 +31,8 @@ class KioskShell extends StatelessWidget {
   final String? stepLabel;
   final Widget? footerTrailing;
   final Widget? headerExtra;
+
+  /// Larger home lockup (taller header). All screens always show the PNG brand.
   final bool showLogo;
   final bool cosmic;
 
@@ -40,10 +42,10 @@ class KioskShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final brand = cosmic ? SkpColors.gold : SkpColors.accent;
     final muted = cosmic ? const Color(0xFFA8B0BC) : SkpColors.muted;
     final divider = cosmic ? const Color(0x33E8C872) : SkpColors.line;
     final titleColor = cosmic ? const Color(0xFFF4F0E6) : SkpColors.muted;
+    final logoHeight = showLogo ? 96.0 : 48.0;
 
     Widget chrome = KioskScaffold(
       cosmic: cosmic,
@@ -52,26 +54,15 @@ class KioskShell extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            height: SkpTokens.headerHeight,
+            height: showLogo ? 112 : SkpTokens.headerHeight,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
                 children: [
-                  if (showLogo) ...[
-                    Image.asset(
-                      'assets/brand/company_logo.png',
-                      height: 52,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Text(
-                    'ATHENA',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      letterSpacing: 1.2,
-                      fontWeight: FontWeight.w800,
-                      color: brand,
-                    ),
+                  Image.asset(
+                    'assets/brand/athena_logo.png',
+                    height: logoHeight,
+                    fit: BoxFit.contain,
                   ),
                   if (title != null) ...[
                     const SizedBox(width: 16),
@@ -90,16 +81,23 @@ class KioskShell extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ] else
+                  ] else if (subtitle == null)
                     const Spacer(),
                   if (title != null) const Spacer(),
                   if (subtitle != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 16),
-                      child: Text(
-                        subtitle!,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: muted,
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 16),
+                          child: Text(
+                            subtitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: muted,
+                            ),
+                          ),
                         ),
                       ),
                     ),

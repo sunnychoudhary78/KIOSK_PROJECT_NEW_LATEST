@@ -16,11 +16,13 @@ class PrintChooserPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
         title: 'Print',
         onHome: () => _endSession(ref),
         footerLeading: KioskGhostButton(
-          label: 'Cancel',
+          label: 'Back',
+          icon: Icons.arrow_back,
           onPressed: () => _endSession(ref),
         ),
         body: kioskPrintingPaused(ref)
@@ -39,7 +41,9 @@ class PrintChooserPage extends ConsumerWidget {
                 'Scan a QR, enter an OTP, or print from DigiLocker.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              const KioskDisclaimer(message: KioskDisclaimerCopy.printDocuments),
+              const SizedBox(height: 16),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {

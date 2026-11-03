@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 /// Paths and mappers for astrology illustration assets.
 abstract final class AstrologyAssets {
   static const sealMedallion = 'assets/astrology/seal_medallion.jpg';
-  static const backdropNebula = 'assets/astrology/backdrop_nebula.jpg';
 
   static const ritualAlign = 'assets/astrology/ritual_align.jpg';
   static const ritualHold = 'assets/astrology/ritual_hold.jpg';
   static const ritualCapture = 'assets/astrology/ritual_capture.jpg';
+
+  static const palmGuide = 'assets/astrology/palm_guide.png';
+  static const palmCircleFrame = 'assets/astrology/palm_circle_frame.png';
 
   static const palmLife = 'assets/astrology/palm_life.jpg';
   static const palmHeart = 'assets/astrology/palm_heart.jpg';

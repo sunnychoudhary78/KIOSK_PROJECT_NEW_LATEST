@@ -10,10 +10,10 @@ import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
-import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -63,6 +63,10 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
     return ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
+  }
+
+  void _goBack() {
+    Navigator.of(context).pop();
   }
 
   String _date(DateTime value) =>
@@ -257,9 +261,35 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(matchKundaliControllerProvider);
+    final controller = ref.read(matchKundaliControllerProvider.notifier);
     final formPhase =
         state.phase == MatchKundaliPhase.groom ||
         state.phase == MatchKundaliPhase.bride;
+
+    ref.listen(matchKundaliControllerProvider, (previous, next) {
+      holdSessionForAstrologyPrint(ref, next.print);
+    });
+
+    final paused = astrologyPausedShell(
+      ref: ref,
+      print: state.print,
+      title: 'Match Kundalis',
+      onHome: _endSession,
+    );
+    if (paused != null) return paused;
+
+    if (astrologyPrintIsActive(state.print)) {
+      return AstrologyPrintShell(
+        title: 'Match Kundalis',
+        print: state.print,
+        onHome: _endSession,
+        onBackFromPreview: controller.cancelPrintPreview,
+        onConfirmPrint: controller.confirmPrint,
+        onTellStaff: controller.tellStaffPrint,
+        onClearResult: controller.clearPrintResult,
+        onReportMissing: controller.reportPrintPagesMissing,
+      );
+    }
 
     Widget? leading;
     Widget? trailing;
@@ -267,11 +297,11 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
       case MatchKundaliPhase.groom:
         leading = KioskGhostButton(
           label: 'Back',
-          onPressed: () => Navigator.of(context).maybePop(),
+          icon: Icons.arrow_back,
+          onPressed: _goBack,
         );
         trailing = KioskPrimaryButton(
           label: 'Continue',
-          gold: true,
           onPressed: _continueToBride,
         );
       case MatchKundaliPhase.bride:
@@ -281,24 +311,30 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
         );
         trailing = KioskPrimaryButton(
           label: 'Match kundalis',
-          gold: true,
           onPressed: _submit,
         );
       case MatchKundaliPhase.loading:
         break;
       case MatchKundaliPhase.result:
         leading = KioskGhostButton(label: 'New match', onPressed: _reset);
-        trailing = KioskPrimaryButton(
-          label: 'Done',
-          gold: true,
-          onPressed: _endSession,
+        trailing = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            KioskGhostButton(label: 'Done', onPressed: _endSession),
+            const SizedBox(width: 12),
+            KioskPrimaryButton(
+              label: 'Print',
+              icon: Icons.print,
+              onPressed: controller.preparePrint,
+            ),
+          ],
         );
     }
 
     Widget page = VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
         title: 'Match Kundalis',
-        cosmic: true,
         onHome: _endSession,
         stepLabel: switch (state.phase) {
           MatchKundaliPhase.groom => 'Groom',
@@ -400,7 +436,6 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
       key: key,
       fit: StackFit.expand,
       children: [
-        const CosmicBackdrop(),
         AstrologyBirthFormPanel(
           nameController: name,
           placeController: place,
@@ -510,7 +545,6 @@ class MatchKundaliResultView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        const CosmicBackdrop(),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
           child: Column(

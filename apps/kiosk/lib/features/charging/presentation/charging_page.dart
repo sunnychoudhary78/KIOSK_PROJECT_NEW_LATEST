@@ -66,7 +66,11 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
           ChargingPhase.error => 'Error',
         },
         footerLeading: canCancel
-            ? KioskGhostButton(label: 'Cancel', onPressed: _endSession)
+            ? KioskGhostButton(
+                label: 'Back',
+                icon: Icons.arrow_back,
+                onPressed: _endSession,
+              )
             : null,
         footerTrailing: showDone
             ? KioskPrimaryButton(

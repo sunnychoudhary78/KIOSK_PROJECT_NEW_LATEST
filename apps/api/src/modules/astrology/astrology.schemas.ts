@@ -239,3 +239,103 @@ export function parseLlmJson(text: string): unknown {
   const raw = (fenced?.[1] ?? trimmed).trim();
   return JSON.parse(raw) as unknown;
 }
+
+const readingSubjectSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  gender: z.enum(['male', 'female', 'other']),
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD')
+    .refine(isCalendarDate, 'dateOfBirth is not a valid date'),
+  birthTime: z.string().regex(/^\d{2}:\d{2}$/, 'birthTime must be HH:mm'),
+  birthPlace: z.string().trim().min(2).max(120),
+  birthTimeUnknown: z.boolean().optional().default(false),
+});
+
+export const printKundaliBodySchema = z.object({
+  subject: readingSubjectSchema,
+  style: z.enum(['north', 'south']),
+  chart: chartSummarySchema.default({}),
+  charts: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(40),
+        title: z.string().min(1).max(40),
+        subtitle: z.string().min(1).max(40),
+        svg: z.string().min(1),
+      }),
+    )
+    .min(1)
+    .max(6),
+  disclaimer: z.string().trim().max(400).optional(),
+  idempotencyKey: z.string().trim().min(1).max(100).optional(),
+});
+
+export type PrintKundaliBody = z.infer<typeof printKundaliBodySchema>;
+
+const matchPrintPersonSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  gender: z.enum(['male', 'female', 'other']).optional().default('other'),
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD')
+    .refine(isCalendarDate, 'dateOfBirth is not a valid date'),
+  birthTime: z.string().regex(/^\d{2}:\d{2}$/, 'birthTime must be HH:mm'),
+  birthPlace: z.string().trim().min(2).max(120),
+  birthTimeUnknown: z.boolean().optional().default(false),
+});
+
+export const printMatchBodySchema = z.object({
+  groom: matchPrintPersonSchema,
+  bride: matchPrintPersonSchema,
+  score: z.object({
+    total: z.number(),
+    max: z.number().default(36),
+    summary: z.string().min(1),
+    tone: z.string().min(1),
+  }),
+  kutas: z
+    .array(
+      z.object({
+        key: z.string().optional(),
+        name: z.string().min(1),
+        maxPoints: z.number(),
+        points: z.number().optional(),
+        nature: z.string().optional(),
+        verdict: z.string().optional(),
+      }),
+    )
+    .max(12),
+  accuracyNote: z.string().trim().max(400).optional(),
+  disclaimer: z.string().trim().max(400).optional(),
+  idempotencyKey: z.string().trim().min(1).max(100).optional(),
+});
+
+export type PrintMatchBody = z.infer<typeof printMatchBodySchema>;
+
+export const printReadingBodySchema = z.object({
+  subject: readingSubjectSchema,
+  chart: chartSummarySchema.default({}),
+  palm: palmInsightSchema,
+  reading: readingSectionsSchema,
+  palmJpegBase64: z.string().max(8_000_000).optional(),
+  disclaimer: z.string().trim().max(400).optional(),
+  idempotencyKey: z.string().trim().min(1).max(100).optional(),
+});
+
+export type PrintReadingBody = z.infer<typeof printReadingBodySchema>;
+
+export const printTodayBodySchema = z.object({
+  subject: readingSubjectSchema,
+  asOf: z.string().min(1),
+  panchang: z.record(z.string().optional()).default({}),
+  dasha: z.object({
+    label: z.string().default(''),
+    levels: z.array(z.string()).default([]),
+  }),
+  accuracyNote: z.string().trim().max(400).optional(),
+  disclaimer: z.string().trim().max(400).optional(),
+  idempotencyKey: z.string().trim().min(1).max(100).optional(),
+});
+
+export type PrintTodayBody = z.infer<typeof printTodayBodySchema>;

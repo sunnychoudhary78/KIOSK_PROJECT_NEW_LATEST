@@ -43,12 +43,13 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: KioskShell(
-          title: 'Today & Periods',
-          cosmic: true,
-          stepLabel: 'Today',
-          body: TodayPeriodsResultView(result: _result()),
+      ProviderScope(
+        child: MaterialApp(
+          home: KioskShell(
+            title: 'Today & Periods',
+            stepLabel: 'Today',
+            body: TodayPeriodsResultView(result: _result()),
+          ),
         ),
       ),
     );

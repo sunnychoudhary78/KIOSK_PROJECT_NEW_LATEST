@@ -1,20 +1,28 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
+import 'package:skp_kiosk/features/astrology/application/astrology_print_mixin.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
+import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
 class MyKundaliUiState {
   const MyKundaliUiState({
     this.phase = KundaliPhase.form,
     this.result,
     this.error,
+    this.subject,
+    this.print = const ReportPrintSnapshot(),
   });
 
   final KundaliPhase phase;
   final KundaliResult? result;
   final String? error;
+  final AstrologyBirthSubject? subject;
+  final ReportPrintSnapshot print;
 
   MyKundaliUiState copyWith({
     KundaliPhase? phase,
@@ -22,11 +30,16 @@ class MyKundaliUiState {
     bool clearResult = false,
     String? error,
     bool clearError = false,
+    AstrologyBirthSubject? subject,
+    bool clearSubject = false,
+    ReportPrintSnapshot? print,
   }) {
     return MyKundaliUiState(
       phase: phase ?? this.phase,
       result: clearResult ? null : (result ?? this.result),
       error: clearError ? null : (error ?? this.error),
+      subject: clearSubject ? null : (subject ?? this.subject),
+      print: print ?? this.print,
     );
   }
 }
@@ -36,6 +49,12 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
   MyKundaliUiState build() => const MyKundaliUiState();
 
   AstrologyRepository get _repository => ref.read(astrologyRepositoryProvider);
+
+  ReportPrintSupport get _printSupport => ReportPrintSupport(
+        api: ref.read(apiClientProvider),
+        coordinator: ref.read(printCoordinatorProvider),
+        tempFolderName: 'skp_astrology',
+      );
 
   void reset() {
     state = const MyKundaliUiState();
@@ -63,10 +82,21 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
       return;
     }
 
+    final subject = AstrologyBirthSubject(
+      name: trimmedName,
+      gender: gender,
+      dateOfBirth: dateOfBirth,
+      birthTime: birthTimeUnknown ? '12:00' : birthTime,
+      birthPlace: trimmedPlace,
+      birthTimeUnknown: birthTimeUnknown,
+    );
+
     state = state.copyWith(
       phase: KundaliPhase.loading,
       clearError: true,
       clearResult: true,
+      subject: subject,
+      print: const ReportPrintSnapshot(),
     );
 
     try {
@@ -107,6 +137,98 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
         error: userFacingError(error),
       );
     }
+  }
+
+  Future<void> preparePrint() async {
+    final result = state.result;
+    final subject = state.subject;
+    if (result == null || subject == null || state.phase != KundaliPhase.result) {
+      return;
+    }
+    final charts = result.availableTabs
+        .map(
+          (entry) => {
+            'key': entry.key,
+            'title': entry.value.title,
+            'subtitle': entry.value.subtitle,
+            'svg': entry.value.svg,
+          },
+        )
+        .toList();
+    if (charts.isEmpty) {
+      state = state.copyWith(error: 'No chart available to print');
+      return;
+    }
+
+    state = state.copyWith(
+      print: state.print.copyWith(
+        phase: ReportPrintPhase.preparingPreview,
+        clearError: true,
+        clearMessage: true,
+      ),
+    );
+
+    final next = await _printSupport.prepare(
+      createJobPath: '/astrology/kundali/print',
+      body: {
+        'subject': subject.toJson(),
+        'style': result.style,
+        'chart': {
+          if (result.chart.lagna != null) 'lagna': result.chart.lagna,
+          if (result.chart.sunSign != null) 'sunSign': result.chart.sunSign,
+          if (result.chart.moonSign != null) 'moonSign': result.chart.moonSign,
+          if (result.chart.nakshatra != null) 'nakshatra': result.chart.nakshatra,
+          if (result.chart.currentDasha != null)
+            'currentDasha': result.chart.currentDasha,
+        },
+        'charts': charts,
+        'disclaimer': result.disclaimer,
+      },
+      previous: state.print,
+    );
+    if (!ref.mounted) return;
+    state = state.copyWith(print: next, error: next.error, clearError: next.error == null);
+  }
+
+  Future<void> confirmPrint() async {
+    if (state.print.phase != ReportPrintPhase.previewing) return;
+    state = state.copyWith(
+      print: state.print.copyWith(phase: ReportPrintPhase.printing),
+    );
+    final next = await _printSupport.confirm(
+      current: state.print,
+      onProgress: (message) {
+        if (!ref.mounted) return;
+        state = state.copyWith(
+          print: state.print.copyWith(
+            phase: ReportPrintPhase.printing,
+            message: message,
+          ),
+        );
+      },
+    );
+    if (!ref.mounted) return;
+    state = state.copyWith(print: next, error: next.error, clearError: next.error == null);
+  }
+
+  Future<void> cancelPrintPreview() async {
+    await _printSupport.abandonRetry(state.print);
+    if (!ref.mounted) return;
+    state = state.copyWith(print: const ReportPrintSnapshot());
+  }
+
+  Future<void> tellStaffPrint() async {
+    final next = await _printSupport.tellStaff(state.print, ref.read(apiClientProvider));
+    if (!ref.mounted) return;
+    state = state.copyWith(print: next);
+  }
+
+  Future<void> reportPrintPagesMissing() async {
+    await _printSupport.reportPagesMissing(state.print, ref.read(apiClientProvider));
+  }
+
+  void clearPrintResult() {
+    state = state.copyWith(print: const ReportPrintSnapshot());
   }
 }
 

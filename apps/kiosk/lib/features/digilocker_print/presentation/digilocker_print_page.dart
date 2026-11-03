@@ -29,6 +29,12 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
         .endVisitorSession(attract: false);
   }
 
+  Future<void> _goBack() async {
+    await ref.read(digilockerControllerProvider.notifier).endSession();
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(digilockerControllerProvider);
@@ -48,6 +54,7 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
     if ((kioskPrintingPaused(ref) || state.paperOut) &&
         state.phase != DigilockerPhase.printing) {
       return VisitorSessionPopScope(
+        endSessionOnPop: false,
         child: KioskShell(
           title: 'DigiLocker',
           onHome: _endSessionAndGoHome,
@@ -82,14 +89,23 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
             );
       step = 'Preview';
     } else if (listing) {
-      leading = KioskGhostButton(label: 'End session', onPressed: _endSessionAndGoHome);
+      leading = KioskGhostButton(
+        label: 'Back',
+        icon: Icons.arrow_back,
+        onPressed: _goBack,
+      );
       step = 'Documents';
     } else if (state.phase == DigilockerPhase.awaitingConsent) {
-      leading = KioskGhostButton(label: 'Cancel', onPressed: _endSessionAndGoHome);
+      leading = KioskGhostButton(
+        label: 'Back',
+        icon: Icons.arrow_back,
+        onPressed: _goBack,
+      );
       step = 'Sign in';
     }
 
     return VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
         title: 'DigiLocker Print',
         onHome: _endSessionAndGoHome,
@@ -132,6 +148,8 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const KioskDisclaimer(message: KioskDisclaimerCopy.digilocker),
+                  const SizedBox(height: 12),
                   if (state.error != null)
                     KioskStatusBanner(
                       message: state.error!,
@@ -200,6 +218,11 @@ class _AuthBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const KioskDisclaimer(
+            message: KioskDisclaimerCopy.digilocker,
+            compact: true,
+          ),
+          const SizedBox(height: 12),
           if (error != null) ...[
             KioskStatusBanner(
               message: error!,

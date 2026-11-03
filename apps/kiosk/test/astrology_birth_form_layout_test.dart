@@ -51,7 +51,6 @@ void main() {
         child: MaterialApp(
           home: KioskShell(
             title: 'My Kundali',
-            cosmic: true,
             stepLabel: 'Details',
             footerLeading: const SizedBox(width: 120, height: 56),
             footerTrailing: const SizedBox(width: 180, height: 56),
@@ -111,7 +110,6 @@ void main() {
         child: MaterialApp(
           home: KioskShell(
             title: 'My Kundali',
-            cosmic: true,
             stepLabel: 'Details',
             footerTrailing: const SizedBox(width: 180, height: 56),
             body: AstrologyBirthFormPanel(
@@ -179,7 +177,6 @@ void main() {
           child: MaterialApp(
             home: KioskShell(
               title: 'My Kundali',
-              cosmic: true,
               stepLabel: 'Details',
               footerLeading: const SizedBox(width: 120, height: 56),
               footerTrailing: const SizedBox(width: 180, height: 56),

@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.smartkiosk" "\0"
-            VALUE "FileDescription", "skp_kiosk" "\0"
+            VALUE "FileDescription", "ATHENA" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "skp_kiosk" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.smartkiosk. All rights reserved." "\0"
             VALUE "OriginalFilename", "skp_kiosk.exe" "\0"
-            VALUE "ProductName", "skp_kiosk" "\0"
+            VALUE "ProductName", "ATHENA" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

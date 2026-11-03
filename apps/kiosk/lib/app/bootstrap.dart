@@ -22,6 +22,7 @@ Future<void> _configureWindow() async {
         minimumSize: kDebugMode ? debugSize : null,
         skipTaskbar: false,
         titleBarStyle: kDebugMode ? TitleBarStyle.normal : TitleBarStyle.hidden,
+        title: 'ATHENA',
         fullScreen: false,
       ),
     );

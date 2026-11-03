@@ -49,6 +49,8 @@ enum PrintJobSource {
   otp_print
   digilocker_print
   quick_print
+  well_being_print
+  astrology_print
 }
 
 enum PrintColorMode {

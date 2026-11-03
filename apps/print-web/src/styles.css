@@ -571,6 +571,14 @@ h1,
   border: 1px solid rgba(180, 35, 24, 0.22);
 }
 
+.banner.privacy {
+  margin-bottom: 0.85rem;
+  color: var(--accent, #0f6a5a);
+  background: rgba(15, 106, 90, 0.1);
+  border: 1px solid rgba(15, 106, 90, 0.28);
+  font-weight: 600;
+}
+
 /* —— Identity / phone OTP —— */
 
 .auth-panel {

@@ -584,14 +584,10 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
               left: 32,
               top: 28,
               child: IgnorePointer(
-                child: Text(
-                  'ATHENA',
-                  style: TextStyle(
-                    color: Color(0x66F5F1E8),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 3.2,
-                  ),
+                child: Image(
+                  image: AssetImage('assets/brand/athena_logo.png'),
+                  height: 40,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),

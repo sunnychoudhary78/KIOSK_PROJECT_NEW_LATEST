@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { PrintJobSource, type Prisma } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { Logger } from '../../infrastructure/logging/logger.js';
 import type { AstrologyLlmClient } from '../../infrastructure/external/openai.client.js';
@@ -12,6 +12,9 @@ import {
 } from '../../infrastructure/external/vedastro.client.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
+import { createPrintJobWithPdf } from '../printing/create_print_job_with_pdf.js';
+import { assertPrintingAvailable } from '../printing/printing_pause.js';
+import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import {
   ASTROLOGY_DISCLAIMER,
@@ -23,9 +26,19 @@ import {
   type CreateTodayBody,
   type KundaliChartEntry,
   type LlmReading,
+  type PrintKundaliBody,
+  type PrintMatchBody,
+  type PrintReadingBody,
+  type PrintTodayBody,
   type ReadingSubject,
   type UploadedPalm,
 } from './astrology.schemas.js';
+import {
+  buildKundaliReportPdf,
+  buildMatchReportPdf,
+  buildPalmReportPdf,
+  buildTodayReportPdf,
+} from './astrology_report_pdf.js';
 
 const MAX_PALM_BYTES = 5 * 1024 * 1024;
 
@@ -67,6 +80,8 @@ export type AstrologyTodayResponse = {
 };
 
 export class AstrologyService {
+  private readonly printing: PrintingService;
+
   constructor(
     private readonly db: DbClient,
     private readonly vedastro: VedAstroClient,
@@ -74,7 +89,9 @@ export class AstrologyService {
     private readonly audit: AuditService,
     private readonly services: ServicesCatalogService,
     private readonly logger: Logger,
-  ) {}
+  ) {
+    this.printing = new PrintingService(db, audit);
+  }
 
   async createReading(
     deviceId: string,
@@ -432,6 +449,153 @@ export class AstrologyService {
       panchang,
       dasha,
     };
+  }
+
+  async printKundali(deviceId: string, input: PrintKundaliBody, correlationId?: string) {
+    await this.services.assertEnabled(deviceId, 'astrology');
+    await assertPrintingAvailable(this.db, deviceId);
+    const bytes = await buildKundaliReportPdf({
+      subject: { ...input.subject, birthTimeUnknown: Boolean(input.subject.birthTimeUnknown) },
+      style: input.style,
+      chart: input.chart,
+      charts: input.charts,
+      disclaimer: input.disclaimer,
+    });
+    const job = await createPrintJobWithPdf(
+      this.printing,
+      {
+        source: PrintJobSource.astrology_print,
+        title: `Kundali — ${input.subject.name}`,
+        deviceId,
+        bytes,
+        folder: 'astrology',
+        idempotencyKey:
+          input.idempotencyKey ??
+          `ast-kundali-${deviceId}-${input.subject.name}-${Date.now()}`.slice(0, 100),
+      },
+      'device',
+      correlationId,
+    );
+    await this.audit.record({
+      action: 'astrology.kundali_print_requested',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'print_job',
+      resourceId: job.id,
+      correlationId,
+    });
+    return job;
+  }
+
+  async printMatch(deviceId: string, input: PrintMatchBody, correlationId?: string) {
+    await this.services.assertEnabled(deviceId, 'astrology');
+    await assertPrintingAvailable(this.db, deviceId);
+    const bytes = await buildMatchReportPdf({
+      groom: { ...input.groom, birthTimeUnknown: Boolean(input.groom.birthTimeUnknown) },
+      bride: { ...input.bride, birthTimeUnknown: Boolean(input.bride.birthTimeUnknown) },
+      score: input.score,
+      kutas: input.kutas,
+      accuracyNote: input.accuracyNote,
+      disclaimer: input.disclaimer,
+    });
+    const job = await createPrintJobWithPdf(
+      this.printing,
+      {
+        source: PrintJobSource.astrology_print,
+        title: `Match Kundali — ${input.groom.name} & ${input.bride.name}`,
+        deviceId,
+        bytes,
+        folder: 'astrology',
+        idempotencyKey:
+          input.idempotencyKey ??
+          `ast-match-${deviceId}-${input.groom.name}-${input.bride.name}-${Date.now()}`.slice(0, 100),
+      },
+      'device',
+      correlationId,
+    );
+    await this.audit.record({
+      action: 'astrology.match_print_requested',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'print_job',
+      resourceId: job.id,
+      correlationId,
+    });
+    return job;
+  }
+
+  async printReading(deviceId: string, input: PrintReadingBody, correlationId?: string) {
+    await this.services.assertEnabled(deviceId, 'astrology');
+    await assertPrintingAvailable(this.db, deviceId);
+    const bytes = await buildPalmReportPdf({
+      subject: { ...input.subject, birthTimeUnknown: Boolean(input.subject.birthTimeUnknown) },
+      chart: input.chart,
+      palm: input.palm,
+      reading: input.reading,
+      palmJpegBase64: input.palmJpegBase64,
+      disclaimer: input.disclaimer,
+    });
+    const job = await createPrintJobWithPdf(
+      this.printing,
+      {
+        source: PrintJobSource.astrology_print,
+        title: `Palm Reading — ${input.subject.name}`,
+        deviceId,
+        bytes,
+        folder: 'astrology',
+        idempotencyKey:
+          input.idempotencyKey ??
+          `ast-palm-${deviceId}-${input.subject.name}-${Date.now()}`.slice(0, 100),
+      },
+      'device',
+      correlationId,
+    );
+    await this.audit.record({
+      action: 'astrology.reading_print_requested',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'print_job',
+      resourceId: job.id,
+      correlationId,
+    });
+    return job;
+  }
+
+  async printToday(deviceId: string, input: PrintTodayBody, correlationId?: string) {
+    await this.services.assertEnabled(deviceId, 'astrology');
+    await assertPrintingAvailable(this.db, deviceId);
+    const bytes = await buildTodayReportPdf({
+      subject: { ...input.subject, birthTimeUnknown: Boolean(input.subject.birthTimeUnknown) },
+      asOf: input.asOf,
+      panchang: input.panchang,
+      dasha: input.dasha,
+      accuracyNote: input.accuracyNote,
+      disclaimer: input.disclaimer,
+    });
+    const job = await createPrintJobWithPdf(
+      this.printing,
+      {
+        source: PrintJobSource.astrology_print,
+        title: `Today & Panchang — ${input.subject.name}`,
+        deviceId,
+        bytes,
+        folder: 'astrology',
+        idempotencyKey:
+          input.idempotencyKey ??
+          `ast-today-${deviceId}-${input.subject.name}-${Date.now()}`.slice(0, 100),
+      },
+      'device',
+      correlationId,
+    );
+    await this.audit.record({
+      action: 'astrology.today_print_requested',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'print_job',
+      resourceId: job.id,
+      correlationId,
+    });
+    return job;
   }
 
   private toVedAstroBirth(

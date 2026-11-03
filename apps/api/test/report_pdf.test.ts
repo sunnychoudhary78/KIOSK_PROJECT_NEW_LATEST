@@ -1,0 +1,118 @@
+import { describe, expect, it } from 'vitest';
+import { PDFDocument } from 'pdf-lib';
+import { buildReportPdf, countPdfPages, svgToPng } from '../src/modules/printing/report_pdf.js';
+import { buildHealthReportPdf } from '../src/modules/well_being/well_being_report_pdf.js';
+import {
+  buildKundaliReportPdf,
+  buildMatchReportPdf,
+  buildPalmReportPdf,
+  buildTodayReportPdf,
+} from '../src/modules/astrology/astrology_report_pdf.js';
+
+const subject = {
+  name: 'Asha',
+  gender: 'female' as const,
+  dateOfBirth: '1992-03-18',
+  birthTime: '12:00',
+  birthPlace: 'Jaipur',
+  birthTimeUnknown: true,
+};
+
+describe('report PDF builders', () => {
+  it('builds a multi-line ATHENA report PDF', async () => {
+    const bytes = await buildReportPdf({
+      title: 'Sample Report',
+      subtitle: 'Unit test',
+      lines: [
+        { kind: 'heading', text: 'Section' },
+        { kind: 'kv', label: 'Name', value: 'Asha' },
+        { kind: 'body', text: 'Hello world from the kiosk report builder.' },
+      ],
+      disclaimer: 'For testing only.',
+    });
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
+    expect(await countPdfPages(bytes)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('builds a health report for oxi mode', async () => {
+    const bytes = await buildHealthReportPdf({
+      mode: 'oxi',
+      heartRate: 72,
+      spo2: 98,
+      heartRateInterpretation: 'Normal Heart Rate',
+      spo2Interpretation: 'Excellent Oxygen Saturation',
+    });
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
+  it('builds a health report for temp mode', async () => {
+    const bytes = await buildHealthReportPdf({
+      mode: 'temp',
+      tempC: 36.8,
+      tempF: 98.2,
+      temperatureInterpretation: 'Normal Range',
+    });
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
+  it('rasterizes SVG and embeds kundali charts', async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f5e6c8"/><text x="20" y="100" font-size="20">Rasi</text></svg>';
+    const png = svgToPng(svg, 200);
+    expect(png[0]).toBe(0x89);
+    expect(png[1]).toBe(0x50);
+
+    const bytes = await buildKundaliReportPdf({
+      subject,
+      style: 'north',
+      chart: { lagna: 'Aries', sunSign: 'Pisces' },
+      charts: [
+        { key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg },
+      ],
+    });
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('builds match, palm, and today report PDFs', async () => {
+    const matchBytes = await buildMatchReportPdf({
+      groom: { ...subject, name: 'Arjun', gender: 'male' },
+      bride: subject,
+      score: { total: 28, max: 36, summary: 'Strong match', tone: 'good' },
+      kutas: [
+        { name: 'Varna', maxPoints: 1, points: 1, nature: 'Friendly', verdict: 'Good' },
+      ],
+    });
+    expect(matchBytes.subarray(0, 4).toString()).toBe('%PDF');
+
+    const palmBytes = await buildPalmReportPdf({
+      subject,
+      chart: { moonSign: 'Taurus' },
+      palm: {
+        summary: 'Clear lines',
+        lifeLine: 'Long',
+        heartLine: 'Warm',
+        headLine: 'Focused',
+        fateLine: 'Steady',
+      },
+      reading: {
+        overview: 'Overview',
+        personality: 'Personality',
+        career: 'Career',
+        health: 'Health',
+        relationships: 'Relationships',
+        period: 'Period',
+      },
+    });
+    expect(palmBytes.subarray(0, 4).toString()).toBe('%PDF');
+
+    const todayBytes = await buildTodayReportPdf({
+      subject,
+      asOf: new Date().toISOString(),
+      panchang: { weekday: 'Tuesday', tithi: 'Shukla Paksha' },
+      dasha: { label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] },
+    });
+    expect(todayBytes.subarray(0, 4).toString()).toBe('%PDF');
+  });
+});

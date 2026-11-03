@@ -18,11 +18,13 @@ class LocalServiceContactsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
         title: category.name,
         onHome: () => _endSession(ref),
         footerLeading: KioskGhostButton(
           label: 'Back',
+          icon: Icons.arrow_back,
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         body: Padding(

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_device.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_provider.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
@@ -9,6 +10,8 @@ import 'package:skp_kiosk/features/well_being/application/vitals_line_parser.dar
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
+import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
 final wellBeingControllerProvider =
     NotifierProvider.autoDispose<WellBeingController, WellBeingUiState>(
@@ -35,6 +38,12 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   }
 
   SerialController get _serial => ref.read(serialControllerProvider.notifier);
+
+  ReportPrintSupport get _printSupport => ReportPrintSupport(
+        api: ref.read(apiClientProvider),
+        coordinator: ref.read(printCoordinatorProvider),
+        tempFolderName: 'skp_well_being',
+      );
 
   Future<void> startSession() async {
     if (!ref.mounted || state.sessionActive) {
@@ -172,10 +181,88 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       clearLiveTempF: true,
       clearFinalTempC: true,
       clearFinalTempF: true,
+      print: const ReportPrintSnapshot(),
       statusMessage: state.isConnected
           ? 'Choose a measurement'
           : state.statusMessage,
     );
+  }
+
+  Future<void> preparePrint() async {
+    if (state.phase != WellBeingPhase.oxiComplete &&
+        state.phase != WellBeingPhase.tempComplete) {
+      return;
+    }
+    final mode = state.phase == WellBeingPhase.oxiComplete ? 'oxi' : 'temp';
+    state = state.copyWith(
+      print: state.print.copyWith(
+        phase: ReportPrintPhase.preparingPreview,
+        clearError: true,
+        clearMessage: true,
+      ),
+    );
+    final next = await _printSupport.prepare(
+      createJobPath: '/well-being/print',
+      body: {
+        'mode': mode,
+        if (state.finalHeartRate != null) 'heartRate': state.finalHeartRate,
+        if (state.finalSpO2 != null) 'spo2': state.finalSpO2,
+        if (state.finalTempC != null) 'tempC': state.finalTempC,
+        if (state.finalTempF != null) 'tempF': state.finalTempF,
+        'heartRateInterpretation': state.heartRateInterpretation,
+        'spo2Interpretation': state.spo2Interpretation,
+        'temperatureInterpretation': state.temperatureInterpretation,
+        'measuredAt': DateTime.now().toUtc().toIso8601String(),
+      },
+      previous: state.print,
+    );
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      print: next,
+      lastError: next.error,
+      clearError: next.error == null,
+    );
+  }
+
+  Future<void> confirmPrint() async {
+    if (state.print.phase != ReportPrintPhase.previewing) return;
+    state = state.copyWith(
+      print: state.print.copyWith(phase: ReportPrintPhase.printing),
+    );
+    final next = await _printSupport.confirm(
+      current: state.print,
+      onProgress: (message) {
+        if (!ref.mounted) return;
+        state = state.copyWith(
+          print: state.print.copyWith(
+            phase: ReportPrintPhase.printing,
+            message: message,
+          ),
+        );
+      },
+    );
+    if (!ref.mounted) return;
+    state = state.copyWith(print: next, lastError: next.error, clearError: next.error == null);
+  }
+
+  Future<void> cancelPrintPreview() async {
+    await _printSupport.abandonRetry(state.print);
+    if (!ref.mounted) return;
+    state = state.copyWith(print: const ReportPrintSnapshot());
+  }
+
+  Future<void> tellStaffPrint() async {
+    final next = await _printSupport.tellStaff(state.print, ref.read(apiClientProvider));
+    if (!ref.mounted) return;
+    state = state.copyWith(print: next);
+  }
+
+  Future<void> reportPrintPagesMissing() async {
+    await _printSupport.reportPagesMissing(state.print, ref.read(apiClientProvider));
+  }
+
+  void clearPrintResult() {
+    state = state.copyWith(print: const ReportPrintSnapshot());
   }
 
   Future<void> _ensureConnected() async {

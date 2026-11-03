@@ -24,6 +24,7 @@ import { registerAdsModule } from './modules/ads/index.js';
 import { registerPlatformSettingsModule } from './modules/platform_settings/index.js';
 import { registerPaymentsModule, registerRazorpayWebhook } from './modules/payments/index.js';
 import { registerAstrologyModule } from './modules/astrology/index.js';
+import { registerWellBeingModule } from './modules/well_being/index.js';
 import { registerFuelStationsModule } from './modules/fuel_stations/index.js';
 import { registerWeatherModule } from './modules/weather/index.js';
 import { registerSurveillanceModule } from './modules/surveillance/index.js';
@@ -103,6 +104,7 @@ export function createApp(deps: AppDeps): Express {
   registerAdsModule(v1, deps);
   registerPlatformSettingsModule(v1, deps);
   registerAstrologyModule(v1, deps);
+  registerWellBeingModule(v1, deps);
   registerFuelStationsModule(v1, deps);
   registerWeatherModule(v1, deps);
   registerSurveillanceModule(v1, deps);

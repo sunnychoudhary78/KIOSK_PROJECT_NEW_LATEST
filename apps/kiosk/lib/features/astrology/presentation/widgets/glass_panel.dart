@@ -39,7 +39,7 @@ class GlassPanel extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: AstrologyColors.gold.withValues(alpha: 0.08),
+            color: SkpColors.text.withValues(alpha: 0.06),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),

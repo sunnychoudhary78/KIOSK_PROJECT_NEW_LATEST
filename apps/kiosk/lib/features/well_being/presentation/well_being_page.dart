@@ -5,12 +5,15 @@ import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
+import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
+import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_controller.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
+import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
 /// Dual-sensor Well Being flow (USB Serial JSON protocol).
 class WellBeingPage extends ConsumerStatefulWidget {
@@ -39,6 +42,97 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(wellBeingControllerProvider);
     final controller = ref.read(wellBeingControllerProvider.notifier);
+    final print = state.print;
+
+    ref.listen(wellBeingControllerProvider, (previous, next) {
+      ref.read(kioskSessionHoldProvider.notifier).set(
+            printing: next.print.phase == ReportPrintPhase.printing,
+          );
+    });
+
+    if ((kioskPrintingPaused(ref) || print.paperOut) &&
+        print.phase != ReportPrintPhase.printing) {
+      return VisitorSessionPopScope(
+        child: KioskShell(
+          title: 'Well Being',
+          onHome: _endSession,
+          body: const KioskPrintingPaused(),
+        ),
+      );
+    }
+
+    if (print.phase == ReportPrintPhase.preparingPreview) {
+      return VisitorSessionPopScope(
+        child: KioskShell(
+          title: 'Well Being',
+          onHome: _endSession,
+          stepLabel: 'Print',
+          body: const KioskWaitAds(message: 'Preparing health report…'),
+        ),
+      );
+    }
+
+    if (print.phase == ReportPrintPhase.previewing ||
+        print.phase == ReportPrintPhase.printing) {
+      return VisitorSessionPopScope(
+        child: KioskShell(
+          title: 'Well Being',
+          onHome: _endSession,
+          stepLabel: 'Preview',
+          footerLeading: KioskGhostButton(
+            label: 'Back',
+            icon: Icons.arrow_back,
+            onPressed: print.phase == ReportPrintPhase.printing
+                ? null
+                : () => controller.cancelPrintPreview(),
+          ),
+          footerTrailing: print.printFailures >= 2
+              ? KioskPrimaryButton(
+                  label: 'Tell staff',
+                  onPressed: controller.tellStaffPrint,
+                )
+              : KioskPrimaryButton(
+                  label: print.phase == ReportPrintPhase.printing
+                      ? 'Printing…'
+                      : 'Print',
+                  icon: Icons.print,
+                  loading: print.phase == ReportPrintPhase.printing,
+                  onPressed: print.phase == ReportPrintPhase.printing
+                      ? null
+                      : controller.confirmPrint,
+                ),
+          body: print.previewBytes == null
+              ? const KioskWaitAds(message: 'Preparing…')
+              : KioskPdfPreview(
+                  title: print.previewTitle ?? 'Health Report',
+                  pdfBytes: print.previewBytes!,
+                  error: print.error,
+                ),
+        ),
+      );
+    }
+
+    if (print.phase == ReportPrintPhase.printResult) {
+      return VisitorSessionPopScope(
+        child: KioskShell(
+          title: 'Well Being',
+          onHome: _endSession,
+          stepLabel: 'Print',
+          body: KioskPrintResult(
+            confirmed: print.printConfirmed,
+            detail: print.message,
+            autoReturn: print.printConfirmed ? const Duration(seconds: 20) : null,
+            onHome: () async {
+              controller.clearPrintResult();
+              await controller.returnToHub();
+            },
+            onNotReceived:
+                print.printConfirmed ? controller.reportPrintPagesMissing : null,
+          ),
+        ),
+      );
+    }
+
     final showBack = state.phase != WellBeingPhase.choose &&
         state.connectionStatus != SerialConnectionStatus.connecting;
     final complete = state.phase == WellBeingPhase.oxiComplete ||
@@ -75,11 +169,26 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                 icon: Icons.arrow_back,
                 onPressed: () => controller.returnToHub(),
               )
-            : KioskGhostButton(label: 'Cancel', onPressed: _endSession),
+            : KioskGhostButton(
+                label: 'Back',
+                icon: Icons.arrow_back,
+                onPressed: _endSession,
+              ),
         footerTrailing: complete
-            ? KioskPrimaryButton(
-                label: 'Done',
-                onPressed: () => controller.returnToHub(),
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  KioskGhostButton(
+                    label: 'Done',
+                    onPressed: () => controller.returnToHub(),
+                  ),
+                  const SizedBox(width: 12),
+                  KioskPrimaryButton(
+                    label: 'Print',
+                    icon: Icons.print,
+                    onPressed: controller.preparePrint,
+                  ),
+                ],
               )
             : null,
         body: Padding(
@@ -232,6 +341,8 @@ class _ChooseView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        const KioskDisclaimer(message: KioskDisclaimerCopy.wellBeing),
+        const SizedBox(height: 12),
         Text(
           connected ? 'Choose a measurement' : 'Connect the sensor to begin',
           textAlign: TextAlign.center,

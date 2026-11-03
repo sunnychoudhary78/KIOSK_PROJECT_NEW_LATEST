@@ -27,6 +27,12 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
         .endVisitorSession(attract: false);
   }
 
+  Future<void> _goBack() async {
+    ref.read(otpPrintControllerProvider.notifier).reset();
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   void _appendDigit(String digit) {
     if (_otp.length >= _otpLength) {
       return;
@@ -67,6 +73,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
     if ((kioskPrintingPaused(ref) || state.paperOut) &&
         state.phase != OtpPrintPhase.printing) {
       return VisitorSessionPopScope(
+        endSessionOnPop: false,
         child: KioskShell(
           title: 'OTP Print',
           onHome: _endSession,
@@ -79,7 +86,11 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
     Widget? trailing;
     String? step;
     if (entering) {
-      leading = KioskGhostButton(label: 'Cancel', onPressed: _endSession);
+      leading = KioskGhostButton(
+        label: 'Back',
+        icon: Icons.arrow_back,
+        onPressed: _goBack,
+      );
       trailing = KioskPrimaryButton(
         label: 'Continue',
         loading: state.loading,
@@ -121,6 +132,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
     }
 
     Widget page = VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
         title: 'OTP Print',
         onHome: _endSession,
@@ -242,6 +254,11 @@ class _OtpEntry extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: SkpColors.muted,
                       ),
+                ),
+                const SizedBox(height: 12),
+                const KioskDisclaimer(
+                  message: KioskDisclaimerCopy.otpPrint,
+                  compact: true,
                 ),
                 const Spacer(),
                 KioskPinField(value: otp),

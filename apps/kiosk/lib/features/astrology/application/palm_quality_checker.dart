@@ -15,6 +15,9 @@ class PalmQualityResult {
     this.blur = 0,
     this.skinRatio = 0,
     this.outsideSkinRatio = 0,
+    this.roiSkinRatio = 0,
+    this.fingerSkinRatio = 0,
+    this.centroidOk = false,
   });
 
   final bool ok;
@@ -23,6 +26,10 @@ class PalmQualityResult {
   final double blur;
   final double skinRatio;
   final double outsideSkinRatio;
+  /// Skin pixels as a fraction of the full ROI (not only the palm path).
+  final double roiSkinRatio;
+  final double fingerSkinRatio;
+  final bool centroidOk;
 }
 
 /// Local palm-photo quality gates (no ML). Scores skin inside the on-screen
@@ -31,12 +38,33 @@ class PalmQualityResult {
 class PalmQualityChecker {
   const PalmQualityChecker();
 
-  static const minBrightness = 45.0;
-  static const maxBrightness = 225.0;
-  static const minInsideSkinRatio = 0.40;
-  static const manualMinInsideSkinRatio = 0.28;
-  static const minSkinContrast = 0.18;
-  static const manualMinSkinContrast = 0.12;
+  static const minBrightness = 50.0;
+  static const maxBrightness = 215.0;
+
+  static const minInsideSkinRatio = 0.52;
+  static const manualMinInsideSkinRatio = 0.42;
+  static const minSkinContrast = 0.28;
+  static const manualMinSkinContrast = 0.20;
+
+  static const maxOutsideSkinRatio = 0.22;
+  static const manualMaxOutsideSkinRatio = 0.30;
+
+  /// Reject “whole ROI is skin” (face close-up).
+  static const maxRoiSkinRatio = 0.72;
+  static const manualMaxRoiSkinRatio = 0.82;
+
+  static const minBlur = 12.0;
+  static const manualMinBlur = 6.0;
+  /// Extremely high variance is usually sensor noise / failure, not a palm.
+  static const maxBlur = 20000.0;
+
+  static const minFingerSkinRatio = 0.35;
+  static const manualMinFingerSkinRatio = 0.25;
+
+  /// Max normalized distance of skin mass from palm-path center (0..~0.7).
+  static const maxCentroidDistance = 0.22;
+  static const manualMaxCentroidDistance = 0.30;
+
   static const analysisMaxWidth = 160;
 
   PalmQualityResult evaluate(Uint8List bytes, {bool strict = true}) {
@@ -61,6 +89,12 @@ class PalmQualityChecker {
     final palm = openPalmPath(
       Rect.fromLTWH(0, 0, roi.width.toDouble(), roi.height.toDouble()),
     );
+    final fingerBand = Rect.fromLTWH(
+      0,
+      0,
+      roi.width.toDouble(),
+      roi.height * 0.35,
+    );
 
     var lumaSum = 0.0;
     var lumaCount = 0;
@@ -68,6 +102,11 @@ class PalmQualityChecker {
     var insideCount = 0;
     var outsideSkin = 0;
     var outsideCount = 0;
+    var fingerSkin = 0;
+    var fingerCount = 0;
+    var skinSumX = 0.0;
+    var skinSumY = 0.0;
+    var skinMass = 0;
     final gray = List<int>.filled(roi.width * roi.height, 0);
     var index = 0;
 
@@ -80,13 +119,26 @@ class PalmQualityChecker {
         final yLuma = 0.299 * r + 0.587 * g + 0.114 * b;
         gray[index++] = yLuma.round();
         final skin = _isSkin(r, g, b);
-        final inPalm = palm.contains(Offset(x + 0.5, y + 0.5));
+        final pt = Offset(x + 0.5, y + 0.5);
+        final inPalm = palm.contains(pt);
+        final inFingers = inPalm && fingerBand.contains(pt);
+
+        if (inFingers) {
+          fingerCount++;
+          if (skin) {
+            fingerSkin++;
+          }
+        }
+
         if (inPalm) {
           insideCount++;
           lumaSum += yLuma;
           lumaCount++;
           if (skin) {
             insideSkin++;
+            skinSumX += x + 0.5;
+            skinSumY += y + 0.5;
+            skinMass++;
           }
         } else {
           outsideCount++;
@@ -99,40 +151,83 @@ class PalmQualityChecker {
 
     final brightness = lumaCount == 0 ? 0.0 : lumaSum / lumaCount;
     final insideSkinRatio = insideCount == 0 ? 0.0 : insideSkin / insideCount;
-    final outsideSkinRatio = outsideCount == 0 ? 0.0 : outsideSkin / outsideCount;
+    final outsideSkinRatio =
+        outsideCount == 0 ? 0.0 : outsideSkin / outsideCount;
+    final roiSkinRatio =
+        (insideCount + outsideCount) == 0
+            ? 0.0
+            : (insideSkin + outsideSkin) / (insideCount + outsideCount);
+    final fingerSkinRatio =
+        fingerCount == 0 ? 0.0 : fingerSkin / fingerCount;
     final blur = _laplacianVariance(gray, roi.width, roi.height);
+
+    final palmCenter = Offset(roi.width * 0.5, roi.height * 0.52);
+    final diag = math.sqrt(
+      roi.width * roi.width + roi.height * roi.height,
+    );
+    var centroidDistance = 1.0;
+    if (skinMass > 0 && diag > 0) {
+      final cx = skinSumX / skinMass;
+      final cy = skinSumY / skinMass;
+      centroidDistance =
+          Offset(cx - palmCenter.dx, cy - palmCenter.dy).distance / diag;
+    }
+    final centroidOk = skinMass > 0 &&
+        centroidDistance <=
+            (strict ? maxCentroidDistance : manualMaxCentroidDistance);
+
+    PalmQualityResult fail(String message) {
+      return PalmQualityResult(
+        ok: false,
+        message: message,
+        brightness: brightness,
+        blur: blur,
+        skinRatio: insideSkinRatio,
+        outsideSkinRatio: outsideSkinRatio,
+        roiSkinRatio: roiSkinRatio,
+        fingerSkinRatio: fingerSkinRatio,
+        centroidOk: centroidOk,
+      );
+    }
+
     final skinMin = strict ? minInsideSkinRatio : manualMinInsideSkinRatio;
     final contrastMin = strict ? minSkinContrast : manualMinSkinContrast;
+    final outsideMax =
+        strict ? maxOutsideSkinRatio : manualMaxOutsideSkinRatio;
+    final roiSkinMax = strict ? maxRoiSkinRatio : manualMaxRoiSkinRatio;
+    final blurMin = strict ? minBlur : manualMinBlur;
+    final fingerMin =
+        strict ? minFingerSkinRatio : manualMinFingerSkinRatio;
 
     if (brightness < minBrightness) {
-      return PalmQualityResult(
-        ok: false,
-        message: 'Too dark. Face your palm toward the light.',
-        brightness: brightness,
-        blur: blur,
-        skinRatio: insideSkinRatio,
-        outsideSkinRatio: outsideSkinRatio,
-      );
+      return fail('Too dark. Face your palm toward the light.');
     }
     if (brightness > maxBrightness) {
-      return PalmQualityResult(
-        ok: false,
-        message: 'Too bright. Move a little away from the light.',
-        brightness: brightness,
-        blur: blur,
-        skinRatio: insideSkinRatio,
-        outsideSkinRatio: outsideSkinRatio,
-      );
+      return fail('Too bright. Move a little away from the light.');
     }
-    if (insideSkinRatio < skinMin || insideSkinRatio - outsideSkinRatio < contrastMin) {
-      return PalmQualityResult(
-        ok: false,
-        message: 'Place your open palm inside the outline.',
-        brightness: brightness,
-        blur: blur,
-        skinRatio: insideSkinRatio,
-        outsideSkinRatio: outsideSkinRatio,
-      );
+    if (blur < blurMin) {
+      return fail('Hold still — image is too soft to read.');
+    }
+    if (blur > maxBlur) {
+      return fail('Too much noise. Soften the lighting a little.');
+    }
+    if (insideSkinRatio < skinMin) {
+      return fail('Place your open palm inside the outline.');
+    }
+    if (insideSkinRatio - outsideSkinRatio < contrastMin) {
+      return fail('Center your palm — background looks like skin.');
+    }
+    if (outsideSkinRatio > outsideMax) {
+      return fail('Only your palm should fill the guide — step closer.');
+    }
+    if (roiSkinRatio > roiSkinMax) {
+      return fail('Too close. Pull your hand back into the guide.');
+    }
+    if (!centroidOk) {
+      return fail('Center your palm in the outline.');
+    }
+    if (fingerSkinRatio < fingerMin) {
+      return fail('Open your fingers inside the top of the guide.');
     }
 
     return PalmQualityResult(
@@ -142,6 +237,9 @@ class PalmQualityChecker {
       blur: blur,
       skinRatio: insideSkinRatio,
       outsideSkinRatio: outsideSkinRatio,
+      roiSkinRatio: roiSkinRatio,
+      fingerSkinRatio: fingerSkinRatio,
+      centroidOk: centroidOk,
     );
   }
 
@@ -149,21 +247,22 @@ class PalmQualityChecker {
     if (roi.width <= analysisMaxWidth) {
       return roi;
     }
-    final height = math.max(8, (roi.height * (analysisMaxWidth / roi.width)).round());
+    final height =
+        math.max(8, (roi.height * (analysisMaxWidth / roi.width)).round());
     return img.copyResize(roi, width: analysisMaxWidth, height: height);
   }
 
+  /// Require YCbCr and Kovac RGB agreement — fewer false skins.
   static bool _isSkin(int r, int g, int b) {
-    return _isYcbCrSkin(r, g, b) || _isRgbSkin(r, g, b);
+    return _isYcbCrSkin(r, g, b) && _isRgbSkin(r, g, b);
   }
 
   static bool _isYcbCrSkin(int r, int g, int b) {
     final cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
     final cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-    return cb >= 70 && cb <= 135 && cr >= 133 && cr <= 180;
+    return cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173;
   }
 
-  /// Kovac RGB — real palms, not beige walls (no warm-tint shortcut).
   static bool _isRgbSkin(int r, int g, int b) {
     final maxc = math.max(r, math.max(g, b));
     final minc = math.min(r, math.min(g, b));
@@ -186,8 +285,7 @@ class PalmQualityChecker {
     for (var y = 1; y < height - 1; y++) {
       for (var x = 1; x < width - 1; x++) {
         final c = gray[y * width + x];
-        final lap =
-            gray[(y - 1) * width + x] +
+        final lap = gray[(y - 1) * width + x] +
             gray[(y + 1) * width + x] +
             gray[y * width + x - 1] +
             gray[y * width + x + 1] -

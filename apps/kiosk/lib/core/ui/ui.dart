@@ -2,6 +2,7 @@ export 'kiosk_buttons.dart';
 export 'kiosk_hardware_keys.dart';
 export 'kiosk_clock.dart';
 export 'kiosk_date_stepper.dart';
+export 'kiosk_disclaimer.dart';
 export 'kiosk_keyboard.dart';
 export 'kiosk_numeric_keypad.dart';
 export 'kiosk_pdf_preview.dart';

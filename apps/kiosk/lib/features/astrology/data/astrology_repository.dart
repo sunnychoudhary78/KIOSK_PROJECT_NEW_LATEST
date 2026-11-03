@@ -239,4 +239,20 @@ class AstrologyRepository {
     );
     return TodayPeriodsResult.fromJson(result);
   }
+
+  Future<Map<String, dynamic>> printKundali(Map<String, dynamic> body) {
+    return _api.post('/astrology/kundali/print', body: body);
+  }
+
+  Future<Map<String, dynamic>> printMatch(Map<String, dynamic> body) {
+    return _api.post('/astrology/match/print', body: body);
+  }
+
+  Future<Map<String, dynamic>> printReading(Map<String, dynamic> body) {
+    return _api.post('/astrology/readings/print', body: body);
+  }
+
+  Future<Map<String, dynamic>> printToday(Map<String, dynamic> body) {
+    return _api.post('/astrology/today/print', body: body);
+  }
 }

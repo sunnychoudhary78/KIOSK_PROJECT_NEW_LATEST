@@ -30,6 +30,12 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
     await ref.read(kioskSessionControllerProvider.notifier).endVisitorSession(attract: false);
   }
 
+  Future<void> _goBack() async {
+    await ref.read(quickPrintControllerProvider.notifier).reset();
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(quickPrintControllerProvider);
@@ -50,8 +56,9 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
     if ((kioskPrintingPaused(ref) || state.paperOut) &&
         state.phase != QuickPrintPhase.printing) {
       return VisitorSessionPopScope(
+        endSessionOnPop: false,
         child: KioskShell(
-          title: 'Quick Print',
+          title: 'QR Print',
           onHome: _endSession,
           body: const KioskPrintingPaused(),
         ),
@@ -64,7 +71,11 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
     if (state.phase == QuickPrintPhase.waiting ||
         state.phase == QuickPrintPhase.starting ||
         state.phase == QuickPrintPhase.error) {
-      leading = KioskGhostButton(label: 'Cancel', onPressed: _endSession);
+      leading = KioskGhostButton(
+        label: 'Back',
+        icon: Icons.arrow_back,
+        onPressed: _goBack,
+      );
       if (state.phase == QuickPrintPhase.error) {
         trailing = KioskPrimaryButton(
           label: 'Try again',
@@ -102,8 +113,9 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
     }
 
     return VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
-        title: 'Quick Print',
+        title: 'QR Print',
         onHome: _endSession,
         stepLabel: step,
         footerLeading: leading,
@@ -211,10 +223,30 @@ class _QrWait extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Scan with your phone', style: theme.textTheme.headlineMedium),
+                const SizedBox(height: 16),
+                Text(
+                  '1. Open your phone camera and point it at this QR code',
+                  style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+                ),
                 const SizedBox(height: 8),
                 Text(
-                  'Open the camera, scan the code, and upload PDFs in the browser. No app required.',
+                  '2. Open the link in the browser (no app needed)',
                   style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '3. Upload your document (PDF)',
+                  style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '4. Complete payment on your phone if asked — your file will appear here',
+                  style: theme.textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+                ),
+                const SizedBox(height: 16),
+                const KioskDisclaimer(
+                  message: KioskDisclaimerCopy.qrPrint,
+                  compact: true,
                 ),
                 const Spacer(),
                 if (expiresAt != null)

@@ -5,7 +5,6 @@ import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
-import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 
 /// Cinematic gold-accented reading reveal for the Astrology result phase.
@@ -177,17 +176,15 @@ class _AstrologyResultViewState extends State<AstrologyResultView>
         ? '✦'
         : String.fromCharCode(trimmedName.runes.first).toUpperCase();
 
-    var staggerIndex = 0;
     final lifeTab =
         lifeSections.isEmpty ? 0 : _lifeTab.clamp(0, lifeSections.length - 1);
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        const CosmicBackdrop(),
         Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 920),
+            constraints: const BoxConstraints(maxWidth: 1080),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(28, 16, 28, 24),
               children: [
@@ -232,22 +229,15 @@ class _AstrologyResultViewState extends State<AstrologyResultView>
                       label: 'Palm insights',
                     ),
                   ),
-                  if (reading.palm.summary.trim().isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _StaggerItem(
-                      index: staggerIndex++,
-                      parent: _entrance,
-                      child: _PalmSummaryBanner(summary: reading.palm.summary),
-                    ),
-                  ],
-                  if (palmLines.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    _PalmLinesGrid(
-                      lines: palmLines,
-                      parent: _entrance,
-                      startIndex: staggerIndex,
-                    ),
-                  ],
+                  const SizedBox(height: 14),
+                  _PalmInsightsLayout(
+                    summary: reading.palm.summary.trim().isEmpty
+                        ? null
+                        : reading.palm.summary,
+                    lines: palmLines,
+                    parent: _entrance,
+                    startIndex: 0,
+                  ),
                 ],
                 if (lifeSections.isNotEmpty) ...[
                   const SizedBox(height: 28),
@@ -729,16 +719,31 @@ class _PalmSummaryBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return GlassPanel(
-      padding: const EdgeInsets.all(16),
-      color: AstrologyColors.accent.withValues(alpha: 0.14),
-      borderColor: AstrologyColors.accent.withValues(alpha: 0.4),
-      child: Text(
-        summary,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AstrologyColors.text,
-              height: 1.4,
+      padding: const EdgeInsets.all(18),
+      color: AstrologyColors.palm.withValues(alpha: 0.10),
+      borderColor: AstrologyColors.palm.withValues(alpha: 0.42),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'PALM SUMMARY',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: AstrologyColors.palm,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
             ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            summary,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: AstrologyColors.text,
+              height: 1.45,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -760,6 +765,77 @@ class _PalmLineData {
   final String? art;
 }
 
+/// Wide kiosk: summary column + 2×2 line cards; narrow: stacked.
+class _PalmInsightsLayout extends StatelessWidget {
+  const _PalmInsightsLayout({
+    required this.summary,
+    required this.lines,
+    required this.parent,
+    required this.startIndex,
+  });
+
+  final String? summary;
+  final List<_PalmLineData> lines;
+  final AnimationController parent;
+  final int startIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 860 &&
+            summary != null &&
+            lines.isNotEmpty;
+
+        if (!wide) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (summary != null)
+                _StaggerItem(
+                  index: startIndex,
+                  parent: parent,
+                  child: _PalmSummaryBanner(summary: summary!),
+                ),
+              if (summary != null && lines.isNotEmpty)
+                const SizedBox(height: 14),
+              if (lines.isNotEmpty)
+                _PalmLinesGrid(
+                  lines: lines,
+                  parent: parent,
+                  startIndex: startIndex + (summary != null ? 1 : 0),
+                ),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 5,
+              child: _StaggerItem(
+                index: startIndex,
+                parent: parent,
+                child: _PalmSummaryBanner(summary: summary!),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 7,
+              child: _PalmLinesGrid(
+                lines: lines,
+                parent: parent,
+                startIndex: startIndex + 1,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _PalmLinesGrid extends StatelessWidget {
   const _PalmLinesGrid({
     required this.lines,
@@ -776,7 +852,10 @@ class _PalmLinesGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final gap = 12.0;
-        final tileW = (constraints.maxWidth - gap) / 2;
+        final columns = constraints.maxWidth >= 420 ? 2 : 1;
+        final tileW = columns == 1
+            ? constraints.maxWidth
+            : (constraints.maxWidth - gap) / 2;
         return Wrap(
           spacing: gap,
           runSpacing: gap,

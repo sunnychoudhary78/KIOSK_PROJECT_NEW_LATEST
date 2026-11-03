@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
-import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 
 /// Casting wait: ads behind a glass “chart casting” overlay (keeps session hold).
@@ -69,7 +68,6 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
     return Stack(
       fit: StackFit.expand,
       children: [
-        const CosmicBackdrop(),
         const Opacity(
           opacity: 0.42,
           child: KioskWaitAds(message: 'Preparing your reading…'),

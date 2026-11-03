@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/hardware/camera/camera_lease.dart';
 import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/hardware/camera/kiosk_camera.dart';
-import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_jpeg.dart';
@@ -17,14 +16,14 @@ import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_phase.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_result_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
-import 'package:skp_kiosk/features/astrology/presentation/palm_overlay.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
-import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
-import 'package:skp_kiosk/features/astrology/presentation/widgets/cosmic_backdrop.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
-import 'package:skp_kiosk/features/astrology/presentation/widgets/palm_seal_ring.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/palm_analyzing_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/palm_capture_viewport.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -71,6 +70,12 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     return ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
+  }
+
+  Future<void> _goBack() async {
+    _releasePalmCamera();
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   void _releasePalmCamera() {
@@ -168,13 +173,9 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
         continue;
       }
 
+      // Keep sampling while quality is ok so the streak / hold can complete.
       backoffMs = 250;
-      if (state.quality?.ok == true) {
-        await Future<void>.delayed(AstrologyController.autoCaptureHold);
-        continue;
-      }
-
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
     }
   }
 
@@ -392,16 +393,46 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
       }
     });
 
+    final controller = ref.read(astrologyControllerProvider.notifier);
+
+    ref.listen(astrologyControllerProvider, (previous, next) {
+      holdSessionForAstrologyPrint(ref, next.print);
+    });
+
+    final paused = astrologyPausedShell(
+      ref: ref,
+      print: state.print,
+      title: 'Astrology',
+      onHome: _endSession,
+    );
+    if (paused != null) return paused;
+
+    if (astrologyPrintIsActive(state.print)) {
+      return AstrologyPrintShell(
+        title: 'Astrology',
+        print: state.print,
+        onHome: _endSession,
+        onBackFromPreview: controller.cancelPrintPreview,
+        onConfirmPrint: controller.confirmPrint,
+        onTellStaff: controller.tellStaffPrint,
+        onClearResult: controller.clearPrintResult,
+        onReportMissing: controller.reportPrintPagesMissing,
+      );
+    }
+
     Widget? leading;
     Widget? trailing;
     String step = 'Palm';
     final palmReady = state.quality?.ok == true;
     switch (state.phase) {
       case AstrologyPhase.capture:
-        leading = KioskGhostButton(label: 'Cancel', onPressed: _endSession);
+        leading = KioskGhostButton(
+          label: 'Back',
+          icon: Icons.arrow_back,
+          onPressed: _goBack,
+        );
         trailing = KioskPrimaryButton(
           label: palmReady ? 'Seal palm reading' : 'Capture palm',
-          gold: true,
           onPressed: _cameraReady ? _captureNow : null,
         );
         step = 'Palm';
@@ -412,7 +443,6 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
         );
         trailing = KioskPrimaryButton(
           label: 'Get reading',
-          gold: true,
           onPressed: _submit,
         );
         step = 'Details';
@@ -420,18 +450,25 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
         step = 'Casting';
       case AstrologyPhase.result:
         leading = KioskGhostButton(label: 'New reading', onPressed: _resetForm);
-        trailing = KioskPrimaryButton(
-          label: 'Done',
-          gold: true,
-          onPressed: _endSession,
+        trailing = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            KioskGhostButton(label: 'Done', onPressed: _endSession),
+            const SizedBox(width: 12),
+            KioskPrimaryButton(
+              label: 'Print',
+              icon: Icons.print,
+              onPressed: controller.preparePrint,
+            ),
+          ],
         );
         step = 'Result';
     }
 
     Widget page = VisitorSessionPopScope(
+      endSessionOnPop: false,
       child: KioskShell(
         title: 'Astrology',
-        cosmic: true,
         onHome: _endSession,
         stepLabel: step,
         footerLeading: leading,
@@ -471,9 +508,8 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
                 onPlaceResolved: (value) =>
                     setState(() => _placeCoords = value),
               ),
-            AstrologyPhase.submitting => const AstrologyCastingView(
+            AstrologyPhase.submitting => const PalmAnalyzingView(
                 key: ValueKey('submitting'),
-                accent: AstrologyColors.palm,
               ),
             AstrologyPhase.result when state.reading != null => AstrologyResultView(
                 key: const ValueKey('result'),
@@ -520,12 +556,18 @@ class _CaptureView extends StatefulWidget {
 
 class _CaptureViewState extends State<_CaptureView>
     with TickerProviderStateMixin {
+  late final AnimationController _orbit;
   late final AnimationController _pulse;
   late final AnimationController _seal;
+  late final AnimationController _sweep;
 
   @override
   void initState() {
     super.initState();
+    _orbit = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 10000),
+    )..repeat();
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
@@ -534,7 +576,18 @@ class _CaptureViewState extends State<_CaptureView>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
+    _sweep = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
     _syncReady(widget.quality?.ok == true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    precacheImage(const AssetImage(AstrologyAssets.palmGuide), context);
+    precacheImage(const AssetImage(AstrologyAssets.palmCircleFrame), context);
   }
 
   @override
@@ -548,310 +601,74 @@ class _CaptureViewState extends State<_CaptureView>
       if (!_pulse.isAnimating) {
         _pulse.repeat(reverse: true);
       }
+      if (!_sweep.isAnimating) {
+        _sweep.repeat();
+      }
       if (_seal.status != AnimationStatus.completed) {
         _seal.forward();
       }
     } else {
       _pulse.stop();
       _pulse.value = 0;
+      _sweep.stop();
+      _sweep.value = 0;
       _seal.reverse();
     }
   }
 
   @override
   void dispose() {
+    _orbit.dispose();
     _pulse.dispose();
     _seal.dispose();
+    _sweep.dispose();
     super.dispose();
   }
 
-  int get _stepIndex {
-    final quality = widget.quality;
-    if (quality?.ok == true) {
-      return 2;
-    }
-    if (quality != null) {
-      return 1;
-    }
-    return 0;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final quality = widget.quality;
-    final ok = quality?.ok == true;
     final theme = Theme.of(context);
+    final ok = widget.quality?.ok == true;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const CosmicBackdrop(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(32, 12, 32, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Open your palm to the stars',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: AstrologyColors.palm,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Place your open palm inside the outline',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: AstrologyColors.muted,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _RitualSteps(activeIndex: _stepIndex),
-              const SizedBox(height: 12),
-              Expanded(
-                child: AnimatedBuilder(
-                  animation: Listenable.merge([_pulse, _seal]),
-                  builder: (context, child) {
-                    final glow = ok ? 0.35 + (_pulse.value * 0.45) : 0.0;
-                    return Stack(
-                      children: [
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius:
-                                  BorderRadius.circular(SkpTokens.radiusLg),
-                              border: Border.all(
-                                color: AstrologyColors.palm.withValues(
-                                  alpha: ok ? 0.7 : 0.35,
-                                ),
-                              ),
-                              boxShadow: ok
-                                  ? [
-                                      BoxShadow(
-                                        color: AstrologyColors.palm
-                                            .withValues(alpha: glow * 0.45),
-                                        blurRadius: 18 + (_pulse.value * 10),
-                                        spreadRadius: 1,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: child,
-                          ),
-                        ),
-                        if (ok)
-                          const Positioned(
-                            right: 16,
-                            top: 16,
-                            child: AstrologyAssetImage(
-                              asset: AstrologyAssets.sealMedallion,
-                              width: 64,
-                              height: 64,
-                              opacity: 0.92,
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-                    child: ColoredBox(
-                      color: Colors.black,
-                      child: widget.cameraError != null
-                          ? _CameraError(
-                              message: widget.cameraError!,
-                              onRetry: widget.onRetryCamera,
-                            )
-                          : !widget.cameraReady || widget.camera == null
-                              ? const Center(
-                                  child: CircularProgressIndicator(
-                                    color: AstrologyColors.palm,
-                                  ),
-                                )
-                              : Center(
-                                  child: AspectRatio(
-                                    aspectRatio:
-                                        widget.camera!.value.aspectRatio == 0
-                                            ? 16 / 9
-                                            : widget.camera!.value.aspectRatio,
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        CameraPreview(widget.camera!),
-                                        const Positioned.fill(
-                                          child: CustomPaint(
-                                            painter: PalmOverlayPainter(),
-                                          ),
-                                        ),
-                                        Positioned.fill(
-                                          child: AnimatedBuilder(
-                                            animation: _seal,
-                                            builder: (context, _) {
-                                              return PalmSealRing(
-                                                progress: _seal.value,
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _QualityBanner(quality: quality),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RitualSteps extends StatelessWidget {
-  const _RitualSteps({required this.activeIndex});
-
-  final int activeIndex;
-
-  static const _labels = ['Align', 'Hold', 'Capture'];
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < _labels.length; i++) ...[
-          if (i > 0)
-            Expanded(
-              child: Container(
-                height: 1,
-                margin: const EdgeInsets.symmetric(horizontal: 6),
-                color: i <= activeIndex
-                    ? AstrologyColors.palm.withValues(alpha: 0.7)
-                    : AstrologyColors.line,
-              ),
-            ),
-          _RitualChip(
-            label: _labels[i],
-            asset: AstrologyAssets.ritualAssetForIndex(i),
-            active: i <= activeIndex,
-            current: i == activeIndex,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _RitualChip extends StatelessWidget {
-  const _RitualChip({
-    required this.label,
-    required this.asset,
-    required this.active,
-    required this.current,
-  });
-
-  final String label;
-  final String asset;
-  final bool active;
-  final bool current;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
-      decoration: BoxDecoration(
-        color: active
-            ? AstrologyColors.palm.withValues(alpha: current ? 0.28 : 0.14)
-            : AstrologyColors.raised,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: active
-              ? AstrologyColors.palm.withValues(alpha: 0.75)
-              : AstrologyColors.line,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ClipOval(
-            child: AstrologyAssetImage(
-              asset: asset,
-              width: 36,
-              height: 36,
-              opacity: active ? 1 : 0.55,
-            ),
-          ),
-          const SizedBox(width: 8),
+          const PalmFlowStepRail(activeIndex: 0),
+          const SizedBox(height: 4),
           Text(
-            label.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: active ? AstrologyColors.palm : AstrologyColors.muted,
-                  letterSpacing: 1.1,
-                  fontWeight: FontWeight.w700,
-                ),
+            'Position your palm',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: AstrologyColors.palm,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CameraError extends StatelessWidget {
-  const _CameraError({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-            const SizedBox(height: 16),
-            KioskPrimaryButton(label: 'Retry camera', onPressed: onRetry, expand: false),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QualityBanner extends StatelessWidget {
-  const _QualityBanner({required this.quality});
-
-  final PalmQualityResult? quality;
-
-  @override
-  Widget build(BuildContext context) {
-    final ok = quality?.ok == true;
-    return GlassPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      borderColor: ok
-          ? AstrologyColors.palm.withValues(alpha: 0.7)
-          : AstrologyColors.line,
-      child: Row(
-        children: [
-          Icon(
-            ok ? Icons.auto_awesome : Icons.back_hand_outlined,
-            color: AstrologyColors.palm,
-            size: 26,
+          const SizedBox(height: 2),
+          Text(
+            ok
+                ? 'Hold steady — sealing your reading'
+                : 'Place your open palm inside the guide',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: AstrologyColors.muted,
+              height: 1.2,
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(height: 4),
           Expanded(
-            child: Text(
-              quality?.message ?? 'Align your palm with the outline',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AstrologyColors.text,
-                  ),
+            child: PalmCaptureViewport(
+              camera: widget.camera,
+              cameraReady: widget.cameraReady,
+              cameraError: widget.cameraError,
+              quality: widget.quality,
+              onRetryCamera: widget.onRetryCamera,
+              orbit: _orbit,
+              pulse: _pulse,
+              seal: _seal,
+              sweep: _sweep,
             ),
           ),
         ],
@@ -982,7 +799,6 @@ class _FormView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        const CosmicBackdrop(),
         AstrologyBirthFormPanel(
           nameController: nameController,
           placeController: placeController,

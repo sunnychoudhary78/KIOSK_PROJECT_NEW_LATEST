@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/app/app.dart';
@@ -20,7 +21,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('ATHENA'), findsOneWidget);
+    expect(
+      find.image(const AssetImage('assets/brand/athena_logo.png')),
+      findsOneWidget,
+    );
     expect(find.text('Activate this terminal'), findsOneWidget);
     expect(find.text('Deactivate this device'), findsNothing);
   });

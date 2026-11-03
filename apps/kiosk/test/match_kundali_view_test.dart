@@ -55,12 +55,13 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: KioskShell(
-          title: 'Match Kundalis',
-          cosmic: true,
-          stepLabel: 'Gun Milan',
-          body: MatchKundaliResultView(result: _result()),
+      ProviderScope(
+        child: MaterialApp(
+          home: KioskShell(
+            title: 'Match Kundalis',
+            stepLabel: 'Gun Milan',
+            body: MatchKundaliResultView(result: _result()),
+          ),
         ),
       ),
     );
@@ -88,23 +89,24 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: KioskShell(
-          title: 'Match Kundalis',
-          cosmic: true,
-          stepLabel: 'Gun Milan',
-          body: MatchKundaliResultView(
-            result: MatchKundaliResult(
-              disclaimer: 'For entertainment only.',
-              groomName: 'Arjun',
-              brideName: 'Asha',
-              score: const MatchScore(
-                total: 18,
-                max: 36,
-                summary: 'Moderate compatibility',
-                tone: 'mixed',
+      ProviderScope(
+        child: MaterialApp(
+          home: KioskShell(
+            title: 'Match Kundalis',
+            stepLabel: 'Gun Milan',
+            body: MatchKundaliResultView(
+              result: MatchKundaliResult(
+                disclaimer: 'For entertainment only.',
+                groomName: 'Arjun',
+                brideName: 'Asha',
+                score: const MatchScore(
+                  total: 18,
+                  max: 36,
+                  summary: 'Moderate compatibility',
+                  tone: 'mixed',
+                ),
+                kutas: const [],
               ),
-              kutas: const [],
             ),
           ),
         ),
@@ -136,7 +138,6 @@ void main() {
         child: MaterialApp(
           home: KioskShell(
             title: 'Match Kundalis',
-            cosmic: true,
             stepLabel: 'Bride',
             body: AstrologyBirthFormPanel(
               nameController: name,
