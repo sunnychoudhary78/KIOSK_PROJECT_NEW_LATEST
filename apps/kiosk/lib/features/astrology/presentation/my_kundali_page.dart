@@ -39,6 +39,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
   int _stepperColumn = 0;
   ResolvedBirthPlace? _placeCoords;
   AstrologyInsightLocale _insightLocale = AstrologyInsightLocale.en;
+  String _selectedChartKey = 'RasiD1';
 
   @override
   void dispose() {
@@ -247,7 +248,10 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
               label: 'Print',
               icon: Icons.print,
               expand: false,
-              onPressed: () => controller.preparePrint(locale: _insightLocale),
+              onPressed: () => controller.preparePrint(
+                locale: _insightLocale,
+                chartKey: _selectedChartKey,
+              ),
             ),
           ],
         );
@@ -320,6 +324,8 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
                 result: state.result!,
                 onLocaleChanged: (locale) =>
                     setState(() => _insightLocale = locale),
+                onChartTabChanged: (key) =>
+                    setState(() => _selectedChartKey = key),
               ),
             ),
             KundaliPhase.result => const AstrologyCastingView(
@@ -345,10 +351,12 @@ class KundaliResultView extends StatefulWidget {
     super.key,
     required this.result,
     this.onLocaleChanged,
+    this.onChartTabChanged,
   });
 
   final KundaliResult result;
   final ValueChanged<AstrologyInsightLocale>? onLocaleChanged;
+  final ValueChanged<String>? onChartTabChanged;
 
   @override
   State<KundaliResultView> createState() => _KundaliResultViewState();
@@ -377,12 +385,22 @@ class _KundaliResultViewState extends State<KundaliResultView>
       end: Offset.zero,
     ).animate(_fade);
     _entrance.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onChartTabChanged?.call(_selectedTab);
+    });
   }
 
   void _setLocale(AstrologyInsightLocale locale) {
     if (locale == _locale) return;
     setState(() => _locale = locale);
     widget.onLocaleChanged?.call(locale);
+  }
+
+  void _selectTab(String key) {
+    if (key == _selectedTab) return;
+    setState(() => _selectedTab = key);
+    widget.onChartTabChanged?.call(key);
   }
 
   @override
@@ -533,10 +551,7 @@ class _KundaliResultViewState extends State<KundaliResultView>
                               chartLabel: selectedEntry?.subtitle,
                               tabs: tabs,
                               selectedTab: _selectedTab,
-                              onTabSelected: (key) {
-                                if (key == _selectedTab) return;
-                                setState(() => _selectedTab = key);
-                              },
+                              onTabSelected: _selectTab,
                               tiles: tiles,
                               locale: _locale,
                               onLocaleChanged: _setLocale,

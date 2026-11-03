@@ -55,24 +55,31 @@ describe('report PDF builders', () => {
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
   });
 
-  it('rasterizes SVG and embeds kundali charts', async () => {
+  it('rasterizes SVG text with system fonts and builds a one-page kundali PDF', async () => {
     const svg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f5e6c8"/><text x="20" y="100" font-size="20">Rasi</text></svg>';
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f5e6c8"/><text x="20" y="100" font-size="28">Mars</text></svg>';
     const png = svgToPng(svg, 200);
     expect(png[0]).toBe(0x89);
     expect(png[1]).toBe(0x50);
+    // Text glyphs should make the PNG larger than a blank frame of the same size.
+    expect(png.length).toBeGreaterThan(800);
 
     const bytes = await buildKundaliReportPdf({
       subject,
       style: 'north',
       chart: { lagna: 'Aries', sunSign: 'Pisces' },
-      charts: [
-        { key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg },
+      charts: [{ key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg }],
+      insights: [
+        {
+          key: 'RasiD1',
+          title: 'Birth',
+          bullets: ['Steady growth', 'Clear habits', 'Finish started work'],
+        },
       ],
     });
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
     const doc = await PDFDocument.load(bytes);
-    expect(doc.getPageCount()).toBeGreaterThanOrEqual(1);
+    expect(doc.getPageCount()).toBe(1);
   });
 
   it('builds match, palm, and today report PDFs', async () => {

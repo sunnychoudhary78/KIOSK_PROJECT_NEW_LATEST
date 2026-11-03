@@ -79,7 +79,8 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): 
 export function svgToPng(svg: string, width = 900): Uint8Array {
   const resvg = new Resvg(svg, {
     fitTo: { mode: 'width', value: width },
-    font: { loadSystemFonts: false },
+    // VedAstro chart labels need a real font; without this, text is blank.
+    font: { loadSystemFonts: true },
   });
   return resvg.render().asPng();
 }

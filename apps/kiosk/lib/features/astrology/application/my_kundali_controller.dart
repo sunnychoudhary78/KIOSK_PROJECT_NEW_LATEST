@@ -142,38 +142,40 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
 
   Future<void> preparePrint({
     AstrologyInsightLocale locale = AstrologyInsightLocale.en,
+    String chartKey = 'RasiD1',
   }) async {
     final result = state.result;
     final subject = state.subject;
     if (result == null || subject == null || state.phase != KundaliPhase.result) {
       return;
     }
-    final charts = result.availableTabs
-        .map(
-          (entry) => {
-            'key': entry.key,
-            'title': entry.value.title,
-            'subtitle': entry.value.subtitle,
-            'svg': entry.value.svg,
-          },
-        )
-        .toList();
-    if (charts.isEmpty) {
+    final tabs = result.availableTabs;
+    if (tabs.isEmpty) {
       state = state.copyWith(error: 'No chart available to print');
       return;
     }
+    final matched = tabs.where((entry) => entry.key == chartKey);
+    final selected = matched.isNotEmpty ? matched.first : tabs.first;
+    final charts = [
+      {
+        'key': selected.key,
+        'title': selected.value.title,
+        'subtitle': selected.value.subtitle,
+        'svg': selected.value.svg,
+      },
+    ];
 
-    final insightSections = <Map<String, dynamic>>[];
-    for (final entry in result.availableTabs) {
-      final bullets =
-          result.insights.forChart(entry.key)?.forLocale(locale) ?? const [];
-      if (bullets.isEmpty) continue;
-      insightSections.add({
-        'key': entry.key,
-        'title': entry.value.title,
-        'bullets': bullets,
-      });
-    }
+    final bullets =
+        result.insights.forChart(selected.key)?.forLocale(locale) ?? const [];
+    final insightSections = bullets.isEmpty
+        ? const <Map<String, dynamic>>[]
+        : [
+            {
+              'key': selected.key,
+              'title': selected.value.title,
+              'bullets': bullets,
+            },
+          ];
 
     state = state.copyWith(
       clearError: true,

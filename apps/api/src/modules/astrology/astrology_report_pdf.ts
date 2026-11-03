@@ -55,25 +55,70 @@ export type KundaliPrintPdfInput = {
 };
 
 export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promise<Buffer> {
-  const lines: ReportLine[] = [
-    ...subjectLines(input.subject),
-    { kind: 'spacer', height: 8 },
-    {
+  const primary = input.charts[0];
+  const singleChart = input.charts.length === 1;
+  const hasInsights = (input.insights ?? []).some((section) => section.bullets.length > 0);
+  // Keep single-chart reports on one A4 page (header + meta + chart + bullets).
+  const chartMaxHeight = singleChart ? (hasInsights ? 300 : 380) : 380;
+
+  const lines: ReportLine[] = [];
+
+  if (singleChart) {
+    lines.push({ kind: 'kv', label: 'Name', value: input.subject.name });
+    lines.push({
+      kind: 'kv',
+      label: 'Birth',
+      value: `${input.subject.dateOfBirth} · ${
+        input.subject.birthTimeUnknown
+          ? `${input.subject.birthTime} (approx.)`
+          : input.subject.birthTime
+      } · ${input.subject.birthPlace}`,
+    });
+    lines.push({
       kind: 'kv',
       label: 'Style',
       value: input.style === 'south' ? 'South Indian' : 'North Indian',
-    },
-    { kind: 'spacer', height: 8 },
-    ...chartSummaryLines(input.chart),
-    { kind: 'spacer', height: 10 },
-    { kind: 'heading', text: 'Charts' },
-  ];
+    });
+    const summaryBits = [
+      input.chart.lagna ? `Lagna ${input.chart.lagna}` : null,
+      input.chart.sunSign ? `Sun ${input.chart.sunSign}` : null,
+      input.chart.moonSign ? `Moon ${input.chart.moonSign}` : null,
+      input.chart.nakshatra ? `Nakshatra ${input.chart.nakshatra}` : null,
+      input.chart.currentDasha ? `Dasha ${input.chart.currentDasha}` : null,
+    ].filter(Boolean);
+    if (summaryBits.length > 0) {
+      lines.push({ kind: 'kv', label: 'Chart', value: summaryBits.join(' · ') });
+    }
+    lines.push({ kind: 'spacer', height: 4 });
+    if (primary) {
+      lines.push({ kind: 'heading', text: `${primary.title} · ${primary.subtitle}` });
+    }
+  } else {
+    lines.push(...subjectLines(input.subject));
+    lines.push({ kind: 'spacer', height: 4 });
+    lines.push({
+      kind: 'kv',
+      label: 'Style',
+      value: input.style === 'south' ? 'South Indian' : 'North Indian',
+    });
+    lines.push({ kind: 'spacer', height: 4 });
+    lines.push(...chartSummaryLines(input.chart));
+    lines.push({ kind: 'spacer', height: 6 });
+    lines.push({ kind: 'heading', text: 'Charts' });
+  }
 
   for (const chart of input.charts) {
     try {
-      const png = svgToPng(chart.svg, 1000);
-      lines.push({ kind: 'subheading', text: `${chart.title} · ${chart.subtitle}` });
-      lines.push({ kind: 'image', bytes: png, format: 'png', caption: chart.key, maxHeight: 380 });
+      const png = svgToPng(chart.svg, singleChart ? 1100 : 1000);
+      if (!singleChart) {
+        lines.push({ kind: 'subheading', text: `${chart.title} · ${chart.subtitle}` });
+      }
+      lines.push({
+        kind: 'image',
+        bytes: png,
+        format: 'png',
+        maxHeight: chartMaxHeight,
+      });
     } catch {
       lines.push({
         kind: 'muted',
@@ -82,24 +127,29 @@ export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promis
     }
   }
 
-  if (input.insights && input.insights.length > 0) {
-    lines.push({ kind: 'spacer', height: 10 });
-    lines.push({
-      kind: 'heading',
-      text: input.locale === 'hi' ? 'AI insights (HI)' : 'AI insights',
-    });
-    for (const section of input.insights) {
-      if (section.bullets.length === 0) continue;
-      lines.push({ kind: 'subheading', text: section.title });
-      for (const bullet of section.bullets) {
-        lines.push({ kind: 'body', text: `• ${bullet}` });
+  if (hasInsights) {
+    const insightHeading = input.locale === 'hi' ? 'AI insights (HI)' : 'AI insights';
+    if (singleChart) {
+      const bullets = (input.insights ?? []).flatMap((section) => section.bullets);
+      lines.push(...insightLines(bullets, insightHeading));
+    } else {
+      lines.push({ kind: 'spacer', height: 8 });
+      lines.push({ kind: 'heading', text: insightHeading });
+      for (const section of input.insights ?? []) {
+        if (section.bullets.length === 0) continue;
+        lines.push({ kind: 'subheading', text: section.title });
+        for (const bullet of section.bullets) {
+          lines.push({ kind: 'body', text: `• ${bullet}` });
+        }
       }
     }
   }
 
+  const subtitle = primary ? `${primary.title} chart report` : 'Birth chart report';
+
   return buildReportPdf({
     title: `Kundali — ${input.subject.name}`,
-    subtitle: 'Birth chart report',
+    subtitle,
     lines,
     disclaimer: input.disclaimer ?? ASTROLOGY_DISCLAIMER,
   });
