@@ -458,6 +458,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
             KioskPrimaryButton(
               label: 'Print',
               icon: Icons.print,
+              expand: false,
               onPressed: controller.preparePrint,
             ),
           ],

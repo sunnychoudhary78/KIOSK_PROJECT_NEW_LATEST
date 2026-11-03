@@ -1,3 +1,4 @@
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
 
 class KundaliChartEntry {
@@ -29,6 +30,7 @@ class KundaliResult {
     required this.svg,
     required this.chart,
     required this.charts,
+    this.insights = const KundaliInsights(),
   });
 
   final String disclaimer;
@@ -38,6 +40,7 @@ class KundaliResult {
   final String svg;
   final AstrologyChartSummary chart;
   final Map<String, KundaliChartEntry> charts;
+  final KundaliInsights insights;
 
   /// Stable tab order for the result UI.
   static const tabKeys = ['RasiD1', 'NavamshaD9', 'DashamamshaD10'];
@@ -83,6 +86,9 @@ class KundaliResult {
         json['chart'] as Map<String, dynamic>?,
       ),
       charts: charts,
+      insights: KundaliInsights.fromJson(
+        json['insights'] as Map<String, dynamic>?,
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/my_kundali_controller.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
@@ -13,6 +14,7 @@ import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_insights_panel.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
@@ -36,6 +38,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
   int _focus = 0;
   int _stepperColumn = 0;
   ResolvedBirthPlace? _placeCoords;
+  AstrologyInsightLocale _insightLocale = AstrologyInsightLocale.en;
 
   @override
   void dispose() {
@@ -243,7 +246,8 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
             KioskPrimaryButton(
               label: 'Print',
               icon: Icons.print,
-              onPressed: controller.preparePrint,
+              expand: false,
+              onPressed: () => controller.preparePrint(locale: _insightLocale),
             ),
           ],
         );
@@ -311,6 +315,8 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
             KundaliPhase.result when state.result != null => KundaliResultView(
               key: const ValueKey('kundali-result'),
               result: state.result!,
+              onLocaleChanged: (locale) =>
+                  setState(() => _insightLocale = locale),
             ),
             KundaliPhase.result => const AstrologyCastingView(
               key: ValueKey('kundali-result-empty'),
@@ -331,9 +337,14 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
 
 @visibleForTesting
 class KundaliResultView extends StatefulWidget {
-  const KundaliResultView({super.key, required this.result});
+  const KundaliResultView({
+    super.key,
+    required this.result,
+    this.onLocaleChanged,
+  });
 
   final KundaliResult result;
+  final ValueChanged<AstrologyInsightLocale>? onLocaleChanged;
 
   @override
   State<KundaliResultView> createState() => _KundaliResultViewState();
@@ -345,6 +356,7 @@ class _KundaliResultViewState extends State<KundaliResultView>
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
   late String _selectedTab;
+  AstrologyInsightLocale _locale = AstrologyInsightLocale.en;
 
   @override
   void initState() {
@@ -361,6 +373,13 @@ class _KundaliResultViewState extends State<KundaliResultView>
       end: Offset.zero,
     ).animate(_fade);
     _entrance.forward();
+    widget.onLocaleChanged?.call(_locale);
+  }
+
+  void _setLocale(AstrologyInsightLocale locale) {
+    if (locale == _locale) return;
+    setState(() => _locale = locale);
+    widget.onLocaleChanged?.call(locale);
   }
 
   @override
@@ -424,6 +443,9 @@ class _KundaliResultViewState extends State<KundaliResultView>
     final styleLabel = result.style == 'south'
         ? 'South Indian'
         : 'North Indian';
+    final insightBullets =
+        result.insights.forChart(_selectedTab)?.forLocale(_locale) ??
+            const <String>[];
 
     return Stack(
       fit: StackFit.expand,
@@ -513,6 +535,9 @@ class _KundaliResultViewState extends State<KundaliResultView>
                                 setState(() => _selectedTab = key);
                               },
                               tiles: tiles,
+                              locale: _locale,
+                              onLocaleChanged: _setLocale,
+                              insightBullets: insightBullets,
                             ),
                           ),
                         ],
@@ -547,6 +572,9 @@ class _KundaliSummaryRail extends StatelessWidget {
     required this.selectedTab,
     required this.onTabSelected,
     required this.tiles,
+    required this.locale,
+    required this.onLocaleChanged,
+    required this.insightBullets,
     this.chartLabel,
   });
 
@@ -556,6 +584,9 @@ class _KundaliSummaryRail extends StatelessWidget {
   final String selectedTab;
   final ValueChanged<String> onTabSelected;
   final List<({String label, String value, String? art})> tiles;
+  final AstrologyInsightLocale locale;
+  final ValueChanged<AstrologyInsightLocale> onLocaleChanged;
+  final List<String> insightBullets;
 
   @override
   Widget build(BuildContext context) {
@@ -592,8 +623,24 @@ class _KundaliSummaryRail extends StatelessWidget {
         ),
         if (tiles.isNotEmpty) const SizedBox(height: 6),
         for (var i = 0; i < tiles.length; i++) ...[
-          if (i > 0) const SizedBox(height: 6),
-          Expanded(child: _KundaliSummaryTile(tile: tiles[i])),
+          if (i > 0) const SizedBox(height: 4),
+          Expanded(flex: 2, child: _KundaliSummaryTile(tile: tiles[i])),
+        ],
+        if (insightBullets.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Expanded(
+            flex: 5,
+            child: SingleChildScrollView(
+              child: AstrologyInsightsPanel(
+                key: const ValueKey('kundali-insights-panel'),
+                bullets: insightBullets,
+                locale: locale,
+                onLocaleChanged: onLocaleChanged,
+                accent: AstrologyColors.kundali,
+                compact: true,
+              ),
+            ),
+          ),
         ],
       ],
     );

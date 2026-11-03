@@ -4,6 +4,7 @@ import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_print_mixin.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
@@ -139,7 +140,9 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     }
   }
 
-  Future<void> preparePrint() async {
+  Future<void> preparePrint({
+    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
+  }) async {
     final result = state.result;
     final subject = state.subject;
     if (result == null || subject == null || state.phase != KundaliPhase.result) {
@@ -158,6 +161,18 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     if (charts.isEmpty) {
       state = state.copyWith(error: 'No chart available to print');
       return;
+    }
+
+    final insightSections = <Map<String, dynamic>>[];
+    for (final entry in result.availableTabs) {
+      final bullets =
+          result.insights.forChart(entry.key)?.forLocale(locale) ?? const [];
+      if (bullets.isEmpty) continue;
+      insightSections.add({
+        'key': entry.key,
+        'title': entry.value.title,
+        'bullets': bullets,
+      });
     }
 
     state = state.copyWith(
@@ -183,6 +198,8 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
         },
         'charts': charts,
         'disclaimer': result.disclaimer,
+        'locale': locale.apiValue,
+        if (insightSections.isNotEmpty) 'insights': insightSections,
       },
       previous: state.print,
     );

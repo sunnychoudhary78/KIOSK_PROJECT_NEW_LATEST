@@ -3,6 +3,7 @@ import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_result.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
@@ -114,7 +115,9 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
     };
   }
 
-  Future<void> preparePrint() async {
+  Future<void> preparePrint({
+    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
+  }) async {
     final result = state.result;
     final groom = state.groom;
     final bride = state.bride;
@@ -124,6 +127,8 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
         state.phase != MatchKundaliPhase.result) {
       return;
     }
+
+    final bullets = result.insights.forLocale(locale);
 
     state = state.copyWith(
       print: state.print.copyWith(
@@ -157,6 +162,8 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
         ],
         if (result.accuracyNote != null) 'accuracyNote': result.accuracyNote,
         'disclaimer': result.disclaimer,
+        'locale': locale.apiValue,
+        if (bullets.isNotEmpty) 'insightBullets': bullets,
       },
       previous: state.print,
     );

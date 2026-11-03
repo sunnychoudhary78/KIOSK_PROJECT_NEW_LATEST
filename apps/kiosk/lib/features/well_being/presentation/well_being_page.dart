@@ -186,6 +186,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                   KioskPrimaryButton(
                     label: 'Print',
                     icon: Icons.print,
+                    expand: false,
                     onPressed: controller.preparePrint,
                   ),
                 ],

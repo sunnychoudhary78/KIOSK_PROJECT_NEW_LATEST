@@ -3,12 +3,16 @@ import {
   ASTROLOGY_DISCLAIMER,
   createMatchBodySchema,
   createReadingFieldsSchema,
+  kundaliInsightsSchema,
   llmReadingSchema,
+  localeBulletsSchema,
   parseLlmJson,
   sniffPalmImageMime,
 } from '../src/modules/astrology/astrology.schemas.js';
 import {
   NOOP_ASTROLOGY_READING,
+  NOOP_KUNDALI_INSIGHTS,
+  NOOP_LOCALE_BULLETS,
   OPENAI_CHAT_URL,
   createAstrologyLlmClient,
   createNoopAstrologyLlmClient,
@@ -135,6 +139,39 @@ describe('astrology LLM client', () => {
     expect(llmReadingSchema.safeParse(reading).success).toBe(true);
   });
 
+  it('noop provider returns bilingual kundali/match/today insights', async () => {
+    const client = createNoopAstrologyLlmClient();
+    const kundali = await client.generateKundaliInsights({
+      subject,
+      chart: { planets: [], houses: [] },
+      style: 'north',
+      chartsPresent: ['RasiD1', 'NavamshaD9'],
+    });
+    expect(kundaliInsightsSchema.safeParse(kundali).success).toBe(true);
+    expect(kundali.RasiD1?.en).toHaveLength(3);
+    expect(kundali.DashamamshaD10).toBeUndefined();
+    expect(kundali).toEqual({
+      RasiD1: NOOP_KUNDALI_INSIGHTS.RasiD1,
+      NavamshaD9: NOOP_KUNDALI_INSIGHTS.NavamshaD9,
+    });
+
+    const match = await client.generateMatchInsights({
+      groom: { ...subject, name: 'Arjun', gender: 'male' },
+      bride: subject,
+      score: { total: 25, max: 36, summary: 'Strong', tone: 'good' },
+      kutas: [],
+    });
+    expect(match).toEqual(NOOP_LOCALE_BULLETS);
+    expect(localeBulletsSchema.safeParse(match).success).toBe(true);
+
+    const today = await client.generateTodayInsights({
+      subject,
+      panchang: { weekday: 'Wednesday' },
+      dasha: { label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] },
+    });
+    expect(today.hi).toHaveLength(3);
+  });
+
   it('falls back to noop when openai has no key in local mode', async () => {
     const client = createAstrologyLlmClient({
       provider: 'openai',
@@ -199,5 +236,34 @@ describe('astrology LLM client', () => {
     expect(reading.palm.lifeLine).toBe('Life');
     expect(reading.reading.overview).toBe('Overview');
     expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('parses bilingual match insights JSON from OpenAI', async () => {
+    const payload = {
+      en: ['Strong guna score', 'Nadi needs care', 'Keep communication open'],
+      hi: ['गुण अंक मजबूत हैं', 'नाड़ी में सावधानी', 'संवाद खुला रखें'],
+    };
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(payload) } }],
+        }),
+        { status: 200 },
+      );
+    });
+    const client = createOpenAiAstrologyClient({
+      apiKey: 'sk-test',
+      model: 'gpt-4o',
+      logger: silentLogger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const insights = await client.generateMatchInsights({
+      groom: { ...subject, name: 'Arjun', gender: 'male' },
+      bride: subject,
+      score: { total: 25, max: 36, summary: 'Strong', tone: 'good' },
+      kutas: [],
+    });
+    expect(insights).toEqual(payload);
+    expect(localeBulletsSchema.parse(insights).en).toHaveLength(3);
   });
 });

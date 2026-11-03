@@ -224,6 +224,23 @@ export const llmReadingSchema = z.object({
 
 export type LlmReading = z.infer<typeof llmReadingSchema>;
 
+const bulletListSchema = z.array(z.string().trim().min(1).max(280)).min(3).max(4);
+
+export const localeBulletsSchema = z.object({
+  en: bulletListSchema,
+  hi: bulletListSchema,
+});
+
+export type LocaleBullets = z.infer<typeof localeBulletsSchema>;
+
+export const kundaliInsightsSchema = z.object({
+  RasiD1: localeBulletsSchema.optional(),
+  NavamshaD9: localeBulletsSchema.optional(),
+  DashamamshaD10: localeBulletsSchema.optional(),
+});
+
+export type KundaliInsights = z.infer<typeof kundaliInsightsSchema>;
+
 export type ReadingSubject = {
   name: string;
   gender: CreateReadingFields['gender'];
@@ -252,6 +269,8 @@ const readingSubjectSchema = z.object({
   birthTimeUnknown: z.boolean().optional().default(false),
 });
 
+const insightBulletListSchema = z.array(z.string().trim().min(1).max(280)).max(4);
+
 export const printKundaliBodySchema = z.object({
   subject: readingSubjectSchema,
   style: z.enum(['north', 'south']),
@@ -267,6 +286,17 @@ export const printKundaliBodySchema = z.object({
     )
     .min(1)
     .max(6),
+  locale: z.enum(['en', 'hi']).optional().default('en'),
+  insights: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(40),
+        title: z.string().min(1).max(40),
+        bullets: insightBulletListSchema,
+      }),
+    )
+    .max(6)
+    .optional(),
   disclaimer: z.string().trim().max(400).optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
 });
@@ -307,6 +337,8 @@ export const printMatchBodySchema = z.object({
     )
     .max(12),
   accuracyNote: z.string().trim().max(400).optional(),
+  locale: z.enum(['en', 'hi']).optional().default('en'),
+  insightBullets: insightBulletListSchema.optional(),
   disclaimer: z.string().trim().max(400).optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
 });
@@ -334,6 +366,8 @@ export const printTodayBodySchema = z.object({
     levels: z.array(z.string()).default([]),
   }),
   accuracyNote: z.string().trim().max(400).optional(),
+  locale: z.enum(['en', 'hi']).optional().default('en'),
+  insightBullets: insightBulletListSchema.optional(),
   disclaimer: z.string().trim().max(400).optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
 });

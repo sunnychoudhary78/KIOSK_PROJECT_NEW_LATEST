@@ -1,7 +1,11 @@
 import { PrintJobSource, type Prisma } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { Logger } from '../../infrastructure/logging/logger.js';
-import type { AstrologyLlmClient } from '../../infrastructure/external/openai.client.js';
+import {
+  NOOP_KUNDALI_INSIGHTS,
+  NOOP_LOCALE_BULLETS,
+  type AstrologyLlmClient,
+} from '../../infrastructure/external/openai.client.js';
 import {
   KUNDALI_CHART_META,
   KUNDALI_PREFETCH_TYPES,
@@ -25,6 +29,8 @@ import {
   type CreateReadingFields,
   type CreateTodayBody,
   type KundaliChartEntry,
+  type KundaliInsights,
+  type LocaleBullets,
   type LlmReading,
   type PrintKundaliBody,
   type PrintMatchBody,
@@ -59,6 +65,7 @@ export type AstrologyKundaliResponse = {
   svg: string;
   chart: ChartSummary;
   charts: Partial<Record<KundaliChartType, KundaliChartEntry>>;
+  insights: KundaliInsights;
 };
 
 export type AstrologyMatchResponse = {
@@ -68,6 +75,7 @@ export type AstrologyMatchResponse = {
   bride: ReadingSubject;
   score: Pick<VedAstroMatchResult, 'total' | 'max' | 'summary' | 'tone'>;
   kutas: VedAstroMatchResult['kutas'];
+  insights: LocaleBullets;
 };
 
 export type AstrologyTodayResponse = {
@@ -77,6 +85,7 @@ export type AstrologyTodayResponse = {
   asOf: string;
   panchang: VedAstroPanchangaResult;
   dasha: { label: string; levels: string[] };
+  insights: LocaleBullets;
 };
 
 export class AstrologyService {
@@ -284,6 +293,16 @@ export class AstrologyService {
       },
     });
 
+    const chartsPresent = (Object.keys(charts) as KundaliChartType[]).filter(
+      (key) => key === 'RasiD1' || key === 'NavamshaD9' || key === 'DashamamshaD10',
+    );
+    const insights = await this.safeKundaliInsights({
+      subject,
+      chart: { ...chartResult.details, ...summary },
+      style: fields.style,
+      chartsPresent,
+    });
+
     this.logger.info(
       {
         correlationId,
@@ -304,6 +323,7 @@ export class AstrologyService {
       svg: primary.svg,
       chart: summary,
       charts,
+      insights,
     };
   }
 
@@ -352,6 +372,19 @@ export class AstrologyService {
       },
     });
 
+    const score = {
+      total: result.total,
+      max: result.max,
+      summary: result.summary,
+      tone: result.tone,
+    };
+    const insights = await this.safeMatchInsights({
+      groom,
+      bride,
+      score,
+      kutas: result.kutas,
+    });
+
     this.logger.info(
       {
         correlationId,
@@ -368,13 +401,9 @@ export class AstrologyService {
         : {}),
       groom,
       bride,
-      score: {
-        total: result.total,
-        max: result.max,
-        summary: result.summary,
-        tone: result.tone,
-      },
+      score,
       kutas: result.kutas,
+      insights,
     };
   }
 
@@ -427,6 +456,12 @@ export class AstrologyService {
       },
     });
 
+    const insights = await this.safeTodayInsights({
+      subject,
+      panchang,
+      dasha,
+    });
+
     this.logger.info(
       {
         correlationId,
@@ -448,6 +483,7 @@ export class AstrologyService {
       asOf: asOf.toISOString(),
       panchang,
       dasha,
+      insights,
     };
   }
 
@@ -459,6 +495,8 @@ export class AstrologyService {
       style: input.style,
       chart: input.chart,
       charts: input.charts,
+      insights: input.insights,
+      locale: input.locale,
       disclaimer: input.disclaimer,
     });
     const job = await createPrintJobWithPdf(
@@ -496,6 +534,8 @@ export class AstrologyService {
       score: input.score,
       kutas: input.kutas,
       accuracyNote: input.accuracyNote,
+      insightBullets: input.insightBullets,
+      locale: input.locale,
       disclaimer: input.disclaimer,
     });
     const job = await createPrintJobWithPdf(
@@ -570,6 +610,8 @@ export class AstrologyService {
       panchang: input.panchang,
       dasha: input.dasha,
       accuracyNote: input.accuracyNote,
+      insightBullets: input.insightBullets,
+      locale: input.locale,
       disclaimer: input.disclaimer,
     });
     const job = await createPrintJobWithPdf(
@@ -596,6 +638,44 @@ export class AstrologyService {
       correlationId,
     });
     return job;
+  }
+
+  private async safeKundaliInsights(
+    input: Parameters<AstrologyLlmClient['generateKundaliInsights']>[0],
+  ): Promise<KundaliInsights> {
+    try {
+      return await this.llm.generateKundaliInsights(input);
+    } catch (error) {
+      this.logger.warn({ err: error }, '[Astrology] kundali insights failed; using fallback');
+      const out: KundaliInsights = {};
+      for (const key of input.chartsPresent) {
+        const block = NOOP_KUNDALI_INSIGHTS[key];
+        if (block) out[key] = block;
+      }
+      return out;
+    }
+  }
+
+  private async safeMatchInsights(
+    input: Parameters<AstrologyLlmClient['generateMatchInsights']>[0],
+  ): Promise<LocaleBullets> {
+    try {
+      return await this.llm.generateMatchInsights(input);
+    } catch (error) {
+      this.logger.warn({ err: error }, '[Astrology] match insights failed; using fallback');
+      return NOOP_LOCALE_BULLETS;
+    }
+  }
+
+  private async safeTodayInsights(
+    input: Parameters<AstrologyLlmClient['generateTodayInsights']>[0],
+  ): Promise<LocaleBullets> {
+    try {
+      return await this.llm.generateTodayInsights(input);
+    } catch (error) {
+      this.logger.warn({ err: error }, '[Astrology] today insights failed; using fallback');
+      return NOOP_LOCALE_BULLETS;
+    }
   }
 
   private toVedAstroBirth(

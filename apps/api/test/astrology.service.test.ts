@@ -1,16 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AstrologyService } from '../src/modules/astrology/astrology.service.js';
 import { ASTROLOGY_DISCLAIMER, sniffPalmImageMime } from '../src/modules/astrology/astrology.schemas.js';
-import { NOOP_ASTROLOGY_READING } from '../src/infrastructure/external/openai.client.js';
+import {
+  NOOP_ASTROLOGY_READING,
+  NOOP_KUNDALI_INSIGHTS,
+  NOOP_LOCALE_BULLETS,
+  type AstrologyLlmClient,
+} from '../src/infrastructure/external/openai.client.js';
 import { AppError } from '../src/shared/errors.js';
 import type { DbClient } from '../src/infrastructure/database/prisma.js';
 import type { AuditService } from '../src/modules/audit/audit.service.js';
 import type { ServicesCatalogService } from '../src/modules/services/services.service.js';
 import type { Logger } from '../src/infrastructure/logging/logger.js';
 import type { VedAstroClient } from '../src/infrastructure/external/vedastro.client.js';
-import type { AstrologyLlmClient } from '../src/infrastructure/external/openai.client.js';
 
 const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+
+function mockLlm(overrides?: Partial<AstrologyLlmClient>): AstrologyLlmClient {
+  return {
+    generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
+    generateKundaliInsights: vi.fn(async () => NOOP_KUNDALI_INSIGHTS),
+    generateMatchInsights: vi.fn(async () => NOOP_LOCALE_BULLETS),
+    generateTodayInsights: vi.fn(async () => NOOP_LOCALE_BULLETS),
+    ...overrides,
+  };
+}
 
 describe('AstrologyService.createReading', () => {
   const fields = {
@@ -69,9 +83,7 @@ describe('AstrologyService.createReading', () => {
         dishaShool: 'North',
       })),
     };
-    const llm: AstrologyLlmClient = {
-      generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
-    };
+    const llm = mockLlm();
     const audit = { record: vi.fn(async () => undefined) };
     const services = {
       assertEnabled: vi.fn(async () => {
@@ -213,9 +225,7 @@ describe('AstrologyService.createKundali', () => {
         dishaShool: 'North',
       })),
     };
-    const llm: AstrologyLlmClient = {
-      generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING),
-    };
+    const llm = mockLlm();
     const audit = { record: vi.fn(async () => undefined) };
     const services = {
       assertEnabled: vi.fn(async () => {
@@ -235,7 +245,7 @@ describe('AstrologyService.createKundali', () => {
     return { service, db, vedastro, llm, audit };
   }
 
-  it('returns SVG map, dasha, and chart summary without LLM or DB', async () => {
+  it('returns SVG map, dasha, insights, and chart summary without DB', async () => {
     const { service, vedastro, llm, db, audit } = setup();
     const result = await service.createKundali('device-1', fields, 'corr-k');
     expect(result.svg).toContain('<svg');
@@ -250,10 +260,12 @@ describe('AstrologyService.createKundali', () => {
       new Set(Object.values(result.charts).map((entry) => entry?.svg)).size,
     ).toBe(3);
     expect(result.disclaimer).toBe(ASTROLOGY_DISCLAIMER);
+    expect(result.insights.RasiD1?.en).toHaveLength(3);
     expect(vedastro.getKundaliSvg).toHaveBeenCalledTimes(3);
     expect(vedastro.getDasaForNow).toHaveBeenCalledOnce();
     expect(vedastro.getChart).toHaveBeenCalledOnce();
     expect(llm.generateReading).not.toHaveBeenCalled();
+    expect(llm.generateKundaliInsights).toHaveBeenCalledOnce();
     expect(db.astrologyReading.create).not.toHaveBeenCalled();
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -261,6 +273,15 @@ describe('AstrologyService.createKundali', () => {
         metadata: expect.objectContaining({ style: 'north', birthPlace: 'Jaipur' }),
       }),
     );
+  });
+
+  it('soft-fails LLM insights and still returns charts', async () => {
+    const { service, llm } = setup();
+    vi.mocked(llm.generateKundaliInsights).mockRejectedValueOnce(new Error('openai down'));
+    const result = await service.createKundali('device-1', fields);
+    expect(result.charts.RasiD1?.svg).toContain('<svg');
+    expect(result.insights.RasiD1?.en.length).toBeGreaterThanOrEqual(3);
+    expect(result.insights.RasiD1?.hi.length).toBeGreaterThanOrEqual(3);
   });
 
   it('omits failed D9/D10 but keeps Birth', async () => {
@@ -359,7 +380,7 @@ describe('AstrologyService.createMatch', () => {
     };
     const audit = { record: vi.fn(async () => undefined) };
     const services = { assertEnabled: vi.fn(async () => undefined) };
-    const llm = { generateReading: vi.fn(async () => NOOP_ASTROLOGY_READING) };
+    const llm = mockLlm();
     const service = new AstrologyService(
       db as unknown as DbClient,
       vedastro as unknown as VedAstroClient,
@@ -375,15 +396,49 @@ describe('AstrologyService.createMatch', () => {
     expect(result.groom.gender).toBe('male');
     expect(result.bride.gender).toBe('female');
     expect(result.accuracyNote).toContain('12:00');
+    expect(result.insights.en).toHaveLength(3);
     expect(vedastro.getMatchReport).toHaveBeenCalledOnce();
     expect(db.astrologyReading.create).not.toHaveBeenCalled();
     expect(llm.generateReading).not.toHaveBeenCalled();
+    expect(llm.generateMatchInsights).toHaveBeenCalledOnce();
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'astrology.match_generated',
         metadata: expect.objectContaining({ score: 25, birthTimeUnknown: true }),
       }),
     );
+  });
+
+  it('soft-fails match insights when LLM throws', async () => {
+    const vedastro = {
+      getChart: vi.fn(),
+      getKundaliSvg: vi.fn(),
+      getDasaForNow: vi.fn(),
+      getMatchReport: vi.fn(async () => ({
+        total: 18,
+        max: 36 as const,
+        summary: 'Mixed',
+        tone: 'mixed' as const,
+        kutas: [],
+      })),
+      getPanchangaTable: vi.fn(),
+    };
+    const llm = mockLlm({
+      generateMatchInsights: vi.fn(async () => {
+        throw new Error('llm down');
+      }),
+    });
+    const service = new AstrologyService(
+      { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
+      vedastro as unknown as VedAstroClient,
+      llm,
+      { record: vi.fn() } as unknown as AuditService,
+      { assertEnabled: vi.fn(async () => undefined) } as unknown as ServicesCatalogService,
+      silentLogger,
+    );
+    const result = await service.createMatch('device-1', fields);
+    expect(result.score.total).toBe(18);
+    expect(result.insights.en.length).toBeGreaterThanOrEqual(3);
   });
 
   it('does not call VedAstro when the service is disabled', async () => {
@@ -397,7 +452,7 @@ describe('AstrologyService.createMatch', () => {
     const service = new AstrologyService(
       { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
       vedastro as unknown as VedAstroClient,
-      { generateReading: vi.fn() },
+      mockLlm(),
       { record: vi.fn() } as unknown as AuditService,
       {
         assertEnabled: vi.fn(async () => {
@@ -451,10 +506,11 @@ describe('AstrologyService.createToday', () => {
     };
     const audit = { record: vi.fn(async () => undefined) };
     const services = { assertEnabled: vi.fn(async () => undefined) };
+    const llm = mockLlm();
     const service = new AstrologyService(
       db as unknown as DbClient,
       vedastro as unknown as VedAstroClient,
-      { generateReading: vi.fn() },
+      llm,
       audit as unknown as AuditService,
       services as unknown as ServicesCatalogService,
       silentLogger,
@@ -466,8 +522,10 @@ describe('AstrologyService.createToday', () => {
     expect(result.dasha).toEqual({ label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] });
     expect(result.accuracyNote).toContain('12:00');
     expect(result.asOf).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(result.insights.hi.length).toBeGreaterThanOrEqual(3);
     expect(vedastro.getPanchangaTable).toHaveBeenCalledOnce();
     expect(vedastro.getDasaForNow).toHaveBeenCalledOnce();
+    expect(llm.generateTodayInsights).toHaveBeenCalledOnce();
     expect(db.astrologyReading.create).not.toHaveBeenCalled();
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -488,7 +546,7 @@ describe('AstrologyService.createToday', () => {
     const service = new AstrologyService(
       { astrologyReading: { create: vi.fn() } } as unknown as DbClient,
       vedastro as unknown as VedAstroClient,
-      { generateReading: vi.fn() },
+      mockLlm(),
       { record: vi.fn() } as unknown as AuditService,
       {
         assertEnabled: vi.fn(async () => {

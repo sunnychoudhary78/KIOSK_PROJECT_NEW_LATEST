@@ -7,12 +7,14 @@ import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/match_kundali_controller.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_insights_panel.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
@@ -40,6 +42,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
   int _stepperColumn = 0;
   ResolvedBirthPlace? _groomPlaceCoords;
   ResolvedBirthPlace? _bridePlaceCoords;
+  AstrologyInsightLocale _insightLocale = AstrologyInsightLocale.en;
 
   bool get _isBride =>
       ref.read(matchKundaliControllerProvider).phase == MatchKundaliPhase.bride;
@@ -325,7 +328,8 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
             KioskPrimaryButton(
               label: 'Print',
               icon: Icons.print,
-              onPressed: controller.preparePrint,
+              expand: false,
+              onPressed: () => controller.preparePrint(locale: _insightLocale),
             ),
           ],
         );
@@ -399,6 +403,8 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               MatchKundaliResultView(
                 key: const ValueKey('match-result'),
                 result: state.result!,
+                onLocaleChanged: (locale) =>
+                    setState(() => _insightLocale = locale),
               ),
             MatchKundaliPhase.result => const AstrologyCastingView(
               key: ValueKey('match-result-empty'),
@@ -523,10 +529,28 @@ class GroomSummaryCard extends StatelessWidget {
 }
 
 @visibleForTesting
-class MatchKundaliResultView extends StatelessWidget {
-  const MatchKundaliResultView({super.key, required this.result});
+class MatchKundaliResultView extends StatefulWidget {
+  const MatchKundaliResultView({
+    super.key,
+    required this.result,
+    this.onLocaleChanged,
+  });
 
   final MatchKundaliResult result;
+  final ValueChanged<AstrologyInsightLocale>? onLocaleChanged;
+
+  @override
+  State<MatchKundaliResultView> createState() => _MatchKundaliResultViewState();
+}
+
+class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
+  AstrologyInsightLocale _locale = AstrologyInsightLocale.en;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.onLocaleChanged?.call(_locale);
+  }
 
   Color _toneColor(String tone) {
     return switch (tone.toLowerCase()) {
@@ -536,12 +560,20 @@ class MatchKundaliResultView extends StatelessWidget {
     };
   }
 
+  void _setLocale(AstrologyInsightLocale locale) {
+    if (locale == _locale) return;
+    setState(() => _locale = locale);
+    widget.onLocaleChanged?.call(locale);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final result = widget.result;
     final score = result.score;
     final kutas = padMatchKutas(result.kutas);
     final tone = _toneColor(score.tone);
     final note = result.accuracyNote ?? result.disclaimer;
+    final bullets = result.insights.forLocale(_locale);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -641,23 +673,46 @@ class MatchKundaliResultView extends StatelessWidget {
                       key: const ValueKey('match-kuta-grid'),
                       child: Column(
                         children: [
-                          for (var row = 0; row < 4; row++) ...[
-                            if (row > 0) const SizedBox(height: 8),
-                            Expanded(
-                              child: Row(
-                                children: [
+                          Expanded(
+                            flex: 5,
+                            child: Column(
+                              children: [
+                                for (var row = 0; row < 4; row++) ...[
+                                  if (row > 0) const SizedBox(height: 6),
                                   Expanded(
-                                    child: _MatchKutaTile(
-                                      kuta: kutas[row * 2],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: _MatchKutaTile(
-                                      kuta: kutas[row * 2 + 1],
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: _MatchKutaTile(
+                                            kuta: kutas[row * 2],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: _MatchKutaTile(
+                                            kuta: kutas[row * 2 + 1],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
+                              ],
+                            ),
+                          ),
+                          if (bullets.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            GlassPanel(
+                              padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                              borderColor: AstrologyColors.matchRose
+                                  .withValues(alpha: 0.4),
+                              child: AstrologyInsightsPanel(
+                                key: const ValueKey('match-insights-panel'),
+                                bullets: bullets,
+                                locale: _locale,
+                                onLocaleChanged: _setLocale,
+                                accent: AstrologyColors.matchRose,
+                                compact: true,
                               ),
                             ),
                           ],

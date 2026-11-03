@@ -1,3 +1,5 @@
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
+
 const matchKutaSpecs = [
   ('varna', 'Varna', 1.0),
   ('vasya', 'Vasya', 2.0),
@@ -84,6 +86,7 @@ class MatchKundaliResult {
     required this.score,
     required this.kutas,
     this.accuracyNote,
+    this.insights = const LocaleBullets(en: [], hi: []),
   });
 
   final String disclaimer;
@@ -92,6 +95,7 @@ class MatchKundaliResult {
   final String brideName;
   final MatchScore score;
   final List<MatchKuta> kutas;
+  final LocaleBullets insights;
 
   factory MatchKundaliResult.fromJson(Map<String, dynamic> json) {
     final groom = json['groom'] as Map<String, dynamic>? ?? const {};
@@ -110,6 +114,9 @@ class MatchKundaliResult {
             .whereType<Map<String, dynamic>>()
             .map(MatchKuta.fromJson)
             .toList(),
+      ),
+      insights: LocaleBullets.fromJson(
+        json['insights'] as Map<String, dynamic>?,
       ),
     );
   }

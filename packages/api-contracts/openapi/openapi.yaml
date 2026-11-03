@@ -3785,9 +3785,37 @@ components:
             period:
               type: string
 
+    AstrologyLocaleBullets:
+      type: object
+      required: [en, hi]
+      properties:
+        en:
+          type: array
+          minItems: 3
+          maxItems: 4
+          items:
+            type: string
+        hi:
+          type: array
+          minItems: 3
+          maxItems: 4
+          items:
+            type: string
+
+    AstrologyKundaliInsights:
+      type: object
+      additionalProperties: false
+      properties:
+        RasiD1:
+          $ref: '#/components/schemas/AstrologyLocaleBullets'
+        NavamshaD9:
+          $ref: '#/components/schemas/AstrologyLocaleBullets'
+        DashamamshaD10:
+          $ref: '#/components/schemas/AstrologyLocaleBullets'
+
     AstrologyKundaliResponse:
       type: object
-      required: [disclaimer, subject, style, chartType, svg, chart, charts]
+      required: [disclaimer, subject, style, chartType, svg, chart, charts, insights]
       properties:
         disclaimer:
           type: string
@@ -3842,6 +3870,8 @@ components:
               $ref: '#/components/schemas/AstrologyKundaliChartEntry'
             DashamamshaD10:
               $ref: '#/components/schemas/AstrologyKundaliChartEntry'
+        insights:
+          $ref: '#/components/schemas/AstrologyKundaliInsights'
 
     AstrologyKundaliChartEntry:
       type: object
@@ -3884,7 +3914,7 @@ components:
 
     AstrologyMatchResponse:
       type: object
-      required: [disclaimer, groom, bride, score, kutas]
+      required: [disclaimer, groom, bride, score, kutas, insights]
       properties:
         disclaimer:
           type: string
@@ -3930,6 +3960,8 @@ components:
                 type: string
               verdict:
                 type: string
+        insights:
+          $ref: '#/components/schemas/AstrologyLocaleBullets'
 
     AstrologyTodayRequest:
       type: object
@@ -3986,7 +4018,7 @@ components:
 
     AstrologyTodayResponse:
       type: object
-      required: [disclaimer, subject, asOf, panchang, dasha]
+      required: [disclaimer, subject, asOf, panchang, dasha, insights]
       properties:
         disclaimer:
           type: string
@@ -3998,6 +4030,8 @@ components:
         asOf:
           type: string
           format: date-time
+        insights:
+          $ref: '#/components/schemas/AstrologyLocaleBullets'
         panchang:
           type: object
           properties:

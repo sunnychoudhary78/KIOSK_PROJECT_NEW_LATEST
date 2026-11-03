@@ -1,3 +1,5 @@
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
+
 class TodayPanchang {
   const TodayPanchang({
     this.weekday,
@@ -86,6 +88,7 @@ class TodayPeriodsResult {
     required this.panchang,
     required this.dasha,
     this.accuracyNote,
+    this.insights = const LocaleBullets(en: [], hi: []),
   });
 
   final String disclaimer;
@@ -94,6 +97,7 @@ class TodayPeriodsResult {
   final DateTime? asOf;
   final TodayPanchang panchang;
   final TodayDasha dasha;
+  final LocaleBullets insights;
 
   factory TodayPeriodsResult.fromJson(Map<String, dynamic> json) {
     final subject = json['subject'] as Map<String, dynamic>? ?? const {};
@@ -109,6 +113,9 @@ class TodayPeriodsResult {
         json['panchang'] as Map<String, dynamic>?,
       ),
       dasha: TodayDasha.fromJson(json['dasha'] as Map<String, dynamic>?),
+      insights: LocaleBullets.fromJson(
+        json['insights'] as Map<String, dynamic>?,
+      ),
     );
   }
 }

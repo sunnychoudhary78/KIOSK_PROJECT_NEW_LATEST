@@ -167,7 +167,7 @@ class KioskShell extends StatelessWidget {
                             ),
                     ),
                     SizedBox(
-                      width: 280,
+                      width: 380,
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: footerTrailing == null
@@ -175,7 +175,7 @@ class KioskShell extends StatelessWidget {
                             : ConstrainedBox(
                                 constraints: const BoxConstraints(
                                   minWidth: 180,
-                                  maxWidth: 280,
+                                  maxWidth: 380,
                                 ),
                                 child: footerTrailing,
                               ),

@@ -4,6 +4,7 @@ import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_print_mixin.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_result.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
@@ -128,7 +129,9 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
     }
   }
 
-  Future<void> preparePrint() async {
+  Future<void> preparePrint({
+    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
+  }) async {
     final result = state.result;
     final subject = state.subject;
     if (result == null ||
@@ -136,6 +139,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
         state.phase != TodayPeriodsPhase.result) {
       return;
     }
+
+    final bullets = result.insights.forLocale(locale);
 
     state = state.copyWith(
       print: state.print.copyWith(
@@ -170,6 +175,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
         },
         if (result.accuracyNote != null) 'accuracyNote': result.accuracyNote,
         'disclaimer': result.disclaimer,
+        'locale': locale.apiValue,
+        if (bullets.isNotEmpty) 'insightBullets': bullets,
       },
       previous: state.print,
     );

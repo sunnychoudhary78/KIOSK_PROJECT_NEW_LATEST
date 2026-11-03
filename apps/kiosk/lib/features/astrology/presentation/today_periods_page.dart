@@ -5,12 +5,14 @@ import 'package:skp_kiosk/core/input/kiosk_hardware_key_map.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/today_periods_controller.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
+import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
+import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_insights_panel.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
@@ -33,6 +35,7 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
   int _focus = 0;
   int _stepperColumn = 0;
   ResolvedBirthPlace? _placeCoords;
+  AstrologyInsightLocale _insightLocale = AstrologyInsightLocale.en;
 
   @override
   void dispose() {
@@ -236,7 +239,8 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
             KioskPrimaryButton(
               label: 'Print',
               icon: Icons.print,
-              onPressed: controller.preparePrint,
+              expand: false,
+              onPressed: () => controller.preparePrint(locale: _insightLocale),
             ),
           ],
         );
@@ -300,6 +304,8 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
               TodayPeriodsResultView(
                 key: const ValueKey('today-result'),
                 result: state.result!,
+                onLocaleChanged: (locale) =>
+                    setState(() => _insightLocale = locale),
               ),
             TodayPeriodsPhase.result => const AstrologyCastingView(
               key: ValueKey('today-result-empty'),
@@ -319,13 +325,31 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
 }
 
 @visibleForTesting
-class TodayPeriodsResultView extends StatelessWidget {
-  const TodayPeriodsResultView({super.key, required this.result});
+class TodayPeriodsResultView extends StatefulWidget {
+  const TodayPeriodsResultView({
+    super.key,
+    required this.result,
+    this.onLocaleChanged,
+  });
 
   final TodayPeriodsResult result;
+  final ValueChanged<AstrologyInsightLocale>? onLocaleChanged;
+
+  @override
+  State<TodayPeriodsResultView> createState() => _TodayPeriodsResultViewState();
+}
+
+class _TodayPeriodsResultViewState extends State<TodayPeriodsResultView> {
+  AstrologyInsightLocale _locale = AstrologyInsightLocale.en;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.onLocaleChanged?.call(_locale);
+  }
 
   String _asOfLabel() {
-    final asOf = result.asOf?.toLocal();
+    final asOf = widget.result.asOf?.toLocal();
     if (asOf == null) return 'Today';
     final day = asOf.day.toString().padLeft(2, '0');
     final month = asOf.month.toString().padLeft(2, '0');
@@ -335,12 +359,20 @@ class TodayPeriodsResultView extends StatelessWidget {
     return '$day/$month/$year · $hour:$minute';
   }
 
+  void _setLocale(AstrologyInsightLocale locale) {
+    if (locale == _locale) return;
+    setState(() => _locale = locale);
+    widget.onLocaleChanged?.call(locale);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final result = widget.result;
     final theme = Theme.of(context);
     final rows = result.panchang.rows;
     final note = result.accuracyNote ?? result.disclaimer;
     final levels = result.dasha.levels;
+    final bullets = result.insights.forLocale(_locale);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -357,7 +389,8 @@ class TodayPeriodsResultView extends StatelessWidget {
                       child: GlassPanel(
                         key: const ValueKey('today-panchang-card'),
                         padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
-                        borderColor: AstrologyColors.today.withValues(alpha: 0.45),
+                        borderColor:
+                            AstrologyColors.today.withValues(alpha: 0.45),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -430,61 +463,88 @@ class TodayPeriodsResultView extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       flex: 5,
-                      child: GlassPanel(
-                        key: const ValueKey('today-dasha-card'),
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-                        borderColor: AstrologyColors.today.withValues(
-                          alpha: 0.55,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const CustomPaint(
-                              painter: _CrescentPainter(),
-                              child: SizedBox(width: 28, height: 28),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Current dasha',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: AstrologyColors.today,
-                                fontWeight: FontWeight.w700,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: GlassPanel(
+                              key: const ValueKey('today-dasha-card'),
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 16, 20, 14),
+                              borderColor: AstrologyColors.today.withValues(
+                                alpha: 0.55,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const CustomPaint(
+                                    painter: _CrescentPainter(),
+                                    child: SizedBox(width: 28, height: 28),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Current dasha',
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                      color: AstrologyColors.today,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    result.dasha.label.isEmpty
+                                        ? '—'
+                                        : result.dasha.label,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.headlineMedium
+                                        ?.copyWith(
+                                      color: AstrologyColors.text,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  if (levels.isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    for (var i = 0; i < levels.length; i++)
+                                      _DashaTimelineStep(
+                                        label: i == 0 ? 'Maha' : 'Bhukti',
+                                        value: levels[i],
+                                        last: i == levels.length - 1,
+                                      ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    result.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                      color: AstrologyColors.muted,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            Text(
-                              result.dasha.label.isEmpty
-                                  ? '—'
-                                  : result.dasha.label,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                color: AstrologyColors.text,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            if (levels.isNotEmpty) ...[
-                              const SizedBox(height: 16),
-                              for (var i = 0; i < levels.length; i++)
-                                _DashaTimelineStep(
-                                  label: i == 0 ? 'Maha' : 'Bhukti',
-                                  value: levels[i],
-                                  last: i == levels.length - 1,
-                                ),
-                            ],
-                            const SizedBox(height: 18),
-                            Text(
-                              result.name,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: AstrologyColors.muted,
+                          ),
+                          if (bullets.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            GlassPanel(
+                              padding:
+                                  const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                              borderColor: AstrologyColors.today
+                                  .withValues(alpha: 0.4),
+                              child: AstrologyInsightsPanel(
+                                key: const ValueKey('today-insights-panel'),
+                                bullets: bullets,
+                                locale: _locale,
+                                onLocaleChanged: _setLocale,
+                                accent: AstrologyColors.today,
+                                compact: true,
                               ),
                             ),
                           ],
-                        ),
+                        ],
                       ),
                     ),
                   ],

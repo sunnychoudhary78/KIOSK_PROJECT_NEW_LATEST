@@ -29,11 +29,28 @@ function chartSummaryLines(chart: ChartSummary): ReportLine[] {
   return rows;
 }
 
+function insightLines(
+  bullets: string[] | undefined,
+  heading = 'AI insights',
+): ReportLine[] {
+  if (!bullets || bullets.length === 0) return [];
+  const lines: ReportLine[] = [
+    { kind: 'spacer', height: 8 },
+    { kind: 'heading', text: heading },
+  ];
+  for (const bullet of bullets) {
+    lines.push({ kind: 'body', text: `• ${bullet}` });
+  }
+  return lines;
+}
+
 export type KundaliPrintPdfInput = {
   subject: ReadingSubject;
   style: 'north' | 'south';
   chart: ChartSummary;
   charts: Array<{ key: string; title: string; subtitle: string; svg: string }>;
+  insights?: Array<{ key: string; title: string; bullets: string[] }>;
+  locale?: 'en' | 'hi';
   disclaimer?: string;
 };
 
@@ -65,6 +82,21 @@ export async function buildKundaliReportPdf(input: KundaliPrintPdfInput): Promis
     }
   }
 
+  if (input.insights && input.insights.length > 0) {
+    lines.push({ kind: 'spacer', height: 10 });
+    lines.push({
+      kind: 'heading',
+      text: input.locale === 'hi' ? 'AI insights (HI)' : 'AI insights',
+    });
+    for (const section of input.insights) {
+      if (section.bullets.length === 0) continue;
+      lines.push({ kind: 'subheading', text: section.title });
+      for (const bullet of section.bullets) {
+        lines.push({ kind: 'body', text: `• ${bullet}` });
+      }
+    }
+  }
+
   return buildReportPdf({
     title: `Kundali — ${input.subject.name}`,
     subtitle: 'Birth chart report',
@@ -85,6 +117,8 @@ export type MatchPrintPdfInput = {
     verdict?: string;
   }>;
   accuracyNote?: string;
+  insightBullets?: string[];
+  locale?: 'en' | 'hi';
   disclaimer?: string;
 };
 
@@ -115,6 +149,13 @@ export async function buildMatchReportPdf(input: MatchPrintPdfInput): Promise<Bu
       }`,
     });
   }
+
+  lines.push(
+    ...insightLines(
+      input.insightBullets,
+      input.locale === 'hi' ? 'AI insights (HI)' : 'AI insights',
+    ),
+  );
 
   if (input.accuracyNote) {
     lines.push({ kind: 'spacer', height: 8 });
@@ -222,6 +263,8 @@ export type TodayPrintPdfInput = {
   panchang: Record<string, string | undefined>;
   dasha: { label: string; levels: string[] };
   accuracyNote?: string;
+  insightBullets?: string[];
+  locale?: 'en' | 'hi';
   disclaimer?: string;
 };
 
@@ -257,6 +300,13 @@ export async function buildTodayReportPdf(input: TodayPrintPdfInput): Promise<Bu
   for (const level of input.dasha.levels) {
     lines.push({ kind: 'body', text: `• ${level}` });
   }
+
+  lines.push(
+    ...insightLines(
+      input.insightBullets,
+      input.locale === 'hi' ? 'AI insights (HI)' : 'AI insights',
+    ),
+  );
 
   if (input.accuracyNote) {
     lines.push({ kind: 'spacer', height: 8 });
