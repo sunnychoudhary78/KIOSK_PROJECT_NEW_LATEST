@@ -143,6 +143,7 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
     final bullets = result.insights.forLocale(locale);
 
     state = state.copyWith(
+      clearError: true,
       print: state.print.copyWith(
         phase: ReportPrintPhase.preparingPreview,
         clearError: true,

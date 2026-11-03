@@ -85,23 +85,47 @@ class AstrologyPrintShell extends StatelessWidget {
     }
 
     if (print.phase == ReportPrintPhase.printResult) {
+      final prepareFailed =
+          !print.printConfirmed && print.previewBytes == null;
       return VisitorSessionPopScope(
         endSessionOnPop: false,
         child: KioskShell(
           title: title,
           onHome: onHome,
           stepLabel: 'Print',
-          body: KioskPrintResult(
-            confirmed: print.printConfirmed,
-            detail: print.message,
-            autoReturn:
-                print.printConfirmed ? const Duration(seconds: 20) : null,
-            onHome: () async {
-              onClearResult();
-              await onHome();
-            },
-            onNotReceived: print.printConfirmed ? onReportMissing : null,
-          ),
+          footerLeading: prepareFailed
+              ? KioskGhostButton(
+                  label: 'Back',
+                  icon: Icons.arrow_back,
+                  onPressed: () async {
+                    onClearResult();
+                  },
+                )
+              : null,
+          body: prepareFailed
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: KioskStatusBanner(
+                      message: 'Could not prepare print',
+                      detail: print.message ?? print.error,
+                      tone: KioskBannerTone.danger,
+                      icon: Icons.error_outline,
+                    ),
+                  ),
+                )
+              : KioskPrintResult(
+                  confirmed: print.printConfirmed,
+                  detail: print.message,
+                  autoReturn:
+                      print.printConfirmed ? const Duration(seconds: 20) : null,
+                  onHome: () async {
+                    onClearResult();
+                    await onHome();
+                  },
+                  onNotReceived:
+                      print.printConfirmed ? onReportMissing : null,
+                ),
         ),
       );
     }
@@ -137,4 +161,29 @@ void holdSessionForAstrologyPrint(WidgetRef ref, ReportPrintSnapshot print) {
   ref.read(kioskSessionHoldProvider.notifier).set(
         printing: print.phase == ReportPrintPhase.printing,
       );
+}
+
+/// Result body with an optional danger banner when print/prepare failed.
+Widget astrologyResultWithError({
+  Key? key,
+  required Widget child,
+  required String? error,
+}) {
+  final body = (error == null || error.trim().isEmpty)
+      ? child
+      : Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: KioskStatusBanner(
+                message: error,
+                tone: KioskBannerTone.danger,
+                icon: Icons.error_outline,
+              ),
+            ),
+            Expanded(child: child),
+          ],
+        );
+  return KeyedSubtree(key: key, child: body);
 }

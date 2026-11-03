@@ -312,11 +312,15 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
                 'Preparing your chart…',
               ],
             ),
-            KundaliPhase.result when state.result != null => KundaliResultView(
+            KundaliPhase.result when state.result != null =>
+                astrologyResultWithError(
               key: const ValueKey('kundali-result'),
-              result: state.result!,
-              onLocaleChanged: (locale) =>
-                  setState(() => _insightLocale = locale),
+              error: state.error,
+              child: KundaliResultView(
+                result: state.result!,
+                onLocaleChanged: (locale) =>
+                    setState(() => _insightLocale = locale),
+              ),
             ),
             KundaliPhase.result => const AstrologyCastingView(
               key: ValueKey('kundali-result-empty'),
@@ -373,7 +377,6 @@ class _KundaliResultViewState extends State<KundaliResultView>
       end: Offset.zero,
     ).animate(_fade);
     _entrance.forward();
-    widget.onLocaleChanged?.call(_locale);
   }
 
   void _setLocale(AstrologyInsightLocale locale) {
@@ -624,12 +627,14 @@ class _KundaliSummaryRail extends StatelessWidget {
         if (tiles.isNotEmpty) const SizedBox(height: 6),
         for (var i = 0; i < tiles.length; i++) ...[
           if (i > 0) const SizedBox(height: 4),
-          Expanded(flex: 2, child: _KundaliSummaryTile(tile: tiles[i])),
+          _KundaliSummaryTile(
+            tile: tiles[i],
+            compact: insightBullets.isNotEmpty,
+          ),
         ],
         if (insightBullets.isNotEmpty) ...[
           const SizedBox(height: 6),
           Expanded(
-            flex: 5,
             child: SingleChildScrollView(
               child: AstrologyInsightsPanel(
                 key: const ValueKey('kundali-insights-panel'),
@@ -641,7 +646,8 @@ class _KundaliSummaryRail extends StatelessWidget {
               ),
             ),
           ),
-        ],
+        ] else if (tiles.isNotEmpty)
+          const Spacer(),
       ],
     );
   }
@@ -757,75 +763,96 @@ class _MetaChip extends StatelessWidget {
 }
 
 class _KundaliSummaryTile extends StatelessWidget {
-  const _KundaliSummaryTile({required this.tile});
+  const _KundaliSummaryTile({
+    required this.tile,
+    this.compact = false,
+  });
 
   final ({String label, String value, String? art}) tile;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GlassPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      borderColor: AstrologyColors.kundali.withValues(alpha: 0.4),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AstrologyColors.kundali, width: 1.6),
-              boxShadow: [
-                BoxShadow(
-                  color: AstrologyColors.gold.withValues(alpha: 0.28),
-                  blurRadius: 10,
+    final artSize = compact ? 32.0 : 46.0;
+    final iconSize = compact ? 16.0 : 22.0;
+    return SizedBox(
+      height: compact ? 40 : null,
+      child: GlassPanel(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 12,
+          vertical: compact ? 4 : 8,
+        ),
+        borderColor: AstrologyColors.kundali.withValues(alpha: 0.4),
+        child: Row(
+          children: [
+            Container(
+              width: artSize,
+              height: artSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AstrologyColors.kundali,
+                  width: compact ? 1.2 : 1.6,
                 ),
-              ],
-            ),
-            child: ClipOval(
-              child: tile.art != null
-                  ? AstrologyAssetImage(
-                      asset: tile.art!,
-                      width: 46,
-                      height: 46,
-                      fit: BoxFit.cover,
-                    )
-                  : const ColoredBox(
-                      color: AstrologyColors.raised,
-                      child: Icon(
-                        Icons.auto_awesome,
-                        color: AstrologyColors.gold,
-                        size: 22,
+                boxShadow: [
+                  BoxShadow(
+                    color: AstrologyColors.gold.withValues(alpha: 0.28),
+                    blurRadius: compact ? 6 : 10,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: tile.art != null
+                    ? AstrologyAssetImage(
+                        asset: tile.art!,
+                        width: artSize,
+                        height: artSize,
+                        fit: BoxFit.cover,
+                      )
+                    : ColoredBox(
+                        color: AstrologyColors.raised,
+                        child: Icon(
+                          Icons.auto_awesome,
+                          color: AstrologyColors.gold,
+                          size: iconSize,
+                        ),
                       ),
+              ),
+            ),
+            SizedBox(width: compact ? 8 : 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    tile.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AstrologyColors.muted,
+                      fontSize: compact ? 10 : null,
+                      height: 1.1,
                     ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  tile.label,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AstrologyColors.muted,
                   ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  tile.value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: AstrologyColors.text,
-                    fontWeight: FontWeight.w700,
+                  Text(
+                    tile.value,
+                    maxLines: compact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: AstrologyColors.text,
+                      fontWeight: FontWeight.w700,
+                      fontSize: compact ? 12 : null,
+                      height: 1.15,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

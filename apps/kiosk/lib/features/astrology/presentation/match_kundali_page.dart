@@ -400,11 +400,14 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               ],
             ),
             MatchKundaliPhase.result when state.result != null =>
-              MatchKundaliResultView(
+              astrologyResultWithError(
                 key: const ValueKey('match-result'),
-                result: state.result!,
-                onLocaleChanged: (locale) =>
-                    setState(() => _insightLocale = locale),
+                error: state.error,
+                child: MatchKundaliResultView(
+                  result: state.result!,
+                  onLocaleChanged: (locale) =>
+                      setState(() => _insightLocale = locale),
+                ),
               ),
             MatchKundaliPhase.result => const AstrologyCastingView(
               key: ValueKey('match-result-empty'),
@@ -545,12 +548,6 @@ class MatchKundaliResultView extends StatefulWidget {
 
 class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
   AstrologyInsightLocale _locale = AstrologyInsightLocale.en;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.onLocaleChanged?.call(_locale);
-  }
 
   Color _toneColor(String tone) {
     return switch (tone.toLowerCase()) {

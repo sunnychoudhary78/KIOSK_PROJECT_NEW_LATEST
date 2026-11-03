@@ -301,11 +301,14 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
               ],
             ),
             TodayPeriodsPhase.result when state.result != null =>
-              TodayPeriodsResultView(
+              astrologyResultWithError(
                 key: const ValueKey('today-result'),
-                result: state.result!,
-                onLocaleChanged: (locale) =>
-                    setState(() => _insightLocale = locale),
+                error: state.error,
+                child: TodayPeriodsResultView(
+                  result: state.result!,
+                  onLocaleChanged: (locale) =>
+                      setState(() => _insightLocale = locale),
+                ),
               ),
             TodayPeriodsPhase.result => const AstrologyCastingView(
               key: ValueKey('today-result-empty'),
@@ -341,12 +344,6 @@ class TodayPeriodsResultView extends StatefulWidget {
 
 class _TodayPeriodsResultViewState extends State<TodayPeriodsResultView> {
   AstrologyInsightLocale _locale = AstrologyInsightLocale.en;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.onLocaleChanged?.call(_locale);
-  }
 
   String _asOfLabel() {
     final asOf = widget.result.asOf?.toLocal();

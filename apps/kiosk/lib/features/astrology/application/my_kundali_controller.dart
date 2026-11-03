@@ -176,6 +176,7 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     }
 
     state = state.copyWith(
+      clearError: true,
       print: state.print.copyWith(
         phase: ReportPrintPhase.preparingPreview,
         clearError: true,

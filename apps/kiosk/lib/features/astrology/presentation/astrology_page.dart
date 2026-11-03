@@ -512,9 +512,13 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
             AstrologyPhase.submitting => const PalmAnalyzingView(
                 key: ValueKey('submitting'),
               ),
-            AstrologyPhase.result when state.reading != null => AstrologyResultView(
+            AstrologyPhase.result when state.reading != null =>
+              astrologyResultWithError(
                 key: const ValueKey('result'),
-                reading: state.reading!,
+                error: state.error,
+                child: AstrologyResultView(
+                  reading: state.reading!,
+                ),
               ),
             AstrologyPhase.result => const AstrologyCastingView(
                 key: ValueKey('result-empty'),

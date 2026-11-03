@@ -131,6 +131,7 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
     final bullets = result.insights.forLocale(locale);
 
     state = state.copyWith(
+      clearError: true,
       print: state.print.copyWith(
         phase: ReportPrintPhase.preparingPreview,
         clearError: true,

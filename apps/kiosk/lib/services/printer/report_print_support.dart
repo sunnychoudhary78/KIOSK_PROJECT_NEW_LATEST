@@ -117,10 +117,15 @@ class ReportPrintSupport {
         printFailures: previous.printFailures,
       );
     } catch (error) {
+      final message = userFacingError(error);
+      // Stay in an active print phase so the shell shows a failure UI instead of
+      // silently bouncing back to the feature result screen.
       return ReportPrintSnapshot(
-        phase: ReportPrintPhase.idle,
+        phase: ReportPrintPhase.printResult,
         printFailures: previous.printFailures,
-        error: userFacingError(error),
+        printConfirmed: false,
+        message: message,
+        error: message,
         paperOut: error is ApiException && error.code == 'printing_paused',
       );
     }
