@@ -96,9 +96,9 @@ class AstrologyPrintShell extends StatelessWidget {
                 ),
                 const SizedBox(width: 24),
                 Container(
-                  width: 320,
-                  height: 320,
-                  padding: const EdgeInsets.all(16),
+                  width: 480,
+                  height: 480,
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
@@ -107,6 +107,7 @@ class AstrologyPrintShell extends StatelessWidget {
                       ? Image.network(
                           qrImageUrl,
                           fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
                           errorBuilder: (_, __, ___) => const Center(
                             child: Icon(Icons.qr_code_2, size: 64),
                           ),

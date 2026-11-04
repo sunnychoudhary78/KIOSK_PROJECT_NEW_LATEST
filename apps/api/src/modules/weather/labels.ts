@@ -1,44 +1,50 @@
-/** WMO weather interpretation codes → short kiosk label. */
-export function weatherLabelFromCode(code: number | null | undefined): string | null {
-  if (code == null || !Number.isFinite(code)) {
+/**
+ * Map Google Weather API condition types to synthetic WMO-like codes so the
+ * kiosk can keep using its existing icon ranges.
+ */
+export function weatherCodeFromGoogleType(type: string | null | undefined): number | null {
+  if (type == null || typeof type !== 'string') {
     return null;
   }
-  const c = Math.trunc(code);
-  if (c === 0) {
-    return 'Clear';
+  const t = type.trim().toUpperCase();
+  if (!t || t === 'TYPE_UNSPECIFIED') {
+    return null;
   }
-  if (c === 1 || c === 2) {
-    return 'Partly cloudy';
+  if (t === 'CLEAR') {
+    return 0;
   }
-  if (c === 3) {
-    return 'Overcast';
+  if (t === 'MOSTLY_CLEAR' || t === 'PARTLY_CLOUDY') {
+    return 2;
   }
-  if (c === 45 || c === 48) {
-    return 'Fog';
+  if (t === 'MOSTLY_CLOUDY' || t === 'CLOUDY' || t === 'OVERCAST' || t === 'WINDY') {
+    return 3;
   }
-  if (c >= 51 && c <= 57) {
-    return 'Drizzle';
+  if (t.includes('FOG') || t.includes('HAZE') || t.includes('MIST')) {
+    return 45;
   }
-  if (c >= 61 && c <= 67) {
-    return 'Rain';
+  if (t.includes('THUNDER')) {
+    return 95;
   }
-  if (c >= 71 && c <= 77) {
-    return 'Snow';
+  if (
+    t.includes('SNOW') ||
+    t.includes('BLIZZARD') ||
+    t.includes('ICE') ||
+    t === 'HAIL' ||
+    t === 'HAIL_SHOWERS'
+  ) {
+    return t.includes('SHOWER') ? 85 : 71;
   }
-  if (c >= 80 && c <= 82) {
-    return 'Showers';
+  if (t.includes('DRIZZLE')) {
+    return 51;
   }
-  if (c >= 85 && c <= 86) {
-    return 'Snow showers';
+  if (t.includes('SHOWER') || t.includes('RAIN')) {
+    return t.includes('SHOWER') ? 80 : 61;
   }
-  if (c >= 95 && c <= 99) {
-    return 'Thunderstorm';
-  }
-  return 'Unknown';
+  return null;
 }
 
-/** US AQI band labels (EPA-style). */
-export function aqiLabelFromUsAqi(aqi: number | null | undefined): string | null {
+/** India CPCB / NAAQI band labels when Google omits category. */
+export function aqiLabelFromIndiaAqi(aqi: number | null | undefined): string | null {
   if (aqi == null || !Number.isFinite(aqi)) {
     return null;
   }
@@ -47,16 +53,28 @@ export function aqiLabelFromUsAqi(aqi: number | null | undefined): string | null
     return 'Good';
   }
   if (v <= 100) {
-    return 'Moderate';
-  }
-  if (v <= 150) {
-    return 'Unhealthy for sensitive';
+    return 'Satisfactory';
   }
   if (v <= 200) {
-    return 'Unhealthy';
+    return 'Moderate';
   }
   if (v <= 300) {
-    return 'Very unhealthy';
+    return 'Poor';
   }
-  return 'Hazardous';
+  if (v <= 400) {
+    return 'Very Poor';
+  }
+  return 'Severe';
+}
+
+export function normalizeAqiCategory(category: string | null | undefined): string | null {
+  if (category == null || typeof category !== 'string') {
+    return null;
+  }
+  const trimmed = category.trim();
+  if (!trimmed) {
+    return null;
+  }
+  // Google often returns "Good air quality" — shorten for the chip tooltip.
+  return trimmed.replace(/\s+air quality$/i, '').trim() || trimmed;
 }

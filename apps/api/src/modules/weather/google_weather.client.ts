@@ -1,8 +1,12 @@
 import type { Logger } from '../../infrastructure/logging/logger.js';
-import { aqiLabelFromUsAqi, weatherLabelFromCode } from './labels.js';
+import {
+  aqiLabelFromIndiaAqi,
+  normalizeAqiCategory,
+  weatherCodeFromGoogleType,
+} from './labels.js';
 
-const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
-const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
+const WEATHER_URL = 'https://weather.googleapis.com/v1/currentConditions:lookup';
+const AIR_QUALITY_URL = 'https://airquality.googleapis.com/v1/currentConditions:lookup';
 export const WEATHER_CACHE_TTL_MS = 15 * 60 * 1000;
 
 export type WeatherSnapshot = {
@@ -18,22 +22,24 @@ export type WeatherSnapshot = {
 
 type CacheEntry = { value: WeatherSnapshot; expiresAt: number };
 
-export type OpenMeteoClient = {
+export type GoogleWeatherClient = {
   getWeather(lat: number, lng: number): Promise<WeatherSnapshot>;
 };
 
 type FetchLike = typeof fetch;
 
-export function createOpenMeteoClient(options: {
+export function createGoogleWeatherClient(options: {
+  apiKey: string | undefined;
   logger: Logger;
   fetchImpl?: FetchLike;
   now?: () => number;
   cacheTtlMs?: number;
-}): OpenMeteoClient {
+}): GoogleWeatherClient {
   const cache = new Map<string, CacheEntry>();
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
   const ttl = options.cacheTtlMs ?? WEATHER_CACHE_TTL_MS;
+  const apiKey = options.apiKey?.trim() ?? '';
   const logger = options.logger;
 
   return {
@@ -45,9 +51,15 @@ export function createOpenMeteoClient(options: {
       }
 
       const coords = { lat: roundCoord(lat), lng: roundCoord(lng) };
+
+      if (!apiKey) {
+        logger.warn({ event: 'weather_google_no_api_key', ...coords }, 'Google weather skipped');
+        throw new Error('Google Weather API key missing');
+      }
+
       const [forecastResult, aqiResult] = await Promise.allSettled([
-        fetchForecast(fetchImpl, coords.lat, coords.lng),
-        fetchAirQuality(fetchImpl, coords.lat, coords.lng),
+        fetchCurrentWeather(fetchImpl, apiKey, coords.lat, coords.lng),
+        fetchAirQuality(fetchImpl, apiKey, coords.lat, coords.lng),
       ]);
 
       const forecastOk = forecastResult.status === 'fulfilled';
@@ -61,10 +73,10 @@ export function createOpenMeteoClient(options: {
               : String(forecastResult.reason)
             : null;
         logger.warn(
-          { event: 'weather_open_meteo_failed', ...coords, err: forecastErr },
-          'Open-Meteo weather failed',
+          { event: 'weather_google_failed', ...coords, err: forecastErr },
+          'Google weather failed',
         );
-        throw new Error('Open-Meteo unavailable');
+        throw new Error('Google Weather unavailable');
       }
 
       if (!forecastOk) {
@@ -77,7 +89,7 @@ export function createOpenMeteoClient(options: {
                 ? forecastResult.reason.message
                 : String(forecastResult.reason),
           },
-          'Open-Meteo forecast failed',
+          'Google Weather forecast failed',
         );
       }
       if (!aqiOk) {
@@ -90,24 +102,22 @@ export function createOpenMeteoClient(options: {
                 ? aqiResult.reason.message
                 : String(aqiResult.reason),
           },
-          'Open-Meteo air quality failed',
+          'Google Air Quality failed',
         );
       }
 
       const forecast = forecastOk ? forecastResult.value : null;
       const aqi = aqiOk ? aqiResult.value : null;
-      const weatherCode = forecast?.weatherCode ?? null;
-      const usAqi = aqi?.usAqi ?? null;
 
       const value: WeatherSnapshot = {
         temperatureC: forecast?.temperatureC ?? null,
         humidityPct: forecast?.humidityPct ?? null,
-        weatherCode,
-        weatherLabel: weatherLabelFromCode(weatherCode),
+        weatherCode: forecast?.weatherCode ?? null,
+        weatherLabel: forecast?.weatherLabel ?? null,
         windKmh: forecast?.windKmh ?? null,
         uvIndex: forecast?.uvIndex ?? null,
-        aqi: usAqi,
-        aqiLabel: aqiLabelFromUsAqi(usAqi),
+        aqi: aqi?.aqi ?? null,
+        aqiLabel: aqi?.aqiLabel ?? null,
       };
 
       cache.set(key, { value, expiresAt: now() + ttl });
@@ -116,68 +126,105 @@ export function createOpenMeteoClient(options: {
   };
 }
 
-export function parseForecastPayload(payload: unknown): {
+export function parseWeatherPayload(payload: unknown): {
   temperatureC: number | null;
   humidityPct: number | null;
   weatherCode: number | null;
+  weatherLabel: string | null;
   windKmh: number | null;
   uvIndex: number | null;
 } {
-  const current = asRecord(asRecord(payload)?.current);
+  const root = asRecord(payload);
+  const condition = asRecord(root?.weatherCondition);
+  const description = asRecord(condition?.description);
+  const temperature = asRecord(root?.temperature);
+  const wind = asRecord(root?.wind);
+  const windSpeed = asRecord(wind?.speed);
+  const conditionType = typeof condition?.type === 'string' ? condition.type : null;
+  const weatherLabel =
+    typeof description?.text === 'string' && description.text.trim()
+      ? description.text.trim()
+      : null;
+
   return {
-    temperatureC: asFiniteNumber(current?.temperature_2m),
-    humidityPct: asFiniteNumber(current?.relative_humidity_2m),
-    weatherCode: asFiniteNumber(current?.weather_code),
-    windKmh: asFiniteNumber(current?.wind_speed_10m),
-    uvIndex: asFiniteNumber(current?.uv_index),
+    temperatureC: asFiniteNumber(temperature?.degrees),
+    humidityPct: asFiniteNumber(root?.relativeHumidity),
+    weatherCode: weatherCodeFromGoogleType(conditionType),
+    weatherLabel,
+    windKmh: asFiniteNumber(windSpeed?.value),
+    uvIndex: asFiniteNumber(root?.uvIndex),
   };
 }
 
-export function parseAirQualityPayload(payload: unknown): { usAqi: number | null } {
-  const current = asRecord(asRecord(payload)?.current);
-  return { usAqi: asFiniteNumber(current?.us_aqi) };
+export function parseAirQualityPayload(payload: unknown): {
+  aqi: number | null;
+  aqiLabel: string | null;
+} {
+  const root = asRecord(payload);
+  const indexes = Array.isArray(root?.indexes) ? root.indexes : [];
+  const records = indexes.map(asRecord).filter((item): item is Record<string, unknown> => item != null);
+
+  const local =
+    records.find((item) => typeof item.code === 'string' && item.code.toLowerCase() !== 'uaqi') ??
+    records[0] ??
+    null;
+
+  const aqi = asFiniteNumber(local?.aqi);
+  const fromCategory = normalizeAqiCategory(
+    typeof local?.category === 'string' ? local.category : null,
+  );
+
+  return {
+    aqi,
+    aqiLabel: fromCategory ?? aqiLabelFromIndiaAqi(aqi),
+  };
 }
 
-async function fetchForecast(
+async function fetchCurrentWeather(
   fetchImpl: FetchLike,
+  apiKey: string,
   lat: number,
   lng: number,
 ): Promise<{
   temperatureC: number | null;
   humidityPct: number | null;
   weatherCode: number | null;
+  weatherLabel: string | null;
   windKmh: number | null;
   uvIndex: number | null;
 }> {
-  const url = new URL(FORECAST_URL);
-  url.searchParams.set('latitude', String(lat));
-  url.searchParams.set('longitude', String(lng));
-  url.searchParams.set(
-    'current',
-    'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,uv_index',
-  );
-  url.searchParams.set('wind_speed_unit', 'kmh');
-  url.searchParams.set('timezone', 'auto');
+  const url = new URL(WEATHER_URL);
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('location.latitude', String(lat));
+  url.searchParams.set('location.longitude', String(lng));
 
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(12_000) });
   if (!response.ok) {
-    throw new Error(`Forecast HTTP ${response.status}`);
+    throw new Error(`Weather HTTP ${response.status}`);
   }
-  return parseForecastPayload(await response.json());
+  return parseWeatherPayload(await response.json());
 }
 
 async function fetchAirQuality(
   fetchImpl: FetchLike,
+  apiKey: string,
   lat: number,
   lng: number,
-): Promise<{ usAqi: number | null }> {
+): Promise<{ aqi: number | null; aqiLabel: string | null }> {
   const url = new URL(AIR_QUALITY_URL);
-  url.searchParams.set('latitude', String(lat));
-  url.searchParams.set('longitude', String(lng));
-  url.searchParams.set('current', 'us_aqi');
-  url.searchParams.set('timezone', 'auto');
+  url.searchParams.set('key', apiKey);
 
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(12_000) });
+  const response = await fetchImpl(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: { latitude: lat, longitude: lng },
+      universalAqi: false,
+      extraComputations: ['LOCAL_AQI'],
+      languageCode: 'en',
+    }),
+    signal: AbortSignal.timeout(12_000),
+  });
   if (!response.ok) {
     throw new Error(`Air quality HTTP ${response.status}`);
   }

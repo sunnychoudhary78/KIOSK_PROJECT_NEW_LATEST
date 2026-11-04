@@ -82,17 +82,24 @@ class WeatherHeaderStrip extends ConsumerWidget {
     return Icons.thermostat_outlined;
   }
 
+  /// India CPCB / NAAQI bands.
   Color _aqiColor(int aqi) {
     if (aqi <= 50) {
-      return SkpColors.accent;
+      return SkpColors.accent; // Good
     }
     if (aqi <= 100) {
-      return SkpColors.gold;
+      return SkpColors.gold; // Satisfactory
     }
-    if (aqi <= 150) {
-      return const Color(0xFFE67E22);
+    if (aqi <= 200) {
+      return const Color(0xFFE67E22); // Moderate
     }
-    return SkpColors.danger;
+    if (aqi <= 300) {
+      return const Color(0xFFE74C3C); // Poor
+    }
+    if (aqi <= 400) {
+      return SkpColors.danger; // Very Poor
+    }
+    return const Color(0xFF8E1B1B); // Severe
   }
 }
 

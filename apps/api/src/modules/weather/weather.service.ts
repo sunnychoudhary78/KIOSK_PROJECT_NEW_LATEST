@@ -1,11 +1,11 @@
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
-import type { OpenMeteoClient, WeatherSnapshot } from './open_meteo.client.js';
+import type { GoogleWeatherClient, WeatherSnapshot } from './google_weather.client.js';
 
 export class WeatherService {
   constructor(
     private readonly db: DbClient,
-    private readonly openMeteo: OpenMeteoClient,
+    private readonly googleWeather: GoogleWeatherClient,
   ) {}
 
   async forDevice(deviceId: string): Promise<WeatherSnapshot> {
@@ -18,7 +18,7 @@ export class WeatherService {
     }
 
     try {
-      return await this.openMeteo.getWeather(device.latitude, device.longitude);
+      return await this.googleWeather.getWeather(device.latitude, device.longitude);
     } catch {
       throw new AppError('weather_unavailable', 'Weather data is temporarily unavailable', 502);
     }
