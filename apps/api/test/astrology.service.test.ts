@@ -21,7 +21,7 @@ const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown
 
 const testConfig = {
   env: 'test',
-  jwtSecret: 'test-jwt-secret-at-least-32-characters!!',
+  auth: { jwtSecret: 'test-jwt-secret-at-least-32-characters!!' },
   razorpay: { keyId: '', keySecret: '', webhookSecret: '' },
   payments: { windowMinutes: 15 },
   printWeb: { publicUrl: 'http://localhost:5174' },

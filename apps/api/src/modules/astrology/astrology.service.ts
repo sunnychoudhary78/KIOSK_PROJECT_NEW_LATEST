@@ -247,7 +247,7 @@ export class AstrologyService {
     const phoneProofToken = createKundaliPhoneProofToken({
       deviceId,
       phone,
-      jwtSecret: this.config.jwtSecret,
+      jwtSecret: this.config.auth.jwtSecret,
     });
 
     await this.audit.record({
@@ -731,7 +731,7 @@ export class AstrologyService {
       const proof = verifyKundaliPhoneProofToken({
         token: input.phoneProofToken,
         deviceId,
-        jwtSecret: this.config.jwtSecret,
+        jwtSecret: this.config.auth.jwtSecret,
       });
       if (!proof) {
         // Wrong-device or corrupt token → reject; expired/invalid for free → fall through to paid.

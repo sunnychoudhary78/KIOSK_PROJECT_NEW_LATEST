@@ -45,7 +45,7 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
   function setup(chargeRupees: number) {
     const config = {
       env: 'test',
-      jwtSecret: 'test-jwt-secret-at-least-32-characters!!',
+      auth: { jwtSecret: 'test-jwt-secret-at-least-32-characters!!' },
       razorpay: { keyId: 'rzp_test', keySecret: 'secret', webhookSecret: 'whsec' },
       payments: { windowMinutes: 15 },
       printWeb: { publicUrl: 'http://localhost:5174' },
@@ -230,7 +230,7 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
     const phoneProofToken = createKundaliPhoneProofToken({
       deviceId: 'device-1',
       phone: '+919876543210',
-      jwtSecret: config.jwtSecret,
+      jwtSecret: config.auth.jwtSecret,
     });
     const result = await service.printKundali('device-1', {
       subject,
@@ -261,7 +261,7 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
     const phoneProofToken = createKundaliPhoneProofToken({
       deviceId: 'device-1',
       phone: '+919876543210',
-      jwtSecret: config.jwtSecret,
+      jwtSecret: config.auth.jwtSecret,
     });
     const result = await service.printKundali('device-1', {
       subject,
@@ -278,7 +278,7 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
   it('rejects paid print when Razorpay is not configured', async () => {
     const config = {
       env: 'test',
-      jwtSecret: 'test-jwt-secret-at-least-32-characters!!',
+      auth: { jwtSecret: 'test-jwt-secret-at-least-32-characters!!' },
       razorpay: { keyId: '', keySecret: '', webhookSecret: '' },
       payments: { windowMinutes: 15 },
       printWeb: { publicUrl: 'http://localhost:5174' },
