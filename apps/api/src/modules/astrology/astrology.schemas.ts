@@ -225,6 +225,7 @@ export const llmReadingSchema = z.object({
 export type LlmReading = z.infer<typeof llmReadingSchema>;
 
 const bulletListSchema = z.array(z.string().trim().min(1).max(280)).min(3).max(4);
+const kundaliBulletListSchema = z.array(z.string().trim().min(1).max(420)).min(5).max(8);
 
 export const localeBulletsSchema = z.object({
   en: bulletListSchema,
@@ -233,10 +234,15 @@ export const localeBulletsSchema = z.object({
 
 export type LocaleBullets = z.infer<typeof localeBulletsSchema>;
 
+const kundaliLocaleBulletsSchema = z.object({
+  en: kundaliBulletListSchema,
+  hi: kundaliBulletListSchema,
+});
+
 export const kundaliInsightsSchema = z.object({
-  RasiD1: localeBulletsSchema.optional(),
-  NavamshaD9: localeBulletsSchema.optional(),
-  DashamamshaD10: localeBulletsSchema.optional(),
+  RasiD1: kundaliLocaleBulletsSchema.optional(),
+  NavamshaD9: kundaliLocaleBulletsSchema.optional(),
+  DashamamshaD10: kundaliLocaleBulletsSchema.optional(),
 });
 
 export type KundaliInsights = z.infer<typeof kundaliInsightsSchema>;

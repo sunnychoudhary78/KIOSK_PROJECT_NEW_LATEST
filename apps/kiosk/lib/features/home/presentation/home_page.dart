@@ -271,18 +271,49 @@ class _ServiceCatalog extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Select a service',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Select a service',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Touch a tile to begin',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: SkpColors.muted,
+                          ),
+                    ),
+                  ],
                 ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Touch a tile to begin',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: SkpColors.muted,
+              ),
+              const SizedBox(width: 16),
+              SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: () =>
+                      Navigator.of(context).pushNamed(AppRoutes.emergency),
+                  icon: const Icon(Icons.sos_outlined, size: 22),
+                  label: const Text('Emergency'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: SkpColors.danger,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 56),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+                    ),
+                  ),
                 ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Expanded(child: serviceGrid),

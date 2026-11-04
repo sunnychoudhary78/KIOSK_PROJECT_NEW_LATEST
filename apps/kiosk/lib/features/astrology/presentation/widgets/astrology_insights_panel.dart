@@ -140,7 +140,7 @@ class AstrologyInsightsPanel extends StatelessWidget {
               Expanded(
                 child: Text(
                   bullets[i],
-                  maxLines: compact ? 2 : 3,
+                  maxLines: compact ? 3 : 5,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: AstrologyColors.text,

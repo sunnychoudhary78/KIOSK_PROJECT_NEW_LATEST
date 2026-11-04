@@ -288,7 +288,8 @@ describe('AstrologyService.createKundali', () => {
       new Set(Object.values(result.charts).map((entry) => entry?.svg)).size,
     ).toBe(3);
     expect(result.disclaimer).toBe(ASTROLOGY_DISCLAIMER);
-    expect(result.insights.RasiD1?.en).toHaveLength(3);
+    expect(result.insights.RasiD1?.en.length).toBeGreaterThanOrEqual(5);
+    expect(result.insights.RasiD1?.en.length).toBeLessThanOrEqual(8);
     expect(vedastro.getKundaliSvg).toHaveBeenCalledTimes(3);
     expect(vedastro.getDasaForNow).toHaveBeenCalledOnce();
     expect(vedastro.getChart).toHaveBeenCalledOnce();
@@ -308,8 +309,8 @@ describe('AstrologyService.createKundali', () => {
     vi.mocked(llm.generateKundaliInsights).mockRejectedValueOnce(new Error('openai down'));
     const result = await service.createKundali('device-1', fields);
     expect(result.charts.RasiD1?.svg).toContain('<svg');
-    expect(result.insights.RasiD1?.en.length).toBeGreaterThanOrEqual(3);
-    expect(result.insights.RasiD1?.hi.length).toBeGreaterThanOrEqual(3);
+    expect(result.insights.RasiD1?.en.length).toBeGreaterThanOrEqual(5);
+    expect(result.insights.RasiD1?.hi.length).toBeGreaterThanOrEqual(5);
   });
 
   it('omits failed D9/D10 but keeps Birth', async () => {

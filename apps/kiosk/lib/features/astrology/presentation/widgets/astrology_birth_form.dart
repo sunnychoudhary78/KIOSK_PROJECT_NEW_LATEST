@@ -221,7 +221,6 @@ class _AstrologyBirthFormPanelState
       children: [
         AstrologyCosmicTextField(
           label: 'Name',
-          hint: 'Your name',
           value: nameController.text,
           focused: focus == 0,
           accent: accent,
@@ -230,7 +229,6 @@ class _AstrologyBirthFormPanelState
         const SizedBox(height: 8),
         AstrologyCosmicTextField(
           label: 'Place of birth',
-          hint: 'City, State',
           value: placeController.text,
           focused: focus == 1,
           accent: accent,
@@ -516,14 +514,13 @@ class _AstrologyBirthFormPanelState
   }
 }
 
-class AstrologyCosmicTextField extends StatelessWidget {
+class AstrologyCosmicTextField extends StatefulWidget {
   const AstrologyCosmicTextField({
     super.key,
     required this.label,
     required this.value,
     required this.focused,
     required this.onTap,
-    this.hint,
     this.accent = AstrologyColors.gold,
   });
 
@@ -531,20 +528,60 @@ class AstrologyCosmicTextField extends StatelessWidget {
   final String value;
   final bool focused;
   final VoidCallback onTap;
-  final String? hint;
   final Color accent;
 
   static const double height = 50;
 
   @override
+  State<AstrologyCosmicTextField> createState() =>
+      _AstrologyCosmicTextFieldState();
+}
+
+class _AstrologyCosmicTextFieldState extends State<AstrologyCosmicTextField>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _caretBlink;
+
+  @override
+  void initState() {
+    super.initState();
+    _caretBlink = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 530),
+    );
+    if (widget.focused) {
+      _caretBlink.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AstrologyCosmicTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focused && !_caretBlink.isAnimating) {
+      _caretBlink.repeat(reverse: true);
+    } else if (!widget.focused && _caretBlink.isAnimating) {
+      _caretBlink.stop();
+      _caretBlink.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _caretBlink.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final focused = widget.focused;
+    final accent = widget.accent;
+    final value = widget.value;
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         width: double.infinity,
-        height: height,
+        height: AstrologyCosmicTextField.height,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: AstrologyColors.raised,
@@ -568,7 +605,7 @@ class AstrologyCosmicTextField extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              label,
+              widget.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
@@ -577,16 +614,30 @@ class AstrologyCosmicTextField extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 1),
-            Text(
-              value.isEmpty ? (hint ?? '') : value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: value.isEmpty
-                    ? AstrologyColors.muted
-                    : AstrologyColors.text,
-                height: 1.05,
-              ),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: AstrologyColors.text,
+                      height: 1.05,
+                    ),
+                  ),
+                ),
+                if (focused)
+                  FadeTransition(
+                    opacity: _caretBlink,
+                    child: Container(
+                      width: 2,
+                      height: 18,
+                      margin: const EdgeInsets.only(left: 1),
+                      color: accent,
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -616,48 +667,12 @@ class AstrologyGenderSegment extends StatelessWidget {
       ('male', 'Male'),
       ('other', 'Other'),
     ];
-    return Container(
+    return _AstrologyPillSegment(
       height: height,
-      decoration: BoxDecoration(
-        color: AstrologyColors.raised,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-        border: Border.all(color: AstrologyColors.line),
-      ),
-      child: Row(
-        children: [
-          for (final option in options)
-            Expanded(
-              child: InkWell(
-                onTap: () => onGender(option.$1),
-                borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: gender == option.$1
-                            ? accent
-                            : Colors.transparent,
-                        width: 3,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    option.$2,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: gender == option.$1
-                          ? accent
-                          : AstrologyColors.muted,
-                      fontWeight: gender == option.$1
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+      accent: accent,
+      options: options,
+      selected: gender,
+      onSelected: onGender,
     );
   }
 }
@@ -737,48 +752,78 @@ class AstrologyStyleSegment extends StatelessWidget {
     const options = [('north', 'North Indian'), ('south', 'South Indian')];
     return Semantics(
       label: 'Chart style',
-      child: Container(
+      child: _AstrologyPillSegment(
         height: height,
-        decoration: BoxDecoration(
-          color: AstrologyColors.raised,
-          borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-          border: Border.all(color: AstrologyColors.line),
-        ),
-        child: Row(
-          children: [
-            for (final option in options)
-              Expanded(
-                child: InkWell(
-                  onTap: () => onStyle(option.$1),
-                  borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-                  child: Container(
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: style == option.$1
-                              ? accent
-                              : Colors.transparent,
-                          width: 3,
-                        ),
-                      ),
-                    ),
-                    child: Text(
-                      option.$2,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: style == option.$1
-                            ? accent
-                            : AstrologyColors.muted,
-                        fontWeight: style == option.$1
-                            ? FontWeight.w700
-                            : FontWeight.w500,
+        accent: accent,
+        options: options,
+        selected: style,
+        onSelected: onStyle,
+      ),
+    );
+  }
+}
+
+class _AstrologyPillSegment extends StatelessWidget {
+  const _AstrologyPillSegment({
+    required this.height,
+    required this.accent,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final double height;
+  final Color accent;
+  final List<(String, String)> options;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final onAccent = ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+        ? Colors.white
+        : AstrologyColors.text;
+    return Container(
+      height: height,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AstrologyColors.raised,
+        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        border: Border.all(color: AstrologyColors.line),
+      ),
+      child: Row(
+        children: [
+          for (final option in options)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Material(
+                  color: selected == option.$1
+                      ? accent
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
+                  child: InkWell(
+                    onTap: () => onSelected(option.$1),
+                    borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
+                    child: Center(
+                      child: Text(
+                        option.$2,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: selected == option.$1
+                                  ? onAccent
+                                  : AstrologyColors.muted,
+                              fontWeight: selected == option.$1
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
                       ),
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

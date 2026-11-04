@@ -7,6 +7,7 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/my_kundali_controller.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
+import 'package:skp_kiosk/features/astrology/domain/kundali_locale.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
@@ -38,7 +39,6 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
   int _focus = 0;
   int _stepperColumn = 0;
   ResolvedBirthPlace? _placeCoords;
-  AstrologyInsightLocale _insightLocale = AstrologyInsightLocale.en;
   String _selectedChartKey = 'RasiD1';
 
   @override
@@ -376,8 +376,6 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
               error: state.error,
               child: KundaliResultView(
                 result: state.result!,
-                onLocaleChanged: (locale) =>
-                    setState(() => _insightLocale = locale),
                 onChartTabChanged: (key) =>
                     setState(() => _selectedChartKey = key),
               ),
@@ -476,20 +474,20 @@ class _KundaliResultViewState extends State<KundaliResultView>
     final tiles = <({String label, String value, String? art})>[
       if (chart.lagna != null)
         (
-          label: 'Lagna',
-          value: chart.lagna!,
+          label: KundaliLocale.fieldLabel('lagna', _locale),
+          value: KundaliLocale.localizeChartValue(chart.lagna!, _locale),
           art: AstrologyAssets.chartArtFor(label: 'Lagna', value: chart.lagna!),
         ),
       if (chart.sunSign != null)
         (
-          label: 'Sun',
-          value: chart.sunSign!,
+          label: KundaliLocale.fieldLabel('sun', _locale),
+          value: KundaliLocale.localizeChartValue(chart.sunSign!, _locale),
           art: AstrologyAssets.chartArtFor(label: 'Sun', value: chart.sunSign!),
         ),
       if (chart.moonSign != null)
         (
-          label: 'Moon',
-          value: chart.moonSign!,
+          label: KundaliLocale.fieldLabel('moon', _locale),
+          value: KundaliLocale.localizeChartValue(chart.moonSign!, _locale),
           art: AstrologyAssets.chartArtFor(
             label: 'Moon',
             value: chart.moonSign!,
@@ -497,8 +495,8 @@ class _KundaliResultViewState extends State<KundaliResultView>
         ),
       if (chart.nakshatra != null)
         (
-          label: 'Nakshatra',
-          value: chart.nakshatra!,
+          label: KundaliLocale.fieldLabel('nakshatra', _locale),
+          value: KundaliLocale.localizeChartValue(chart.nakshatra!, _locale),
           art: AstrologyAssets.chartArtFor(
             label: 'Nakshatra',
             value: chart.nakshatra!,
@@ -506,8 +504,8 @@ class _KundaliResultViewState extends State<KundaliResultView>
         ),
       if (chart.currentDasha != null && chart.currentDasha!.trim().isNotEmpty)
         (
-          label: 'Dasha',
-          value: chart.currentDasha!,
+          label: KundaliLocale.fieldLabel('dasha', _locale),
+          value: KundaliLocale.localizeChartValue(chart.currentDasha!, _locale),
           art: AstrologyAssets.chartArtFor(
             label: 'Dasha',
             value: chart.currentDasha!,
@@ -515,9 +513,7 @@ class _KundaliResultViewState extends State<KundaliResultView>
         ),
     ];
 
-    final styleLabel = result.style == 'south'
-        ? 'South Indian'
-        : 'North Indian';
+    final styleLabel = KundaliLocale.styleLabel(result.style, _locale);
     final insightBullets =
         result.insights.forChart(_selectedTab)?.forLocale(_locale) ??
             const <String>[];
@@ -545,53 +541,93 @@ class _KundaliResultViewState extends State<KundaliResultView>
                             borderColor: AstrologyColors.kundali.withValues(
                               alpha: 0.75,
                             ),
-                            child: CustomPaint(
-                              foregroundPainter: const _ManuscriptCorners(),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: AstrologyColors.gold.withValues(
-                                      alpha: 0.35,
-                                    ),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AstrologyColors.gold.withValues(
-                                        alpha: 0.12,
-                                      ),
-                                      blurRadius: 18,
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 220,
-                                      ),
-                                      switchInCurve: Curves.easeOut,
-                                      switchOutCurve: Curves.easeIn,
-                                      child: SvgPicture.string(
-                                        selectedSvg,
-                                        key: ValueKey(
-                                          'kundali-chart-$_selectedTab',
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final side = constraints.maxHeight;
+                                final showInsights = insightBullets.isNotEmpty;
+                                final chart = SizedBox(
+                                  width: side,
+                                  height: side,
+                                  child: CustomPaint(
+                                    foregroundPainter:
+                                        const _ManuscriptCorners(),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: AstrologyColors.gold
+                                              .withValues(alpha: 0.35),
                                         ),
-                                        fit: BoxFit.contain,
-                                        placeholderBuilder: (_) =>
-                                            const Center(
-                                              child: CircularProgressIndicator(
-                                                color: AstrologyColors.gold,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AstrologyColors.gold
+                                                .withValues(alpha: 0.12),
+                                            blurRadius: 18,
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(4),
+                                          child: AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 220,
+                                            ),
+                                            switchInCurve: Curves.easeOut,
+                                            switchOutCurve: Curves.easeIn,
+                                            child: SvgPicture.string(
+                                              selectedSvg,
+                                              key: ValueKey(
+                                                'kundali-chart-$_selectedTab',
+                                              ),
+                                              fit: BoxFit.contain,
+                                              placeholderBuilder: (_) =>
+                                                  const Center(
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  color: AstrologyColors.gold,
+                                                ),
                                               ),
                                             ),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
+                                );
+                                if (!showInsights) {
+                                  return Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: chart,
+                                  );
+                                }
+                                return Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    chart,
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: SingleChildScrollView(
+                                        child: AstrologyInsightsPanel(
+                                          key: const ValueKey(
+                                            'kundali-insights-panel',
+                                          ),
+                                          title: KundaliLocale.insightsTitle(
+                                            _locale,
+                                          ),
+                                          bullets: insightBullets,
+                                          locale: _locale,
+                                          onLocaleChanged: _setLocale,
+                                          accent: AstrologyColors.kundali,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -608,8 +644,6 @@ class _KundaliResultViewState extends State<KundaliResultView>
                               onTabSelected: _selectTab,
                               tiles: tiles,
                               locale: _locale,
-                              onLocaleChanged: _setLocale,
-                              insightBullets: insightBullets,
                             ),
                           ),
                         ],
@@ -645,8 +679,6 @@ class _KundaliSummaryRail extends StatelessWidget {
     required this.onTabSelected,
     required this.tiles,
     required this.locale,
-    required this.onLocaleChanged,
-    required this.insightBullets,
     this.chartLabel,
   });
 
@@ -657,8 +689,6 @@ class _KundaliSummaryRail extends StatelessWidget {
   final ValueChanged<String> onTabSelected;
   final List<({String label, String value, String? art})> tiles;
   final AstrologyInsightLocale locale;
-  final ValueChanged<AstrologyInsightLocale> onLocaleChanged;
-  final List<String> insightBullets;
 
   @override
   Widget build(BuildContext context) {
@@ -671,6 +701,7 @@ class _KundaliSummaryRail extends StatelessWidget {
               tabs: tabs,
               selectedTab: selectedTab,
               onTabSelected: onTabSelected,
+              locale: locale,
             ),
           ),
         if (tabs.isNotEmpty) const SizedBox(height: 6),
@@ -696,27 +727,9 @@ class _KundaliSummaryRail extends StatelessWidget {
         if (tiles.isNotEmpty) const SizedBox(height: 6),
         for (var i = 0; i < tiles.length; i++) ...[
           if (i > 0) const SizedBox(height: 4),
-          _KundaliSummaryTile(
-            tile: tiles[i],
-            compact: insightBullets.isNotEmpty,
-          ),
+          _KundaliSummaryTile(tile: tiles[i]),
         ],
-        if (insightBullets.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Expanded(
-            child: SingleChildScrollView(
-              child: AstrologyInsightsPanel(
-                key: const ValueKey('kundali-insights-panel'),
-                bullets: insightBullets,
-                locale: locale,
-                onLocaleChanged: onLocaleChanged,
-                accent: AstrologyColors.kundali,
-                compact: true,
-              ),
-            ),
-          ),
-        ] else if (tiles.isNotEmpty)
-          const Spacer(),
+        if (tiles.isNotEmpty) const Spacer(),
       ],
     );
   }
@@ -727,11 +740,13 @@ class _ChartTabBar extends StatelessWidget {
     required this.tabs,
     required this.selectedTab,
     required this.onTabSelected,
+    required this.locale,
   });
 
   final List<MapEntry<String, KundaliChartEntry>> tabs;
   final String selectedTab;
   final ValueChanged<String> onTabSelected;
+  final AstrologyInsightLocale locale;
 
   @override
   Widget build(BuildContext context) {
@@ -747,7 +762,7 @@ class _ChartTabBar extends StatelessWidget {
           for (final entry in tabs)
             Expanded(
               child: _ChartTabButton(
-                label: entry.value.title,
+                label: KundaliLocale.chartTabTitle(entry.key, locale),
                 selected: entry.key == selectedTab,
                 onTap: () => onTabSelected(entry.key),
               ),
@@ -832,96 +847,84 @@ class _MetaChip extends StatelessWidget {
 }
 
 class _KundaliSummaryTile extends StatelessWidget {
-  const _KundaliSummaryTile({
-    required this.tile,
-    this.compact = false,
-  });
+  const _KundaliSummaryTile({required this.tile});
 
   final ({String label, String value, String? art}) tile;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final artSize = compact ? 32.0 : 46.0;
-    final iconSize = compact ? 16.0 : 22.0;
-    return SizedBox(
-      height: compact ? 40 : null,
-      child: GlassPanel(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 10 : 12,
-          vertical: compact ? 4 : 8,
-        ),
-        borderColor: AstrologyColors.kundali.withValues(alpha: 0.4),
-        child: Row(
-          children: [
-            Container(
-              width: artSize,
-              height: artSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AstrologyColors.kundali,
-                  width: compact ? 1.2 : 1.6,
+    const artSize = 46.0;
+    const iconSize = 22.0;
+    return GlassPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      borderColor: AstrologyColors.kundali.withValues(alpha: 0.4),
+      child: Row(
+        children: [
+          Container(
+            width: artSize,
+            height: artSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AstrologyColors.kundali,
+                width: 1.6,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AstrologyColors.gold.withValues(alpha: 0.28),
+                  blurRadius: 10,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AstrologyColors.gold.withValues(alpha: 0.28),
-                    blurRadius: compact ? 6 : 10,
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: tile.art != null
-                    ? AstrologyAssetImage(
-                        asset: tile.art!,
-                        width: artSize,
-                        height: artSize,
-                        fit: BoxFit.cover,
-                      )
-                    : ColoredBox(
-                        color: AstrologyColors.raised,
-                        child: Icon(
-                          Icons.auto_awesome,
-                          color: AstrologyColors.gold,
-                          size: iconSize,
-                        ),
+              ],
+            ),
+            child: ClipOval(
+              child: tile.art != null
+                  ? AstrologyAssetImage(
+                      asset: tile.art!,
+                      width: artSize,
+                      height: artSize,
+                      fit: BoxFit.cover,
+                    )
+                  : ColoredBox(
+                      color: AstrologyColors.raised,
+                      child: Icon(
+                        Icons.auto_awesome,
+                        color: AstrologyColors.gold,
+                        size: iconSize,
                       ),
-              ),
-            ),
-            SizedBox(width: compact ? 8 : 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    tile.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AstrologyColors.muted,
-                      fontSize: compact ? 10 : null,
-                      height: 1.1,
                     ),
-                  ),
-                  Text(
-                    tile.value,
-                    maxLines: compact ? 1 : 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: AstrologyColors.text,
-                      fontWeight: FontWeight.w700,
-                      fontSize: compact ? 12 : null,
-                      height: 1.15,
-                    ),
-                  ),
-                ],
-              ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  tile.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AstrologyColors.muted,
+                    height: 1.1,
+                  ),
+                ),
+                Text(
+                  tile.value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: AstrologyColors.text,
+                    fontWeight: FontWeight.w700,
+                    height: 1.15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

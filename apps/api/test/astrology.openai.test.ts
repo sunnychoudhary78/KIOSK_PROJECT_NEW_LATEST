@@ -148,7 +148,8 @@ describe('astrology LLM client', () => {
       chartsPresent: ['RasiD1', 'NavamshaD9'],
     });
     expect(kundaliInsightsSchema.safeParse(kundali).success).toBe(true);
-    expect(kundali.RasiD1?.en).toHaveLength(3);
+    expect(kundali.RasiD1?.en.length).toBeGreaterThanOrEqual(5);
+    expect(kundali.RasiD1?.en.length).toBeLessThanOrEqual(8);
     expect(kundali.DashamamshaD10).toBeUndefined();
     expect(kundali).toEqual({
       RasiD1: NOOP_KUNDALI_INSIGHTS.RasiD1,
