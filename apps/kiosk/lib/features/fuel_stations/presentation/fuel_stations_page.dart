@@ -8,6 +8,8 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/fuel_stations/application/fuel_stations_controller.dart';
 import 'package:skp_kiosk/features/fuel_stations/domain/fuel_station.dart';
 import 'package:skp_kiosk/features/fuel_stations/domain/polyline_codec.dart';
+import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
+import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -32,6 +34,16 @@ class _FuelStationsPageState extends ConsumerState<FuelStationsPage> {
   }
 
   Future<void> _showDirections(FuelStation station) {
+    // ignore: discarded_futures
+    ref.read(serviceAnalyticsTrackerProvider).track(
+          ServiceEventKeys.fuelDirections,
+          metadata: {
+            if (station.googlePlaceId != null) 'googlePlaceId': station.googlePlaceId,
+            'latitude': station.latitude,
+            'longitude': station.longitude,
+            if (station.name != null) 'name': station.name,
+          },
+        );
     return showDialog<void>(
       context: context,
       builder: (context) => _StationDirectionsDialog(station: station),

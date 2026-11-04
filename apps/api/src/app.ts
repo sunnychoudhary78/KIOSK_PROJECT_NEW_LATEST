@@ -33,6 +33,7 @@ import { registerQuickPrintModule } from './modules/quick_print/index.js';
 import { registerPrintQuotaModule } from './modules/print_quota/index.js';
 import { registerSocietyPhonesModule } from './modules/society_phones/index.js';
 import { registerLocalServicesModule } from './modules/local_services/index.js';
+import { registerServiceAnalyticsModule } from './modules/service_analytics/index.js';
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -110,6 +111,7 @@ export function createApp(deps: AppDeps): Express {
   registerFuelStationsModule(v1, deps);
   registerWeatherModule(v1, deps);
   registerSurveillanceModule(v1, deps);
+  registerServiceAnalyticsModule(v1, deps);
 
   // Device-authenticated PDF content for print jobs
   v1.get(

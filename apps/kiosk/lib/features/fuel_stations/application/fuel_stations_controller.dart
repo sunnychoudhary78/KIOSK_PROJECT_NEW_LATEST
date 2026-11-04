@@ -3,6 +3,8 @@ import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/fuel_stations/data/fuel_stations_repository.dart';
 import 'package:skp_kiosk/features/fuel_stations/domain/fuel_station.dart';
+import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
+import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
 
 final fuelStationsRepositoryProvider = Provider<FuelStationsRepository>((ref) {
   return FuelStationsRepository(ref.watch(apiClientProvider));
@@ -47,8 +49,15 @@ class FuelStationsController extends Notifier<FuelStationsState> {
 
   Future<void> load({FuelKind? kind}) async {
     final nextKind = kind ?? state.kind;
+    final filterChanged = kind != null && kind != state.kind;
     final request = ++_request;
     state = state.copyWith(loading: true, kind: nextKind, clearError: true);
+    if (filterChanged) {
+      // ignore: discarded_futures
+      ref
+          .read(serviceAnalyticsTrackerProvider)
+          .track(ServiceEventKeys.fuelFilter(nextKind.name));
+    }
     try {
       final items = await _repository.list(kind: nextKind);
       if (request != _request) {

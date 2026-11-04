@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
+  BarChart3,
   CloudUpload,
   PauseCircle,
   Pencil,
@@ -26,6 +27,12 @@ import {
   resolvePrinterStatus,
   type PrinterHealthView,
 } from './printerMaintenance';
+import {
+  buildUsageRows,
+  rangeIso,
+  type ServiceAnalyticsItem,
+  type UsageRow,
+} from './serviceUsage';
 import {
   resolveRecordingDisplay,
   type SurveillanceHealth,
@@ -447,6 +454,11 @@ export function KiosksPage() {
   const [trayInput, setTrayInput] = useState('');
   const [trayError, setTrayError] = useState<string | null>(null);
   const [traySaving, setTraySaving] = useState(false);
+  const [usageDevice, setUsageDevice] = useState<Device | null>(null);
+  const [usageDays, setUsageDays] = useState<7 | 30>(30);
+  const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageError, setUsageError] = useState<string | null>(null);
   const printerRefreshGeneration = useRef(0);
   const canEnablePrinting =
     roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
@@ -663,6 +675,34 @@ export function KiosksPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function loadUsage(device: Device, days: 7 | 30) {
+    setUsageLoading(true);
+    setUsageError(null);
+    try {
+      const { from, to } = rangeIso(days);
+      const result = await apiRequest<{
+        items: ServiceAnalyticsItem[];
+      }>(
+        `/devices/${device.id}/service-analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { token },
+      );
+      setUsageRows(buildUsageRows(result.items ?? []));
+    } catch (err) {
+      setUsageRows([]);
+      setUsageError(err instanceof Error ? err.message : 'Failed to load usage');
+    } finally {
+      setUsageLoading(false);
+    }
+  }
+
+  function openUsage(device: Device) {
+    setUsageDevice(device);
+    setUsageDays(30);
+    setUsageRows([]);
+    setUsageError(null);
+    void loadUsage(device, 30);
   }
 
   function openSettings(device: Device) {
@@ -978,6 +1018,18 @@ export function KiosksPage() {
                         <span className="inline-flex items-center gap-1.5">
                           <Settings className="h-4 w-4" />
                           Settings
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 px-2"
+                        disabled={submitting}
+                        onClick={() => openUsage(device)}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <BarChart3 className="h-4 w-4" />
+                          Usage
                         </span>
                       </Button>
                       {device.surveillanceEnabled ? (
@@ -1384,6 +1436,87 @@ export function KiosksPage() {
             onSaveTray={(mode) => void saveTray(mode)}
           />
         ) : null}
+      </Modal>
+
+      <Modal
+        open={usageDevice != null}
+        title={usageDevice ? `Service usage · ${usageDevice.name}` : 'Service usage'}
+        className="max-w-2xl"
+        onClose={() => {
+          if (!usageLoading) {
+            setUsageDevice(null);
+          }
+        }}
+        footer={
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={usageLoading}
+            onClick={() => setUsageDevice(null)}
+          >
+            Close
+          </Button>
+        }
+      >
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Range</span>
+          <Button
+            type="button"
+            variant={usageDays === 7 ? 'primary' : 'secondary'}
+            className="h-8 px-3"
+            disabled={usageLoading || !usageDevice}
+            onClick={() => {
+              if (!usageDevice) return;
+              setUsageDays(7);
+              void loadUsage(usageDevice, 7);
+            }}
+          >
+            Last 7 days
+          </Button>
+          <Button
+            type="button"
+            variant={usageDays === 30 ? 'primary' : 'secondary'}
+            className="h-8 px-3"
+            disabled={usageLoading || !usageDevice}
+            onClick={() => {
+              if (!usageDevice) return;
+              setUsageDays(30);
+              void loadUsage(usageDevice, 30);
+            }}
+          >
+            Last 30 days
+          </Button>
+        </div>
+        {usageError ? <p className="error mb-3">{usageError}</p> : null}
+        {usageLoading ? (
+          <p className="text-muted-foreground">Loading usage…</p>
+        ) : usageRows.length === 0 ? (
+          <EmptyState
+            title="No service clicks yet"
+            description="Counts appear after visitors open services on this kiosk."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table w-full">
+              <thead>
+                <tr>
+                  <th>Service / option</th>
+                  <th className="text-right">Clicks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usageRows.map((row) => (
+                  <tr key={row.key}>
+                    <td className={row.depth === 1 ? 'pl-8 text-muted-foreground' : 'font-medium'}>
+                      {row.label}
+                    </td>
+                    <td className="text-right tabular-nums">{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Modal>
     </div>
   );

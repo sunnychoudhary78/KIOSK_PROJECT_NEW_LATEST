@@ -6,6 +6,8 @@ import 'package:skp_kiosk/core/hardware/serial/serial_device.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_provider.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
+import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
+import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
 import 'package:skp_kiosk/features/well_being/application/vitals_line_parser.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
@@ -109,6 +111,10 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     if (!ref.mounted || !state.sessionActive || !state.isConnected) {
       return;
     }
+    // ignore: discarded_futures
+    ref
+        .read(serviceAnalyticsTrackerProvider)
+        .track(ServiceEventKeys.wellBeingOxygen);
     state = state.copyWith(
       activeMode: WellBeingMode.oxi,
       phase: WellBeingPhase.oxiIdle,
@@ -135,6 +141,10 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     if (!ref.mounted || !state.sessionActive || !state.isConnected) {
       return;
     }
+    // ignore: discarded_futures
+    ref
+        .read(serviceAnalyticsTrackerProvider)
+        .track(ServiceEventKeys.wellBeingTemperature);
     state = state.copyWith(
       activeMode: WellBeingMode.temp,
       phase: WellBeingPhase.tempIdle,

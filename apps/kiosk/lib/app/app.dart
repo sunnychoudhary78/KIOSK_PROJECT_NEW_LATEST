@@ -8,6 +8,8 @@ import 'package:skp_kiosk/features/session/presentation/kiosk_activity_scope.dar
 import 'package:skp_kiosk/features/session/presentation/kiosk_session_route_observer.dart';
 import 'package:skp_kiosk/features/session/presentation/session_timeout_overlay.dart';
 import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
+import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
+import 'package:skp_kiosk/features/service_analytics/presentation/service_analytics_route_observer.dart';
 import 'package:skp_kiosk/features/surveillance/application/surveillance_controller.dart';
 
 class SkpKioskApp extends ConsumerStatefulWidget {
@@ -19,6 +21,7 @@ class SkpKioskApp extends ConsumerStatefulWidget {
 
 class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
   late final KioskSessionRouteObserver _routeObserver;
+  late final ServiceAnalyticsRouteObserver _analyticsObserver;
 
   @override
   void initState() {
@@ -30,6 +33,11 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
         ref.read(kioskSessionControllerProvider.notifier).setOnHome(onHome);
       },
     );
+    _analyticsObserver = ServiceAnalyticsRouteObserver(
+      onRoute: (settings) {
+        ref.read(serviceAnalyticsTrackerProvider).trackRoute(settings);
+      },
+    );
   }
 
   @override
@@ -39,7 +47,7 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.kiosk(),
       navigatorKey: kioskNavigatorKey,
-      navigatorObservers: [_routeObserver],
+      navigatorObservers: [_routeObserver, _analyticsObserver],
       initialRoute: AppRoutes.home,
       onGenerateRoute: AppRouter.onGenerateRoute,
       builder: (context, child) {

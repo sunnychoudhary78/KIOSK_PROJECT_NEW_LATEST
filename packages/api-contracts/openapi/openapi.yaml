@@ -28,6 +28,7 @@ tags:
   - name: Astrology
   - name: WellBeing
   - name: Ads
+  - name: Analytics
 paths:
   /health:
     get:
@@ -513,6 +514,63 @@ paths:
           description: Uploaded object size does not match
         '409':
           description: Object was not found in storage
+
+  /devices/{deviceId}/service-analytics:
+    get:
+      tags: [Analytics]
+      summary: Per-kiosk service navigation counts
+      operationId: getDeviceServiceAnalytics
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Aggregated event counts for the device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAnalyticsResponse'
+        '404':
+          description: Device not found
+
+  /analytics/service-events:
+    post:
+      tags: [Analytics]
+      summary: Report kiosk service navigation events
+      operationId: reportServiceNavigationEvents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportServiceEventsRequest'
+      responses:
+        '202':
+          description: Events accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted]
+                properties:
+                  accepted:
+                    type: integer
+                    minimum: 1
 
   /services:
     get:
@@ -2822,6 +2880,56 @@ components:
           type: string
           format: date-time
           description: Echo of printerRefreshRequestedAt. Present only on the post that answers that request.
+
+    ReportServiceEventsRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [eventKey]
+            properties:
+              eventKey:
+                type: string
+                minLength: 1
+                maxLength: 120
+                pattern: '^[a-z0-9._-]+$'
+                example: home.print
+              occurredAt:
+                type: string
+                format: date-time
+              metadata:
+                type: object
+                additionalProperties: true
+
+    ServiceAnalyticsResponse:
+      type: object
+      required: [deviceId, from, to, items]
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            type: object
+            required: [eventKey, count]
+            properties:
+              eventKey:
+                type: string
+              count:
+                type: integer
+                minimum: 0
 
     SurveillanceUploadUrlRequest:
       type: object
