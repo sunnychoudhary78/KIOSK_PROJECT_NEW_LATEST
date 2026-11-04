@@ -17,6 +17,7 @@ import type {
   SetDevicePrintLimitsInput,
   SetPrinterTrayInput,
   SurveillanceHealthInput,
+  UpdateDeviceInput,
 } from './devices.schemas.js';
 import { applyTrayLoad, pagesLeft, usbPagesTotal } from './printer_tray.js';
 import { isWithinLocalTimeWindow } from '../print_quota/print_quota.time.js';
@@ -226,6 +227,72 @@ export class DevicesService {
       deviceKey,
       deviceSecret,
     };
+  }
+
+  async updateDetails(
+    deviceId: string,
+    input: UpdateDeviceInput,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    let site = await this.db.site.findFirst({
+      where: { tenantId: device.tenantId, name: input.siteName },
+    });
+    if (!site) {
+      site = await this.db.site.create({
+        data: { tenantId: device.tenantId, name: input.siteName },
+      });
+    }
+
+    const address = input.address?.trim() ? input.address.trim() : null;
+    const before = {
+      name: device.name,
+      siteName: device.site.name,
+      latitude: device.latitude,
+      longitude: device.longitude,
+      address: device.address,
+    };
+
+    const updated = await this.db.device.update({
+      where: { id: deviceId },
+      data: {
+        name: input.name,
+        siteId: site.id,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        address,
+      },
+      include: { site: true },
+    });
+
+    await this.audit.record({
+      action: 'device.updated',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: {
+        before,
+        after: {
+          name: updated.name,
+          siteName: updated.site.name,
+          latitude: updated.latitude,
+          longitude: updated.longitude,
+          address: updated.address,
+        },
+      },
+    });
+
+    return mapDevice(updated);
   }
 
   async setStatus(

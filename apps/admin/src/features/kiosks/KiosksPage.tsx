@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   CloudUpload,
   PauseCircle,
+  Pencil,
   Settings,
   Video,
   VideoOff,
@@ -427,6 +428,7 @@ export function KiosksPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [editDevice, setEditDevice] = useState<Device | null>(null);
   const [name, setName] = useState('');
   const [siteName, setSiteName] = useState('');
   const [latitude, setLatitude] = useState('');
@@ -482,7 +484,25 @@ export function KiosksPage() {
 
   function openAdd() {
     resetForm();
+    setEditDevice(null);
     setAddOpen(true);
+  }
+
+  function openEdit(device: Device) {
+    setAddOpen(false);
+    setFormError(null);
+    setEditDevice(device);
+    setName(device.name);
+    setSiteName(device.siteName);
+    setLatitude(device.latitude != null ? String(device.latitude) : '');
+    setLongitude(device.longitude != null ? String(device.longitude) : '');
+    setAddress(device.address ?? '');
+  }
+
+  function closeEdit() {
+    if (submitting) return;
+    setEditDevice(null);
+    resetForm();
   }
 
   async function onRegister(event: FormEvent) {
@@ -529,6 +549,51 @@ export function KiosksPage() {
       await load();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to register device');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onUpdate(event: FormEvent) {
+    event.preventDefault();
+    if (!editDevice) return;
+
+    const trimmedName = name.trim();
+    const trimmedSite = siteName.trim();
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (!trimmedName || !trimmedSite) {
+      setFormError('Device name and site name are required');
+      return;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setFormError('Latitude and longitude are required numbers');
+      return;
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setFormError('Latitude must be −90…90 and longitude −180…180');
+      return;
+    }
+
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await apiRequest<Device>(`/devices/${editDevice.id}`, {
+        method: 'PATCH',
+        token,
+        body: {
+          name: trimmedName,
+          siteName: trimmedSite,
+          latitude: lat,
+          longitude: lng,
+          address: address.trim() || undefined,
+        },
+      });
+      setEditDevice(null);
+      resetForm();
+      await load();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to update device');
     } finally {
       setSubmitting(false);
     }
@@ -889,6 +954,20 @@ export function KiosksPage() {
                           Stop
                         </Button>
                       )}
+                      {canEnablePrinting ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 px-2"
+                          disabled={submitting}
+                          onClick={() => openEdit(device)}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </span>
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         variant="secondary"
@@ -984,6 +1063,76 @@ export function KiosksPage() {
         }
       >
         <form id="register-kiosk-form" className="grid gap-4 md:grid-cols-2" onSubmit={(e) => void onRegister(e)}>
+          <label>
+            Device name
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Lobby Kiosk"
+              required
+            />
+          </label>
+          <label>
+            Site name
+            <Input
+              value={siteName}
+              onChange={(e) => setSiteName(e.target.value)}
+              placeholder="Demo Site"
+              required
+            />
+          </label>
+          <label>
+            Latitude
+            <Input
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              placeholder="28.613900"
+              inputMode="decimal"
+              required
+            />
+          </label>
+          <label>
+            Longitude
+            <Input
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              placeholder="77.209000"
+              inputMode="decimal"
+              required
+            />
+          </label>
+          <label className="md:col-span-2">
+            Address (optional)
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="City Mall, Gate 2"
+            />
+          </label>
+          {formError ? <p className="error md:col-span-2">{formError}</p> : null}
+        </form>
+      </Modal>
+
+      <Modal
+        open={editDevice != null}
+        title={editDevice ? `Edit kiosk · ${editDevice.name}` : 'Edit kiosk'}
+        onClose={closeEdit}
+        footer={
+          <>
+            <Button type="button" variant="ghost" disabled={submitting} onClick={closeEdit}>
+              Cancel
+            </Button>
+            <Button type="submit" form="edit-kiosk-form" disabled={submitting}>
+              {submitting ? 'Saving…' : 'Save changes'}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="edit-kiosk-form"
+          className="grid gap-4 md:grid-cols-2"
+          onSubmit={(e) => void onUpdate(e)}
+        >
           <label>
             Device name
             <Input

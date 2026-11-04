@@ -11,6 +11,16 @@ export const registerDeviceSchema = z.object({
 
 export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
 
+export const updateDeviceSchema = z.object({
+  name: z.string().min(2).max(120),
+  siteName: z.string().min(2).max(120),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  address: z.string().trim().max(240).optional(),
+});
+
+export type UpdateDeviceInput = z.infer<typeof updateDeviceSchema>;
+
 export const nearbyDevicesQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
