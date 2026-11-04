@@ -78,3 +78,25 @@ export function normalizeAqiCategory(category: string | null | undefined): strin
   // Google often returns "Good air quality" — shorten for the chip tooltip.
   return trimmed.replace(/\s+air quality$/i, '').trim() || trimmed;
 }
+
+/** Normalize Google dominant pollutant codes for kiosk display. */
+export function formatDominantPollutant(code: string | null | undefined): string | null {
+  if (code == null || typeof code !== 'string') {
+    return null;
+  }
+  const key = code.trim().toLowerCase();
+  if (!key) {
+    return null;
+  }
+  const known: Record<string, string> = {
+    pm25: 'PM2.5',
+    pm2_5: 'PM2.5',
+    'pm2.5': 'PM2.5',
+    pm10: 'PM10',
+    no2: 'NO2',
+    o3: 'O3',
+    co: 'CO',
+    so2: 'SO2',
+  };
+  return known[key] ?? code.trim().toUpperCase();
+}

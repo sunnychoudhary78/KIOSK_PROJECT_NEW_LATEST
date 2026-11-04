@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   aqiLabelFromIndiaAqi,
+  formatDominantPollutant,
   normalizeAqiCategory,
   weatherCodeFromGoogleType,
 } from '../src/modules/weather/labels.js';
@@ -38,22 +39,33 @@ describe('weather labels', () => {
     expect(normalizeAqiCategory('  Moderate  ')).toBe('Moderate');
     expect(normalizeAqiCategory('')).toBeNull();
   });
+
+  it('formats dominant pollutant codes', () => {
+    expect(formatDominantPollutant('pm25')).toBe('PM2.5');
+    expect(formatDominantPollutant('pm10')).toBe('PM10');
+    expect(formatDominantPollutant('no2')).toBe('NO2');
+    expect(formatDominantPollutant('o3')).toBe('O3');
+    expect(formatDominantPollutant('mystery')).toBe('MYSTERY');
+    expect(formatDominantPollutant(null)).toBeNull();
+  });
 });
 
 describe('google weather parsers', () => {
-  it('parses current weather fields', () => {
+  it('parses current weather fields including feels-like', () => {
     const parsed = parseWeatherPayload({
       weatherCondition: {
         type: 'PARTLY_CLOUDY',
         description: { text: 'Partly cloudy', languageCode: 'en' },
       },
       temperature: { degrees: 32.1, unit: 'CELSIUS' },
+      feelsLikeTemperature: { degrees: 36.4, unit: 'CELSIUS' },
       relativeHumidity: 48,
       uvIndex: 7.2,
       wind: { speed: { value: 12.4, unit: 'KILOMETERS_PER_HOUR' } },
     });
     expect(parsed).toEqual({
       temperatureC: 32.1,
+      feelsLikeC: 36.4,
       humidityPct: 48,
       weatherCode: 2,
       weatherLabel: 'Partly cloudy',
@@ -62,7 +74,7 @@ describe('google weather parsers', () => {
     });
   });
 
-  it('prefers local AQI index over universal', () => {
+  it('prefers local AQI index and formats dominant pollutant', () => {
     expect(
       parseAirQualityPayload({
         indexes: [
@@ -70,15 +82,17 @@ describe('google weather parsers', () => {
             code: 'uaqi',
             aqi: 10,
             category: 'Excellent air quality',
+            dominantPollutant: 'o3',
           },
           {
             code: 'ind_cpcb',
             aqi: 142,
             category: 'Moderate air quality',
+            dominantPollutant: 'pm25',
           },
         ],
       }),
-    ).toEqual({ aqi: 142, aqiLabel: 'Moderate' });
+    ).toEqual({ aqi: 142, aqiLabel: 'Moderate', dominantPollutant: 'PM2.5' });
   });
 
   it('falls back to India band labels when category missing', () => {
@@ -86,7 +100,7 @@ describe('google weather parsers', () => {
       parseAirQualityPayload({
         indexes: [{ code: 'ind_cpcb', aqi: 80 }],
       }),
-    ).toEqual({ aqi: 80, aqiLabel: 'Satisfactory' });
+    ).toEqual({ aqi: 80, aqiLabel: 'Satisfactory', dominantPollutant: null });
   });
 
   it('caches weather responses for the same coordinates', async () => {
@@ -98,7 +112,14 @@ describe('google weather parsers', () => {
         expect(init?.method).toBe('POST');
         return new Response(
           JSON.stringify({
-            indexes: [{ code: 'ind_cpcb', aqi: 90, category: 'Satisfactory air quality' }],
+            indexes: [
+              {
+                code: 'ind_cpcb',
+                aqi: 90,
+                category: 'Satisfactory air quality',
+                dominantPollutant: 'pm10',
+              },
+            ],
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
@@ -110,6 +131,7 @@ describe('google weather parsers', () => {
             description: { text: 'Clear', languageCode: 'en' },
           },
           temperature: { degrees: 30, unit: 'CELSIUS' },
+          feelsLikeTemperature: { degrees: 33, unit: 'CELSIUS' },
           relativeHumidity: 40,
           uvIndex: 6,
           wind: { speed: { value: 8, unit: 'KILOMETERS_PER_HOUR' } },
@@ -136,10 +158,12 @@ describe('google weather parsers', () => {
     const second = await client.getWeather(28.6139, 77.209);
     expect(calls).toBe(2); // weather + aqi once
     expect(first.temperatureC).toBe(30);
+    expect(first.feelsLikeC).toBe(33);
     expect(first.aqi).toBe(90);
     expect(first.weatherLabel).toBe('Clear');
     expect(first.weatherCode).toBe(0);
     expect(first.aqiLabel).toBe('Satisfactory');
+    expect(first.dominantPollutant).toBe('PM10');
     expect(second).toEqual(first);
   });
 
@@ -156,6 +180,7 @@ describe('google weather parsers', () => {
             description: { text: 'Rain', languageCode: 'en' },
           },
           temperature: { degrees: 22, unit: 'CELSIUS' },
+          feelsLikeTemperature: { degrees: 21, unit: 'CELSIUS' },
           relativeHumidity: 70,
           uvIndex: 2,
           wind: { speed: { value: 15, unit: 'KILOMETERS_PER_HOUR' } },
@@ -180,9 +205,11 @@ describe('google weather parsers', () => {
 
     const snapshot = await client.getWeather(28.6139, 77.209);
     expect(snapshot.temperatureC).toBe(22);
+    expect(snapshot.feelsLikeC).toBe(21);
     expect(snapshot.weatherCode).toBe(61);
     expect(snapshot.aqi).toBeNull();
     expect(snapshot.aqiLabel).toBeNull();
+    expect(snapshot.dominantPollutant).toBeNull();
   });
 
   it('throws when API key is missing', async () => {

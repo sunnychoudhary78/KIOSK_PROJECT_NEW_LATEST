@@ -18,11 +18,23 @@ class WeatherHeaderStrip extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (snapshot.temperatureC != null)
+          if (snapshot.weatherLabel != null)
             _WeatherChip(
               icon: _conditionIcon(snapshot.weatherCode),
+              label: snapshot.weatherLabel!,
+              tooltip: 'Condition',
+            ),
+          if (snapshot.temperatureC != null)
+            _WeatherChip(
+              icon: Icons.thermostat_outlined,
               label: '${snapshot.temperatureC!.round()}°',
-              tooltip: snapshot.weatherLabel ?? 'Temperature',
+              tooltip: 'Temperature',
+            ),
+          if (snapshot.feelsLikeC != null)
+            _WeatherChip(
+              icon: Icons.device_thermostat,
+              label: 'Feels ${snapshot.feelsLikeC!.round()}°',
+              tooltip: 'Feels like',
             ),
           if (snapshot.humidityPct != null)
             _WeatherChip(
@@ -45,7 +57,10 @@ class WeatherHeaderStrip extends ConsumerWidget {
           if (snapshot.aqi != null)
             _WeatherChip(
               icon: Icons.air_outlined,
-              label: 'AQI ${snapshot.aqi}',
+              label: snapshot.dominantPollutant != null &&
+                      snapshot.dominantPollutant!.isNotEmpty
+                  ? 'AQI ${snapshot.aqi} · ${snapshot.dominantPollutant}'
+                  : 'AQI ${snapshot.aqi}',
               tooltip: snapshot.aqiLabel ?? 'Air quality',
               tint: _aqiColor(snapshot.aqi!),
             ),

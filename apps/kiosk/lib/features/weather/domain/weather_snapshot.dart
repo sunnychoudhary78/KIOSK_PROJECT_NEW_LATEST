@@ -1,6 +1,7 @@
 class WeatherSnapshot {
   const WeatherSnapshot({
     this.temperatureC,
+    this.feelsLikeC,
     this.humidityPct,
     this.weatherCode,
     this.weatherLabel,
@@ -8,9 +9,11 @@ class WeatherSnapshot {
     this.uvIndex,
     this.aqi,
     this.aqiLabel,
+    this.dominantPollutant,
   });
 
   final double? temperatureC;
+  final double? feelsLikeC;
   final int? humidityPct;
   final int? weatherCode;
   final String? weatherLabel;
@@ -18,9 +21,11 @@ class WeatherSnapshot {
   final double? uvIndex;
   final int? aqi;
   final String? aqiLabel;
+  final String? dominantPollutant;
 
   bool get hasDisplayableData =>
       temperatureC != null ||
+      feelsLikeC != null ||
       humidityPct != null ||
       weatherLabel != null ||
       windKmh != null ||
@@ -30,6 +35,7 @@ class WeatherSnapshot {
   factory WeatherSnapshot.fromJson(Map<String, dynamic> json) {
     return WeatherSnapshot(
       temperatureC: _asDouble(json['temperatureC']),
+      feelsLikeC: _asDouble(json['feelsLikeC']),
       humidityPct: _asInt(json['humidityPct']),
       weatherCode: _asInt(json['weatherCode']),
       weatherLabel: json['weatherLabel'] as String?,
@@ -37,6 +43,7 @@ class WeatherSnapshot {
       uvIndex: _asDouble(json['uvIndex']),
       aqi: _asInt(json['aqi']),
       aqiLabel: json['aqiLabel'] as String?,
+      dominantPollutant: json['dominantPollutant'] as String?,
     );
   }
 

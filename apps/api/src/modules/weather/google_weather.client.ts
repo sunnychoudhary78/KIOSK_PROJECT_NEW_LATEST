@@ -1,6 +1,7 @@
 import type { Logger } from '../../infrastructure/logging/logger.js';
 import {
   aqiLabelFromIndiaAqi,
+  formatDominantPollutant,
   normalizeAqiCategory,
   weatherCodeFromGoogleType,
 } from './labels.js';
@@ -11,6 +12,7 @@ export const WEATHER_CACHE_TTL_MS = 15 * 60 * 1000;
 
 export type WeatherSnapshot = {
   temperatureC: number | null;
+  feelsLikeC: number | null;
   humidityPct: number | null;
   weatherCode: number | null;
   weatherLabel: string | null;
@@ -18,6 +20,7 @@ export type WeatherSnapshot = {
   uvIndex: number | null;
   aqi: number | null;
   aqiLabel: string | null;
+  dominantPollutant: string | null;
 };
 
 type CacheEntry = { value: WeatherSnapshot; expiresAt: number };
@@ -111,6 +114,7 @@ export function createGoogleWeatherClient(options: {
 
       const value: WeatherSnapshot = {
         temperatureC: forecast?.temperatureC ?? null,
+        feelsLikeC: forecast?.feelsLikeC ?? null,
         humidityPct: forecast?.humidityPct ?? null,
         weatherCode: forecast?.weatherCode ?? null,
         weatherLabel: forecast?.weatherLabel ?? null,
@@ -118,6 +122,7 @@ export function createGoogleWeatherClient(options: {
         uvIndex: forecast?.uvIndex ?? null,
         aqi: aqi?.aqi ?? null,
         aqiLabel: aqi?.aqiLabel ?? null,
+        dominantPollutant: aqi?.dominantPollutant ?? null,
       };
 
       cache.set(key, { value, expiresAt: now() + ttl });
@@ -128,6 +133,7 @@ export function createGoogleWeatherClient(options: {
 
 export function parseWeatherPayload(payload: unknown): {
   temperatureC: number | null;
+  feelsLikeC: number | null;
   humidityPct: number | null;
   weatherCode: number | null;
   weatherLabel: string | null;
@@ -138,6 +144,7 @@ export function parseWeatherPayload(payload: unknown): {
   const condition = asRecord(root?.weatherCondition);
   const description = asRecord(condition?.description);
   const temperature = asRecord(root?.temperature);
+  const feelsLike = asRecord(root?.feelsLikeTemperature);
   const wind = asRecord(root?.wind);
   const windSpeed = asRecord(wind?.speed);
   const conditionType = typeof condition?.type === 'string' ? condition.type : null;
@@ -148,6 +155,7 @@ export function parseWeatherPayload(payload: unknown): {
 
   return {
     temperatureC: asFiniteNumber(temperature?.degrees),
+    feelsLikeC: asFiniteNumber(feelsLike?.degrees),
     humidityPct: asFiniteNumber(root?.relativeHumidity),
     weatherCode: weatherCodeFromGoogleType(conditionType),
     weatherLabel,
@@ -159,6 +167,7 @@ export function parseWeatherPayload(payload: unknown): {
 export function parseAirQualityPayload(payload: unknown): {
   aqi: number | null;
   aqiLabel: string | null;
+  dominantPollutant: string | null;
 } {
   const root = asRecord(payload);
   const indexes = Array.isArray(root?.indexes) ? root.indexes : [];
@@ -177,6 +186,9 @@ export function parseAirQualityPayload(payload: unknown): {
   return {
     aqi,
     aqiLabel: fromCategory ?? aqiLabelFromIndiaAqi(aqi),
+    dominantPollutant: formatDominantPollutant(
+      typeof local?.dominantPollutant === 'string' ? local.dominantPollutant : null,
+    ),
   };
 }
 
@@ -187,6 +199,7 @@ async function fetchCurrentWeather(
   lng: number,
 ): Promise<{
   temperatureC: number | null;
+  feelsLikeC: number | null;
   humidityPct: number | null;
   weatherCode: number | null;
   weatherLabel: string | null;
@@ -210,7 +223,7 @@ async function fetchAirQuality(
   apiKey: string,
   lat: number,
   lng: number,
-): Promise<{ aqi: number | null; aqiLabel: string | null }> {
+): Promise<{ aqi: number | null; aqiLabel: string | null; dominantPollutant: string | null }> {
   const url = new URL(AIR_QUALITY_URL);
   url.searchParams.set('key', apiKey);
 
