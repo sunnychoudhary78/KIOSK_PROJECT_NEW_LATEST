@@ -54,6 +54,56 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
         .endVisitorSession(attract: false);
   }
 
+  Future<void> _verifyOtpAndShowQuota(MyKundaliController controller) async {
+    final summary = await controller.verifyPrintPhoneOtp();
+    if (!mounted || summary == null) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Free print check'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                summary.remainingLabel,
+                style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                summary.printCostLine,
+                style: Theme.of(dialogContext).textTheme.bodyLarge,
+              ),
+              if (summary.message != null &&
+                  summary.message!.trim().isNotEmpty &&
+                  !summary.freeEligible) ...[
+                const SizedBox(height: 12),
+                Text(
+                  summary.message!,
+                  style: Theme.of(dialogContext).textTheme.bodyMedium,
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            KioskPrimaryButton(
+              label: 'OK',
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+    await controller.continueAfterQuotaSummary(summary);
+  }
+
   void _goBack() {
     Navigator.of(context).pop();
   }
@@ -219,7 +269,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
         onPhoneChanged: controller.setPrintPhoneDigits,
         onOtpChanged: controller.setPrintOtpDigits,
         onRequestOtp: controller.requestPrintPhoneOtp,
-        onVerifyOtp: controller.verifyPrintPhoneOtp,
+        onVerifyOtp: () => _verifyOtpAndShowQuota(controller),
       );
     }
 

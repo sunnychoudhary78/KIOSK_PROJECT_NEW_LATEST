@@ -12,6 +12,32 @@ import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
+class KundaliQuotaSummary {
+  const KundaliQuotaSummary({
+    required this.freeEligible,
+    required this.society,
+    this.remainingColor,
+    this.message,
+    this.phoneProofToken,
+  });
+
+  final bool freeEligible;
+  final bool society;
+  final int? remainingColor;
+  final String? message;
+  final String? phoneProofToken;
+
+  String get remainingLabel {
+    if (!society) return 'Not on society free list';
+    if (remainingColor == null) return 'Unavailable';
+    return '$remainingColor free color page${remainingColor == 1 ? '' : 's'} left';
+  }
+
+  String get printCostLine => freeEligible
+      ? 'This Kundali print is free for you (uses 1 free color page).'
+      : 'This Kundali print requires payment.';
+}
+
 class MyKundaliUiState {
   const MyKundaliUiState({
     this.phase = KundaliPhase.form,
@@ -19,6 +45,7 @@ class MyKundaliUiState {
     this.error,
     this.subject,
     this.print = const ReportPrintSnapshot(),
+    this.pendingPhoneProofToken,
   });
 
   final KundaliPhase phase;
@@ -26,6 +53,7 @@ class MyKundaliUiState {
   final String? error;
   final AstrologyBirthSubject? subject;
   final ReportPrintSnapshot print;
+  final String? pendingPhoneProofToken;
 
   MyKundaliUiState copyWith({
     KundaliPhase? phase,
@@ -36,6 +64,8 @@ class MyKundaliUiState {
     AstrologyBirthSubject? subject,
     bool clearSubject = false,
     ReportPrintSnapshot? print,
+    String? pendingPhoneProofToken,
+    bool clearPendingPhoneProofToken = false,
   }) {
     return MyKundaliUiState(
       phase: phase ?? this.phase,
@@ -43,6 +73,9 @@ class MyKundaliUiState {
       error: clearError ? null : (error ?? this.error),
       subject: clearSubject ? null : (subject ?? this.subject),
       print: print ?? this.print,
+      pendingPhoneProofToken: clearPendingPhoneProofToken
+          ? null
+          : (pendingPhoneProofToken ?? this.pendingPhoneProofToken),
     );
   }
 }
@@ -294,15 +327,17 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     }
   }
 
-  Future<void> verifyPrintPhoneOtp({String chartKey = 'RasiD1'}) async {
-    if (state.print.phase != ReportPrintPhase.enteringPhone) return;
+  /// Verifies OTP and returns a quota summary for the OK dialog.
+  /// Does not start print until [continueAfterQuotaSummary] is called.
+  Future<KundaliQuotaSummary?> verifyPrintPhoneOtp() async {
+    if (state.print.phase != ReportPrintPhase.enteringPhone) return null;
     final phone = state.print.phoneDigits;
     final otp = state.print.otpDigits;
     if (otp.length < 4) {
       state = state.copyWith(
         print: state.print.copyWith(error: 'Enter the OTP sent to your phone'),
       );
-      return;
+      return null;
     }
     state = state.copyWith(
       print: state.print.copyWith(phoneBusy: true, clearError: true),
@@ -312,39 +347,63 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
         phone: phone,
         otp: otp,
       );
-      if (!ref.mounted) return;
+      if (!ref.mounted) return null;
       final freeEligible = verified['freeEligible'] == true;
+      final society = verified['society'] == true;
+      final remainingRaw = verified['remainingColor'];
+      final remainingColor = remainingRaw is num ? remainingRaw.toInt() : null;
       final notice = verified['message']?.toString();
       final token = verified['phoneProofToken']?.toString();
-      if (freeEligible && token != null && token.isNotEmpty) {
-        state = state.copyWith(
-          print: state.print.copyWith(
-            phoneBusy: false,
-            clearPhoneNotice: true,
-            clearError: true,
-          ),
-        );
-        await _runPreparePrint(chartKey: chartKey, phoneProofToken: token);
-        return;
-      }
       state = state.copyWith(
         print: state.print.copyWith(
           phoneBusy: false,
-          phoneNotice: notice ??
-              'Free print is not available for this number. Continue with payment.',
           clearError: true,
+          clearPhoneNotice: true,
         ),
+        pendingPhoneProofToken:
+            freeEligible && token != null && token.isNotEmpty ? token : null,
+        clearPendingPhoneProofToken:
+            !(freeEligible && token != null && token.isNotEmpty),
       );
-      await _runPreparePrint(chartKey: chartKey);
+      return KundaliQuotaSummary(
+        freeEligible: freeEligible,
+        society: society,
+        remainingColor: remainingColor,
+        message: notice,
+        phoneProofToken:
+            freeEligible && token != null && token.isNotEmpty ? token : null,
+      );
     } catch (error) {
-      if (!ref.mounted) return;
+      if (!ref.mounted) return null;
       state = state.copyWith(
         print: state.print.copyWith(
           phoneBusy: false,
           error: userFacingError(error),
         ),
       );
+      return null;
     }
+  }
+
+  Future<void> continueAfterQuotaSummary(KundaliQuotaSummary summary) async {
+    final token = summary.phoneProofToken ?? state.pendingPhoneProofToken;
+    if (summary.freeEligible && token != null && token.isNotEmpty) {
+      state = state.copyWith(
+        print: state.print.copyWith(clearPhoneNotice: true, clearError: true),
+        clearPendingPhoneProofToken: true,
+      );
+      await _runPreparePrint(phoneProofToken: token);
+      return;
+    }
+    state = state.copyWith(
+      print: state.print.copyWith(
+        phoneNotice: summary.message ??
+            'Free print is not available for this number. Continue with payment.',
+        clearError: true,
+      ),
+      clearPendingPhoneProofToken: true,
+    );
+    await _runPreparePrint();
   }
 
   Future<void> _runPreparePrint({
@@ -481,7 +540,10 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     _stopPaymentPoll();
     await _printSupport.abandonRetry(state.print);
     if (!ref.mounted) return;
-    state = state.copyWith(print: const ReportPrintSnapshot());
+    state = state.copyWith(
+      print: const ReportPrintSnapshot(),
+      clearPendingPhoneProofToken: true,
+    );
   }
 
   Future<void> tellStaffPrint() async {
@@ -496,7 +558,10 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
 
   void clearPrintResult() {
     _stopPaymentPoll();
-    state = state.copyWith(print: const ReportPrintSnapshot());
+    state = state.copyWith(
+      print: const ReportPrintSnapshot(),
+      clearPendingPhoneProofToken: true,
+    );
   }
 }
 

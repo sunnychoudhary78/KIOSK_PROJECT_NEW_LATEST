@@ -39,6 +39,14 @@ describe('DigiLockerService.cancelSession', () => {
       audit as unknown as AuditService,
       {} as PrintingService,
       {} as ServicesCatalogService,
+      {
+        env: 'test',
+        auth: { jwtSecret: 'test-jwt-secret-at-least-32-characters!!' },
+        razorpay: { keyId: '', keySecret: '', webhookSecret: '' },
+        payments: { windowMinutes: 15 },
+      } as never,
+      {} as never,
+      { sendOtp: vi.fn() } as never,
     );
     return { service, db, audit, row };
   }

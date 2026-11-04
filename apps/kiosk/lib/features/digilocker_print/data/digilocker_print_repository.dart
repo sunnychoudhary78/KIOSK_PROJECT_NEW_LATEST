@@ -99,18 +99,50 @@ class DigilockerPrintRepository {
         .toList();
   }
 
+  Future<Map<String, dynamic>> printOptions() async {
+    return _api.get('/digilocker/print-options');
+  }
+
+  Future<void> requestPhoneOtp(String phone) async {
+    await _api.post('/digilocker/otp-request', body: {'phone': phone});
+  }
+
+  Future<Map<String, dynamic>> verifyPhoneOtp({
+    required String phone,
+    required String otp,
+    required String colorMode,
+  }) async {
+    return _api.post(
+      '/digilocker/otp-verify',
+      body: {
+        'phone': phone,
+        'otp': otp,
+        'colorMode': colorMode,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> printDocument({
     required String sessionId,
     required String documentId,
+    required String colorMode,
     String? title,
+    String? phoneProofToken,
   }) async {
     return _api.post(
       '/digilocker/sessions/$sessionId/print',
       body: {
         'documentId': documentId,
+        'colorMode': colorMode,
         if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+        if (phoneProofToken != null && phoneProofToken.isNotEmpty)
+          'phoneProofToken': phoneProofToken,
       },
     );
+  }
+
+  Future<Map<String, dynamic>> getPrintJobPayment(String jobId) async {
+    return _api.get('/digilocker/print-jobs/$jobId/payment');
   }
 
   Future<Uint8List> downloadPrintContent(String jobId) async {

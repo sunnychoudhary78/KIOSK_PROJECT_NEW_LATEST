@@ -5,12 +5,12 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/core/auth/device_auth.dart';
-import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
-import 'package:skp_kiosk/services/printer/print_job_support.dart';
 import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/digilocker_print/data/digilocker_print_repository.dart';
+import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
+import 'package:skp_kiosk/services/printer/print_job_support.dart';
 
 final digilockerRepositoryProvider = Provider<DigilockerPrintRepository>((ref) {
   return DigilockerPrintRepository(ref.watch(apiClientProvider));
@@ -21,12 +21,46 @@ enum DigilockerPhase {
   awaitingConsent,
   loadingDocs,
   ready,
+  choosingColorMode,
+  choosingPayMethod,
+  enteringPhone,
   preparingPreview,
+  awaitingPayment,
   previewing,
   printing,
   printResult,
   done,
   error,
+}
+
+class DigilockerQuotaSummary {
+  const DigilockerQuotaSummary({
+    required this.freeEligible,
+    required this.society,
+    required this.colorMode,
+    this.remaining,
+    this.message,
+    this.phoneProofToken,
+  });
+
+  final bool freeEligible;
+  final bool society;
+  final String colorMode;
+  final int? remaining;
+  final String? message;
+  final String? phoneProofToken;
+
+  String get modeLabel => colorMode == 'color' ? 'color' : 'B&W';
+
+  String get remainingLabel {
+    if (!society) return 'Not on society free list';
+    if (remaining == null) return 'Unavailable';
+    return '$remaining free $modeLabel page${remaining == 1 ? '' : 's'} left';
+  }
+
+  String get printCostLine => freeEligible
+      ? 'This DigiLocker print is free for you (uses free $modeLabel pages).'
+      : 'This DigiLocker print requires payment.';
 }
 
 class DigilockerUiState {
@@ -44,6 +78,22 @@ class DigilockerUiState {
     this.printConfirmed = false,
     this.printFailures = 0,
     this.paperOut = false,
+    this.pendingDocumentId,
+    this.pendingDocumentTitle,
+    this.colorMode,
+    this.bwChargeRupees = 0,
+    this.colorChargeRupees = 0,
+    this.paymentRequired = false,
+    this.amountPaise = 0,
+    this.qrImageUrl,
+    this.pagesExpected = 1,
+    this.printColorMode = 'bw',
+    this.phoneDigits = '',
+    this.otpDigits = '',
+    this.otpSent = false,
+    this.phoneBusy = false,
+    this.phoneNotice,
+    this.pendingPhoneProofToken,
   });
 
   final DigilockerPhase phase;
@@ -59,15 +109,130 @@ class DigilockerUiState {
   final bool printConfirmed;
   final int printFailures;
   final bool paperOut;
+  final String? pendingDocumentId;
+  final String? pendingDocumentTitle;
+  final String? colorMode;
+  final int bwChargeRupees;
+  final int colorChargeRupees;
+  final bool paymentRequired;
+  final int amountPaise;
+  final String? qrImageUrl;
+  final int pagesExpected;
+  final String printColorMode;
+  final String phoneDigits;
+  final String otpDigits;
+  final bool otpSent;
+  final bool phoneBusy;
+  final String? phoneNotice;
+  final String? pendingPhoneProofToken;
+
+  int get selectedModeChargeRupees {
+    if (colorMode == 'color') return colorChargeRupees;
+    return bwChargeRupees;
+  }
 
   bool get loading =>
       phase == DigilockerPhase.loadingDocs ||
       phase == DigilockerPhase.preparingPreview ||
-      phase == DigilockerPhase.printing;
+      phase == DigilockerPhase.printing ||
+      phoneBusy;
+
+  DigilockerUiState copyWith({
+    DigilockerPhase? phase,
+    String? sessionId,
+    bool clearSessionId = false,
+    String? authorizationUrl,
+    bool clearAuthorizationUrl = false,
+    List<DigilockerDocument>? documents,
+    String? message,
+    bool clearMessage = false,
+    String? error,
+    bool clearError = false,
+    String? previewTitle,
+    bool clearPreviewTitle = false,
+    Uint8List? previewBytes,
+    bool clearPreviewBytes = false,
+    String? previewFilePath,
+    bool clearPreviewFilePath = false,
+    String? previewJobId,
+    bool clearPreviewJobId = false,
+    bool? printConfirmed,
+    int? printFailures,
+    bool? paperOut,
+    String? pendingDocumentId,
+    bool clearPendingDocumentId = false,
+    String? pendingDocumentTitle,
+    bool clearPendingDocumentTitle = false,
+    String? colorMode,
+    bool clearColorMode = false,
+    int? bwChargeRupees,
+    int? colorChargeRupees,
+    bool? paymentRequired,
+    int? amountPaise,
+    String? qrImageUrl,
+    bool clearQrImageUrl = false,
+    int? pagesExpected,
+    String? printColorMode,
+    String? phoneDigits,
+    String? otpDigits,
+    bool? otpSent,
+    bool? phoneBusy,
+    String? phoneNotice,
+    bool clearPhoneNotice = false,
+    String? pendingPhoneProofToken,
+    bool clearPendingPhoneProofToken = false,
+  }) {
+    return DigilockerUiState(
+      phase: phase ?? this.phase,
+      sessionId: clearSessionId ? null : (sessionId ?? this.sessionId),
+      authorizationUrl: clearAuthorizationUrl
+          ? null
+          : (authorizationUrl ?? this.authorizationUrl),
+      documents: documents ?? this.documents,
+      message: clearMessage ? null : (message ?? this.message),
+      error: clearError ? null : (error ?? this.error),
+      previewTitle:
+          clearPreviewTitle ? null : (previewTitle ?? this.previewTitle),
+      previewBytes:
+          clearPreviewBytes ? null : (previewBytes ?? this.previewBytes),
+      previewFilePath: clearPreviewFilePath
+          ? null
+          : (previewFilePath ?? this.previewFilePath),
+      previewJobId:
+          clearPreviewJobId ? null : (previewJobId ?? this.previewJobId),
+      printConfirmed: printConfirmed ?? this.printConfirmed,
+      printFailures: printFailures ?? this.printFailures,
+      paperOut: paperOut ?? this.paperOut,
+      pendingDocumentId: clearPendingDocumentId
+          ? null
+          : (pendingDocumentId ?? this.pendingDocumentId),
+      pendingDocumentTitle: clearPendingDocumentTitle
+          ? null
+          : (pendingDocumentTitle ?? this.pendingDocumentTitle),
+      colorMode: clearColorMode ? null : (colorMode ?? this.colorMode),
+      bwChargeRupees: bwChargeRupees ?? this.bwChargeRupees,
+      colorChargeRupees: colorChargeRupees ?? this.colorChargeRupees,
+      paymentRequired: paymentRequired ?? this.paymentRequired,
+      amountPaise: amountPaise ?? this.amountPaise,
+      qrImageUrl: clearQrImageUrl ? null : (qrImageUrl ?? this.qrImageUrl),
+      pagesExpected: pagesExpected ?? this.pagesExpected,
+      printColorMode: printColorMode ?? this.printColorMode,
+      phoneDigits: phoneDigits ?? this.phoneDigits,
+      otpDigits: otpDigits ?? this.otpDigits,
+      otpSent: otpSent ?? this.otpSent,
+      phoneBusy: phoneBusy ?? this.phoneBusy,
+      phoneNotice:
+          clearPhoneNotice ? null : (phoneNotice ?? this.phoneNotice),
+      pendingPhoneProofToken: clearPendingPhoneProofToken
+          ? null
+          : (pendingPhoneProofToken ?? this.pendingPhoneProofToken),
+    );
+  }
 }
 
 class DigilockerController extends Notifier<DigilockerUiState> {
   Timer? _pollTimer;
+  Timer? _paymentPoll;
   int _pollAttempts = 0;
   static const _maxPollAttempts = 150; // ~5 minutes at 2s
   bool _authCallbackSeen = false;
@@ -80,6 +245,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
   DigilockerUiState build() {
     ref.onDispose(() {
       _pollTimer?.cancel();
+      _stopPaymentPoll();
       final sessionId = state.sessionId;
       final previewPath = state.previewFilePath;
       final repository = _repository;
@@ -95,8 +261,14 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     return const DigilockerUiState();
   }
 
-  DigilockerPrintRepository get _repository => ref.read(digilockerRepositoryProvider);
+  DigilockerPrintRepository get _repository =>
+      ref.read(digilockerRepositoryProvider);
   PrintCoordinator get _coordinator => ref.read(printCoordinatorProvider);
+
+  void _stopPaymentPoll() {
+    _paymentPoll?.cancel();
+    _paymentPoll = null;
+  }
 
   /// Cancel the current DigiLocker flow and clear local session data.
   /// Caller should navigate away (e.g. back to home) after this returns.
@@ -108,6 +280,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     try {
       _pollTimer?.cancel();
       _pollTimer = null;
+      _stopPaymentPoll();
       _authCallbackSeen = false;
       _pollAttempts = 0;
       _pollInFlight = false;
@@ -168,6 +341,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
 
   Future<void> start() async {
     _pollTimer?.cancel();
+    _stopPaymentPoll();
     if (_printingPaused()) {
       state = const DigilockerUiState(
         phase: DigilockerPhase.error,
@@ -213,7 +387,6 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       sessionId: sessionId,
       message: 'Finishing DigiLocker sign-in…',
     );
-    // Polling continues; also nudge an immediate check.
     unawaited(_pollOnce(sessionId, force: true));
   }
 
@@ -244,18 +417,8 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         state.phase != DigilockerPhase.loadingDocs) {
       return;
     }
-    // Skip overlapping ticks so slow DigiLocker responses cannot stack
-    // concurrent GETs and exhaust the shared API rate-limit budget.
     if (_pollInFlight) {
       return;
-    }
-    // Only auto-advance from consent/loading after auth.
-    if (!force &&
-        state.phase == DigilockerPhase.loadingDocs &&
-        !_authCallbackSeen &&
-        state.documents.isEmpty &&
-        state.authorizationUrl != null) {
-      // Still waiting for WebView callback; keep polling session status.
     }
 
     _pollAttempts += 1;
@@ -313,7 +476,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         documents: documents,
         message: documents.isEmpty
             ? 'No DigiLocker documents were shared. End session and try again, or check DigiLocker consent.'
-            : 'Choose any document to preview.',
+            : 'Choose any document to print.',
       );
     } catch (error) {
       state = DigilockerUiState(
@@ -324,28 +487,229 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     }
   }
 
-  /// Downloads the document and opens in-app preview (does not print yet).
-  Future<void> preparePreview(String documentId) async {
+  /// Starts color-mode / pay flow for a document (replaces immediate preview).
+  Future<void> beginPrintFlow(String documentId) async {
     final sessionId = state.sessionId;
-    if (sessionId == null) {
+    if (sessionId == null || state.phase != DigilockerPhase.ready) {
+      return;
+    }
+    final matched = state.documents.where((d) => d.id == documentId);
+    final documentTitle = matched.isEmpty ? null : matched.first.name;
+    state = state.copyWith(
+      phase: DigilockerPhase.choosingColorMode,
+      pendingDocumentId: documentId,
+      pendingDocumentTitle: documentTitle,
+      clearColorMode: true,
+      clearError: true,
+      clearMessage: true,
+      clearPhoneNotice: true,
+      clearPendingPhoneProofToken: true,
+      otpSent: false,
+      otpDigits: '',
+      phoneBusy: false,
+    );
+    try {
+      final options = await _repository.printOptions();
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        bwChargeRupees: (options['bwChargeRupees'] as num?)?.toInt() ?? 0,
+        colorChargeRupees: (options['colorChargeRupees'] as num?)?.toInt() ?? 0,
+        clearError: true,
+      );
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        phase: DigilockerPhase.ready,
+        clearPendingDocumentId: true,
+        clearPendingDocumentTitle: true,
+        error: userFacingError(error),
+      );
+    }
+  }
+
+  Future<void> chooseColorMode(String mode) async {
+    if (state.phase != DigilockerPhase.choosingColorMode) return;
+    if (mode != 'bw' && mode != 'color') return;
+    final charge =
+        mode == 'color' ? state.colorChargeRupees : state.bwChargeRupees;
+    state = state.copyWith(
+      colorMode: mode,
+      printColorMode: mode,
+      clearError: true,
+      clearPhoneNotice: true,
+    );
+    if (charge <= 0) {
+      await _runPreparePrint();
+      return;
+    }
+    state = state.copyWith(phase: DigilockerPhase.choosingPayMethod);
+  }
+
+  Future<void> choosePhoneQuota() async {
+    if (state.phase != DigilockerPhase.choosingPayMethod) return;
+    state = state.copyWith(
+      phase: DigilockerPhase.enteringPhone,
+      otpSent: false,
+      otpDigits: '',
+      clearError: true,
+      clearPhoneNotice: true,
+    );
+  }
+
+  Future<void> choosePayDirect() async {
+    if (state.phase != DigilockerPhase.choosingPayMethod &&
+        state.phase != DigilockerPhase.enteringPhone) {
+      return;
+    }
+    await _runPreparePrint();
+  }
+
+  void setPrintPhoneDigits(String value) {
+    state = state.copyWith(
+      phoneDigits: value.replaceAll(RegExp(r'\D'), ''),
+    );
+  }
+
+  void setPrintOtpDigits(String value) {
+    state = state.copyWith(
+      otpDigits: value.replaceAll(RegExp(r'\D'), ''),
+    );
+  }
+
+  Future<void> requestPrintPhoneOtp() async {
+    if (state.phase != DigilockerPhase.enteringPhone) return;
+    final phone = state.phoneDigits;
+    if (phone.length < 10) {
+      state = state.copyWith(error: 'Enter a valid 10-digit mobile number');
+      return;
+    }
+    state = state.copyWith(phoneBusy: true, clearError: true);
+    try {
+      await _repository.requestPhoneOtp(phone);
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        phoneBusy: false,
+        otpSent: true,
+        otpDigits: '',
+        clearError: true,
+      );
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        phoneBusy: false,
+        error: userFacingError(error),
+      );
+    }
+  }
+
+  Future<DigilockerQuotaSummary?> verifyPrintPhoneOtp() async {
+    if (state.phase != DigilockerPhase.enteringPhone) return null;
+    final phone = state.phoneDigits;
+    final otp = state.otpDigits;
+    final colorMode = state.colorMode;
+    if (colorMode == null) return null;
+    if (otp.length < 4) {
+      state = state.copyWith(error: 'Enter the OTP sent to your phone');
+      return null;
+    }
+    state = state.copyWith(phoneBusy: true, clearError: true);
+    try {
+      final verified = await _repository.verifyPhoneOtp(
+        phone: phone,
+        otp: otp,
+        colorMode: colorMode,
+      );
+      if (!ref.mounted) return null;
+      final freeEligible = verified['freeEligible'] == true;
+      final society = verified['society'] == true;
+      final remainingRaw = verified['remaining'];
+      final remaining = remainingRaw is num ? remainingRaw.toInt() : null;
+      final notice = verified['message']?.toString();
+      final token = verified['phoneProofToken']?.toString();
+      state = state.copyWith(
+        phoneBusy: false,
+        clearError: true,
+        clearPhoneNotice: true,
+        pendingPhoneProofToken:
+            freeEligible && token != null && token.isNotEmpty ? token : null,
+        clearPendingPhoneProofToken:
+            !(freeEligible && token != null && token.isNotEmpty),
+      );
+      return DigilockerQuotaSummary(
+        freeEligible: freeEligible,
+        society: society,
+        colorMode: colorMode,
+        remaining: remaining,
+        message: notice,
+        phoneProofToken:
+            freeEligible && token != null && token.isNotEmpty ? token : null,
+      );
+    } catch (error) {
+      if (!ref.mounted) return null;
+      state = state.copyWith(
+        phoneBusy: false,
+        error: userFacingError(error),
+      );
+      return null;
+    }
+  }
+
+  Future<void> continueAfterQuotaSummary(DigilockerQuotaSummary summary) async {
+    final token = summary.phoneProofToken ?? state.pendingPhoneProofToken;
+    if (summary.freeEligible && token != null && token.isNotEmpty) {
+      state = state.copyWith(
+        clearPhoneNotice: true,
+        clearError: true,
+        clearPendingPhoneProofToken: true,
+      );
+      await _runPreparePrint(phoneProofToken: token);
+      return;
+    }
+    state = state.copyWith(
+      phoneNotice: summary.message ??
+          'Free print is not available for this number. Continue with payment.',
+      clearError: true,
+      clearPendingPhoneProofToken: true,
+    );
+    await _runPreparePrint();
+  }
+
+  Future<void> _runPreparePrint({String? phoneProofToken}) async {
+    final sessionId = state.sessionId;
+    final documentId = state.pendingDocumentId;
+    final colorMode = state.colorMode;
+    if (sessionId == null || documentId == null || colorMode == null) {
       return;
     }
     final documents = state.documents;
-    final matched = documents.where((d) => d.id == documentId);
-    final documentTitle = matched.isEmpty ? null : matched.first.name;
-    state = DigilockerUiState(
+    final documentTitle = state.pendingDocumentTitle;
+    final notice = state.phoneNotice;
+    final bw = state.bwChargeRupees;
+    final color = state.colorChargeRupees;
+
+    state = state.copyWith(
       phase: DigilockerPhase.preparingPreview,
-      sessionId: sessionId,
-      documents: documents,
+      clearError: true,
+      clearMessage: true,
     );
+
     try {
       final job = await _repository.printDocument(
         sessionId: sessionId,
         documentId: documentId,
         title: documentTitle,
+        colorMode: colorMode,
+        phoneProofToken: phoneProofToken,
       );
       final jobId = job['id'] as String;
-      final title = job['title'] as String? ?? 'document';
+      final title = job['title'] as String? ?? documentTitle ?? 'document';
+      final pagesExpected = (job['pagesExpected'] as num?)?.toInt() ??
+          (job['pageCount'] as num?)?.toInt() ??
+          1;
+      final paymentRequired = job['paymentRequired'] == true;
+      final amountPaise = (job['amountPaise'] as num?)?.toInt() ?? 0;
+      final qrImageUrl = job['qrImageUrl'] as String?;
+      final jobColorMode = job['printColorMode'] as String? ?? colorMode;
       final bytes = await _repository.downloadPrintContent(jobId);
 
       final dir = Directory(p.join(Directory.systemTemp.path, 'skp_digilocker'));
@@ -353,23 +717,120 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       final filePath = p.join(dir.path, '$jobId.pdf');
       await File(filePath).writeAsBytes(bytes, flush: true);
 
+      if (!ref.mounted) return;
       state = DigilockerUiState(
-        phase: DigilockerPhase.previewing,
+        phase: paymentRequired
+            ? DigilockerPhase.awaitingPayment
+            : DigilockerPhase.previewing,
         sessionId: sessionId,
         documents: documents,
+        pendingDocumentId: documentId,
+        pendingDocumentTitle: documentTitle,
+        colorMode: colorMode,
+        bwChargeRupees: bw,
+        colorChargeRupees: color,
         previewTitle: title,
         previewBytes: bytes,
         previewFilePath: filePath,
         previewJobId: jobId,
+        pagesExpected: pagesExpected,
+        printColorMode: jobColorMode,
+        paymentRequired: paymentRequired,
+        amountPaise: amountPaise,
+        qrImageUrl: qrImageUrl,
+        phoneNotice: paymentRequired ? notice : null,
       );
+      if (paymentRequired) {
+        _startPaymentPoll();
+      }
     } catch (error) {
+      if (!ref.mounted) return;
       state = DigilockerUiState(
-        phase: DigilockerPhase.error,
+        phase: DigilockerPhase.printResult,
         sessionId: sessionId,
         documents: documents,
+        pendingDocumentId: documentId,
+        pendingDocumentTitle: documentTitle,
+        colorMode: colorMode,
+        bwChargeRupees: bw,
+        colorChargeRupees: color,
+        printConfirmed: false,
         error: userFacingError(error),
+        message: userFacingError(error),
+        paperOut: error is ApiException && error.code == 'printing_paused',
       );
     }
+  }
+
+  void _startPaymentPoll() {
+    _stopPaymentPoll();
+    _paymentPoll = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_pollPaymentOnce());
+    });
+  }
+
+  Future<void> _pollPaymentOnce() async {
+    final jobId = state.previewJobId;
+    if (jobId == null || state.phase != DigilockerPhase.awaitingPayment) {
+      return;
+    }
+    try {
+      final body = await _repository.getPrintJobPayment(jobId);
+      if (!ref.mounted) return;
+      final status = body['status'] as String? ?? '';
+      if (status == 'PAID') {
+        _stopPaymentPoll();
+        state = state.copyWith(
+          phase: DigilockerPhase.previewing,
+          clearError: true,
+          clearMessage: true,
+        );
+        return;
+      }
+      if (status == 'EXPIRED' || status == 'CANCELLED') {
+        _stopPaymentPoll();
+        state = state.copyWith(
+          phase: DigilockerPhase.printResult,
+          printConfirmed: false,
+          error: 'Payment window expired. Try again.',
+          message: 'Payment window expired. Try again.',
+        );
+      }
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(error: userFacingError(error));
+    }
+  }
+
+  Future<void> backFromPrintFlow() async {
+    final phase = state.phase;
+    if (phase == DigilockerPhase.enteringPhone) {
+      state = state.copyWith(
+        phase: DigilockerPhase.choosingPayMethod,
+        otpSent: false,
+        otpDigits: '',
+        phoneBusy: false,
+        clearError: true,
+        clearPhoneNotice: true,
+      );
+      return;
+    }
+    if (phase == DigilockerPhase.choosingPayMethod) {
+      state = state.copyWith(
+        phase: DigilockerPhase.choosingColorMode,
+        clearColorMode: true,
+        clearError: true,
+        clearPhoneNotice: true,
+      );
+      return;
+    }
+    if (phase == DigilockerPhase.choosingColorMode ||
+        phase == DigilockerPhase.awaitingPayment) {
+      _stopPaymentPoll();
+      backToDocuments();
+      return;
+    }
+    backToDocuments();
   }
 
   Future<void> confirmPrint() async {
@@ -379,20 +840,20 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     final jobId = state.previewJobId;
     final title = state.previewTitle ?? 'document';
     final filePath = state.previewFilePath;
-    if (sessionId == null || bytes == null || jobId == null) {
+    if (sessionId == null ||
+        bytes == null ||
+        jobId == null ||
+        state.phase != DigilockerPhase.previewing) {
       return;
     }
     final failures = state.printFailures;
+    final pagesExpected = state.pagesExpected;
+    final colorMode = state.printColorMode;
 
-    state = DigilockerUiState(
+    state = state.copyWith(
       phase: DigilockerPhase.printing,
-      sessionId: sessionId,
-      documents: documents,
-      previewTitle: title,
-      previewBytes: bytes,
-      previewFilePath: filePath,
-      previewJobId: jobId,
-      printFailures: failures,
+      clearError: true,
+      clearMessage: true,
     );
 
     try {
@@ -400,20 +861,13 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         jobId: jobId,
         title: title,
         pdfBytes: bytes,
-        pagesExpected: 1,
-        colorMode: 'color',
+        pagesExpected: pagesExpected,
+        colorMode: colorMode,
         holdForRetry: failures == 0,
         reportStatus: _repository.reportStatus,
         onProgress: (message) {
-          state = DigilockerUiState(
+          state = state.copyWith(
             phase: DigilockerPhase.printing,
-            sessionId: sessionId,
-            documents: documents,
-            previewTitle: title,
-            previewBytes: bytes,
-            previewFilePath: filePath,
-            previewJobId: jobId,
-            printFailures: failures,
             message: message,
           );
         },
@@ -425,7 +879,6 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           documents: documents,
           message: outcome.userMessage,
           printConfirmed: outcome.isSuccess,
-          previewJobId: jobId,
         );
       } else if (outcome.reconcileDetail == 'paper_out') {
         state = DigilockerUiState(
@@ -436,6 +889,8 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           previewBytes: bytes,
           previewFilePath: filePath,
           previewJobId: jobId,
+          pagesExpected: pagesExpected,
+          printColorMode: colorMode,
           paperOut: true,
           error: outcome.userMessage,
         );
@@ -448,6 +903,8 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           previewBytes: bytes,
           previewFilePath: filePath,
           previewJobId: jobId,
+          pagesExpected: pagesExpected,
+          printColorMode: colorMode,
           printFailures: failures + 1,
           error: outcome.userMessage,
         );
@@ -461,6 +918,8 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         previewBytes: bytes,
         previewFilePath: filePath,
         previewJobId: jobId,
+        pagesExpected: pagesExpected,
+        printColorMode: colorMode,
         printFailures: failures + 1,
         error: userFacingError(error),
       );
@@ -471,20 +930,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     if (state.printFailures != 1 || state.paperOut) return;
     final jobId = state.previewJobId;
     final error = state.error;
-    state = DigilockerUiState(
-      phase: state.phase,
-      sessionId: state.sessionId,
-      documents: state.documents,
-      message: state.message,
-      error: state.error,
-      previewTitle: state.previewTitle,
-      previewBytes: state.previewBytes,
-      previewFilePath: state.previewFilePath,
-      previewJobId: state.previewJobId,
-      printConfirmed: state.printConfirmed,
-      printFailures: 2,
-      paperOut: state.paperOut,
-    );
+    state = state.copyWith(printFailures: 2);
     if (jobId == null || jobId.isEmpty) return;
     try {
       await _repository.reportStatus(
@@ -503,15 +949,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       jobId: jobId,
       message: state.error ?? 'Print failed',
     );
-    state = DigilockerUiState(
-      phase: state.phase,
-      sessionId: state.sessionId,
-      documents: state.documents,
-      previewTitle: state.previewTitle,
-      previewBytes: state.previewBytes,
-      previewFilePath: state.previewFilePath,
-      previewJobId: jobId,
-      printFailures: state.printFailures,
+    state = state.copyWith(
       message: 'We received this. Staff will review.',
     );
   }
@@ -527,15 +965,17 @@ class DigilockerController extends Notifier<DigilockerUiState> {
 
   void backToDocuments() {
     unawaited(abandonRetry());
+    _stopPaymentPoll();
     final sessionId = state.sessionId;
     if (sessionId == null) {
       return;
     }
+    unawaited(_deletePreviewFile(state.previewFilePath));
     state = DigilockerUiState(
       phase: DigilockerPhase.ready,
       sessionId: sessionId,
       documents: state.documents,
-      message: 'Choose any document to preview.',
+      message: 'Choose any document to print.',
     );
   }
 

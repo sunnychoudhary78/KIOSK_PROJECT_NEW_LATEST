@@ -4,20 +4,111 @@ import { requireDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
+import { RazorpayClient } from '../payments/razorpay.client.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { DigiLockerService } from './digilocker.service.js';
-import { printDigiLockerSchema, startDigiLockerSessionSchema } from './digilocker.schemas.js';
+import {
+  digilockerOtpRequestSchema,
+  digilockerOtpVerifySchema,
+  printDigiLockerSchema,
+  startDigiLockerSessionSchema,
+} from './digilocker.schemas.js';
 
-export function registerDigiLockerModule(router: Router, deps: AppDeps): void {
+function createDigiLockerService(deps: AppDeps): DigiLockerService {
   const printing = new PrintingService(deps.db, deps.auditService);
   const services = new ServicesCatalogService(deps.db, deps.auditService);
-  const service = new DigiLockerService(
+  const razorpay = new RazorpayClient(deps.config);
+  return new DigiLockerService(
     deps.db,
     deps.digiLocker,
     deps.auditService,
     printing,
     services,
+    deps.config,
+    razorpay,
+    deps.sms,
+  );
+}
+
+export function registerDigiLockerModule(router: Router, deps: AppDeps): void {
+  const service = createDigiLockerService(deps);
+
+  router.get(
+    '/digilocker/print-options',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        res.json(await service.getPrintOptions(req.principal.deviceId));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/digilocker/otp-request',
+    ...requireDevice(deps),
+    validateBody(digilockerOtpRequestSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        res.json(
+          await service.requestPhoneOtp(
+            req.principal.deviceId,
+            req.body.phone,
+            req.correlationId,
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/digilocker/otp-verify',
+    ...requireDevice(deps),
+    validateBody(digilockerOtpVerifySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        res.json(
+          await service.verifyPhoneOtp(
+            req.principal.deviceId,
+            req.body.phone,
+            req.body.otp,
+            req.body.colorMode,
+            req.correlationId,
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/digilocker/print-jobs/:jobId/payment',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const jobId = requireParam(req.params.jobId, 'jobId');
+        res.json(await service.getPrintJobPayment(req.principal.deviceId, jobId));
+      } catch (error) {
+        next(error);
+      }
+    },
   );
 
   router.post(
@@ -123,15 +214,7 @@ export function registerDigiLockerModule(router: Router, deps: AppDeps): void {
 }
 
 export function registerDigiLockerOAuthCallback(deps: AppDeps) {
-  const printing = new PrintingService(deps.db, deps.auditService);
-  const services = new ServicesCatalogService(deps.db, deps.auditService);
-  const service = new DigiLockerService(
-    deps.db,
-    deps.digiLocker,
-    deps.auditService,
-    printing,
-    services,
-  );
+  const service = createDigiLockerService(deps);
 
   return async (req: Request, res: Response) => {
     try {
