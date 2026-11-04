@@ -7,6 +7,7 @@ import type { VedAstroClient } from '../src/infrastructure/external/vedastro.cli
 import type { AstrologyLlmClient } from '../src/infrastructure/external/openai.client.js';
 import type { AuditService } from '../src/modules/audit/audit.service.js';
 import { AstrologyService } from '../src/modules/astrology/astrology.service.js';
+import { createKundaliPhoneProofToken } from '../src/modules/astrology/kundali_phone_proof.js';
 import { PaymentsService } from '../src/modules/payments/payments.service.js';
 import type { RazorpayClient } from '../src/modules/payments/razorpay.client.js';
 import type { ServicesCatalogService } from '../src/modules/services/services.service.js';
@@ -43,6 +44,8 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
 
   function setup(chargeRupees: number) {
     const config = {
+      env: 'test',
+      jwtSecret: 'test-jwt-secret-at-least-32-characters!!',
       razorpay: { keyId: 'rzp_test', keySecret: 'secret', webhookSecret: 'whsec' },
       payments: { windowMinutes: 15 },
       printWeb: { publicUrl: 'http://localhost:5174' },
@@ -69,8 +72,27 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
       device: {
         findUnique: vi.fn(async () => ({
           kundaliColorPrintChargeRupees: chargeRupees,
+          freeColorPagesPerSession: 2,
+          freePagesPerSession: 2,
+          maxPagesPerSession: 10,
+          freeDisabledFromLocal: null,
+          freeDisabledToLocal: null,
           printingPausedReason: null,
         })),
+      },
+      societyPhone: {
+        findUnique: vi.fn(async () => null),
+      },
+      phoneFreePageLedger: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'ledger-1',
+          ...data,
+        })),
+      },
+      platformSetting: {
+        findUnique: vi.fn(async () => null),
       },
       printJob: {
         findUnique: vi.fn(async () => null),
@@ -135,6 +157,7 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
     const services = { assertEnabled: vi.fn(async () => undefined) };
     const audit = { record: vi.fn(async () => undefined) };
 
+    const sms = { sendOtp: vi.fn(async () => undefined) };
     const service = new AstrologyService(
       db as unknown as DbClient,
       {} as VedAstroClient,
@@ -145,9 +168,10 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
       config,
       razorpay,
       payments,
+      sms as never,
     );
 
-    return { service, db, razorpay };
+    return { service, db, razorpay, config };
   }
 
   it('returns paymentRequired false when charge is 0', async () => {
@@ -189,8 +213,72 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
     );
   });
 
+  it('skips QR and reserves one free color page for society phone proof', async () => {
+    const { service, db, razorpay, config } = setup(50);
+    db.societyPhone.findUnique = vi.fn(async () => ({ id: 'soc-1' }));
+    db.platformSetting.findUnique = vi.fn(async ({ where }: { where: { settingKey: string } }) => {
+      if (where.settingKey === 'society_free_quota_config') {
+        return {
+          settingKey: where.settingKey,
+          settingValue: { period: 'monthly', freeBwPages: 0, freeColorPages: 5 },
+          isActive: true,
+          description: null,
+        };
+      }
+      return null;
+    });
+    const phoneProofToken = createKundaliPhoneProofToken({
+      deviceId: 'device-1',
+      phone: '+919876543210',
+      jwtSecret: config.jwtSecret,
+    });
+    const result = await service.printKundali('device-1', {
+      subject,
+      style: 'north',
+      chart: {},
+      charts: [{ key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg: '<svg/>' }],
+      phoneProofToken,
+    });
+    expect(result.paymentRequired).toBe(false);
+    expect(result.freePages).toBe(1);
+    expect(result.qrImageUrl).toBeNull();
+    expect(razorpay.createUpiQrCode).not.toHaveBeenCalled();
+    expect(db.payment.create).not.toHaveBeenCalled();
+    expect(db.phoneFreePageLedger.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          phone: '+919876543210',
+          pages: 1,
+          printJobId: 'job-1',
+        }),
+      }),
+    );
+  });
+
+  it('falls back to paid QR when phone is not on society list', async () => {
+    const { service, db, razorpay, config } = setup(50);
+    db.societyPhone.findUnique = vi.fn(async () => null);
+    const phoneProofToken = createKundaliPhoneProofToken({
+      deviceId: 'device-1',
+      phone: '+919876543210',
+      jwtSecret: config.jwtSecret,
+    });
+    const result = await service.printKundali('device-1', {
+      subject,
+      style: 'north',
+      chart: {},
+      charts: [{ key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg: '<svg/>' }],
+      phoneProofToken,
+    });
+    expect(result.paymentRequired).toBe(true);
+    expect(razorpay.createUpiQrCode).toHaveBeenCalledOnce();
+    expect(db.phoneFreePageLedger.create).not.toHaveBeenCalled();
+  });
+
   it('rejects paid print when Razorpay is not configured', async () => {
     const config = {
+      env: 'test',
+      jwtSecret: 'test-jwt-secret-at-least-32-characters!!',
       razorpay: { keyId: '', keySecret: '', webhookSecret: '' },
       payments: { windowMinutes: 15 },
       printWeb: { publicUrl: 'http://localhost:5174' },
@@ -199,6 +287,11 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
       device: {
         findUnique: vi.fn(async () => ({
           kundaliColorPrintChargeRupees: 50,
+          freeColorPagesPerSession: 2,
+          freePagesPerSession: 2,
+          maxPagesPerSession: 10,
+          freeDisabledFromLocal: null,
+          freeDisabledToLocal: null,
           printingPausedReason: null,
         })),
       },
@@ -213,6 +306,7 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
       config,
       {} as RazorpayClient,
       {} as PaymentsService,
+      { sendOtp: vi.fn() } as never,
     );
     await expect(
       service.printKundali('device-1', {

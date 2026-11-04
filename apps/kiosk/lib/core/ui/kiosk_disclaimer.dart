@@ -4,7 +4,7 @@ import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 /// Explicit privacy copy shown on sensitive kiosk flows.
 abstract final class KioskDisclaimerCopy {
   static const printDocuments =
-      'We do not save your documents. Files are used only to print this session, then removed from this kiosk.';
+      'We do not save your documents. Files are used only to print this session, then removed when the session ends.';
 
   static const digilocker =
       'We do not save DigiLocker documents or login data. Access is for this print session only; nothing is stored after you leave.';
@@ -13,7 +13,7 @@ abstract final class KioskDisclaimerCopy {
       'We do not save your documents or OTP. Content is fetched only to print now, then cleared.';
 
   static const qrPrint =
-      'We do not save uploaded documents. Your phone upload is for this print session only, then deleted from the kiosk.';
+      'We do not save uploaded documents. Your phone upload is for this print session only, then deleted when the session ends.';
 
   static const wellBeing =
       'We do not save health readings. Measurements stay on this screen only and are cleared when you leave.';
@@ -43,6 +43,12 @@ class KioskDisclaimer extends StatelessWidget {
         ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
         : const EdgeInsets.symmetric(horizontal: 18, vertical: 14);
     final iconSize = compact ? 22.0 : 26.0;
+    final baseStyle = (compact ? theme.textTheme.bodyMedium : theme.textTheme.titleMedium)
+        ?.copyWith(
+      color: color,
+      height: 1.35,
+      fontWeight: FontWeight.w600,
+    );
 
     return Container(
       width: double.infinity,
@@ -58,18 +64,66 @@ class KioskDisclaimer extends StatelessWidget {
           Icon(icon, color: color, size: iconSize),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              message,
-              style: (compact ? theme.textTheme.bodyMedium : theme.textTheme.titleMedium)
-                  ?.copyWith(
-                color: color,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Disclaimer',
+                    style: baseStyle?.copyWith(
+                      color: SkpColors.danger,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  TextSpan(text: ': ', style: baseStyle),
+                  TextSpan(text: message, style: baseStyle),
+                ],
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Compact footer/caption with a red **Disclaimer** prefix.
+class DisclaimerCaption extends StatelessWidget {
+  const DisclaimerCaption(
+    this.message, {
+    super.key,
+    this.style,
+    this.textAlign,
+    this.maxLines,
+    this.overflow,
+  });
+
+  final String message;
+  final TextStyle? style;
+  final TextAlign? textAlign;
+  final int? maxLines;
+  final TextOverflow? overflow;
+
+  @override
+  Widget build(BuildContext context) {
+    final base =
+        style ?? Theme.of(context).textTheme.labelSmall ?? const TextStyle();
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: 'Disclaimer',
+            style: base.copyWith(
+              color: SkpColors.danger,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          TextSpan(text: ': ', style: base),
+          TextSpan(text: message, style: base),
+        ],
+      ),
+      textAlign: textAlign,
+      maxLines: maxLines,
+      overflow: overflow,
     );
   }
 }

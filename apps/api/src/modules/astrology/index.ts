@@ -19,6 +19,8 @@ import {
   createTodayBodySchema,
   placeIdParamSchema,
   placesQuerySchema,
+  kundaliOtpRequestSchema,
+  kundaliOtpVerifySchema,
   printKundaliBodySchema,
   printMatchBodySchema,
   printReadingBodySchema,
@@ -62,6 +64,7 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
     deps.config,
     razorpay,
     payments,
+    deps.sms,
   );
   const places = createPlacesClient({
     apiKey: process.env.SKP_GOOGLE_PLACES_API_KEY,
@@ -248,6 +251,66 @@ export function registerAstrologyModule(router: Router, deps: AppDeps): void {
           req.correlationId,
         );
         res.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/astrology/kundali/print-options',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        res.json(await service.getKundaliPrintOptions(req.principal.deviceId));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/kundali/otp-request',
+    ...requireDevice(deps),
+    validateBody(kundaliOtpRequestSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        res.json(
+          await service.requestKundaliPhoneOtp(
+            req.principal.deviceId,
+            req.body.phone,
+            req.correlationId,
+          ),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology/kundali/otp-verify',
+    ...requireDevice(deps),
+    validateBody(kundaliOtpVerifySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        res.json(
+          await service.verifyKundaliPhoneOtp(
+            req.principal.deviceId,
+            req.body.phone,
+            req.body.otp,
+            req.correlationId,
+          ),
+        );
       } catch (error) {
         next(error);
       }

@@ -720,7 +720,7 @@ class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
+              DisclaimerCaption(
                 note,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

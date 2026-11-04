@@ -209,11 +209,17 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
         title: 'My Kundali',
         print: state.print,
         onHome: _endSession,
-        onBackFromPreview: controller.cancelPrintPreview,
+        onBackFromPreview: controller.backFromPrintFlow,
         onConfirmPrint: controller.confirmPrint,
         onTellStaff: controller.tellStaffPrint,
         onClearResult: controller.clearPrintResult,
         onReportMissing: controller.reportPrintPagesMissing,
+        onChoosePhoneQuota: controller.choosePhoneQuota,
+        onChoosePayDirect: controller.choosePayDirect,
+        onPhoneChanged: controller.setPrintPhoneDigits,
+        onOtpChanged: controller.setPrintOtpDigits,
+        onRequestOtp: controller.requestPrintPhoneOtp,
+        onVerifyOtp: controller.verifyPrintPhoneOtp,
       );
     }
 
@@ -561,7 +567,7 @@ class _KundaliResultViewState extends State<KundaliResultView>
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
+                  DisclaimerCaption(
                     result.disclaimer,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

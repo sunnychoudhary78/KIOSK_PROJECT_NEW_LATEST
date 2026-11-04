@@ -10,6 +10,8 @@ import 'package:skp_kiosk/services/printer/print_status_body.dart';
 
 enum ReportPrintPhase {
   idle,
+  choosingPayMethod,
+  enteringPhone,
   preparingPreview,
   awaitingPayment,
   previewing,
@@ -33,6 +35,12 @@ class ReportPrintSnapshot {
     this.checkoutUrl,
     this.checkoutToken,
     this.qrImageUrl,
+    this.chargeRupees = 0,
+    this.phoneDigits = '',
+    this.otpDigits = '',
+    this.otpSent = false,
+    this.phoneBusy = false,
+    this.phoneNotice,
     this.message,
     this.error,
   });
@@ -52,6 +60,12 @@ class ReportPrintSnapshot {
   final String? checkoutToken;
   /// Razorpay UPI QR bitmap URL (preferred over [checkoutUrl]).
   final String? qrImageUrl;
+  final int chargeRupees;
+  final String phoneDigits;
+  final String otpDigits;
+  final bool otpSent;
+  final bool phoneBusy;
+  final String? phoneNotice;
   final String? message;
   final String? error;
 
@@ -75,6 +89,13 @@ class ReportPrintSnapshot {
     bool clearCheckoutToken = false,
     String? qrImageUrl,
     bool clearQrImageUrl = false,
+    int? chargeRupees,
+    String? phoneDigits,
+    String? otpDigits,
+    bool? otpSent,
+    bool? phoneBusy,
+    String? phoneNotice,
+    bool clearPhoneNotice = false,
     String? message,
     bool clearMessage = false,
     String? error,
@@ -96,6 +117,13 @@ class ReportPrintSnapshot {
       checkoutToken:
           clearCheckoutToken ? null : (checkoutToken ?? this.checkoutToken),
       qrImageUrl: clearQrImageUrl ? null : (qrImageUrl ?? this.qrImageUrl),
+      chargeRupees: chargeRupees ?? this.chargeRupees,
+      phoneDigits: phoneDigits ?? this.phoneDigits,
+      otpDigits: otpDigits ?? this.otpDigits,
+      otpSent: otpSent ?? this.otpSent,
+      phoneBusy: phoneBusy ?? this.phoneBusy,
+      phoneNotice:
+          clearPhoneNotice ? null : (phoneNotice ?? this.phoneNotice),
       message: clearMessage ? null : (message ?? this.message),
       error: clearError ? null : (error ?? this.error),
     );

@@ -181,9 +181,179 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
   Future<void> preparePrint({
     String chartKey = 'RasiD1',
   }) async {
+    if (state.result == null ||
+        state.subject == null ||
+        state.phase != KundaliPhase.result) {
+      return;
+    }
+    state = state.copyWith(
+      clearError: true,
+      print: state.print.copyWith(
+        phase: ReportPrintPhase.preparingPreview,
+        clearError: true,
+        clearMessage: true,
+        clearPhoneNotice: true,
+      ),
+    );
+    try {
+      final options = await _repository.kundaliPrintOptions();
+      final chargeRupees = (options['chargeRupees'] as num?)?.toInt() ?? 0;
+      if (!ref.mounted) return;
+      if (chargeRupees > 0) {
+        state = state.copyWith(
+          print: state.print.copyWith(
+            phase: ReportPrintPhase.choosingPayMethod,
+            chargeRupees: chargeRupees,
+            amountPaise: chargeRupees * 100,
+            clearError: true,
+            clearPhoneNotice: true,
+          ),
+        );
+        return;
+      }
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phase: ReportPrintPhase.printResult,
+          printConfirmed: false,
+          error: userFacingError(error),
+          message: userFacingError(error),
+        ),
+        error: userFacingError(error),
+      );
+      return;
+    }
+    await _runPreparePrint(chartKey: chartKey);
+  }
+
+  Future<void> choosePhoneQuota() async {
+    if (state.print.phase != ReportPrintPhase.choosingPayMethod) return;
+    state = state.copyWith(
+      print: state.print.copyWith(
+        phase: ReportPrintPhase.enteringPhone,
+        otpSent: false,
+        otpDigits: '',
+        clearError: true,
+        clearPhoneNotice: true,
+      ),
+    );
+  }
+
+  Future<void> choosePayDirect({String chartKey = 'RasiD1'}) async {
+    if (state.print.phase != ReportPrintPhase.choosingPayMethod &&
+        state.print.phase != ReportPrintPhase.enteringPhone) {
+      return;
+    }
+    await _runPreparePrint(chartKey: chartKey);
+  }
+
+  void setPrintPhoneDigits(String value) {
+    state = state.copyWith(
+      print: state.print.copyWith(phoneDigits: value.replaceAll(RegExp(r'\D'), '')),
+    );
+  }
+
+  void setPrintOtpDigits(String value) {
+    state = state.copyWith(
+      print: state.print.copyWith(otpDigits: value.replaceAll(RegExp(r'\D'), '')),
+    );
+  }
+
+  Future<void> requestPrintPhoneOtp() async {
+    if (state.print.phase != ReportPrintPhase.enteringPhone) return;
+    final phone = state.print.phoneDigits;
+    if (phone.length < 10) {
+      state = state.copyWith(
+        print: state.print.copyWith(error: 'Enter a valid 10-digit mobile number'),
+      );
+      return;
+    }
+    state = state.copyWith(
+      print: state.print.copyWith(phoneBusy: true, clearError: true),
+    );
+    try {
+      await _repository.requestKundaliPhoneOtp(phone);
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phoneBusy: false,
+          otpSent: true,
+          otpDigits: '',
+          clearError: true,
+        ),
+      );
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phoneBusy: false,
+          error: userFacingError(error),
+        ),
+      );
+    }
+  }
+
+  Future<void> verifyPrintPhoneOtp({String chartKey = 'RasiD1'}) async {
+    if (state.print.phase != ReportPrintPhase.enteringPhone) return;
+    final phone = state.print.phoneDigits;
+    final otp = state.print.otpDigits;
+    if (otp.length < 4) {
+      state = state.copyWith(
+        print: state.print.copyWith(error: 'Enter the OTP sent to your phone'),
+      );
+      return;
+    }
+    state = state.copyWith(
+      print: state.print.copyWith(phoneBusy: true, clearError: true),
+    );
+    try {
+      final verified = await _repository.verifyKundaliPhoneOtp(
+        phone: phone,
+        otp: otp,
+      );
+      if (!ref.mounted) return;
+      final freeEligible = verified['freeEligible'] == true;
+      final notice = verified['message']?.toString();
+      final token = verified['phoneProofToken']?.toString();
+      if (freeEligible && token != null && token.isNotEmpty) {
+        state = state.copyWith(
+          print: state.print.copyWith(
+            phoneBusy: false,
+            clearPhoneNotice: true,
+            clearError: true,
+          ),
+        );
+        await _runPreparePrint(chartKey: chartKey, phoneProofToken: token);
+        return;
+      }
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phoneBusy: false,
+          phoneNotice: notice ??
+              'Free print is not available for this number. Continue with payment.',
+          clearError: true,
+        ),
+      );
+      await _runPreparePrint(chartKey: chartKey);
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phoneBusy: false,
+          error: userFacingError(error),
+        ),
+      );
+    }
+  }
+
+  Future<void> _runPreparePrint({
+    String chartKey = 'RasiD1',
+    String? phoneProofToken,
+  }) async {
     final result = state.result;
     final subject = state.subject;
-    if (result == null || subject == null || state.phase != KundaliPhase.result) {
+    if (result == null || subject == null) {
       return;
     }
     final tabs = result.availableTabs;
@@ -216,6 +386,7 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
             },
           ];
 
+    final notice = state.print.phoneNotice;
     state = state.copyWith(
       clearError: true,
       print: state.print.copyWith(
@@ -242,14 +413,47 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
         'disclaimer': result.disclaimer,
         'locale': printLocale.apiValue,
         if (insightSections.isNotEmpty) 'insights': insightSections,
+        'phoneProofToken': ?phoneProofToken,
       },
       previous: state.print,
     );
     if (!ref.mounted) return;
-    state = state.copyWith(print: next, error: next.error, clearError: next.error == null);
-    if (next.phase == ReportPrintPhase.awaitingPayment) {
+    final withNotice = next.phase == ReportPrintPhase.awaitingPayment &&
+            notice != null &&
+            notice.trim().isNotEmpty
+        ? next.copyWith(phoneNotice: notice)
+        : next;
+    state = state.copyWith(
+      print: withNotice,
+      error: withNotice.error,
+      clearError: withNotice.error == null,
+    );
+    if (withNotice.phase == ReportPrintPhase.awaitingPayment) {
       _startPaymentPoll();
     }
+  }
+
+  Future<void> backFromPrintFlow() async {
+    final phase = state.print.phase;
+    if (phase == ReportPrintPhase.enteringPhone) {
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phase: ReportPrintPhase.choosingPayMethod,
+          otpSent: false,
+          otpDigits: '',
+          phoneBusy: false,
+          clearError: true,
+          clearPhoneNotice: true,
+        ),
+      );
+      return;
+    }
+    if (phase == ReportPrintPhase.choosingPayMethod ||
+        phase == ReportPrintPhase.awaitingPayment) {
+      await cancelPrintPreview();
+      return;
+    }
+    await cancelPrintPreview();
   }
 
   Future<void> confirmPrint() async {

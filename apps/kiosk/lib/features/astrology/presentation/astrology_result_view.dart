@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
+import 'package:skp_kiosk/core/ui/kiosk_disclaimer.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_reading.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
@@ -427,7 +428,7 @@ class _HeroSeal extends StatelessWidget {
           style: theme.textTheme.bodyLarge?.copyWith(color: AstrologyColors.muted),
         ),
         const SizedBox(height: 10),
-        Text(
+        DisclaimerCaption(
           disclaimer,
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall?.copyWith(

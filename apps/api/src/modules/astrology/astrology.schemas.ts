@@ -299,9 +299,23 @@ export const printKundaliBodySchema = z.object({
     .optional(),
   disclaimer: z.string().trim().max(400).optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
+  phoneProofToken: z.string().trim().min(1).max(800).optional(),
 });
 
 export type PrintKundaliBody = z.infer<typeof printKundaliBodySchema>;
+
+export const kundaliOtpRequestSchema = z.object({
+  phone: z.string().trim().min(10).max(20),
+});
+
+export type KundaliOtpRequestBody = z.infer<typeof kundaliOtpRequestSchema>;
+
+export const kundaliOtpVerifySchema = z.object({
+  phone: z.string().trim().min(10).max(20),
+  otp: z.string().trim().min(4).max(8),
+});
+
+export type KundaliOtpVerifyBody = z.infer<typeof kundaliOtpVerifySchema>;
 
 const matchPrintPersonSchema = z.object({
   name: z.string().trim().min(1).max(80),

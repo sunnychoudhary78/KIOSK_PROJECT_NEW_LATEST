@@ -185,6 +185,7 @@ export class PrintQuotaService {
     periodKey: string;
     otpChallengeId?: string;
     quickPrintSessionId?: string;
+    printJobId?: string;
     tx?: TxClient;
   }): Promise<void> {
     if (input.pages <= 0) return;
@@ -203,6 +204,12 @@ export class PrintQuotaService {
       });
       if (existing) return;
     }
+    if (input.printJobId) {
+      const existing = await db.phoneFreePageLedger.findUnique({
+        where: { printJobId: input.printJobId },
+      });
+      if (existing) return;
+    }
 
     await db.phoneFreePageLedger.create({
       data: {
@@ -213,6 +220,7 @@ export class PrintQuotaService {
         periodKey: input.periodKey,
         otpChallengeId: input.otpChallengeId,
         quickPrintSessionId: input.quickPrintSessionId,
+        printJobId: input.printJobId,
       },
     });
   }

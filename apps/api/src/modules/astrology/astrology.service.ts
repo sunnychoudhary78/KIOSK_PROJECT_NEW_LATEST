@@ -2,6 +2,7 @@ import { PaymentStatus, PrintColorMode, PrintJobSource, type Prisma } from '@pri
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { Logger } from '../../infrastructure/logging/logger.js';
+import type { SmsClient } from '../../infrastructure/external/sms.client.js';
 import {
   NOOP_KUNDALI_INSIGHTS,
   NOOP_LOCALE_BULLETS,
@@ -16,12 +17,20 @@ import {
   type VedAstroPanchangaResult,
 } from '../../infrastructure/external/vedastro.client.js';
 import { AppError } from '../../shared/errors.js';
+import {
+  generateNumericOtp,
+  hashOtp,
+  normalizePhone,
+  sanitizeOtpDeliveryError,
+} from '../../shared/otp.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import {
   RazorpayClient,
   verifyPaymentSignature,
 } from '../payments/razorpay.client.js';
+import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
+import { PrintQuotaService } from '../print_quota/print_quota.service.js';
 import { createPrintJobWithPdf } from '../printing/create_print_job_with_pdf.js';
 import { assertPrintingAvailable } from '../printing/printing_pause.js';
 import { PrintingService } from '../printing/printing.service.js';
@@ -51,8 +60,24 @@ import {
   buildPalmReportPdf,
   buildTodayReportPdf,
 } from './astrology_report_pdf.js';
+import {
+  createKundaliPhoneProofToken,
+  verifyKundaliPhoneProofToken,
+} from './kundali_phone_proof.js';
 
 const MAX_PALM_BYTES = 5 * 1024 * 1024;
+const kundaliPhoneOtpCooldownUntil = new Map<string, number>();
+
+const kundaliQuotaDeviceSelect = {
+  kundaliColorPrintChargeRupees: true,
+  maxPagesPerSession: true,
+  freePagesPerSession: true,
+  extraPageChargeRupees: true,
+  freeColorPagesPerSession: true,
+  extraColorPageChargeRupees: true,
+  freeDisabledFromLocal: true,
+  freeDisabledToLocal: true,
+} as const;
 
 export type AstrologyReadingResponse = {
   id: string;
@@ -96,6 +121,8 @@ export type AstrologyTodayResponse = {
 
 export class AstrologyService {
   private readonly printing: PrintingService;
+  private readonly quota: PrintQuotaService;
+  private readonly settings: PlatformSettingsService;
 
   constructor(
     private readonly db: DbClient,
@@ -107,8 +134,198 @@ export class AstrologyService {
     private readonly config: AppConfig,
     private readonly razorpay: RazorpayClient,
     private readonly payments: PaymentsService,
+    private readonly sms: SmsClient,
   ) {
     this.printing = new PrintingService(db, audit);
+    this.quota = new PrintQuotaService(db, audit);
+    this.settings = new PlatformSettingsService(db, audit);
+  }
+
+  async getKundaliPrintOptions(deviceId: string) {
+    await this.services.assertEnabled(deviceId, 'astrology');
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      select: { kundaliColorPrintChargeRupees: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    return {
+      chargeRupees: Math.max(0, device.kundaliColorPrintChargeRupees ?? 0),
+    };
+  }
+
+  async requestKundaliPhoneOtp(deviceId: string, phoneRaw: string, correlationId?: string) {
+    await this.services.assertEnabled(deviceId, 'astrology');
+    let phone: string;
+    try {
+      phone = normalizePhone(phoneRaw);
+    } catch {
+      throw new AppError('invalid_phone', 'Enter a valid 10-digit mobile number', 400);
+    }
+
+    const authConfig = await this.settings.getCitizenAuthConfig();
+    const cooldownMs = authConfig.requestCooldownSeconds * 1000;
+    const until = kundaliPhoneOtpCooldownUntil.get(phone) ?? 0;
+    if (Date.now() < until) {
+      throw new AppError('otp_cooldown', 'Please wait before requesting another OTP', 429);
+    }
+
+    const code = generateNumericOtp(authConfig.otpLength);
+    const expiresAt = new Date(Date.now() + authConfig.ttlSeconds * 1000);
+    await this.db.phoneOtpSession.upsert({
+      where: { phone },
+      create: { phone, codeHash: hashOtp(code), expiresAt, attemptCount: 0 },
+      update: { codeHash: hashOtp(code), expiresAt, attemptCount: 0 },
+    });
+
+    try {
+      await this.sms.sendOtp(phone, code, authConfig.ttlSeconds);
+    } catch (error) {
+      await this.db.phoneOtpSession.delete({ where: { phone } }).catch(() => undefined);
+      throw new AppError('sms_failed', sanitizeOtpDeliveryError(error), 502);
+    }
+
+    kundaliPhoneOtpCooldownUntil.set(phone, Date.now() + cooldownMs);
+    await this.audit.record({
+      action: 'astrology.kundali_phone_otp_requested',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: { phoneSuffix: phone.slice(-4) },
+    });
+
+    const includeDevOtp =
+      this.config.env === 'local' || this.config.env === 'test' || this.config.env === 'dev';
+    return {
+      message: 'OTP sent successfully',
+      expiresAt: expiresAt.toISOString(),
+      ...(includeDevOtp ? { devOtp: code } : {}),
+    };
+  }
+
+  async verifyKundaliPhoneOtp(
+    deviceId: string,
+    phoneRaw: string,
+    otp: string,
+    correlationId?: string,
+  ) {
+    await this.services.assertEnabled(deviceId, 'astrology');
+    let phone: string;
+    try {
+      phone = normalizePhone(phoneRaw);
+    } catch {
+      throw new AppError('invalid_phone', 'Enter a valid 10-digit mobile number', 400);
+    }
+
+    const authConfig = await this.settings.getCitizenAuthConfig();
+    const otpSession = await this.db.phoneOtpSession.findUnique({ where: { phone } });
+    if (!otpSession) {
+      throw new AppError('otp_invalid', 'Invalid or expired OTP', 400);
+    }
+    if (otpSession.attemptCount >= authConfig.maxVerifyAttempts) {
+      await this.db.phoneOtpSession.delete({ where: { phone } }).catch(() => undefined);
+      throw new AppError('otp_locked', 'Too many invalid attempts. Request a new OTP.', 400);
+    }
+    if (otpSession.expiresAt.getTime() < Date.now()) {
+      await this.db.phoneOtpSession.delete({ where: { phone } }).catch(() => undefined);
+      throw new AppError('otp_expired', 'OTP has expired', 400);
+    }
+    if (otpSession.codeHash !== hashOtp(otp)) {
+      await this.db.phoneOtpSession.update({
+        where: { phone },
+        data: { attemptCount: { increment: 1 } },
+      });
+      throw new AppError('otp_invalid', 'Invalid or expired OTP', 400);
+    }
+
+    await this.db.phoneOtpSession.delete({ where: { phone } });
+
+    const eligibility = await this.evaluateKundaliFreeEligibility(deviceId, phone);
+    const phoneProofToken = createKundaliPhoneProofToken({
+      deviceId,
+      phone,
+      jwtSecret: this.config.jwtSecret,
+    });
+
+    await this.audit.record({
+      action: 'astrology.kundali_phone_otp_verified',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: {
+        phoneSuffix: phone.slice(-4),
+        society: eligibility.society,
+        freeEligible: eligibility.freeEligible,
+      },
+    });
+
+    return {
+      phoneProofToken,
+      society: eligibility.society,
+      freeEligible: eligibility.freeEligible,
+      remainingColor: eligibility.remainingColor,
+      message: eligibility.message,
+    };
+  }
+
+  private async evaluateKundaliFreeEligibility(deviceId: string, phone: string) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      select: kundaliQuotaDeviceSelect,
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    const remaining = await this.quota.getRemaining(phone, 'color');
+    if (!remaining.society) {
+      return {
+        society: false,
+        freeEligible: false,
+        remainingColor: remaining.remaining,
+        periodKey: remaining.periodKey,
+        message: 'This number isn’t on the society free list. Continue with payment.',
+      };
+    }
+
+    const effective = await this.quota.computeEffectiveFree({
+      phone,
+      device,
+      mode: 'color',
+      pageCount: 1,
+    });
+
+    if (effective.freeDisabledNow) {
+      return {
+        society: true,
+        freeEligible: false,
+        remainingColor: effective.remainingBefore,
+        periodKey: effective.periodKey,
+        message: 'Free prints are paused on this kiosk right now. Continue with payment.',
+      };
+    }
+    if (effective.freePages < 1) {
+      return {
+        society: true,
+        freeEligible: false,
+        remainingColor: effective.remainingBefore,
+        periodKey: effective.periodKey,
+        message: 'No free color pages left. Continue with payment.',
+      };
+    }
+
+    return {
+      society: true,
+      freeEligible: true,
+      remainingColor: effective.remainingBefore,
+      periodKey: effective.periodKey,
+      message: null as string | null,
+    };
   }
 
   async createReading(
@@ -501,13 +718,36 @@ export class AstrologyService {
     await assertPrintingAvailable(this.db, deviceId);
     const device = await this.db.device.findUnique({
       where: { id: deviceId },
-      select: { kundaliColorPrintChargeRupees: true },
+      select: kundaliQuotaDeviceSelect,
     });
     if (!device) {
       throw new AppError('not_found', 'Device not found', 404);
     }
     const chargeRupees = Math.max(0, device.kundaliColorPrintChargeRupees ?? 0);
-    if (chargeRupees > 0 && (!this.config.razorpay.keyId || !this.config.razorpay.keySecret)) {
+
+    let freePhone: string | null = null;
+    let freePeriodKey: string | null = null;
+    if (chargeRupees > 0 && input.phoneProofToken) {
+      const proof = verifyKundaliPhoneProofToken({
+        token: input.phoneProofToken,
+        deviceId,
+        jwtSecret: this.config.jwtSecret,
+      });
+      if (!proof) {
+        // Wrong-device or corrupt token → reject; expired/invalid for free → fall through to paid.
+        // Distinguishing: if signature fails for another device id inside payload, verify returns null.
+        // Treat null as paid path (expired or bad). Only 403 if payload device mismatches after parse —
+        // verify already returns null for mismatch. Paid path is fine.
+      } else {
+        const eligibility = await this.evaluateKundaliFreeEligibility(deviceId, proof.phone);
+        if (eligibility.freeEligible) {
+          freePhone = proof.phone;
+          freePeriodKey = eligibility.periodKey;
+        }
+      }
+    }
+
+    if (chargeRupees > 0 && !freePhone && (!this.config.razorpay.keyId || !this.config.razorpay.keySecret)) {
       throw new AppError(
         'payments_not_configured',
         'Paid printing is not available on this kiosk right now',
@@ -547,9 +787,21 @@ export class AstrologyService {
       resourceType: 'print_job',
       resourceId: job.id,
       correlationId,
+      metadata: freePhone
+        ? { freeColorPage: true, phoneSuffix: freePhone.slice(-4) }
+        : { freeColorPage: false },
     });
 
-    if (chargeRupees <= 0) {
+    if (chargeRupees <= 0 || freePhone) {
+      if (freePhone && freePeriodKey) {
+        await this.quota.reserveFreePages({
+          phone: freePhone,
+          mode: 'color',
+          pages: 1,
+          periodKey: freePeriodKey,
+          printJobId: job.id,
+        });
+      }
       return {
         ...job,
         paymentRequired: false,
@@ -559,6 +811,7 @@ export class AstrologyService {
         checkoutToken: null,
         checkoutUrl: null,
         qrImageUrl: null,
+        freePages: freePhone ? 1 : 0,
       };
     }
 

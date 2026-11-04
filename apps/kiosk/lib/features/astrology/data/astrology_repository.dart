@@ -240,6 +240,24 @@ class AstrologyRepository {
     return TodayPeriodsResult.fromJson(result);
   }
 
+  Future<Map<String, dynamic>> kundaliPrintOptions() {
+    return _api.get('/astrology/kundali/print-options');
+  }
+
+  Future<Map<String, dynamic>> requestKundaliPhoneOtp(String phone) {
+    return _api.post('/astrology/kundali/otp-request', body: {'phone': phone});
+  }
+
+  Future<Map<String, dynamic>> verifyKundaliPhoneOtp({
+    required String phone,
+    required String otp,
+  }) {
+    return _api.post(
+      '/astrology/kundali/otp-verify',
+      body: {'phone': phone, 'otp': otp},
+    );
+  }
+
   Future<Map<String, dynamic>> printKundali(Map<String, dynamic> body) {
     return _api.post('/astrology/kundali/print', body: body);
   }
