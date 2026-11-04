@@ -11,7 +11,7 @@ final fuelStationsRepositoryProvider = Provider<FuelStationsRepository>((ref) {
 class FuelStationsState {
   const FuelStationsState({
     this.loading = false,
-    this.kind = FuelKind.all,
+    this.kind = FuelKind.fuel,
     this.items = const [],
     this.error,
   });

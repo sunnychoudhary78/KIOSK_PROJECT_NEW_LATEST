@@ -6,7 +6,7 @@ enum FuelKind {
 
   String get label => switch (this) {
         FuelKind.all => 'All',
-        FuelKind.fuel => 'Fuel',
+        FuelKind.fuel => 'Petrol/Diesel',
         FuelKind.cng => 'CNG',
         FuelKind.ev => 'EV',
       };

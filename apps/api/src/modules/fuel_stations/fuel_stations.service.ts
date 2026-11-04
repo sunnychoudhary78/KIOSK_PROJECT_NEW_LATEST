@@ -102,63 +102,67 @@ export class FuelStationsService {
       query.limit,
     );
 
-    const origin = { lat: device.latitude, lng: device.longitude };
-    const targets = pickApproachTargets(items);
-    if (targets.length > 0) {
-      const results = await Promise.all(
-        targets.map(({ station }) =>
-          this.approachTraffic.getRouteTraffic(origin, {
-            lat: station.latitude,
-            lng: station.longitude,
-          }),
-        ),
-      );
-      const statuses: string[] = [];
-      const driveDistancesKm: Array<number | null> = [];
-      const segmentCounts: number[] = [];
-      for (let i = 0; i < targets.length; i += 1) {
-        const target = targets[i];
-        const result = results[i];
-        if (!target || !result) {
-          continue;
+    // Approach traffic + best-now pin are for CNG/EV tabs only. On petrol/diesel
+    // (and all), keep pure distance order so dual CNG stations do not jump to top.
+    if (query.kind === 'cng' || query.kind === 'ev') {
+      const origin = { lat: device.latitude, lng: device.longitude };
+      const targets = pickApproachTargets(items);
+      if (targets.length > 0) {
+        const results = await Promise.all(
+          targets.map(({ station }) =>
+            this.approachTraffic.getRouteTraffic(origin, {
+              lat: station.latitude,
+              lng: station.longitude,
+            }),
+          ),
+        );
+        const statuses: string[] = [];
+        const driveDistancesKm: Array<number | null> = [];
+        const segmentCounts: number[] = [];
+        for (let i = 0; i < targets.length; i += 1) {
+          const target = targets[i];
+          const result = results[i];
+          if (!target || !result) {
+            continue;
+          }
+          const status = result.approachTraffic;
+          statuses.push(status);
+          const driveDistanceKm =
+            result.driveDistanceM != null
+              ? roundDistanceKm(result.driveDistanceM / 1000)
+              : null;
+          driveDistancesKm.push(driveDistanceKm);
+          segmentCounts.push(result.routeTrafficSegments.length);
+          const driveDurationMin =
+            result.driveDurationSec != null
+              ? Math.max(1, Math.ceil(result.driveDurationSec / 60))
+              : null;
+          items[target.index] = {
+            ...items[target.index]!,
+            approachTraffic: status,
+            approachWaitMin: waitMinutesForApproach(status),
+            driveDistanceKm,
+            driveDurationMin,
+            routeTrafficSegments: result.routeTrafficSegments,
+            routePolyline: result.encodedPolyline,
+          };
         }
-        const status = result.approachTraffic;
-        statuses.push(status);
-        const driveDistanceKm =
-          result.driveDistanceM != null
-            ? roundDistanceKm(result.driveDistanceM / 1000)
-            : null;
-        driveDistancesKm.push(driveDistanceKm);
-        segmentCounts.push(result.routeTrafficSegments.length);
-        const driveDurationMin =
-          result.driveDurationSec != null
-            ? Math.max(1, Math.ceil(result.driveDurationSec / 60))
-            : null;
-        items[target.index] = {
-          ...items[target.index]!,
-          approachTraffic: status,
-          approachWaitMin: waitMinutesForApproach(status),
-          driveDistanceKm,
-          driveDurationMin,
-          routeTrafficSegments: result.routeTrafficSegments,
-          routePolyline: result.encodedPolyline,
-        };
+        items = pinBestNow(items);
+        const bestNowIndex = items.findIndex((row) => row.bestNow);
+        this.logger.info(
+          {
+            event: 'approach_traffic_nearby',
+            deviceId,
+            kind: query.kind,
+            statuses,
+            driveDistancesKm,
+            segmentCounts,
+            bestNowIndex: bestNowIndex >= 0 ? bestNowIndex : null,
+            bestNowName: bestNowIndex >= 0 ? items[bestNowIndex]?.name ?? null : null,
+          },
+          'Route traffic for nearby stations',
+        );
       }
-      items = pinBestNow(items);
-      const bestNowIndex = items.findIndex((row) => row.bestNow);
-      this.logger.info(
-        {
-          event: 'approach_traffic_nearby',
-          deviceId,
-          kind: query.kind,
-          statuses,
-          driveDistancesKm,
-          segmentCounts,
-          bestNowIndex: bestNowIndex >= 0 ? bestNowIndex : null,
-          bestNowName: bestNowIndex >= 0 ? items[bestNowIndex]?.name ?? null : null,
-        },
-        'Route traffic for nearby stations',
-      );
     }
 
     return { items };

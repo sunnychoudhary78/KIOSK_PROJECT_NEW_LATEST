@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { DbClient } from '../src/infrastructure/database/prisma.js';
+import type { Logger } from '../src/infrastructure/logging/logger.js';
 import {
   APPROACH_TRAFFIC_LIMIT,
   approachEndpointsFromSnaps,
@@ -13,7 +15,7 @@ import {
   waitMinutesForApproach,
 } from '../src/modules/fuel_stations/approach.js';
 import { createApproachTrafficClient } from '../src/modules/fuel_stations/approach_traffic.client.js';
-import type { NearbyStation } from '../src/modules/fuel_stations/nearby.js';
+import type { ApproachTrafficClient } from '../src/modules/fuel_stations/approach_traffic.client.js';
 import { countCatalogKinds, filterCatalogStations } from '../src/modules/fuel_stations/catalog.js';
 import {
   acceptCngPlace,
@@ -24,13 +26,16 @@ import {
   isGoogleSourcedOsmId,
   parseTextSearchPlaces,
 } from '../src/modules/fuel_stations/cng_seed.js';
+import { FuelStationsService } from '../src/modules/fuel_stations/fuel_stations.service.js';
 import {
   googleIncludedType,
   parseNearbyPlaces,
   pickClosestGooglePlace,
 } from '../src/modules/fuel_stations/google.js';
-import { mapOsmElement, nextMissState, overpassQuery } from '../src/modules/fuel_stations/osm.js';
+import type { NearbyStation } from '../src/modules/fuel_stations/nearby.js';
 import { rankNearbyStations } from '../src/modules/fuel_stations/nearby.js';
+import { mapOsmElement, nextMissState, overpassQuery } from '../src/modules/fuel_stations/osm.js';
+import type { ServicesCatalogService } from '../src/modules/services/services.service.js';
 import { haversineKm } from '../src/shared/geo.js';
 
 const origin = { lat: 28.6139, lng: 77.209 };
@@ -623,5 +628,82 @@ describe('cng google seed helpers', () => {
         longitude: 77.2,
       },
     ]);
+  });
+});
+
+describe('FuelStationsService.nearby approach gating', () => {
+  function setupNearbyService() {
+    const rows = [
+      {
+        name: 'Near Petrol',
+        address: null,
+        latitude: 28.6145,
+        longitude: 77.209,
+        petrol: true,
+        diesel: false,
+        cng: false,
+        ev: false,
+        fuelUntyped: false,
+        googlePlaceId: null,
+      },
+      {
+        name: 'Far Dual CNG',
+        address: null,
+        latitude: 28.63,
+        longitude: 77.209,
+        petrol: true,
+        diesel: false,
+        cng: true,
+        ev: false,
+        fuelUntyped: false,
+        googlePlaceId: null,
+      },
+    ];
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          latitude: origin.lat,
+          longitude: origin.lng,
+        })),
+      },
+      fuelStation: {
+        findMany: vi.fn(async () => rows),
+      },
+    };
+    const approachTraffic = {
+      getRouteTraffic: vi.fn(async () => ({
+        approachTraffic: 'clear' as const,
+        driveDistanceM: 500,
+        driveDurationSec: 60,
+        routeTrafficSegments: [],
+        encodedPolyline: null,
+      })),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+    const service = new FuelStationsService(
+      db as unknown as DbClient,
+      { assertEnabled: vi.fn(async () => undefined) } as unknown as ServicesCatalogService,
+      approachTraffic as unknown as ApproachTrafficClient,
+      logger,
+    );
+    return { service, approachTraffic, rows };
+  }
+
+  it('keeps distance order on fuel kind and skips approach traffic', async () => {
+    const { service, approachTraffic } = setupNearbyService();
+    const result = await service.nearby('device-1', { kind: 'fuel', limit: 30 });
+    expect(approachTraffic.getRouteTraffic).not.toHaveBeenCalled();
+    expect(result.items.map((row) => row.name)).toEqual(['Near Petrol', 'Far Dual CNG']);
+    expect(result.items[0]!.distanceKm).toBeLessThan(result.items[1]!.distanceKm);
+    expect(result.items.every((row) => row.bestNow === false)).toBe(true);
+    expect(result.items.every((row) => row.approachTraffic === null)).toBe(true);
+  });
+
+  it('still enriches CNG tab with approach traffic', async () => {
+    const { service, approachTraffic } = setupNearbyService();
+    const result = await service.nearby('device-1', { kind: 'cng', limit: 30 });
+    expect(approachTraffic.getRouteTraffic).toHaveBeenCalled();
+    expect(result.items.some((row) => row.name === 'Far Dual CNG')).toBe(true);
+    expect(result.items[0]?.approachTraffic).not.toBeNull();
   });
 });

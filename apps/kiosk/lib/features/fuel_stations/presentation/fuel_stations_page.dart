@@ -566,7 +566,7 @@ class _KindFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final kinds = FuelKind.values;
+    final kinds = FuelKind.values.where((k) => k != FuelKind.all).toList();
     return SizedBox(
       height: _height,
       child: DecoratedBox(
