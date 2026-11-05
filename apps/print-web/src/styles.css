@@ -126,6 +126,29 @@ a {
   color: var(--ink);
 }
 
+.brand-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+  max-width: min(200px, 55vw);
+  object-fit: contain;
+  object-position: left center;
+}
+
+.brand-hero {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+.brand-logo-hero {
+  display: block;
+  height: clamp(64px, 18vw, 96px);
+  width: auto;
+  max-width: min(280px, 70vw);
+  object-fit: contain;
+}
+
 .step-rail {
   display: flex;
   align-items: center;

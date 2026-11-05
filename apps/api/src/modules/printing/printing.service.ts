@@ -11,6 +11,8 @@ import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { PrintQuotaService } from '../print_quota/print_quota.service.js';
 import type { UpdatePrintJobStatusInput } from './printing.schemas.js';
+import { assertPrintingAvailable } from './printing_pause.js';
+import { assertTrayCapacity } from './tray_capacity.js';
 
 function mapJob(job: {
   id: string;
@@ -106,6 +108,11 @@ export class PrintingService {
 
     const pageCount = input.pageCount ?? 1;
     const pagesExpected = input.pagesExpected ?? pageCount;
+
+    if (input.deviceId) {
+      await assertPrintingAvailable(this.db, input.deviceId);
+      await assertTrayCapacity(this.db, input.deviceId, pagesExpected);
+    }
 
     const job = await this.db.printJob.create({
       data: {

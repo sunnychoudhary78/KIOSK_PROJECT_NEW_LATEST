@@ -13,6 +13,7 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { SmsClient } from '../../infrastructure/external/sms.client.js';
 import { AppError } from '../../shared/errors.js';
 import { assertPrintingAvailable } from '../printing/printing_pause.js';
+import { assertTrayCapacity } from '../printing/tray_capacity.js';
 import {
   generateNumericOtp,
   hashOtp,
@@ -358,6 +359,8 @@ export class QuickPrintService {
         400,
       );
     }
+
+    await assertTrayCapacity(this.db, session.deviceId, totalPages);
 
     const { quote, effective } = await this.quota.buildQuote({
       phone: session.verifiedPhone,

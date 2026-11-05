@@ -186,14 +186,18 @@ function AppShell({
       <header className="topbar">
         <div className="brand-lockup">
           <p className="brand-eyebrow">Quick Print</p>
-          {brandAsHero ? null : <p className="brand-wordmark">ATHENA</p>}
+          {brandAsHero ? null : (
+            <img src="/athena_logo.png" alt="ATHENA" className="brand-logo" />
+          )}
         </div>
         {step ?? null}
       </header>
       <main className={bodyClass}>
         {status ? <div className={`status-icon ${statusTone ?? ''}`}>{status}</div> : null}
         {brandAsHero ? (
-          <h1 className="display">ATHENA</h1>
+          <h1 className="display brand-hero">
+            <img src="/athena_logo.png" alt="ATHENA" className="brand-logo-hero" />
+          </h1>
         ) : hero ? (
           <h1 className="display">{title}</h1>
         ) : (
@@ -285,6 +289,9 @@ function SessionPage() {
         name.endsWith('.png')
       );
     });
+    if (incoming.length > 0) {
+      setError(null);
+    }
     setFiles((prev) => {
       const map = new Map(prev.map((file) => [`${file.name}:${file.size}`, file]));
       for (const file of incoming) {
@@ -295,6 +302,7 @@ function SessionPage() {
   }
 
   function removeFile(index: number) {
+    setError(null);
     setFiles((prev) => prev.filter((_, i) => i !== index));
     if (fileInputRef.current) {
       fileInputRef.current.value = '';

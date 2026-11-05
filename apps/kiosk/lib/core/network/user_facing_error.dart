@@ -35,6 +35,8 @@ const _codeMessages = <String, String>{
   'payment_required': 'Payment is not complete yet.',
   'payment_unavailable': 'Payment is not available for this print.',
   'printing_paused': 'Out of paper. Printing is paused.',
+  'insufficient_tray_pages':
+      'Not enough paper in the printer for this job. Try fewer pages or ask staff to refill.',
   'phone_required': 'A mobile number is required to continue.',
   'request_failed': _fallback,
   'page_limit_exceeded': 'Too many pages for this kiosk. Remove some pages and try again.',

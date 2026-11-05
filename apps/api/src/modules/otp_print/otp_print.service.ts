@@ -15,6 +15,7 @@ import {
   normalizeToPdf,
 } from '../printing/normalize_to_pdf.js';
 import { PrintingService } from '../printing/printing.service.js';
+import { assertTrayCapacity } from '../printing/tray_capacity.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { printLimitsFromDevice } from '../devices/device_print_limits.js';
 import { PrintQuotaService } from '../print_quota/print_quota.service.js';
@@ -189,6 +190,8 @@ export class OtpPrintService {
         400,
       );
     }
+
+    await assertTrayCapacity(this.db, device.id, totalPages);
 
     const user = await this.db.user.findUnique({ where: { id: userId } });
     if (!user?.phone) {
