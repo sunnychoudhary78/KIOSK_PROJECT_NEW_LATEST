@@ -326,7 +326,47 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
     Widget page = VisitorSessionPopScope(
       endSessionOnPop: false,
       child: KioskShell(
-        title: 'My Kundali',
+        headerExtra: KundaliTopStepper(phase: state.phase),
+        titleWidget: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF1E1738)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF4A3474)
+                  : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.10),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ReadingEmblem(kind: AstrologyReadingKind.kundali, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'My Kundali',
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : const Color(0xFF1E1B4B),
+                ),
+              ),
+            ],
+          ),
+        ),
         onHome: _endSession,
         stepLabel: step,
         footerLeading: leading,
@@ -966,4 +1006,109 @@ class _ManuscriptCorners extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ManuscriptCorners oldDelegate) => false;
+}
+
+/// Top bar stepper for My Kundali: (1) Details — (2) Casting — (3) Chart
+class KundaliTopStepper extends StatelessWidget {
+  const KundaliTopStepper({super.key, required this.phase});
+
+  final KundaliPhase phase;
+
+  @override
+  Widget build(BuildContext context) {
+    final stepIndex = switch (phase) {
+      KundaliPhase.form => 0,
+      KundaliPhase.loading => 1,
+      KundaliPhase.result => 2,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF1E1738)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF4A3474)
+              : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _stepItem(1, 'Details', stepIndex == 0, stepIndex > 0),
+          _divider(stepIndex >= 1),
+          _stepItem(2, 'Casting', stepIndex == 1, stepIndex > 1),
+          _divider(stepIndex >= 2),
+          _stepItem(3, 'Chart', stepIndex == 2, false),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepItem(int number, String label, bool active, bool passed) {
+    const activeColor = Color(0xFF7C3AED);
+    const passedColor = Color(0xFF3B82F6);
+    const inactiveColor = Color(0xFF64748B);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: active
+                ? activeColor
+                : (passed ? passedColor : Colors.transparent),
+            border: (active || passed)
+                ? null
+                : Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$number',
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: (active || passed) ? Colors.white : inactiveColor,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'PlusJakartaSans',
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active
+                ? activeColor
+                : (passed ? passedColor : inactiveColor),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _divider(bool passed) {
+    return Container(
+      width: 28,
+      height: 1.5,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: passed ? const Color(0xFF7C3AED) : const Color(0xFFE2E8F0),
+    );
+  }
 }

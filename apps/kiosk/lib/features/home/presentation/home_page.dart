@@ -197,54 +197,60 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
     final showHorizontal = playlist.homeBanners.isNotEmpty;
     final showVertical = playlist.homeSideBanners.isNotEmpty;
 
-    // 6 Signature Service Tiles (Image 1)
+    // 6 Signature Service Tiles with pastel organic waves
     final tiles = [
       KioskServiceTile(
         icon: Icons.print_rounded,
         title: 'Print Documents',
         subtitle: 'Phone, OTP, or DigiLocker',
         accent: const Color(0xFF0077B6),
-        gradientColors: const [Color(0xFF29B6F6), Color(0xFF0288D1)],
+        waveColor: const Color(0xFFE0F2FE),
+        gradientColors: const [Color(0xFF38BDF8), Color(0xFF0284C7)],
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.print),
       ),
       KioskServiceTile(
         icon: Icons.handyman_rounded,
         title: 'Find Services',
         subtitle: 'Mechanics, tailors, carpenters, and more',
-        accent: const Color(0xFF00A878),
-        gradientColors: const [Color(0xFF26A69A), Color(0xFF00897B)],
+        accent: const Color(0xFF059669),
+        waveColor: const Color(0xFFD1FAE5),
+        gradientColors: const [Color(0xFF34D399), Color(0xFF059669)],
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.localServices),
       ),
       KioskServiceTile(
         icon: Icons.favorite_rounded,
         title: 'Well Being',
         subtitle: 'Heart rate, blood oxygen, and temperature',
-        accent: const Color(0xFFE6007A),
-        gradientColors: const [Color(0xFFFF4081), Color(0xFFE6007A)],
+        accent: const Color(0xFFE11D48),
+        waveColor: const Color(0xFFFFE4E6),
+        gradientColors: const [Color(0xFFFB7185), Color(0xFFE11D48)],
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
       ),
       KioskServiceTile(
         icon: Icons.battery_charging_full_rounded,
         title: 'Phone Charging',
         subtitle: 'Watch a short message, then charge your phone',
-        accent: const Color(0xFFFB8C00),
-        gradientColors: const [Color(0xFFFFB300), Color(0xFFFB8C00)],
+        accent: const Color(0xFFD97706),
+        waveColor: const Color(0xFFFEF3C7),
+        gradientColors: const [Color(0xFFFBBF24), Color(0xFFD97706)],
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.charging),
       ),
       KioskServiceTile(
         icon: Icons.auto_awesome_rounded,
         title: 'Astrology',
         subtitle: 'Kundali · Palm · Match · Today',
-        accent: const Color(0xFF7928CA),
-        gradientColors: const [Color(0xFF9C27B0), Color(0xFF673AB7)],
+        accent: const Color(0xFF7C3AED),
+        waveColor: const Color(0xFFEDE9FE),
+        gradientColors: const [Color(0xFFA855F7), Color(0xFF7C3AED)],
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
       ),
       KioskServiceTile(
         icon: Icons.local_gas_station_rounded,
         title: 'Fuel Stations',
         subtitle: 'Petrol, diesel, CNG, and EV stations nearby',
-        accent: const Color(0xFFF4511E),
-        gradientColors: const [Color(0xFFFF7043), Color(0xFFE64A19)],
+        accent: const Color(0xFFEA580C),
+        waveColor: const Color(0xFFFFEDD5),
+        gradientColors: const [Color(0xFFFB923C), Color(0xFFEA580C)],
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.fuelStations),
       ),
     ];
@@ -282,70 +288,157 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  RichText(
-                    text: TextSpan(
+                  // Top Pill Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF2E1C48) : const Color(0xFFFDF2F8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF6B21A8) : const Color(0xFFFBCFE8),
+                        width: 1.1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        TextSpan(
-                          text: 'Select a ',
+                        const Icon(Icons.auto_awesome_rounded, size: 13, color: Color(0xFFEC4899)),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Athena Smart Kiosk',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 34,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                            color: colors.textPrimary,
-                          ),
-                        ),
-                        TextSpan(
-                          text: 'Service',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontSize: 34,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                            color: colors.accentMagenta,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? const Color(0xFFF472B6) : const Color(0xFFBE185D),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  // Magenta accent underline
+
+                  // Headline: Select a Service ✨
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Select a ',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                      ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
+                        ).createShader(bounds),
+                        child: const Text(
+                          'Service',
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 34,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text('✨', style: TextStyle(fontSize: 22)),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+
+                  // Glowing Gradient Underline
                   Container(
-                    width: 54,
-                    height: 4,
+                    width: 64,
+                    height: 4.5,
                     decoration: BoxDecoration(
-                      color: colors.accentMagenta,
-                      borderRadius: BorderRadius.circular(2),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFE11D48).withValues(alpha: 0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Touch a tile to begin',
-                    style: TextStyle(
-                      fontFamily: 'PlusJakartaSans',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: colors.textSecondary,
-                    ),
+                  const SizedBox(height: 8),
+
+                  // Subtitle
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.touch_app_outlined,
+                        size: 16,
+                        color: colors.textSecondary.withValues(alpha: 0.8),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Touch any card below to start your service',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 12),
-            SizedBox(
-              height: 56,
-              child: FilledButton.icon(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed(AppRoutes.emergency),
-                icon: const Icon(Icons.sos_outlined, size: 22),
-                label: const Text('Emergency'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFE11D48),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(0, 56),
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+
+            // Emergency Action Button
+            Container(
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFF43F5E), Color(0xFFE11D48)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFE11D48).withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.emergency),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.sos_rounded, size: 22, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Emergency',
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -455,31 +548,31 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'ATHENA',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontWeight: FontWeight.w800,
-                            fontSize: 20,
-                            letterSpacing: 1.1,
-                            color: colors.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          'Your Smart Everyday Assistant',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 10.5,
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
+                    // Column(
+                    //   mainAxisAlignment: MainAxisAlignment.center,
+                    //   crossAxisAlignment: CrossAxisAlignment.start,
+                    //   children: [
+                    //     Text(
+                    //       'ATHENA',
+                    //       style: TextStyle(
+                    //         fontFamily: 'PlusJakartaSans',
+                    //         fontWeight: FontWeight.w800,
+                    //         fontSize: 20,
+                    //         letterSpacing: 1.1,
+                    //         color: colors.textPrimary,
+                    //       ),
+                    //     ),
+                    //     Text(
+                    //       'Your Smart Everyday Assistant',
+                    //       style: TextStyle(
+                    //         fontFamily: 'PlusJakartaSans',
+                    //         fontWeight: FontWeight.w500,
+                    //         fontSize: 10.5,
+                    //         color: colors.textSecondary,
+                    //       ),
+                    //     ),
+                    //   ],
+                    // ),
                   ],
                 ),
                 const SizedBox(width: 12),
@@ -528,9 +621,9 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                     ),
                     const SizedBox(width: 12),
 
-                    // Dark/Light Theme Mode Toggle (Sun/Moon capsule)
-                    const ThemeModeTogglePill(),
-                    const SizedBox(width: 14),
+                    // Dark/Light Theme Mode Toggle (commented out for now; uncomment if toggle is needed later)
+                    // const ThemeModeTogglePill(),
+                    // const SizedBox(width: 14),
 
                     // Live Clock & Date
                     const KioskClock(showDate: true),

@@ -65,6 +65,8 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -74,16 +76,19 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
         ),
         Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
+            constraints: const BoxConstraints(maxWidth: 540),
             child: GlassPanel(
-              padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
-              borderColor: widget.accent.withValues(alpha: 0.55),
+              padding: const EdgeInsets.fromLTRB(36, 36, 36, 32),
+              borderColor: widget.accent.withValues(alpha: 0.45),
+              color: isDark ? const Color(0xFF131126).withValues(alpha: 0.92) : Colors.white.withValues(alpha: 0.94),
+              borderRadius: 28,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 1. Double Orbiting Planetary Rings
                   SizedBox(
-                    width: 160,
-                    height: 160,
+                    width: 170,
+                    height: 170,
                     child: AnimatedBuilder(
                       animation: _orbit,
                       builder: (context, _) {
@@ -94,18 +99,19 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
                           ),
                           child: Center(
                             child: Container(
-                              width: 88,
-                              height: 88,
+                              width: 92,
+                              height: 92,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: widget.accent.withValues(alpha: 0.7),
-                                  width: 1.5,
+                                  color: widget.accent.withValues(alpha: 0.75),
+                                  width: 2.0,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: widget.accent.withValues(alpha: 0.28),
-                                    blurRadius: 18,
+                                    color: widget.accent.withValues(alpha: 0.35),
+                                    blurRadius: 24,
+                                    spreadRadius: 2,
                                   ),
                                 ],
                               ),
@@ -121,37 +127,105 @@ class _AstrologyCastingViewState extends State<AstrologyCastingView>
                       },
                     ),
                   ),
-                  const SizedBox(height: 22),
-                  Text(
-                    'CASTING YOUR CHART',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: widget.accent,
-                          letterSpacing: 2.2,
-                          fontWeight: FontWeight.w700,
+                  const SizedBox(height: 24),
+
+                  // 2. Cosmic Status Pill
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: widget.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: widget.accent.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome, size: 14, color: widget.accent),
+                        const SizedBox(width: 8),
+                        Text(
+                          'ALIGNING THE STARS',
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 12.5,
+                            letterSpacing: 2.0,
+                            fontWeight: FontWeight.w700,
+                            color: widget.accent,
+                          ),
                         ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  AnimatedBuilder(
-                    animation: _copy,
-                    builder: (context, _) {
-                      final t = Curves.easeInOut.transform(_copy.value);
-                      final opacity = t < 0.15
-                          ? t / 0.15
-                          : t > 0.85
-                              ? (1 - t) / 0.15
-                              : 1.0;
-                      return Opacity(
-                        opacity: opacity.clamp(0.0, 1.0),
-                        child: Text(
-                          _lines[_lineIndex],
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: AstrologyColors.text,
-                                height: 1.35,
+                  const SizedBox(height: 16),
+
+                  // 3. Rotating status message
+                  SizedBox(
+                    height: 38,
+                    child: AnimatedBuilder(
+                      animation: _copy,
+                      builder: (context, _) {
+                        final t = Curves.easeInOut.transform(_copy.value);
+                        final opacity = t < 0.15
+                            ? t / 0.15
+                            : t > 0.85
+                                ? (1 - t) / 0.15
+                                : 1.0;
+                        return Opacity(
+                          opacity: opacity.clamp(0.0, 1.0),
+                          child: Text(
+                            _lines[_lineIndex],
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              height: 1.35,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // 4. Shimmering progress bar
+                  Container(
+                    width: 220,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: widget.accent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: AnimatedBuilder(
+                      animation: _orbit,
+                      builder: (context, _) {
+                        return FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: 0.3 + 0.65 * ((math.sin(_orbit.value * math.pi * 2) + 1) / 2),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(3),
+                              gradient: LinearGradient(
+                                colors: [
+                                  widget.accent.withValues(alpha: 0.5),
+                                  widget.accent,
+                                  const Color(0xFFFBBF24),
+                                ],
                               ),
-                        ),
-                      );
-                    },
+                              boxShadow: [
+                                BoxShadow(
+                                  color: widget.accent.withValues(alpha: 0.6),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -172,22 +246,44 @@ class _OrbitPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final radius = size.shortestSide * 0.42;
-    final ring = Paint()
+    final outerRadius = size.shortestSide * 0.46;
+    final innerRadius = size.shortestSide * 0.35;
+
+    // Outer Orbit Ring
+    final outerRing = Paint()
       ..color = color.withValues(alpha: 0.28)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    canvas.drawCircle(center, radius, ring);
+      ..strokeWidth = 1.4;
+    canvas.drawCircle(center, outerRadius, outerRing);
 
-    final paint = Paint()..style = PaintingStyle.fill;
-    for (var i = 0; i < 8; i++) {
-      final angle = (t * math.pi * 2) + (i * math.pi * 2 / 8);
+    // Inner Orbit Ring
+    final innerRing = Paint()
+      ..color = color.withValues(alpha: 0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawCircle(center, innerRadius, innerRing);
+
+    // Outer Planets (clockwise)
+    final planetPaint = Paint()..style = PaintingStyle.fill;
+    for (var i = 0; i < 6; i++) {
+      final angle = (t * math.pi * 2) + (i * math.pi * 2 / 6);
       final p = Offset(
-        center.dx + math.cos(angle) * radius,
-        center.dy + math.sin(angle) * radius,
+        center.dx + math.cos(angle) * outerRadius,
+        center.dy + math.sin(angle) * outerRadius,
       );
-      paint.color = color.withValues(alpha: 0.4 + (i % 3) * 0.18);
-      canvas.drawCircle(p, i.isEven ? 4.2 : 2.8, paint);
+      planetPaint.color = color.withValues(alpha: 0.45 + (i % 3) * 0.22);
+      canvas.drawCircle(p, i.isEven ? 4.5 : 3.0, planetPaint);
+    }
+
+    // Inner Planets (counter-clockwise)
+    for (var i = 0; i < 4; i++) {
+      final angle = (-t * math.pi * 2 * 1.3) + (i * math.pi * 2 / 4);
+      final p = Offset(
+        center.dx + math.cos(angle) * innerRadius,
+        center.dy + math.sin(angle) * innerRadius,
+      );
+      planetPaint.color = const Color(0xFFFBBF24).withValues(alpha: 0.65);
+      canvas.drawCircle(p, 3.2, planetPaint);
     }
   }
 

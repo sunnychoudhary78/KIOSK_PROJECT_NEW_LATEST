@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class ThemeModeController extends Notifier<ThemeMode> {
   @override
   ThemeMode build() {
-    // By default, the app follows the operating system's theme
-    return ThemeMode.system;
+    // Fixed to Light mode by default; can switch back to ThemeMode.system if needed.
+    return ThemeMode.light;
   }
 
   /// Toggles between Light and Dark mode.

@@ -426,7 +426,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
 
     Widget? leading;
     Widget? trailing;
-    String step = 'Palm';
+    String step = 'Palm Scan';
     final palmReady = state.quality?.ok == true;
     switch (state.phase) {
       case AstrologyPhase.capture:
@@ -435,11 +435,50 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
           icon: Icons.arrow_back,
           onPressed: _goBack,
         );
-        trailing = KioskPrimaryButton(
-          label: palmReady ? 'Seal palm reading' : 'Capture palm',
-          onPressed: _cameraReady ? _captureNow : null,
+        trailing = Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF9333EA), Color(0xFFEC4899)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFEC4899).withValues(alpha: 0.35),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(28),
+              onTap: _cameraReady ? _captureNow : null,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.camera_alt_outlined, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Capture Palm',
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         );
-        step = 'Palm';
+        step = 'Palm Scan';
       case AstrologyPhase.form:
         leading = KioskGhostButton(
           label: 'Retake palm',
@@ -473,9 +512,68 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     Widget page = VisitorSessionPopScope(
       endSessionOnPop: false,
       child: KioskShell(
-        title: 'Astrology',
+        headerExtra: state.phase == AstrologyPhase.capture
+            ? const PalmTopStepper(activeStep: 0)
+            : (state.phase == AstrologyPhase.submitting
+                ? const PalmTopStepper(activeStep: 1)
+                : (state.phase == AstrologyPhase.result
+                    ? const PalmTopStepper(activeStep: 2)
+                    : null)),
+        titleWidget: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF1E1B2E)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF3B2F50)
+                  : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF9333EA).withValues(alpha: 0.10),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.pan_tool_outlined,
+                color: Color(0xFF9333EA),
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Palm Reading',
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : const Color(0xFF1E1B4B),
+                ),
+              ),
+            ],
+          ),
+        ),
         onHome: _endSession,
         stepLabel: step,
+        footerCenter: const Text(
+          'Palm Scan',
+          style: TextStyle(
+            fontFamily: 'PlusJakartaSans',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF64748B),
+          ),
+        ),
         footerLeading: leading,
         footerTrailing: trailing,
         body: AnimatedSwitcher(
@@ -636,37 +734,63 @@ class _CaptureViewState extends State<_CaptureView>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final ok = widget.quality?.ok == true;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 4, 18, 4),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const PalmFlowStepRail(activeIndex: 0),
+          const SizedBox(height: 4),
+          // Heading: "Position Your Palm ✨" matching the reference screenshot
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Position Your ',
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF1E1B4B),
+                  letterSpacing: -0.5,
+                ),
+              ),
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [Color(0xFF9333EA), Color(0xFFEC4899)],
+                ).createShader(bounds),
+                child: const Text(
+                  'Palm',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Text(
+                '✨',
+                style: TextStyle(fontSize: 18),
+              ),
+            ],
+          ),
           const SizedBox(height: 4),
           Text(
-            'Position your palm',
+            'Place your open palm inside the guide to begin scanning.',
             textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: AstrologyColors.palm,
-              fontWeight: FontWeight.w800,
-              height: 1.1,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            ok
-                ? 'Hold steady — sealing your reading'
-                : 'Place your open palm inside the guide',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: AstrologyColors.muted,
-              height: 1.2,
-            ),
-          ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Expanded(
             child: PalmCaptureViewport(
               camera: widget.camera,
