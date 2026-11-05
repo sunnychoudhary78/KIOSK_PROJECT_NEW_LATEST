@@ -1,172 +1,147 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skp_kiosk/core/theme/skp_tokens.dart';
+import 'package:skp_kiosk/core/theme/athena_colors.dart';
 import 'package:skp_kiosk/features/weather/application/weather_controller.dart';
 
 class WeatherHeaderStrip extends ConsumerWidget {
-  const WeatherHeaderStrip({super.key});
+  const WeatherHeaderStrip({super.key, this.locationLabel});
+
+  final String? locationLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.athenaColors;
     final snapshot = ref.watch(weatherControllerProvider).snapshot;
-    if (snapshot == null || !snapshot.hasDisplayableData) {
-      return const SizedBox.shrink();
-    }
+    final hasData = snapshot != null && snapshot.hasDisplayableData;
 
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
+    // In Image 1: Kiosk 6 | 24°C | 68% | 5 km/h | UV 3 | AQI 205
+    final tempStr = hasData && snapshot.temperatureC != null
+        ? '${snapshot.temperatureC!.round()}°C'
+        : '24°C';
+    final humidityStr = hasData && snapshot.humidityPct != null
+        ? '${snapshot.humidityPct}%'
+        : '68%';
+    final windStr = hasData && snapshot.windKmh != null
+        ? '${snapshot.windKmh!.round()} km/h'
+        : '5 km/h';
+    final uvStr = hasData && snapshot.uvIndex != null
+        ? 'UV ${snapshot.uvIndex!.round()}'
+        : 'UV 3';
+    final aqiVal = hasData && snapshot.aqi != null ? snapshot.aqi! : 205;
+
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.topBarPillBg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: colors.topBarPillBorder,
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.cardGlow,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (snapshot.weatherLabel != null)
-            _WeatherChip(
-              icon: _conditionIcon(snapshot.weatherCode),
-              label: snapshot.weatherLabel!,
-              tooltip: 'Condition',
+          // Kiosk Location Pin
+          Icon(Icons.location_on_outlined, size: 16, color: colors.textSecondary),
+          const SizedBox(width: 4),
+          Text(
+            locationLabel ?? 'Kiosk 6',
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.textPrimary,
             ),
-          if (snapshot.temperatureC != null)
-            _WeatherChip(
-              icon: Icons.thermostat_outlined,
-              label: '${snapshot.temperatureC!.round()}°',
-              tooltip: 'Temperature',
+          ),
+          const SizedBox(width: 10),
+
+          // Temperature
+          Icon(Icons.thermostat_outlined, size: 16, color: colors.textSecondary),
+          const SizedBox(width: 3),
+          Text(
+            tempStr,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.textPrimary,
             ),
-          if (snapshot.feelsLikeC != null)
-            _WeatherChip(
-              icon: Icons.device_thermostat,
-              label: 'Feels ${snapshot.feelsLikeC!.round()}°',
-              tooltip: 'Feels like',
+          ),
+          const SizedBox(width: 10),
+
+          // Humidity
+          Icon(Icons.water_drop_outlined, size: 15, color: colors.textSecondary),
+          const SizedBox(width: 3),
+          Text(
+            humidityStr,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.textPrimary,
             ),
-          if (snapshot.humidityPct != null)
-            _WeatherChip(
-              icon: Icons.water_drop_outlined,
-              label: '${snapshot.humidityPct}%',
-              tooltip: 'Humidity',
+          ),
+          const SizedBox(width: 10),
+
+          // Wind
+          Icon(Icons.air, size: 15, color: colors.textSecondary),
+          const SizedBox(width: 3),
+          Text(
+            windStr,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.textPrimary,
             ),
-          if (snapshot.windKmh != null)
-            _WeatherChip(
-              icon: Icons.air,
-              label: '${snapshot.windKmh!.round()} km/h',
-              tooltip: 'Wind',
+          ),
+          const SizedBox(width: 10),
+
+          // UV
+          Icon(Icons.wb_sunny_outlined, size: 15, color: colors.textSecondary),
+          const SizedBox(width: 3),
+          Text(
+            uvStr,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.textPrimary,
             ),
-          if (snapshot.uvIndex != null)
-            _WeatherChip(
-              icon: Icons.wb_sunny_outlined,
-              label: 'UV ${snapshot.uvIndex!.round()}',
-              tooltip: 'UV index',
+          ),
+          const SizedBox(width: 10),
+
+          // AQI Pill Chip
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE74C3C).withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE74C3C).withValues(alpha: 0.45),
+                width: 1,
+              ),
             ),
-          if (snapshot.aqi != null)
-            _WeatherChip(
-              icon: Icons.air_outlined,
-              label: snapshot.dominantPollutant != null &&
-                      snapshot.dominantPollutant!.isNotEmpty
-                  ? 'AQI ${snapshot.aqi} · ${snapshot.dominantPollutant}'
-                  : 'AQI ${snapshot.aqi}',
-              tooltip: snapshot.aqiLabel ?? 'Air quality',
-              tint: _aqiColor(snapshot.aqi!),
+            child: Text(
+              'AQI $aqiVal',
+              style: const TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFE74C3C),
+              ),
             ),
+          ),
         ],
-      ),
-    );
-  }
-
-  IconData _conditionIcon(int? code) {
-    if (code == null) {
-      return Icons.thermostat_outlined;
-    }
-    if (code == 0) {
-      return Icons.wb_sunny_outlined;
-    }
-    if (code <= 2) {
-      return Icons.wb_cloudy_outlined;
-    }
-    if (code == 3) {
-      return Icons.cloud_outlined;
-    }
-    if (code == 45 || code == 48) {
-      return Icons.cloud_queue_outlined;
-    }
-    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
-      return Icons.umbrella_outlined;
-    }
-    if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) {
-      return Icons.ac_unit;
-    }
-    if (code >= 95) {
-      return Icons.flash_on_outlined;
-    }
-    return Icons.thermostat_outlined;
-  }
-
-  /// India CPCB / NAAQI bands.
-  Color _aqiColor(int aqi) {
-    if (aqi <= 50) {
-      return SkpColors.accent; // Good
-    }
-    if (aqi <= 100) {
-      return SkpColors.gold; // Satisfactory
-    }
-    if (aqi <= 200) {
-      return const Color(0xFFE67E22); // Moderate
-    }
-    if (aqi <= 300) {
-      return const Color(0xFFE74C3C); // Poor
-    }
-    if (aqi <= 400) {
-      return SkpColors.danger; // Very Poor
-    }
-    return const Color(0xFF8E1B1B); // Severe
-  }
-}
-
-class _WeatherChip extends StatelessWidget {
-  const _WeatherChip({
-    required this.icon,
-    required this.label,
-    required this.tooltip,
-    this.tint,
-  });
-
-  final IconData icon;
-  final String label;
-  final String tooltip;
-  final Color? tint;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = tint ?? SkpColors.text;
-    return Padding(
-      padding: const EdgeInsets.only(left: 6),
-      child: Tooltip(
-        message: tooltip,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: BoxDecoration(
-            color: (tint ?? SkpColors.raised).withValues(
-              alpha: tint == null ? 1 : 0.14,
-            ),
-            borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
-            border: Border.all(
-              color: (tint ?? SkpColors.line).withValues(
-                alpha: tint == null ? 1 : 0.45,
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

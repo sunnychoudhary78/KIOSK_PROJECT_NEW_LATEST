@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:skp_kiosk/core/theme/skp_tokens.dart';
+import 'package:skp_kiosk/core/theme/athena_colors.dart';
+import 'package:skp_kiosk/core/ui/kiosk_wave_background.dart';
 
 class KioskScaffold extends StatelessWidget {
   const KioskScaffold({
@@ -15,48 +16,24 @@ class KioskScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canvas = cosmic ? const Color(0xFF0B1220) : SkpColors.canvas;
+    if (cosmic) {
+      return Material(
+        color: const Color(0xFF0B1220),
+        child: body,
+      );
+    }
+
+    if (useAtmosphere) {
+      return Material(
+        color: Colors.transparent,
+        child: KioskWaveBackground(child: body),
+      );
+    }
+
+    final colors = context.athenaColors;
     return Material(
-      color: canvas,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (useAtmosphere && !cosmic)
-            const IgnorePointer(child: KioskAtmosphere()),
-          body,
-        ],
-      ),
-    );
-  }
-}
-
-class KioskAtmosphere extends StatelessWidget {
-  const KioskAtmosphere({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Stack(
-      fit: StackFit.expand,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(-0.7, -0.85),
-              radius: 1.15,
-              colors: [Color(0x280F6A5A), Color(0x00F4F7F8)],
-            ),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(0.85, 1.05),
-              radius: 0.9,
-              colors: [Color(0x1A2EC4A0), Color(0x00F4F7F8)],
-            ),
-          ),
-        ),
-      ],
+      color: colors.canvas,
+      child: body,
     );
   }
 }
