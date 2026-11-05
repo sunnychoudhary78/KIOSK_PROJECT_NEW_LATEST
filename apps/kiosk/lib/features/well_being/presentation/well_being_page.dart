@@ -13,6 +13,7 @@ import 'package:skp_kiosk/features/well_being/application/well_being_controller.
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
+import 'package:skp_kiosk/features/well_being/presentation/widgets/well_being_marks.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
 /// Dual-sensor Well Being flow (USB Serial JSON protocol).
@@ -137,43 +138,173 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
         state.connectionStatus != SerialConnectionStatus.connecting;
     final complete = state.phase == WellBeingPhase.oxiComplete ||
         state.phase == WellBeingPhase.tempComplete;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final currentStep = switch (state.phase) {
+      WellBeingPhase.choose => 1,
+      WellBeingPhase.oxiIdle ||
+      WellBeingPhase.oxiMeasuring ||
+      WellBeingPhase.oxiCancelled ||
+      WellBeingPhase.tempIdle ||
+      WellBeingPhase.tempMeasuring =>
+        2,
+      WellBeingPhase.oxiComplete ||
+      WellBeingPhase.tempComplete =>
+        3,
+    };
 
     return VisitorSessionPopScope(
       child: KioskShell(
-        title: 'Well Being',
-        onHome: _endSession,
-        headerExtra: kDebugMode
-            ? IconButton(
-                tooltip: 'Serial Debug',
-                onPressed: () {
-                  Navigator.of(context).pushNamed(AppRoutes.serialDebug);
-                },
-                icon: const Icon(Icons.bug_report_outlined, color: SkpColors.muted),
-              )
-            : null,
-        stepLabel: switch (state.phase) {
-          WellBeingPhase.choose => 'Choose',
-          WellBeingPhase.oxiIdle ||
-          WellBeingPhase.oxiMeasuring ||
-          WellBeingPhase.oxiCancelled =>
-            'Blood oxygen',
-          WellBeingPhase.oxiComplete => 'Results',
-          WellBeingPhase.tempIdle ||
-          WellBeingPhase.tempMeasuring =>
-            'Temperature',
-          WellBeingPhase.tempComplete => 'Results',
-        },
-        footerLeading: showBack
-            ? KioskGhostButton(
-                label: 'Back',
-                icon: Icons.arrow_back,
-                onPressed: () => controller.returnToHub(),
-              )
-            : KioskGhostButton(
-                label: 'Back',
-                icon: Icons.arrow_back,
-                onPressed: _endSession,
+        titleWidget: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF2E1222) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? const Color(0xFF6B1D45) : const Color(0xFFFCE7F3),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFE11D48).withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('💓', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Text(
+                'Health Measurement',
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF1E1B4B),
+                ),
+              ),
+            ],
+          ),
+        ),
+        onHome: _endSession,
+        headerExtra: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F172A) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+              width: 1.0,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x08000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: state.isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (state.isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444))
+                          .withValues(alpha: 0.5),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    state.isConnected ? 'Device Ready' : 'Device Offline',
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      height: 1.1,
+                    ),
+                  ),
+                  Text(
+                    state.isConnected
+                        ? 'Connected · ${state.portName ?? "COM3"}'
+                        : 'Disconnected',
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        footerCenter: _WellBeingStepIndicator(step: currentStep),
+        footerLeading: Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1738) : Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: isDark ? const Color(0xFF4A3474) : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: showBack ? () => controller.returnToHub() : _endSession,
+              borderRadius: BorderRadius.circular(22),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.arrow_back_rounded,
+                      size: 18,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Back',
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         footerTrailing: complete
             ? Row(
                 mainAxisSize: MainAxisSize.min,
@@ -191,26 +322,28 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                   ),
                 ],
               )
-            : null,
+            : const _PartnerPill(),
         body: Padding(
-          padding: const EdgeInsets.fromLTRB(32, 12, 32, 12),
+          padding: const EdgeInsets.fromLTRB(32, 10, 32, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _ConnectionBanner(
-                label: state.connectionLabel,
-                portName: state.portName,
-                status: state.connectionStatus,
-                activeMode: state.activeMode,
-                fingerDetected: state.fingerDetected,
-                objectDetected: state.objectDetected,
-                error: state.lastError,
-                onRetry: state.connectionStatus == SerialConnectionStatus.error ||
-                        state.connectionStatus == SerialConnectionStatus.disconnected
-                    ? () => controller.retryConnect()
-                    : null,
-              ),
-              const SizedBox(height: 16),
+              if (state.phase != WellBeingPhase.choose &&
+                  (state.connectionStatus == SerialConnectionStatus.error ||
+                      state.connectionStatus == SerialConnectionStatus.disconnected))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _ConnectionBanner(
+                    label: state.connectionLabel,
+                    portName: state.portName,
+                    status: state.connectionStatus,
+                    activeMode: state.activeMode,
+                    fingerDetected: state.fingerDetected,
+                    objectDetected: state.objectDetected,
+                    error: state.lastError,
+                    onRetry: () => controller.retryConnect(),
+                  ),
+                ),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 280),
@@ -340,111 +473,728 @@ class _ChooseView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const KioskDisclaimer(message: KioskDisclaimerCopy.wellBeing),
-        const SizedBox(height: 12),
-        Text(
-          connected ? 'Choose a measurement' : 'Connect the sensor to begin',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Select Blood Oxygen or Temperature. Only one sensor runs at a time.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: Row(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. Hero Header + 3D Health Terminal Illustration
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: _ModeOptionCard(
-                  icon: Icons.bloodtype_outlined,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          'Check Your ',
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Color(0xFFE11D48), Color(0xFFF43F5E), Color(0xFFEC4899)],
+                          ).createShader(bounds),
+                          child: const Text(
+                            'Health',
+                            style: TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.6,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Quick, safe and non-invasive health measurements.',
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Glowing Underline Accent Bar
+                    Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFE11D48), Color(0xFFF43F5E)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFF43F5E).withValues(alpha: 0.5),
+                            blurRadius: 8,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // 3 Feature highlight pills
+                    Row(
+                      children: [
+                        _FeaturePill(
+                          icon: Icons.bolt_rounded,
+                          iconColor: const Color(0xFFD946EF),
+                          title: 'Quick & Easy',
+                          subtitle: 'Get results in seconds',
+                          isDark: isDark,
+                        ),
+                        const SizedBox(width: 8),
+                        _FeaturePill(
+                          icon: Icons.shield_outlined,
+                          iconColor: const Color(0xFFE11D48),
+                          title: 'Safe & Contactless',
+                          subtitle: 'Hygienic and user-friendly',
+                          isDark: isDark,
+                        ),
+                        const SizedBox(width: 8),
+                        _FeaturePill(
+                          icon: Icons.bar_chart_rounded,
+                          iconColor: const Color(0xFF8B5CF6),
+                          title: 'Instant Results',
+                          subtitle: 'On-screen measurement',
+                          isDark: isDark,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              const HealthHeroIllustration(),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // 2. Privacy Banner (Matching Reference Image)
+          const _WellBeingPrivacyBanner(),
+
+          const SizedBox(height: 12),
+
+          // 3. Section Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(width: 32, height: 1.5, color: const Color(0xFFF43F5E)),
+              const SizedBox(width: 10),
+              Text(
+                'Choose a Measurement',
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(width: 32, height: 1.5, color: const Color(0xFFF43F5E)),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Select Blood Oxygen or Temperature. Only one sensor runs at a time.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // 4. Two Measurement Cards
+          Row(
+            children: [
+              Expanded(
+                child: _MeasurementCard(
                   title: 'Blood Oxygen',
-                  subtitle: 'Heart rate and SpO₂ with your fingertip (~15s)',
-                  enabled: connected,
+                  subtitle: 'Measure your oxygen level (SpO2)\nand heart rate with your fingertip.',
+                  graphic: const Oximeter3DGraphic(size: 88),
+                  accentColor: const Color(0xFF0284C7),
+                  cardGradient: isDark
+                      ? const LinearGradient(
+                          colors: [Color(0xFF131D33), Color(0xFF172554)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : const LinearGradient(
+                          colors: [Color(0xFFFFFFFF), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
+                          stops: [0.35, 0.75, 1.0],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                  borderColor: isDark ? const Color(0xFF0369A1) : const Color(0xFFBAE6FD),
+                  shadowColor: const Color(0xFF0284C7),
+                  tags: const [
+                    (icon: '🫁', label: 'SpO2 (Oxygen Level)'),
+                    (icon: '💓', label: 'Heart Rate'),
+                  ],
                   onTap: onOxygen,
+                  isDark: isDark,
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _ModeOptionCard(
-                  icon: Icons.thermostat_outlined,
+                child: _MeasurementCard(
                   title: 'Temperature',
-                  subtitle: 'Non-contact reading — hold forehead near the sensor (~5s)',
-                  enabled: connected,
+                  subtitle: 'Getting your body temperature...\n',
+                  graphic: const Thermometer3DGraphic(size: 88),
+                  accentColor: const Color(0xFFE11D48),
+                  cardGradient: isDark
+                      ? const LinearGradient(
+                          colors: [Color(0xFF241523), Color(0xFF3B1832)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : const LinearGradient(
+                          colors: [Color(0xFFFFFFFF), Color(0xFFFDF2F8), Color(0xFFFCE7F3)],
+                          stops: [0.35, 0.75, 1.0],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                  borderColor: isDark ? const Color(0xFF9F1239) : const Color(0xFFFBCFE8),
+                  shadowColor: const Color(0xFFE11D48),
+                  showProgressBar: true,
                   onTap: onTemperature,
+                  isDark: isDark,
                 ),
               ),
             ],
           ),
+
+          const SizedBox(height: 10),
+
+          // 5. Medical Disclaimer
+          const _MedicalDisclaimer(),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeaturePill extends StatelessWidget {
+  const _FeaturePill({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.isDark,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1738) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? const Color(0xFF4A3474) : const Color(0xFFE2E8F0),
+            width: 1.0,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x06000000),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
-        const _MedicalDisclaimer(),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 16, color: iconColor),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WellBeingPrivacyBanner extends StatelessWidget {
+  const _WellBeingPrivacyBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF064E3B).withValues(alpha: 0.35) : const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF059669).withValues(alpha: 0.45) : const Color(0xFFA7F3D0),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.verified_user_rounded,
+              color: Color(0xFF059669),
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'We do not save health readings. Measurements stay on this screen only and are cleared when you leave.',
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF065F46),
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MeasurementCard extends StatelessWidget {
+  const _MeasurementCard({
+    required this.title,
+    required this.subtitle,
+    required this.graphic,
+    required this.accentColor,
+    required this.cardGradient,
+    required this.borderColor,
+    required this.shadowColor,
+    required this.onTap,
+    required this.isDark,
+    this.tags,
+    this.showProgressBar = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget graphic;
+  final Color accentColor;
+  final Gradient cardGradient;
+  final Color borderColor;
+  final Color shadowColor;
+  final VoidCallback onTap;
+  final bool isDark;
+  final List<({String icon, String label})>? tags;
+  final bool showProgressBar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: cardGradient,
+        border: Border.all(
+          color: borderColor.withValues(alpha: isDark ? 0.7 : 0.85),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor.withValues(alpha: isDark ? 0.22 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          splashColor: accentColor.withValues(alpha: 0.12),
+          highlightColor: accentColor.withValues(alpha: 0.06),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                graphic,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          height: 1.3,
+                        ),
+                      ),
+                      if (tags != null) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final tag in tags!)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? const Color(0xFF1E293B)
+                                      : const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(tag.icon, style: const TextStyle(fontSize: 12)),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      tag.label,
+                                      style: TextStyle(
+                                        fontFamily: 'PlusJakartaSans',
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                      if (showProgressBar) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(7),
+                                  color: isDark ? const Color(0xFF332A55) : const Color(0xFFFCE7F3),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(7),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: FractionallySizedBox(
+                                      widthFactor: 0.58,
+                                      child: Container(
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Color(0xFFE11D48),
+                                              Color(0xFFF43F5E),
+                                              Color(0xFFFB7185),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              '58%',
+                              style: TextStyle(
+                                fontFamily: 'PlusJakartaSans',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: isDark ? 0.8 : 0.85),
+                      width: 1.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.20),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      color: accentColor,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WellBeingStepIndicator extends StatelessWidget {
+  const _WellBeingStepIndicator({required this.step});
+
+  final int step;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _StepNode(number: 1, label: 'Choose', isCurrent: step == 1, isPast: step > 1, isDark: isDark),
+        Container(
+          width: 32,
+          height: 1.5,
+          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+        ),
+        _StepNode(number: 2, label: 'Measure', isCurrent: step == 2, isPast: step > 2, isDark: isDark),
+        Container(
+          width: 32,
+          height: 1.5,
+          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+        ),
+        _StepNode(number: 3, label: 'Results', isCurrent: step == 3, isPast: false, isDark: isDark),
       ],
     );
   }
 }
 
-class _ModeOptionCard extends StatelessWidget {
-  const _ModeOptionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.enabled,
-    required this.onTap,
+class _StepNode extends StatelessWidget {
+  const _StepNode({
+    required this.number,
+    required this.label,
+    required this.isCurrent,
+    required this.isPast,
+    required this.isDark,
   });
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool enabled;
-  final VoidCallback onTap;
+  final int number;
+  final String label;
+  final bool isCurrent;
+  final bool isPast;
+  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: enabled ? SkpColors.panel : SkpColors.canvas,
-      borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-        child: Container(
-          padding: const EdgeInsets.all(24),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
+            shape: BoxShape.circle,
+            color: isCurrent
+                ? const Color(0xFFE11D48)
+                : (isPast ? const Color(0xFF10B981) : Colors.transparent),
             border: Border.all(
-              color: enabled ? SkpColors.accent.withValues(alpha: 0.45) : SkpColors.line,
+              color: isCurrent
+                  ? const Color(0xFFE11D48)
+                  : (isPast
+                      ? const Color(0xFF10B981)
+                      : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8))),
+              width: 1.6,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                icon,
-                size: 48,
-                color: enabled ? SkpColors.accentBright : SkpColors.muted,
+          child: Center(
+            child: Text(
+              '$number',
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: isCurrent || isPast
+                    ? Colors.white
+                    : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
               ),
-              const Spacer(),
-              Text(
-                title,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: enabled ? SkpColors.text : SkpColors.muted,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: enabled ? SkpColors.muted : SkpColors.muted.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'PlusJakartaSans',
+            fontSize: 14,
+            fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+            color: isCurrent
+                ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PartnerPill extends StatelessWidget {
+  const _PartnerPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1738) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF4A3474) : const Color(0xFFE2E8F0),
+          width: 1.0,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🚀', style: TextStyle(fontSize: 13)),
+          const SizedBox(width: 6),
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: 'Empowering Businesses with ',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                  ),
+                ),
+                const TextSpan(
+                  text: 'Smart IT Solutions',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFE11D48),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -891,35 +1641,92 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     required this.unit,
     this.caption,
+    this.accent = const Color(0xFFE11D48),
   });
 
   final String title;
   final String value;
   final String unit;
   final String? caption;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
-        color: SkpColors.panel,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-        border: Border.all(color: SkpColors.line),
+        color: isDark ? const Color(0xFF1E1738) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? const Color(0xFF4A3474) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: isDark ? 0.2 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          Text(title, style: theme.textTheme.labelLarge?.copyWith(color: SkpColors.muted)),
-          const SizedBox(height: 8),
-          Text(value, style: theme.textTheme.headlineMedium),
-          Text(unit, style: theme.textTheme.titleMedium?.copyWith(color: SkpColors.muted)),
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 44,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1.0,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                unit,
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: accent,
+                ),
+              ),
+            ],
+          ),
           if (caption != null) ...[
             const SizedBox(height: 10),
-            Text(
-              caption!,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelLarge?.copyWith(color: SkpColors.accentBright),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                caption!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: accent,
+                ),
+              ),
             ),
           ],
         ],
@@ -964,31 +1771,44 @@ class _MedicalDisclaimer extends StatelessWidget {
   static const _copy =
       'For general wellness and informational use only. This kiosk is not a medical device '
       'and does not provide medical diagnosis, treatment, or clinical monitoring. Readings may be '
-      'inaccurate and are not a substitute for professional medical advice, diagnosis, or treatment. '
+      'inaccurate and are not a substitute for professional medical advice. '
       'If you have health concerns, consult a qualified clinician. In an emergency, contact local '
       'emergency services immediately.';
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-        border: Border.all(color: SkpColors.line),
-        color: SkpColors.raised,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1.0,
+        ),
+        color: isDark ? const Color(0xFF0F172A).withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.8),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline, size: 20, color: SkpColors.muted),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+            ),
+            child: const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               _copy,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: SkpColors.muted,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 height: 1.35,
               ),
             ),

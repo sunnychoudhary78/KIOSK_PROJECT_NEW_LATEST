@@ -16,11 +16,16 @@ class AstrologyLocaleSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: AstrologyColors.raised,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AstrologyColors.line),
+        color: isDark ? const Color(0xFF1E1738) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF332A55) : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -53,20 +58,28 @@ class _LocaleChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Material(
-      color: selected ? accent.withValues(alpha: 0.18) : Colors.transparent,
+      color: selected
+          ? (isDark ? accent.withValues(alpha: 0.3) : accent)
+          : Colors.transparent,
       borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(9),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Text(
             label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected ? accent : AstrologyColors.muted,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                ),
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 12.5,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              color: selected
+                  ? (isDark ? Colors.white : Colors.white)
+                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+            ),
           ),
         ),
       ),
@@ -97,18 +110,30 @@ class AstrologyInsightsPanel extends StatelessWidget {
     if (bullets.isEmpty) {
       return const SizedBox.shrink();
     }
-    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
+            Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.auto_awesome, size: 14, color: accent),
+            ),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: accent,
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                 ),
               ),
             ),
@@ -119,36 +144,64 @@ class AstrologyInsightsPanel extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: compact ? 6 : 8),
+        SizedBox(height: compact ? 8 : 12),
         for (var i = 0; i < bullets.length; i++) ...[
-          if (i > 0) SizedBox(height: compact ? 4 : 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    shape: BoxShape.circle,
+          if (i > 0) SizedBox(height: compact ? 6 : 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF1E1738).withValues(alpha: 0.6)
+                  : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: accent.withValues(alpha: isDark ? 0.25 : 0.2),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.5),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  bullets[i],
-                  maxLines: compact ? 3 : 5,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AstrologyColors.text,
-                    height: 1.25,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    bullets[i],
+                    maxLines: compact ? 4 : 6,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                      height: 1.4,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ],

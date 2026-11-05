@@ -14,11 +14,13 @@ class KioskShell extends StatelessWidget {
     super.key,
     required this.body,
     this.title,
+    this.titleWidget,
     this.subtitle,
     this.onHome,
     this.showHome = true,
     this.footerLeading,
     this.stepLabel,
+    this.footerCenter,
     this.footerTrailing,
     this.headerExtra,
     this.showLogo = false,
@@ -28,11 +30,13 @@ class KioskShell extends StatelessWidget {
 
   final Widget body;
   final String? title;
+  final Widget? titleWidget;
   final String? subtitle;
   final VoidCallback? onHome;
   final bool showHome;
   final Widget? footerLeading;
   final String? stepLabel;
+  final Widget? footerCenter;
   final Widget? footerTrailing;
   final Widget? headerExtra;
   final bool showLogo;
@@ -72,7 +76,10 @@ class KioskShell extends StatelessWidget {
                 ),
 
                 // Section divider + title
-                if (title != null) ...[
+                if (titleWidget != null) ...[
+                  const SizedBox(width: 16),
+                  titleWidget!,
+                ] else if (title != null) ...[
                   const SizedBox(width: 16),
                   Container(width: 1, height: 22, color: divider),
                   const SizedBox(width: 16),
@@ -122,9 +129,9 @@ class KioskShell extends StatelessWidget {
                         const SizedBox(width: 8),
                       ],
 
-                      // Theme mode toggle
-                      const ThemeModeTogglePill(),
-                      const SizedBox(width: 8),
+                      // Theme mode toggle (commented out for now; uncomment if toggle is needed later)
+                      // const ThemeModeTogglePill(),
+                      // const SizedBox(width: 8),
 
                       // Clock capsule
                       const KioskClock(capsule: true),
@@ -177,16 +184,44 @@ class KioskShell extends StatelessWidget {
                 child: Row(
                   children: [
                     if (footerLeading != null) footerLeading!,
-                    if (stepLabel != null) ...[
+                    if (footerCenter != null) ...[
                       const Spacer(),
-                      Text(
-                        stepLabel!,
-                        style: TextStyle(
-                          fontFamily: 'PlusJakartaSans',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: colors.textSecondary,
-                        ),
+                      footerCenter!,
+                      const Spacer(),
+                    ] else if (stepLabel != null) ...[
+                      const Spacer(),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 1.5,
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Text(
+                              stepLabel!,
+                              style: TextStyle(
+                                fontFamily: 'PlusJakartaSans',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: colors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            width: 24,
+                            height: 1.5,
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                          ),
+                        ],
                       ),
                       const Spacer(),
                     ] else

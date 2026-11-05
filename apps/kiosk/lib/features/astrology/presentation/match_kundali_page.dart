@@ -338,7 +338,47 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
     Widget page = VisitorSessionPopScope(
       endSessionOnPop: false,
       child: KioskShell(
-        title: 'Match Kundalis',
+        headerExtra: MatchKundaliTopStepper(phase: state.phase),
+        titleWidget: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF241523)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF6B1D45)
+                  : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFE11D48).withValues(alpha: 0.10),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ReadingEmblem(kind: AstrologyReadingKind.match, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'Match Kundalis',
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : const Color(0xFF1E1B4B),
+                ),
+              ),
+            ],
+          ),
+        ),
         onHome: _endSession,
         stepLabel: switch (state.phase) {
           MatchKundaliPhase.groom => 'Groom',
@@ -474,6 +514,112 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
   }
 }
 
+/// Top bar stepper for Match Kundalis: (1) Groom — (2) Bride — (3) Gun Milan
+class MatchKundaliTopStepper extends StatelessWidget {
+  const MatchKundaliTopStepper({super.key, required this.phase});
+
+  final MatchKundaliPhase phase;
+
+  @override
+  Widget build(BuildContext context) {
+    final stepIndex = switch (phase) {
+      MatchKundaliPhase.groom => 0,
+      MatchKundaliPhase.bride => 1,
+      MatchKundaliPhase.loading => 2,
+      MatchKundaliPhase.result => 2,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF241523)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF6B1D45)
+              : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE11D48).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _stepItem(1, 'Groom', stepIndex == 0, stepIndex > 0),
+          _divider(stepIndex >= 1),
+          _stepItem(2, 'Bride', stepIndex == 1, stepIndex > 1),
+          _divider(stepIndex >= 2),
+          _stepItem(3, 'Gun Milan', stepIndex == 2, false),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepItem(int number, String label, bool active, bool passed) {
+    const activeColor = Color(0xFFE11D48);
+    const passedColor = Color(0xFF6366F1);
+    const inactiveColor = Color(0xFF64748B);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: active
+                ? activeColor
+                : (passed ? passedColor : Colors.transparent),
+            border: (active || passed)
+                ? null
+                : Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$number',
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: (active || passed) ? Colors.white : inactiveColor,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'PlusJakartaSans',
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active
+                ? activeColor
+                : (passed ? passedColor : inactiveColor),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _divider(bool passed) {
+    return Container(
+      width: 28,
+      height: 1.5,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: passed ? const Color(0xFFE11D48) : const Color(0xFFE2E8F0),
+    );
+  }
+}
+
 @visibleForTesting
 class GroomSummaryCard extends StatelessWidget {
   const GroomSummaryCard({
@@ -489,43 +635,120 @@ class GroomSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 210,
-      child: GlassPanel(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.person_outline,
-              color: AstrologyColors.gold,
-              size: 44,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? const Color(0xFF3B2F50) : const Color(0xFFE2E8F0),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withValues(alpha: 0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 68,
+            height: 68,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF818CF8), Color(0xFF4F46E5)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              name.isEmpty ? 'Groom' : name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AstrologyColors.goldSoft,
-                fontWeight: FontWeight.w800,
+            child: const Icon(
+              Icons.face_outlined,
+              color: Colors.white,
+              size: 38,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'Groom Profile',
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF4F46E5),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              dateOfBirth,
-              style: const TextStyle(color: AstrologyColors.text),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            name.isEmpty ? 'Groom' : name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF1E1B4B),
             ),
-            const SizedBox(height: 4),
-            Text(
-              birthPlace,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AstrologyColors.muted),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cake_outlined, size: 14, color: Color(0xFF64748B)),
+              const SizedBox(width: 6),
+              Text(
+                dateOfBirth,
+                style: const TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.place_outlined, size: 14, color: Color(0xFF64748B)),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  birthPlace,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 12,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

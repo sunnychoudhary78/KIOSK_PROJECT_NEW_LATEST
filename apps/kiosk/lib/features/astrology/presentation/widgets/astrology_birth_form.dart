@@ -278,6 +278,8 @@ class _AstrologyBirthFormPanelState
       ],
     );
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final fields = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -285,14 +287,15 @@ class _AstrologyBirthFormPanelState
           children: [
             if (emblem != null) ...[
               ReadingEmblem(kind: emblem, size: 28, color: accent),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
             ],
             Expanded(
               child: Text(
                 title,
                 style: theme.textTheme.titleMedium?.copyWith(
-                  color: accent,
-                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF1E1B4B),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
                   height: 1.1,
                 ),
               ),
@@ -300,13 +303,13 @@ class _AstrologyBirthFormPanelState
           ],
         ),
         if (subtitle.trim().isNotEmpty) ...[
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: AstrologyColors.muted,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
               height: 1.1,
             ),
           ),
@@ -481,9 +484,25 @@ class _AstrologyBirthFormPanelState
               children: [
                 if (leading != null) ...[leading, const SizedBox(width: 16)],
                 Expanded(
-                  child: GlassPanel(
-                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-                    borderColor: accent.withValues(alpha: 0.5),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(22, 16, 22, 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF3B2F50)
+                            : const Color(0xFFE2E8F0),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.08),
+                          blurRadius: 20,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
                     child: SizedBox.expand(child: fields),
                   ),
                 ),
@@ -573,6 +592,7 @@ class _AstrologyCosmicTextFieldState extends State<AstrologyCosmicTextField>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final focused = widget.focused;
     final accent = widget.accent;
     final value = widget.value;
@@ -584,17 +604,20 @@ class _AstrologyCosmicTextFieldState extends State<AstrologyCosmicTextField>
         height: AstrologyCosmicTextField.height,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: AstrologyColors.raised,
-          borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+          color: focused
+              ? (isDark ? const Color(0xFF2E1C48) : const Color(0xFFFAF5FF))
+              : (isDark ? const Color(0xFF231F33) : const Color(0xFFF8FAFC)),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: focused ? accent : AstrologyColors.line,
-            width: focused ? 2 : SkpTokens.hairline,
+            color: focused ? accent : (isDark ? const Color(0xFF3B2F50) : const Color(0xFFE2E8F0)),
+            width: focused ? 1.8 : 1.2,
           ),
           boxShadow: focused
               ? [
                   BoxShadow(
                     color: accent.withValues(alpha: 0.22),
                     blurRadius: 12,
+                    offset: const Offset(0, 2),
                   ),
                 ]
               : null,
@@ -696,15 +719,15 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
       color: selected
           ? accent.withValues(alpha: 0.14)
           : AstrologyColors.raised,
-      borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: selected ? accent : AstrologyColors.line,
             ),
@@ -712,7 +735,7 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                selected ? Icons.check_box : Icons.check_box_outline_blank,
+                selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
                 size: 20,
                 color: selected ? accent : AstrologyColors.muted,
               ),
@@ -722,6 +745,7 @@ class AstrologyUnknownTimeRow extends StatelessWidget {
                   'Birth time unknown',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: selected ? accent : AstrologyColors.text,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
               ),
@@ -788,7 +812,7 @@ class _AstrologyPillSegment extends StatelessWidget {
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: AstrologyColors.raised,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AstrologyColors.line),
       ),
       child: Row(
@@ -801,10 +825,10 @@ class _AstrologyPillSegment extends StatelessWidget {
                   color: selected == option.$1
                       ? accent
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
+                  borderRadius: BorderRadius.circular(11),
                   child: InkWell(
                     onTap: () => onSelected(option.$1),
-                    borderRadius: BorderRadius.circular(SkpTokens.radiusSm),
+                    borderRadius: BorderRadius.circular(11),
                     child: Center(
                       child: Text(
                         option.$2,
