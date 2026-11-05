@@ -28,6 +28,20 @@ std::string StringArg(const EncodableMap& map, const char* key) {
   return {};
 }
 
+uint32_t Uint32Arg(const EncodableMap& map, const char* key) {
+  const auto it = map.find(EncodableValue(key));
+  if (it == map.end()) {
+    return 0;
+  }
+  if (const auto* v = std::get_if<int32_t>(&it->second)) {
+    return *v > 0 ? static_cast<uint32_t>(*v) : 0;
+  }
+  if (const auto* v = std::get_if<int64_t>(&it->second)) {
+    return *v > 0 ? static_cast<uint32_t>(*v) : 0;
+  }
+  return 0;
+}
+
 class PrinterPlugin : public flutter::Plugin {
  public:
   static void RegisterWithRegistrar(flutter::PluginRegistrarWindows* registrar) {
@@ -72,6 +86,10 @@ class PrinterPlugin : public flutter::Plugin {
     }
     if (call.method_name() == "getPrinterStatus") {
       result->Success(BuildStatus(map));
+      return;
+    }
+    if (call.method_name() == "cancelUsbSpoolerJobs") {
+      result->Success(BuildCancel(map));
       return;
     }
     result->NotImplemented();
@@ -126,6 +144,31 @@ class PrinterPlugin : public flutter::Plugin {
       out[EncodableValue("latestJobId")] =
           EncodableValue(static_cast<int64_t>(spooler.latest_job_id));
       out[EncodableValue("latestJobStatus")] = EncodableValue(spooler.latest_job_status);
+    }
+    return EncodableValue(out);
+  }
+
+  EncodableValue BuildCancel(const EncodableMap& args) {
+    const std::string preferred = StringArg(args, "printerName");
+    const std::string document_title = StringArg(args, "documentTitle");
+    uint32_t job_id = Uint32Arg(args, "jobId");
+    if (job_id == 0 && !document_title.empty()) {
+      const auto lookup =
+          skp_printer::FindUsbSpoolerJobByDocument(preferred, document_title);
+      if (lookup.found) {
+        job_id = lookup.job_id;
+      }
+    }
+    const auto cancelled = skp_printer::CancelUsbSpoolerJobs(preferred, job_id);
+    EncodableMap out;
+    out[EncodableValue("ok")] = EncodableValue(cancelled.ok);
+    out[EncodableValue("purged")] = EncodableValue(cancelled.purged);
+    if (cancelled.job_id != 0) {
+      out[EncodableValue("jobId")] =
+          EncodableValue(static_cast<int64_t>(cancelled.job_id));
+    }
+    if (cancelled.win32_error != 0) {
+      out[EncodableValue("win32Error")] = EncodableValue(cancelled.win32_error);
     }
     return EncodableValue(out);
   }

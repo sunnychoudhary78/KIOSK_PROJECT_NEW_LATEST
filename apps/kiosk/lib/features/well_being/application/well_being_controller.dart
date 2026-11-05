@@ -6,6 +6,7 @@ import 'package:skp_kiosk/core/hardware/serial/serial_device.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_provider.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
+import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
 import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
 import 'package:skp_kiosk/features/well_being/application/vitals_line_parser.dart';
@@ -14,6 +15,36 @@ import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
+
+class WellBeingQuotaSummary {
+  const WellBeingQuotaSummary({
+    required this.freeEligible,
+    required this.society,
+    required this.colorMode,
+    this.remaining,
+    this.message,
+    this.phoneProofToken,
+  });
+
+  final bool freeEligible;
+  final bool society;
+  final String colorMode;
+  final int? remaining;
+  final String? message;
+  final String? phoneProofToken;
+
+  String get modeLabel => colorMode == 'color' ? 'color' : 'B&W';
+
+  String get remainingLabel {
+    if (!society) return 'Not on society free list';
+    if (remaining == null) return 'Unavailable';
+    return '$remaining free $modeLabel page${remaining == 1 ? '' : 's'} left';
+  }
+
+  String get printCostLine => freeEligible
+      ? 'This health report print is free for you (uses free $modeLabel pages).'
+      : 'This health report print requires payment.';
+}
 
 final wellBeingControllerProvider =
     NotifierProvider.autoDispose<WellBeingController, WellBeingUiState>(
@@ -24,6 +55,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   final VitalsLineParser _parser = VitalsLineParser();
   StreamSubscription<String>? _incomingSub;
   ProviderSubscription<SerialUiState>? _serialWatch;
+  Timer? _paymentPollTimer;
 
   static const _cmdStop = '{"command":"stop"}';
   static const _cmdStartMax =
@@ -34,6 +66,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   @override
   WellBeingUiState build() {
     ref.onDispose(() {
+      _stopPaymentPoll();
       unawaited(_tearDown(disconnect: true));
     });
     return WellBeingUiState.initial();
@@ -45,7 +78,38 @@ class WellBeingController extends Notifier<WellBeingUiState> {
         api: ref.read(apiClientProvider),
         coordinator: ref.read(printCoordinatorProvider),
         tempFolderName: 'skp_well_being',
+        paymentStatusPath: (jobId) => '/well-being/print-jobs/$jobId/payment',
       );
+
+  void _stopPaymentPoll() {
+    _paymentPollTimer?.cancel();
+    _paymentPollTimer = null;
+  }
+
+  void _armPaymentPoll() {
+    _stopPaymentPoll();
+    _paymentPollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_pollPaymentOnce());
+    });
+  }
+
+  Future<void> _pollPaymentOnce() async {
+    if (!ref.mounted) return;
+    if (state.print.phase != ReportPrintPhase.awaitingPayment) {
+      _stopPaymentPoll();
+      return;
+    }
+    final next = await _printSupport.pollPayment(state.print);
+    if (!ref.mounted) return;
+    if (next.phase != ReportPrintPhase.awaitingPayment) {
+      _stopPaymentPoll();
+    }
+    state = state.copyWith(
+      print: next,
+      lastError: next.error,
+      clearError: next.error == null,
+    );
+  }
 
   Future<void> startSession() async {
     if (!ref.mounted || state.sessionActive) {
@@ -198,12 +262,242 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     );
   }
 
+  /// Starts DigiLocker-parity print monetization (color mode → phone/pay).
   Future<void> preparePrint() async {
     if (state.phase != WellBeingPhase.oxiComplete &&
         state.phase != WellBeingPhase.tempComplete) {
       return;
     }
+    _stopPaymentPoll();
+    state = state.copyWith(
+      print: state.print.copyWith(
+        phase: ReportPrintPhase.preparingPreview,
+        clearError: true,
+        clearMessage: true,
+        clearPhoneNotice: true,
+      ),
+    );
+    try {
+      final options = await ref.read(apiClientProvider).get('/well-being/print-options');
+      if (!ref.mounted) return;
+      final bw = (options['bwChargeRupees'] as num?)?.toInt() ?? 0;
+      final color = (options['colorChargeRupees'] as num?)?.toInt() ?? 0;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phase: ReportPrintPhase.choosingColorMode,
+          bwChargeRupees: bw,
+          colorChargeRupees: color,
+          clearError: true,
+          clearPhoneNotice: true,
+        ),
+      );
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phase: ReportPrintPhase.printResult,
+          printConfirmed: false,
+          error: userFacingError(error),
+          message: userFacingError(error),
+        ),
+        lastError: userFacingError(error),
+      );
+    }
+  }
+
+  Future<void> chooseColorMode(String mode) async {
+    if (state.print.phase != ReportPrintPhase.choosingColorMode) return;
+    if (mode != 'bw' && mode != 'color') return;
+    final charge = mode == 'color'
+        ? state.print.colorChargeRupees
+        : state.print.bwChargeRupees;
+    state = state.copyWith(
+      print: state.print.copyWith(
+        colorMode: mode,
+        chargeRupees: charge,
+        amountPaise: charge * 100,
+        clearError: true,
+        clearPhoneNotice: true,
+      ),
+    );
+    if (charge <= 0) {
+      await _runPreparePrint();
+      return;
+    }
+    state = state.copyWith(
+      print: state.print.copyWith(phase: ReportPrintPhase.choosingPayMethod),
+    );
+  }
+
+  Future<void> choosePhoneQuota() async {
+    if (state.print.phase != ReportPrintPhase.choosingPayMethod) return;
+    state = state.copyWith(
+      print: state.print.copyWith(
+        phase: ReportPrintPhase.enteringPhone,
+        otpSent: false,
+        otpDigits: '',
+        clearError: true,
+        clearPhoneNotice: true,
+      ),
+    );
+  }
+
+  Future<void> choosePayDirect() async {
+    if (state.print.phase != ReportPrintPhase.choosingPayMethod &&
+        state.print.phase != ReportPrintPhase.enteringPhone) {
+      return;
+    }
+    await _runPreparePrint();
+  }
+
+  void setPrintPhoneDigits(String value) {
+    state = state.copyWith(
+      print: state.print.copyWith(
+        phoneDigits: value.replaceAll(RegExp(r'\D'), ''),
+      ),
+    );
+  }
+
+  void setPrintOtpDigits(String value) {
+    state = state.copyWith(
+      print: state.print.copyWith(
+        otpDigits: value.replaceAll(RegExp(r'\D'), ''),
+      ),
+    );
+  }
+
+  Future<void> requestPrintPhoneOtp() async {
+    if (state.print.phase != ReportPrintPhase.enteringPhone) return;
+    final phone = state.print.phoneDigits;
+    if (phone.length < 10) {
+      state = state.copyWith(
+        print: state.print.copyWith(error: 'Enter a valid 10-digit mobile number'),
+      );
+      return;
+    }
+    state = state.copyWith(
+      print: state.print.copyWith(phoneBusy: true, clearError: true),
+    );
+    try {
+      await ref.read(apiClientProvider).post(
+        '/well-being/otp-request',
+        body: {'phone': phone},
+      );
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phoneBusy: false,
+          otpSent: true,
+          otpDigits: '',
+          clearError: true,
+        ),
+      );
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phoneBusy: false,
+          error: userFacingError(error),
+        ),
+      );
+    }
+  }
+
+  Future<WellBeingQuotaSummary?> verifyPrintPhoneOtp() async {
+    if (state.print.phase != ReportPrintPhase.enteringPhone) return null;
+    final phone = state.print.phoneDigits;
+    final otp = state.print.otpDigits;
+    final colorMode = state.print.colorMode;
+    if (otp.length < 4) {
+      state = state.copyWith(
+        print: state.print.copyWith(error: 'Enter the OTP sent to your phone'),
+      );
+      return null;
+    }
+    state = state.copyWith(
+      print: state.print.copyWith(phoneBusy: true, clearError: true),
+    );
+    try {
+      final verified = await ref.read(apiClientProvider).post(
+        '/well-being/otp-verify',
+        body: {
+          'phone': phone,
+          'otp': otp,
+          'colorMode': colorMode,
+        },
+      );
+      if (!ref.mounted) return null;
+      final freeEligible = verified['freeEligible'] == true;
+      final society = verified['society'] == true;
+      final remainingRaw = verified['remaining'];
+      final remaining = remainingRaw is num ? remainingRaw.toInt() : null;
+      final notice = verified['message']?.toString();
+      final token = verified['phoneProofToken']?.toString();
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phoneBusy: false,
+          clearError: true,
+          clearPhoneNotice: true,
+          phoneProofToken:
+              freeEligible && token != null && token.isNotEmpty ? token : null,
+          clearPhoneProofToken:
+              !(freeEligible && token != null && token.isNotEmpty),
+        ),
+      );
+      return WellBeingQuotaSummary(
+        freeEligible: freeEligible,
+        society: society,
+        colorMode: colorMode,
+        remaining: remaining,
+        message: notice,
+        phoneProofToken:
+            freeEligible && token != null && token.isNotEmpty ? token : null,
+      );
+    } catch (error) {
+      if (!ref.mounted) return null;
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phoneBusy: false,
+          error: userFacingError(error),
+        ),
+      );
+      return null;
+    }
+  }
+
+  Future<void> continueAfterQuotaSummary(WellBeingQuotaSummary summary) async {
+    final token = summary.phoneProofToken ?? state.print.phoneProofToken;
+    if (summary.freeEligible && token != null && token.isNotEmpty) {
+      state = state.copyWith(
+        print: state.print.copyWith(
+          clearPhoneNotice: true,
+          clearError: true,
+          phoneProofToken: token,
+        ),
+      );
+      await _runPreparePrint(phoneProofToken: token);
+      return;
+    }
+    state = state.copyWith(
+      print: state.print.copyWith(
+        phoneNotice: summary.message ??
+            'Free print is not available for this number. Continue with payment.',
+        clearError: true,
+        clearPhoneProofToken: true,
+      ),
+    );
+    await _runPreparePrint();
+  }
+
+  Future<void> _runPreparePrint({String? phoneProofToken}) async {
+    if (state.phase != WellBeingPhase.oxiComplete &&
+        state.phase != WellBeingPhase.tempComplete) {
+      return;
+    }
     final mode = state.phase == WellBeingPhase.oxiComplete ? 'oxi' : 'temp';
+    final colorMode = state.print.colorMode;
+    final token = phoneProofToken ?? state.print.phoneProofToken;
+    _stopPaymentPoll();
     state = state.copyWith(
       print: state.print.copyWith(
         phase: ReportPrintPhase.preparingPreview,
@@ -215,6 +509,8 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       createJobPath: '/well-being/print',
       body: {
         'mode': mode,
+        'colorMode': colorMode,
+        if (token != null && token.isNotEmpty) 'phoneProofToken': token,
         if (state.finalHeartRate != null) 'heartRate': state.finalHeartRate,
         if (state.finalSpO2 != null) 'spo2': state.finalSpO2,
         if (state.finalTempC != null) 'tempC': state.finalTempC,
@@ -232,6 +528,9 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       lastError: next.error,
       clearError: next.error == null,
     );
+    if (next.phase == ReportPrintPhase.awaitingPayment) {
+      _armPaymentPoll();
+    }
   }
 
   Future<void> confirmPrint() async {
@@ -243,6 +542,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       current: state.print,
       onProgress: (message) {
         if (!ref.mounted) return;
+        if (state.print.message == message) return;
         state = state.copyWith(
           print: state.print.copyWith(
             phase: ReportPrintPhase.printing,
@@ -256,8 +556,37 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   }
 
   Future<void> cancelPrintPreview() async {
+    _stopPaymentPoll();
     await _printSupport.abandonRetry(state.print);
     if (!ref.mounted) return;
+    state = state.copyWith(print: const ReportPrintSnapshot());
+  }
+
+  Future<void> backFromPrintFlow() async {
+    final phase = state.print.phase;
+    if (phase == ReportPrintPhase.enteringPhone) {
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phase: ReportPrintPhase.choosingPayMethod,
+          otpSent: false,
+          otpDigits: '',
+          clearError: true,
+          clearPhoneNotice: true,
+        ),
+      );
+      return;
+    }
+    if (phase == ReportPrintPhase.choosingPayMethod) {
+      state = state.copyWith(
+        print: state.print.copyWith(
+          phase: ReportPrintPhase.choosingColorMode,
+          clearError: true,
+          clearPhoneNotice: true,
+        ),
+      );
+      return;
+    }
+    _stopPaymentPoll();
     state = state.copyWith(print: const ReportPrintSnapshot());
   }
 
@@ -272,6 +601,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   }
 
   void clearPrintResult() {
+    _stopPaymentPoll();
     state = state.copyWith(print: const ReportPrintSnapshot());
   }
 
@@ -716,6 +1046,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   }
 
   Future<void> _tearDown({required bool disconnect}) async {
+    _stopPaymentPoll();
     var shouldDisconnect = false;
     Future<void> Function()? doDisconnect;
     try {

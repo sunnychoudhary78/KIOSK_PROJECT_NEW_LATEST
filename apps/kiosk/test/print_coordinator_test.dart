@@ -277,6 +277,136 @@ void main() {
     expect(second.outcome, isNot(PrintReconcileOutcome.busy));
     final firstResult = await first;
     expect(firstResult.reconcileDetail, 'aborted');
+    expect(native.cancelCalls, greaterThan(0));
+  });
+
+  test('abort after submit clears the USB spooler', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(
+        state: 'ready',
+        online: true,
+        spoolerLatestJobId: 42,
+      ),
+    );
+    final spooler = _FakeSpooler();
+    final coordinator = buildCoordinator(
+      native: native,
+      spooler: spooler,
+      pollInterval: const Duration(milliseconds: 40),
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+
+    final pending = coordinator.printAndReconcile(
+      jobId: 'job-abort-clear',
+      title: 'orphan.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 5,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(spooler.calls, 1);
+    coordinator.abortAndReset();
+    final result = await pending;
+    expect(result.reconcileDetail, 'aborted');
+    expect(native.cancelCalls, greaterThan(0));
+  });
+
+  test('post-submit failure clears the USB spooler', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true),
+      healthAfterFirst: const PrinterHealth(
+        state: 'jam',
+        online: true,
+        jammed: true,
+        lastErrorCode: 'PAPER_JAM',
+      ),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 100));
+    final coordinator = buildCoordinator(
+      native: native,
+      usbPageWatch: watch,
+      pollInterval: const Duration(milliseconds: 20),
+      reconcileTimeout: const Duration(milliseconds: 200),
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-jam-clear',
+      title: 'jam.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 2,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.failed);
+    expect(native.cancelCalls, greaterThan(0));
+  });
+
+  test('verified success does not clear the USB spooler', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(
+        state: 'ready',
+        online: true,
+        spoolerLatestJobId: 7,
+      ),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 186));
+    final coordinator = buildCoordinator(
+      native: native,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 30), () {
+      watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 190));
+    });
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-verified-no-clear',
+      title: 'ok.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 4,
+      colorMode: 'color',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.verified);
+    expect(native.cancelCalls, 0);
+  });
+
+  test('dirty pre-print queue triggers purge before send', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(
+        state: 'ready',
+        online: true,
+        spoolerJobsQueued: 2,
+      ),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 10));
+    final coordinator = buildCoordinator(
+      native: native,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 30), () {
+      watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 11));
+    });
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-dirty-queue',
+      title: 'next.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.verified);
+    expect(native.cancelCalls, greaterThan(0));
+    expect(native.cancelArgs.first['jobId'], isNull);
   });
 
   test('busy when a second job starts while locked', () async {

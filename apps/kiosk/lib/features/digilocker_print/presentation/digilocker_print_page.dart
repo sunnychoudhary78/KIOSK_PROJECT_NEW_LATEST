@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
@@ -239,51 +238,41 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
                       : 'Society numbers with free $modeLabel pages can print without paying.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                const SizedBox(height: 24),
-                if (!state.otpSent)
-                  TextField(
-                    key: const ValueKey('digilocker-phone-input'),
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(10),
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile number',
-                      prefixText: '+91 ',
-                    ),
-                    onChanged: controller.setPrintPhoneDigits,
-                  )
-                else
-                  TextField(
-                    key: const ValueKey('digilocker-otp-input'),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(8),
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: 'OTP',
-                    ),
-                    onChanged: controller.setPrintOtpDigits,
-                  ),
+                const SizedBox(height: 16),
                 if (state.phoneNotice != null &&
                     state.phoneNotice!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 16),
                   KioskStatusBanner(
                     message: state.phoneNotice!,
                     tone: KioskBannerTone.warning,
                     icon: Icons.info_outline,
                   ),
+                  const SizedBox(height: 12),
                 ],
                 if (state.error != null && state.error!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 16),
                   KioskStatusBanner(
                     message: state.error!,
                     tone: KioskBannerTone.danger,
                     icon: Icons.error_outline,
                   ),
+                  const SizedBox(height: 12),
                 ],
+                Expanded(
+                  child: KioskPhoneOtpEntry(
+                    key: ValueKey(
+                      state.otpSent
+                          ? 'digilocker-otp-pad'
+                          : 'digilocker-phone-pad',
+                    ),
+                    value: state.otpSent ? state.otpDigits : state.phoneDigits,
+                    mode: state.otpSent
+                        ? KioskPhoneOtpMode.otp
+                        : KioskPhoneOtpMode.phone,
+                    enabled: !state.phoneBusy,
+                    onChanged: state.otpSent
+                        ? controller.setPrintOtpDigits
+                        : controller.setPrintPhoneDigits,
+                  ),
+                ),
               ],
             ),
           ),
@@ -631,22 +620,17 @@ class _AuthBody extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+      padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const KioskDisclaimer(
-            message: KioskDisclaimerCopy.digilocker,
-            compact: true,
-          ),
-          const SizedBox(height: 12),
           if (error != null) ...[
             KioskStatusBanner(
               message: error!,
               tone: KioskBannerTone.danger,
               icon: Icons.error_outline,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
           ],
           Expanded(
             child: DigilockerAuthWebView(

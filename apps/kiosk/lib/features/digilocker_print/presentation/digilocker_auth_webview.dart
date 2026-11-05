@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:skp_kiosk/core/config/app_config.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
+import 'package:skp_kiosk/core/ui/kiosk_keyboard.dart';
 import 'package:webview_windows/webview_windows.dart';
 
 /// In-app WebView2 pane for MeriPehchaan DigiLocker authorization.
@@ -34,6 +35,28 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
   bool _callbackReported = false;
   String? _initError;
 
+  /// Remembers the last focused editable so Flutter keyboard taps still type
+  /// after WebView2 loses focus.
+  static const _focusTrackerScript = r'''
+(function () {
+  if (window.__kioskKbInstalled) return;
+  window.__kioskKbInstalled = true;
+  window.__kioskLastEditable = null;
+  function isEditable(el) {
+    if (!el) return false;
+    var tag = (el.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+  document.addEventListener('focusin', function (e) {
+    if (isEditable(e.target)) {
+      window.__kioskLastEditable = e.target;
+    }
+  }, true);
+})();
+''';
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +81,7 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
       // Force a fresh DigiLocker session so cached consent does not skip the picker.
       await _controller.clearCookies();
       await _controller.clearCache();
+      await _controller.addScriptToExecuteOnDocumentCreated(_focusTrackerScript);
 
       _urlSub = _controller.url.listen(_onUrl);
       _errorSub = _controller.onLoadError.listen((status) {
@@ -97,6 +121,144 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
         widget.onCallbackReached();
       }
     });
+  }
+
+  static String _jsStringLiteral(String value) {
+    return "'${value
+        .replaceAll(r'\', r'\\')
+        .replaceAll("'", r"\'")
+        .replaceAll('\n', r'\n')
+        .replaceAll('\r', r'\r')}'";
+  }
+
+  Future<void> _injectChar(String value) async {
+    widget.onActivity?.call();
+    final literal = _jsStringLiteral(value);
+    try {
+      await _controller.executeScript('''
+(function () {
+  function isEditable(el) {
+    if (!el) return false;
+    var tag = (el.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+  function setNativeValue(el, next) {
+    var proto = el.tagName === 'TEXTAREA'
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+    var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (desc && desc.set) {
+      desc.set.call(el, next);
+    } else {
+      el.value = next;
+    }
+  }
+  function notify(el, data, inputType) {
+    try {
+      el.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        data: data,
+        inputType: inputType
+      }));
+    } catch (_) {
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  var el = window.__kioskLastEditable;
+  if (!isEditable(el)) {
+    el = document.activeElement;
+  }
+  if (!isEditable(el)) return;
+  var ch = $literal;
+  if (el.isContentEditable) {
+    try { document.execCommand('insertText', false, ch); } catch (_) {}
+    return;
+  }
+  var start = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
+  var end = (typeof el.selectionEnd === 'number') ? el.selectionEnd : (el.value || '').length;
+  var v = el.value || '';
+  var next = v.slice(0, start) + ch + v.slice(end);
+  setNativeValue(el, next);
+  var pos = start + ch.length;
+  try { el.setSelectionRange(pos, pos); } catch (_) {}
+  notify(el, ch, 'insertText');
+})();
+''');
+    } catch (_) {
+      // Ignore injection failures (e.g. page mid-navigation).
+    }
+  }
+
+  Future<void> _injectBackspace() async {
+    widget.onActivity?.call();
+    try {
+      await _controller.executeScript(r'''
+(function () {
+  function isEditable(el) {
+    if (!el) return false;
+    var tag = (el.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+  function setNativeValue(el, next) {
+    var proto = el.tagName === 'TEXTAREA'
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+    var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (desc && desc.set) {
+      desc.set.call(el, next);
+    } else {
+      el.value = next;
+    }
+  }
+  function notify(el) {
+    try {
+      el.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'deleteContentBackward'
+      }));
+    } catch (_) {
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  var el = window.__kioskLastEditable;
+  if (!isEditable(el)) {
+    el = document.activeElement;
+  }
+  if (!isEditable(el)) return;
+  if (el.isContentEditable) {
+    try { document.execCommand('delete', false, null); } catch (_) {}
+    return;
+  }
+  var v = el.value || '';
+  var start = (typeof el.selectionStart === 'number') ? el.selectionStart : v.length;
+  var end = (typeof el.selectionEnd === 'number') ? el.selectionEnd : v.length;
+  var next;
+  var pos;
+  if (start !== end) {
+    next = v.slice(0, start) + v.slice(end);
+    pos = start;
+  } else if (start > 0) {
+    next = v.slice(0, start - 1) + v.slice(end);
+    pos = start - 1;
+  } else {
+    return;
+  }
+  setNativeValue(el, next);
+  try { el.setSelectionRange(pos, pos); } catch (_) {}
+  notify(el);
+})();
+''');
+    } catch (_) {
+      // Ignore injection failures (e.g. page mid-navigation).
+    }
   }
 
   @override
@@ -154,28 +316,18 @@ class _DigilockerAuthWebViewState extends State<DigilockerAuthWebView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: SkpColors.line)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.lock_outline, color: SkpColors.accent),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Sign in here — do not leave this screen',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ],
-            ),
-          ),
           Expanded(
             child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
               child: Webview(_controller),
+            ),
+          ),
+          const Divider(height: 1, color: SkpColors.line),
+          SizedBox(
+            height: 200,
+            child: KioskKeyboard(
+              onKey: (value) => unawaited(_injectChar(value)),
+              onBackspace: () => unawaited(_injectBackspace()),
             ),
           ),
         ],

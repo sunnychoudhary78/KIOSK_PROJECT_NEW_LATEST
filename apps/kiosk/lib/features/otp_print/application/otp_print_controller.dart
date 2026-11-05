@@ -216,6 +216,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
         holdForRetry: state.printFailures == 0,
         reportStatus: _repository.reportStatus,
         onProgress: (message) {
+          if (state.message == message) return;
           state = state.copyWith(
             phase: OtpPrintPhase.printing,
             message: message,
@@ -267,6 +268,9 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
     final jobId = state.redeemResult?.printJobId;
     final error = state.error;
     state = state.copyWith(printFailures: 2);
+    try {
+      await _coordinator.clearPendingSpoolerWork();
+    } catch (_) {}
     if (jobId == null || jobId.isEmpty) return;
     try {
       await _repository.reportStatus(

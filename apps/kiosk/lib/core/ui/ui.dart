@@ -5,6 +5,7 @@ export 'kiosk_date_stepper.dart';
 export 'kiosk_disclaimer.dart';
 export 'kiosk_keyboard.dart';
 export 'kiosk_numeric_keypad.dart';
+export 'kiosk_phone_otp_entry.dart';
 export 'kiosk_pdf_preview.dart';
 export 'kiosk_print_result.dart';
 export 'kiosk_printing_paused.dart';

@@ -23,8 +23,12 @@ import type { RazorpayClient } from '../payments/razorpay.client.js';
 import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
 import { PrintQuotaService } from '../print_quota/print_quota.service.js';
 import { assertPrintingAvailable } from '../printing/printing_pause.js';
-import { countPdfPages } from '../printing/report_pdf.js';
+import { normalizeToPdf } from '../printing/normalize_to_pdf.js';
 import type { PrintingService } from '../printing/printing.service.js';
+import {
+  EAADHAAR_SYNTHETIC_URI,
+  looksLikeAadhaarDoc,
+} from '../../infrastructure/external/digilocker.eaadhaar.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import type {
   DigiLockerColorMode,
@@ -209,17 +213,35 @@ export class DigiLockerService {
   async listDocuments(sessionId: string, deviceId: string) {
     const session = await this.requireAuthorizedSession(sessionId, deviceId);
     const items = await this.digiLocker.listAllDocuments(session.accessToken!);
-    return {
-      items: items.map((doc) => ({
-        id: doc.id,
-        name: doc.name,
-        issuer: doc.issuer,
-        mimeType: doc.mimeType,
-        doctype: doc.doctype,
-        description: doc.description,
-        source: doc.source,
-      })),
-    };
+    const mapped = items.map((doc) => ({
+      id: doc.id,
+      name: doc.name,
+      issuer: doc.issuer,
+      mimeType: doc.mimeType,
+      doctype: doc.doctype,
+      description: doc.description,
+      source: doc.source,
+    }));
+
+    const hasPrintableAadhaar = mapped.some(
+      (doc) =>
+        doc.id === EAADHAAR_SYNTHETIC_URI ||
+        (looksLikeAadhaarDoc(doc) &&
+          (doc.mimeType ?? '').toLowerCase().includes('pdf')),
+    );
+    if (!hasPrintableAadhaar) {
+      mapped.unshift({
+        id: EAADHAAR_SYNTHETIC_URI,
+        name: 'e-Aadhaar',
+        issuer: 'UIDAI',
+        mimeType: 'application/pdf',
+        doctype: 'ADHAR',
+        description: 'Downloaded from DigiLocker e-Aadhaar XML',
+        source: 'eaadhaar' as const,
+      });
+    }
+
+    return { items: mapped };
   }
 
   async getPrintOptions(deviceId: string) {
@@ -396,7 +418,12 @@ export class DigiLockerService {
       (documentUri === 'eaadhaar:xml' ? 'e-Aadhaar' : 'DigiLocker document');
 
     const file = await this.digiLocker.downloadFile(session.accessToken!, documentUri);
-    const pageCount = Math.max(1, await countPdfPages(file.bytes));
+    const normalized = await normalizeToPdf({
+      bytes: file.bytes,
+      mimeType: file.contentType,
+      fileName: file.fileName ?? title,
+    });
+    const pageCount = Math.max(1, normalized.pageCount);
 
     let freePhone: string | null = null;
     let freePeriodKey: string | null = null;
@@ -457,7 +484,7 @@ export class DigiLockerService {
     const payloadDir = join(process.cwd(), 'tmp', 'digilocker');
     await mkdir(payloadDir, { recursive: true });
     const payloadPath = join(payloadDir, `${job.id}.pdf`);
-    await writeFile(payloadPath, file.bytes);
+    await writeFile(payloadPath, normalized.pdfBytes);
 
     const updated = await this.printing.attachPayload(job.id, {
       payloadPath,

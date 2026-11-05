@@ -11,6 +11,7 @@ export type CreatePrintJobWithPdfInput = {
   bytes: Buffer;
   idempotencyKey?: string;
   printColorMode?: PrintColorMode;
+  freePagesGranted?: number;
   folder?: string;
 };
 
@@ -30,6 +31,7 @@ export async function createPrintJobWithPdf(
       pagesExpected: pageCount,
       deviceId: input.deviceId,
       printColorMode: input.printColorMode ?? PrintColorMode.color,
+      freePagesGranted: input.freePagesGranted ?? 0,
       payloadUrl: `/v1/print-jobs/pending/content`,
       idempotencyKey: input.idempotencyKey?.slice(0, 100),
     },

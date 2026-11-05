@@ -866,6 +866,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         holdForRetry: failures == 0,
         reportStatus: _repository.reportStatus,
         onProgress: (message) {
+          if (state.message == message) return;
           state = state.copyWith(
             phase: DigilockerPhase.printing,
             message: message,
@@ -931,6 +932,9 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     final jobId = state.previewJobId;
     final error = state.error;
     state = state.copyWith(printFailures: 2);
+    try {
+      await _coordinator.clearPendingSpoolerWork();
+    } catch (_) {}
     if (jobId == null || jobId.isEmpty) return;
     try {
       await _repository.reportStatus(

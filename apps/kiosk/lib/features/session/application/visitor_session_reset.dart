@@ -26,9 +26,12 @@ final visitorSessionResetProvider = Provider<VisitorSessionResetFn>((ref) {
 
 /// Wipe visitor PII and return to the catalog. Does not touch device auth.
 Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
-  // Unlock print immediately so Home never leaves "already running".
+  // Unlock print immediately so Home never leaves "already running",
+  // and await Windows USB-queue clear so orphans cannot resume later.
   try {
-    ref.read(printCoordinatorProvider).abortAndReset();
+    final coordinator = ref.read(printCoordinatorProvider);
+    coordinator.abortAndReset();
+    await coordinator.clearPendingSpoolerWork();
   } catch (_) {}
 
   if (ref.exists(digilockerControllerProvider)) {

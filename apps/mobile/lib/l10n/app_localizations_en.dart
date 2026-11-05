@@ -204,7 +204,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get pdfOnlyHint => 'PDF only · page limits enforced by server';
+  String get pdfOnlyHint => 'PDF or JPG/PNG · page limits enforced by server';
 
   @override
   String get printColor => 'Print color';

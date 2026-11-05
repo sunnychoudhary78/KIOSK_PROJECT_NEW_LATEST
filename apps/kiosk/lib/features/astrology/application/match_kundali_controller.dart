@@ -181,6 +181,7 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
       current: state.print,
       onProgress: (message) {
         if (!ref.mounted) return;
+        if (state.print.message == message) return;
         state = state.copyWith(
           print: state.print.copyWith(
             phase: ReportPrintPhase.printing,

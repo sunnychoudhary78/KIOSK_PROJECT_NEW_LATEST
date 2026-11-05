@@ -107,9 +107,12 @@ class KioskSessionController extends Notifier<KioskSessionState> {
     if (onHome) {
       _cancelTimers();
       ref.read(kioskSessionHoldProvider.notifier).clear();
-      // Landing on catalog must always clear exclusive print lock.
+      // Landing on catalog must always clear exclusive print lock and
+      // any Windows USB spooler orphans from a departed visitor.
       try {
-        ref.read(printCoordinatorProvider).abortAndReset();
+        final coordinator = ref.read(printCoordinatorProvider);
+        coordinator.abortAndReset();
+        unawaited(coordinator.clearPendingSpoolerWork());
       } catch (_) {}
       state = state.copyWith(
         phase: KioskSessionPhase.catalog,

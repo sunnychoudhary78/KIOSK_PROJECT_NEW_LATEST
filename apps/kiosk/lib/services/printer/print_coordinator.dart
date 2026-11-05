@@ -44,6 +44,8 @@ class PrintCoordinator {
   bool _locked = false;
   int _runId = 0;
   bool _abortRequested = false;
+  int? _activeSpoolerJobId;
+  String? _activePrintTitle;
 
   bool get isLocked => _locked;
 
@@ -52,10 +54,40 @@ class PrintCoordinator {
       Duration(milliseconds: _monitor.reconcileTimeoutMs);
 
   /// Abort in-flight reconcile and clear the exclusive lock (home / visitor reset).
+  /// Also kicks a Windows USB-queue clear so orphans cannot resume later.
   void abortAndReset() {
     _abortRequested = true;
     _runId++;
     _locked = false;
+    unawaited(clearPendingSpoolerWork());
+  }
+
+  /// Cancel/purge any pending USB spooler work for this kiosk printer.
+  /// Safe when idle (purges orphans). Prefer awaiting from session reset.
+  Future<void> clearPendingSpoolerWork() => _clearActiveSpoolerWork();
+
+  Future<void> _clearActiveSpoolerWork() async {
+    final jobId = _activeSpoolerJobId;
+    final title = _activePrintTitle;
+    _activeSpoolerJobId = null;
+    _activePrintTitle = null;
+    try {
+      final result = await _monitor.clearUsbSpoolerJobs(
+        jobId: jobId,
+        documentTitle: title,
+      );
+      AppLogger.info(
+        'PRINTER spooler clear ok=${result.ok} purged=${result.purged} '
+        'jobId=${result.jobId ?? jobId} win32=${result.win32Error}',
+      );
+    } catch (error) {
+      AppLogger.error('PRINTER spooler clear failed', error);
+    }
+  }
+
+  void _forgetActiveSpoolerJob() {
+    _activeSpoolerJobId = null;
+    _activePrintTitle = null;
   }
 
   bool _isAborted(int runId) => _abortRequested || runId != _runId;
@@ -191,10 +223,13 @@ class PrintCoordinator {
     int? pageCounterAfter,
     int pagesReported = 0,
   }) async {
+    final spoolerJobId = _activeSpoolerJobId?.toString();
+    await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,
       status: 'printing',
       pagesReported: pagesReported,
+      spoolerJobId: spoolerJobId,
       pageCounterBefore: pageCounterBefore,
       pageCounterAfter: pageCounterAfter,
       reconcileStatus: 'unknown',
@@ -209,6 +244,19 @@ class PrintCoordinator {
       pageCounterAfter: pageCounterAfter,
       reconcileDetail: 'aborted',
     );
+  }
+
+  Future<void> _captureSpoolerJob(String title) async {
+    _activePrintTitle = title;
+    try {
+      final status = await _monitor.getSpoolerStatus();
+      final id = status.spoolerLatestJobId;
+      if (id != null && id > 0) {
+        _activeSpoolerJobId = id;
+      }
+    } catch (error) {
+      AppLogger.error('PRINTER spooler job capture failed', error);
+    }
   }
 
   Future<PrintReconcileResult> _run({
@@ -250,6 +298,16 @@ class PrintCoordinator {
       );
     }
 
+    final dirtyQueue = (preHealth.spoolerJobsQueued ?? 0) +
+        (preHealth.spoolerJobsPrinting ?? 0);
+    if (dirtyQueue > 0) {
+      AppLogger.info(
+        'PRINTER pre-print purge jobsQueued=${preHealth.spoolerJobsQueued} '
+        'jobsPrinting=${preHealth.spoolerJobsPrinting}',
+      );
+      await _monitor.clearUsbSpoolerJobs();
+    }
+
     final usbBefore = await _readUsbBaseline(onProgress: onProgress);
     final useUsb = usbBefore != null;
     final int? counterBefore = usbBefore;
@@ -282,6 +340,7 @@ class PrintCoordinator {
         colorMode: colorMode,
       );
     } catch (error) {
+      await _clearActiveSpoolerWork();
       await reportStatus(
         jobId: jobId,
         status: 'failed',
@@ -297,6 +356,19 @@ class PrintCoordinator {
         pagesReported: 0,
         pageCounterBefore: counterBefore,
         reconcileDetail: 'spooler_reject',
+      );
+    }
+
+    await _captureSpoolerJob(title);
+    final spoolerJobId = _activeSpoolerJobId?.toString();
+    if (spoolerJobId != null) {
+      await reportStatus(
+        jobId: jobId,
+        status: 'printing',
+        pageCounterBefore: counterBefore,
+        pagesReported: 0,
+        spoolerJobId: spoolerJobId,
+        reconcileStatus: 'pending',
       );
     }
 
@@ -347,11 +419,14 @@ class PrintCoordinator {
       await Future<void>.delayed(pollInterval);
       final health = await _monitor.getHealth();
       if (health.isPhysicalFatal) {
+        final spoolerJobId = _activeSpoolerJobId?.toString();
+        await _clearActiveSpoolerWork();
         await reportStatus(
           jobId: jobId,
           status: 'failed',
           errorMessage: health.userMessage,
           pagesReported: 0,
+          spoolerJobId: spoolerJobId,
           reconcileStatus: 'pending',
           reconcileDetail: health.lastErrorCode ?? health.state,
         );
@@ -363,15 +438,18 @@ class PrintCoordinator {
         );
       }
     }
+    final spoolerJobId = _activeSpoolerJobId?.toString();
+    await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,
       status: 'printing',
       pagesReported: 0,
+      spoolerJobId: spoolerJobId,
       reconcileStatus: 'unknown',
       reconcileDetail: 'usb_baseline_unavailable',
       needsAdminReview: true,
     );
-    return const PrintReconcileResult(
+    return PrintReconcileResult(
       outcome: PrintReconcileOutcome.unknown,
       userMessage:
           'Print was sent, but physical completion could not be confirmed. Staff will review.',
@@ -475,10 +553,13 @@ class PrintCoordinator {
         AppLogger.info(
           'PRINTER reconcile job=$jobId verified delta=$pagesReported expected=$expected',
         );
+        final spoolerJobId = _activeSpoolerJobId?.toString();
+        _forgetActiveSpoolerJob();
         await reportStatus(
           jobId: jobId,
           status: 'completed',
           pagesReported: pagesReported,
+          spoolerJobId: spoolerJobId,
           pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
           reconcileStatus: 'verified',
@@ -501,12 +582,15 @@ class PrintCoordinator {
             : (health.jammed
                 ? 'jam'
                 : (health.lastErrorCode ?? health.state));
+        final spoolerJobId = _activeSpoolerJobId?.toString();
+        await _clearActiveSpoolerWork();
         if (pagesReported > 0) {
           await reportStatus(
             jobId: jobId,
             status: 'failed',
             errorMessage: health.userMessage,
             pagesReported: pagesReported,
+            spoolerJobId: spoolerJobId,
             pageCounterBefore: baseline,
             pageCounterAfter: counterAfter,
             reconcileStatus: 'partial',
@@ -527,6 +611,7 @@ class PrintCoordinator {
           status: 'failed',
           errorMessage: health.userMessage,
           pagesReported: 0,
+          spoolerJobId: spoolerJobId,
           pageCounterBefore: baseline,
           pageCounterAfter: counterAfter,
           reconcileStatus: 'pending',
@@ -547,10 +632,13 @@ class PrintCoordinator {
       AppLogger.info(
         'PRINTER reconcile job=$jobId not verified detail=$unavailableDetail',
       );
+      final spoolerJobId = _activeSpoolerJobId?.toString();
+      await _clearActiveSpoolerWork();
       await reportStatus(
         jobId: jobId,
         status: 'printing',
         pagesReported: 0,
+        spoolerJobId: spoolerJobId,
         pageCounterBefore: baseline,
         pageCounterAfter: counterAfter,
         reconcileStatus: 'unknown',
@@ -571,10 +659,13 @@ class PrintCoordinator {
     AppLogger.info(
       'PRINTER reconcile job=$jobId not verified delta=$pagesReported expected=$expected detail=timeout',
     );
+    final spoolerJobId = _activeSpoolerJobId?.toString();
+    await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,
       status: 'printing',
       pagesReported: pagesReported,
+      spoolerJobId: spoolerJobId,
       pageCounterBefore: baseline ?? provisionalWatermark,
       pageCounterAfter: counterAfter,
       reconcileStatus: 'reconciliation_required',

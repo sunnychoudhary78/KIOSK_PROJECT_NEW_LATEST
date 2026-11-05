@@ -10,6 +10,7 @@ import 'package:skp_kiosk/services/printer/print_status_body.dart';
 
 enum ReportPrintPhase {
   idle,
+  choosingColorMode,
   choosingPayMethod,
   enteringPhone,
   preparingPreview,
@@ -36,6 +37,11 @@ class ReportPrintSnapshot {
     this.checkoutToken,
     this.qrImageUrl,
     this.chargeRupees = 0,
+    this.bwChargeRupees = 0,
+    this.colorChargeRupees = 0,
+    /// Defaults to color so astrology kundali prints stay color unless overridden.
+    this.colorMode = 'color',
+    this.phoneProofToken,
     this.phoneDigits = '',
     this.otpDigits = '',
     this.otpSent = false,
@@ -61,6 +67,11 @@ class ReportPrintSnapshot {
   /// Razorpay UPI QR bitmap URL (preferred over [checkoutUrl]).
   final String? qrImageUrl;
   final int chargeRupees;
+  final int bwChargeRupees;
+  final int colorChargeRupees;
+  /// DigiLocker-style print mode: `bw` or `color`.
+  final String colorMode;
+  final String? phoneProofToken;
   final String phoneDigits;
   final String otpDigits;
   final bool otpSent;
@@ -70,6 +81,9 @@ class ReportPrintSnapshot {
   final String? error;
 
   bool get isActive => phase != ReportPrintPhase.idle;
+
+  int get selectedModeChargeRupees =>
+      colorMode == 'color' ? colorChargeRupees : bwChargeRupees;
 
   ReportPrintSnapshot copyWith({
     ReportPrintPhase? phase,
@@ -90,6 +104,11 @@ class ReportPrintSnapshot {
     String? qrImageUrl,
     bool clearQrImageUrl = false,
     int? chargeRupees,
+    int? bwChargeRupees,
+    int? colorChargeRupees,
+    String? colorMode,
+    String? phoneProofToken,
+    bool clearPhoneProofToken = false,
     String? phoneDigits,
     String? otpDigits,
     bool? otpSent,
@@ -118,6 +137,12 @@ class ReportPrintSnapshot {
           clearCheckoutToken ? null : (checkoutToken ?? this.checkoutToken),
       qrImageUrl: clearQrImageUrl ? null : (qrImageUrl ?? this.qrImageUrl),
       chargeRupees: chargeRupees ?? this.chargeRupees,
+      bwChargeRupees: bwChargeRupees ?? this.bwChargeRupees,
+      colorChargeRupees: colorChargeRupees ?? this.colorChargeRupees,
+      colorMode: colorMode ?? this.colorMode,
+      phoneProofToken: clearPhoneProofToken
+          ? null
+          : (phoneProofToken ?? this.phoneProofToken),
       phoneDigits: phoneDigits ?? this.phoneDigits,
       otpDigits: otpDigits ?? this.otpDigits,
       otpSent: otpSent ?? this.otpSent,
@@ -135,12 +160,16 @@ class ReportPrintSupport {
     required ApiClient api,
     required PrintCoordinator coordinator,
     this.tempFolderName = 'skp_report_print',
+    String Function(String jobId)? paymentStatusPath,
   })  : _api = api,
-        _coordinator = coordinator;
+        _coordinator = coordinator,
+        _paymentStatusPath = paymentStatusPath ??
+            ((jobId) => '/astrology/print-jobs/$jobId/payment');
 
   final ApiClient _api;
   final PrintCoordinator _coordinator;
   final String tempFolderName;
+  final String Function(String jobId) _paymentStatusPath;
 
   Future<ReportPrintSnapshot> prepare({
     required String createJobPath,
@@ -181,6 +210,11 @@ class ReportPrintSupport {
         checkoutUrl: checkoutUrl,
         checkoutToken: checkoutToken,
         qrImageUrl: qrImageUrl,
+        colorMode: previous.colorMode,
+        bwChargeRupees: previous.bwChargeRupees,
+        colorChargeRupees: previous.colorChargeRupees,
+        chargeRupees: previous.chargeRupees,
+        phoneProofToken: previous.phoneProofToken,
       );
     } catch (error) {
       final message = userFacingError(error);
@@ -197,7 +231,7 @@ class ReportPrintSupport {
     }
   }
 
-  /// Poll device payment status for a prepared kundali print job.
+  /// Poll device payment status for a prepared print job.
   Future<ReportPrintSnapshot> pollPayment(ReportPrintSnapshot current) async {
     final jobId = current.previewJobId;
     if (jobId == null ||
@@ -206,7 +240,7 @@ class ReportPrintSupport {
       return current;
     }
     try {
-      final body = await _api.get('/astrology/print-jobs/$jobId/payment');
+      final body = await _api.get(_paymentStatusPath(jobId));
       final status = body['status'] as String? ?? '';
       if (status == 'PAID') {
         return current.copyWith(
@@ -240,6 +274,10 @@ class ReportPrintSupport {
       return current;
     }
     final failures = current.printFailures;
+    final colorMode =
+        current.colorMode == 'bw' || current.colorMode == 'color'
+            ? current.colorMode
+            : 'color';
 
     try {
       final outcome = await _coordinator.printAndReconcile(
@@ -247,7 +285,7 @@ class ReportPrintSupport {
         title: title,
         pdfBytes: bytes,
         pagesExpected: current.pagesExpected,
-        colorMode: 'color',
+        colorMode: colorMode,
         holdForRetry: failures == 0,
         reportStatus: reportStatus,
         onProgress: onProgress,
@@ -324,6 +362,9 @@ class ReportPrintSupport {
     if (current.printFailures != 1 || current.paperOut) return current;
     final jobId = current.previewJobId;
     final next = current.copyWith(printFailures: 2);
+    try {
+      await _coordinator.clearPendingSpoolerWork();
+    } catch (_) {}
     if (jobId == null || jobId.isEmpty) return next;
     try {
       await reportStatus(

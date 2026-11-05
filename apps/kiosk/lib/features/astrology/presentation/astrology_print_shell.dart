@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
@@ -163,50 +162,39 @@ class AstrologyPrintShell extends StatelessWidget {
                       : 'Society numbers with free color pages can print without paying.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                const SizedBox(height: 24),
-                if (!print.otpSent)
-                  TextField(
-                    key: const ValueKey('kundali-phone-input'),
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(10),
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile number',
-                      prefixText: '+91 ',
-                    ),
-                    onChanged: onPhoneChanged,
-                  )
-                else
-                  TextField(
-                    key: const ValueKey('kundali-otp-input'),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(8),
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: 'OTP',
-                    ),
-                    onChanged: onOtpChanged,
-                  ),
-                if (print.phoneNotice != null && print.phoneNotice!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
+                if (print.phoneNotice != null &&
+                    print.phoneNotice!.trim().isNotEmpty) ...[
                   KioskStatusBanner(
                     message: print.phoneNotice!,
                     tone: KioskBannerTone.warning,
                     icon: Icons.info_outline,
                   ),
+                  const SizedBox(height: 12),
                 ],
                 if (print.error != null && print.error!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 16),
                   KioskStatusBanner(
                     message: print.error!,
                     tone: KioskBannerTone.danger,
                     icon: Icons.error_outline,
                   ),
+                  const SizedBox(height: 12),
                 ],
+                Expanded(
+                  child: KioskPhoneOtpEntry(
+                    key: ValueKey(
+                      print.otpSent ? 'kundali-otp-pad' : 'kundali-phone-pad',
+                    ),
+                    value: print.otpSent ? print.otpDigits : print.phoneDigits,
+                    mode: print.otpSent
+                        ? KioskPhoneOtpMode.otp
+                        : KioskPhoneOtpMode.phone,
+                    enabled: !print.phoneBusy,
+                    onChanged: print.otpSent
+                        ? (onOtpChanged ?? (_) {})
+                        : (onPhoneChanged ?? (_) {}),
+                  ),
+                ),
               ],
             ),
           ),
@@ -489,7 +477,8 @@ void holdSessionForAstrologyPrint(WidgetRef ref, ReportPrintSnapshot print) {
         printing: print.phase == ReportPrintPhase.printing ||
             print.phase == ReportPrintPhase.awaitingPayment ||
             print.phase == ReportPrintPhase.choosingPayMethod ||
-            print.phase == ReportPrintPhase.enteringPhone,
+            print.phase == ReportPrintPhase.enteringPhone ||
+            print.phase == ReportPrintPhase.choosingColorMode,
       );
 }
 

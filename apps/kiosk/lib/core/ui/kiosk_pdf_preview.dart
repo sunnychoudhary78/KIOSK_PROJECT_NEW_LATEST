@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 
@@ -44,16 +45,10 @@ class KioskPdfPreview extends StatelessWidget {
               borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
               child: ColoredBox(
                 color: SkpColors.raised,
-                child: PdfPreview(
-                  build: (format) async => pdfBytes,
-                  pdfFileName: '$title.pdf',
-                  allowPrinting: false,
-                  allowSharing: false,
-                  canChangePageFormat: false,
-                  canChangeOrientation: false,
-                  canDebug: false,
-                  actions: const [],
-                  padding: EdgeInsets.zero,
+                // Isolated so message/error rebuilds cannot remount PdfPreview.
+                child: _StablePdfPreview(
+                  title: title,
+                  pdfBytes: pdfBytes,
                 ),
               ),
             ),
@@ -62,4 +57,61 @@ class KioskPdfPreview extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Caches [PdfPreview] so parent rebuilds (progress text) do not re-raster.
+class _StablePdfPreview extends StatefulWidget {
+  const _StablePdfPreview({
+    required this.title,
+    required this.pdfBytes,
+  });
+
+  final String title;
+  final Uint8List pdfBytes;
+
+  @override
+  State<_StablePdfPreview> createState() => _StablePdfPreviewState();
+}
+
+class _StablePdfPreviewState extends State<_StablePdfPreview> {
+  late Widget _viewer;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewer = _createViewer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StablePdfPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final bytesChanged = !identical(oldWidget.pdfBytes, widget.pdfBytes) ||
+        oldWidget.pdfBytes.length != widget.pdfBytes.length;
+    final titleChanged = oldWidget.title != widget.title;
+    if (bytesChanged || titleChanged) {
+      _viewer = _createViewer();
+    }
+  }
+
+  Future<Uint8List> _buildPdf(PdfPageFormat format) async => widget.pdfBytes;
+
+  Widget _createViewer() {
+    return PdfPreview(
+      key: ValueKey<Object>(
+        Object.hash(identityHashCode(widget.pdfBytes), widget.title),
+      ),
+      build: _buildPdf,
+      pdfFileName: '${widget.title}.pdf',
+      allowPrinting: false,
+      allowSharing: false,
+      canChangePageFormat: false,
+      canChangeOrientation: false,
+      canDebug: false,
+      actions: const [],
+      padding: EdgeInsets.zero,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => _viewer;
 }

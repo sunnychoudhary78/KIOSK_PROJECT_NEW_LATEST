@@ -273,6 +273,7 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
         holdForRetry: state.printFailures == 0,
         reportStatus: _repository.reportStatus,
         onProgress: (message) {
+          if (state.message == message) return;
           state = state.copyWith(
             phase: QuickPrintPhase.printing,
             message: message,
@@ -319,6 +320,9 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
     final jobId = state.claim?.printJobId;
     final error = state.error;
     state = state.copyWith(printFailures: 2);
+    try {
+      await _coordinator.clearPendingSpoolerWork();
+    } catch (_) {}
     if (jobId == null || jobId.isEmpty) return;
     try {
       await _repository.reportStatus(

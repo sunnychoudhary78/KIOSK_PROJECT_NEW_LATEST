@@ -90,7 +90,7 @@
       "count": { "type": "int" }
     }
   },
-  "pdfOnlyHint": "PDF only · page limits enforced by server",
+  "pdfOnlyHint": "PDF or JPG/PNG · page limits enforced by server",
   "printColor": "Print color",
   "colorBw": "Black & white",
   "colorColor": "Color",

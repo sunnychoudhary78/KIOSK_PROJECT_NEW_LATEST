@@ -296,4 +296,111 @@ SpoolerPrinterInfo QuerySpoolerStatus(const std::string& preferred_name_substrin
   return info;
 }
 
+SpoolerJobLookup FindUsbSpoolerJobByDocument(const std::string& preferred_name_substring,
+                                             const std::string& document_title) {
+  SpoolerJobLookup lookup;
+  const std::string needle = ToLower(Trim(document_title));
+  if (needle.empty()) {
+    return lookup;
+  }
+
+  const EnumOutcome listed = EnumerateInstalledPrinters();
+  if (listed.failed) {
+    lookup.win32_error = static_cast<int>(GetLastError());
+    return lookup;
+  }
+  const ListedPrinter* chosen = SelectUsbPrinter(listed.printers, preferred_name_substring);
+  if (chosen == nullptr || chosen->name_wide.empty()) {
+    return lookup;
+  }
+
+  HANDLE handle = nullptr;
+  if (!OpenPrinterW(const_cast<LPWSTR>(chosen->name_wide.c_str()), &handle, nullptr)) {
+    lookup.win32_error = static_cast<int>(GetLastError());
+    return lookup;
+  }
+
+  DWORD jobs_needed = 0;
+  DWORD jobs_returned = 0;
+  EnumJobsW(handle, 0, 0xFFFFFFFF, 1, nullptr, 0, &jobs_needed, &jobs_returned);
+  if (jobs_needed == 0) {
+    ClosePrinter(handle);
+    return lookup;
+  }
+  std::vector<BYTE> jobs_buf(jobs_needed);
+  if (!EnumJobsW(handle, 0, 0xFFFFFFFF, 1, jobs_buf.data(), jobs_needed, &jobs_needed,
+                 &jobs_returned)) {
+    lookup.win32_error = static_cast<int>(GetLastError());
+    ClosePrinter(handle);
+    return lookup;
+  }
+  auto* jobs = reinterpret_cast<JOB_INFO_1W*>(jobs_buf.data());
+  for (DWORD i = 0; i < jobs_returned; ++i) {
+    const std::string doc = ToLower(Trim(WideToUtf8(jobs[i].pDocument)));
+    if (doc == needle) {
+      lookup.found = true;
+      lookup.job_id = jobs[i].JobId;
+      ClosePrinter(handle);
+      return lookup;
+    }
+  }
+  ClosePrinter(handle);
+  return lookup;
+}
+
+SpoolerCancelResult CancelUsbSpoolerJobs(const std::string& preferred_name_substring,
+                                         uint32_t job_id) {
+  SpoolerCancelResult result;
+  const EnumOutcome listed = EnumerateInstalledPrinters();
+  if (listed.failed) {
+    result.win32_error = static_cast<int>(GetLastError());
+    return result;
+  }
+  const ListedPrinter* chosen = SelectUsbPrinter(listed.printers, preferred_name_substring);
+  if (chosen == nullptr || chosen->name_wide.empty()) {
+    result.win32_error = ERROR_FILE_NOT_FOUND;
+    return result;
+  }
+
+  HANDLE handle = nullptr;
+  if (!OpenPrinterW(const_cast<LPWSTR>(chosen->name_wide.c_str()), &handle, nullptr)) {
+    result.win32_error = static_cast<int>(GetLastError());
+    return result;
+  }
+
+  auto purge = [&]() -> bool {
+    if (!SetPrinterW(handle, 0, nullptr, PRINTER_CONTROL_PURGE)) {
+      result.win32_error = static_cast<int>(GetLastError());
+      return false;
+    }
+    result.ok = true;
+    result.purged = true;
+    return true;
+  };
+
+  if (job_id == 0) {
+    purge();
+    ClosePrinter(handle);
+    return result;
+  }
+
+  result.job_id = job_id;
+  if (SetJobW(handle, job_id, 0, nullptr, JOB_CONTROL_DELETE)) {
+    result.ok = true;
+    ClosePrinter(handle);
+    return result;
+  }
+  const DWORD delete_err = GetLastError();
+  if (SetJobW(handle, job_id, 0, nullptr, JOB_CONTROL_CANCEL)) {
+    result.ok = true;
+    ClosePrinter(handle);
+    return result;
+  }
+  // Targeted cancel failed — clear the whole USB queue so orphans cannot resume.
+  result.win32_error = static_cast<int>(GetLastError() != 0 ? GetLastError() : delete_err);
+  purge();
+  ClosePrinter(handle);
+  return result;
+}
+
 }  // namespace skp_printer

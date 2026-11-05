@@ -19,6 +19,30 @@ class UsbPrinterResolution {
   final String port;
 }
 
+/// Result of cancelling or purging jobs on the USB Brother queue.
+class SpoolerCancelResult {
+  const SpoolerCancelResult({
+    required this.ok,
+    this.purged = false,
+    this.jobId,
+    this.win32Error,
+  });
+
+  final bool ok;
+  final bool purged;
+  final int? jobId;
+  final int? win32Error;
+
+  factory SpoolerCancelResult.fromJson(Map<dynamic, dynamic> raw) {
+    return SpoolerCancelResult(
+      ok: raw['ok'] == true,
+      purged: raw['purged'] == true,
+      jobId: (raw['jobId'] as num?)?.toInt(),
+      win32Error: (raw['win32Error'] as num?)?.toInt(),
+    );
+  }
+}
+
 abstract class PrinterNative {
   Future<PrinterHealth> getHealth({
     required String printerName,
@@ -30,6 +54,14 @@ abstract class PrinterNative {
   Future<UsbPrinterResolution> resolveUsbPrinter({required String printerName});
 
   Future<UsbSnapshot> getUsbSnapshot({required String scope});
+
+  /// Cancel [jobId] on the USB queue, or purge when [jobId] is null.
+  /// When [jobId] is null and [documentTitle] is set, native resolves the id first.
+  Future<SpoolerCancelResult> cancelUsbSpoolerJobs({
+    required String printerName,
+    int? jobId,
+    String? documentTitle,
+  });
 }
 
 class MethodChannelPrinterNative implements PrinterNative {
@@ -134,6 +166,32 @@ class MethodChannelPrinterNative implements PrinterNative {
       return UsbSnapshot.failed('usb_helper_failed');
     }
   }
+
+  @override
+  Future<SpoolerCancelResult> cancelUsbSpoolerJobs({
+    required String printerName,
+    int? jobId,
+    String? documentTitle,
+  }) async {
+    try {
+      final raw = await _methods.invokeMethod<dynamic>('cancelUsbSpoolerJobs', {
+        'printerName': printerName,
+        if (jobId != null) 'jobId': jobId,
+        if (documentTitle != null && documentTitle.isNotEmpty)
+          'documentTitle': documentTitle,
+      });
+      if (raw is Map) {
+        return SpoolerCancelResult.fromJson(raw);
+      }
+      return const SpoolerCancelResult(ok: false);
+    } on MissingPluginException {
+      AppLogger.error('PRINTER native plugin missing for cancelUsbSpoolerJobs');
+      return const SpoolerCancelResult(ok: false);
+    } catch (error) {
+      AppLogger.error('PRINTER cancelUsbSpoolerJobs failed', error);
+      return const SpoolerCancelResult(ok: false);
+    }
+  }
 }
 
 /// In-memory fake for unit tests.
@@ -158,6 +216,9 @@ class FakePrinterNative implements PrinterNative {
     port: 'USB001',
   );
   UsbSnapshot usbSnapshot = UsbSnapshot.failed('helper_missing');
+  int cancelCalls = 0;
+  final List<Map<String, dynamic>> cancelArgs = [];
+  SpoolerCancelResult cancelResult = const SpoolerCancelResult(ok: true);
 
   @override
   Future<PrinterHealth> getHealth({
@@ -196,6 +257,8 @@ class FakePrinterNative implements PrinterNative {
       doorOpen: source.doorOpen,
       spoolerJobsQueued: source.spoolerJobsQueued,
       spoolerJobsPrinting: source.spoolerJobsPrinting,
+      spoolerLatestJobId: source.spoolerLatestJobId,
+      spoolerLatestJobStatus: source.spoolerLatestJobStatus,
       lastErrorCode: source.lastErrorCode,
     );
   }
@@ -227,5 +290,20 @@ class FakePrinterNative implements PrinterNative {
       return UsbSnapshot(ok: true, connected: true, pagesTotal: value);
     }
     return usbSnapshot;
+  }
+
+  @override
+  Future<SpoolerCancelResult> cancelUsbSpoolerJobs({
+    required String printerName,
+    int? jobId,
+    String? documentTitle,
+  }) async {
+    cancelCalls++;
+    cancelArgs.add({
+      'printerName': printerName,
+      'jobId': jobId,
+      'documentTitle': documentTitle,
+    });
+    return cancelResult;
   }
 }

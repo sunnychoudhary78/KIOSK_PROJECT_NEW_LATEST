@@ -455,7 +455,7 @@ abstract class AppLocalizations {
   /// No description provided for @pdfOnlyHint.
   ///
   /// In en, this message translates to:
-  /// **'PDF only · page limits enforced by server'**
+  /// **'PDF or JPG/PNG · page limits enforced by server'**
   String get pdfOnlyHint;
 
   /// No description provided for @printColor.

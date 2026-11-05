@@ -35,8 +35,12 @@ Face-up trays: by default pages print last→first (`SKP_PRINT_REVERSE_PAGES=tru
 - **Verified only** when the USB total page Δ ≥ expected under exclusive lock. A flat counter is not paper-out.
 - If the USB baseline cannot be read, the job is `unknown` with detail `usb_baseline_unavailable`.
 - Do **not** verify from spooler job gone/idle, `directPrintPdf` ok, or status back to idle alone.
-- Spooler `EnumJobs` fields are correlation-only.
+- Spooler `EnumJobs` fields are correlation-only (except cancel/purge of orphans).
 - Tray 1 out of paper is USB status `41236`.
+
+### Spooler orphan cancel
+
+Visitor-bound prints must not resume after the visitor leaves. On abort, session reset, home, abandon-retry, post-submit fail/timeout, or a dirty pre-print queue, the kiosk cancels the Windows USB job (or purges that queue). Verified success does **not** cancel. Mid-print cancel can leave partial physical pages — those jobs still use `needsAdminReview`.
 
 ```powershell
 flutter run -d windows
@@ -51,6 +55,7 @@ Run only after a Windows rebuild against a live HL-L3280CDW; do not claim these 
 3. UI should show “Confirming print…” then success (no `completed requires reconcileStatus=verified` error).
 4. Admin/API print job: `status=completed`, `reconcileStatus=verified`, `pagesReported >= 1`.
 5. Optional: pull paper mid-job — expect paper-out from USB status `41236` and printing paused.
+6. Optional orphan check: start a print, unplug USB mid-job, leave/home, replug — Windows queue should be empty (no auto-print).
 
 ## Surveillance (Windows)
 

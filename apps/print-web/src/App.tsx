@@ -272,9 +272,19 @@ function SessionPage() {
   }, [colorMode, session]);
 
   function addFiles(list: FileList | null) {
-    const incoming = Array.from(list ?? []).filter(
-      (file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'),
-    );
+    const incoming = Array.from(list ?? []).filter((file) => {
+      const name = file.name.toLowerCase();
+      const type = file.type.toLowerCase();
+      return (
+        type === 'application/pdf' ||
+        type === 'image/jpeg' ||
+        type === 'image/png' ||
+        name.endsWith('.pdf') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png')
+      );
+    });
     setFiles((prev) => {
       const map = new Map(prev.map((file) => [`${file.name}:${file.size}`, file]));
       for (const file of incoming) {
@@ -467,7 +477,7 @@ function SessionPage() {
             </span>
             <span className="choice-copy">
               <span className="choice-title">Print from this phone</span>
-              <span className="choice-sub">Upload PDFs in the browser and send them to the machine</span>
+              <span className="choice-sub">Upload PDF or JPG/PNG in the browser and send them to the machine</span>
             </span>
             <span className="choice-arrow">
               <IconArrow />
@@ -689,7 +699,7 @@ function SessionPage() {
   return (
     <AppShell
       step={<StepRail active="upload" />}
-      title="Upload PDFs"
+      title="Upload files"
       subtitle={
         session.phoneVerified
           ? session.freeDisabledNow
@@ -735,18 +745,22 @@ function SessionPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf,.pdf"
+          accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png"
           multiple
           onChange={(event) => addFiles(event.target.files)}
         />
-        <strong>Tap to add PDFs</strong>
+        <strong>Tap to add PDF or JPG/PNG</strong>
         <small>You can attach more than one file</small>
       </label>
       {files.length > 0 ? (
         <ul className="files">
           {files.map((file, index) => (
             <li className="file-chip" key={`${file.name}-${file.size}-${index}`}>
-              <span className="file-thumb">PDF</span>
+              <span className="file-thumb">
+                {file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
+                  ? 'PDF'
+                  : 'IMG'}
+              </span>
               <span className="file-meta">
                 <strong>{file.name}</strong>
                 <span>{formatBytes(file.size)}</span>

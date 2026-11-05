@@ -1,7 +1,6 @@
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { PDFDocument } from 'pdf-lib';
 import { DeviceStatus, OtpChallengeStatus, PaymentStatus, PrintColorMode, PrintJobSource } from '@prisma/client';
 import type { OtpChallenge, OtpDocument, Payment } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
@@ -11,6 +10,10 @@ import { AppError } from '../../shared/errors.js';
 import { generateNumericOtp, hashOtp, sanitizeOtpDeliveryError } from '../../shared/otp.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
+import {
+  isAcceptedPrintUpload,
+  normalizeToPdf,
+} from '../printing/normalize_to_pdf.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { printLimitsFromDevice } from '../devices/device_print_limits.js';
@@ -50,9 +53,11 @@ const deviceQuoteSelect = {
   freeDisabledToLocal: true,
 } as const;
 
-async function countPdfPages(buffer: Buffer): Promise<number> {
-  const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-  return doc.getPageCount();
+function pdfSafeName(original: string): string {
+  const cleaned = original.replace(/[^\w.\- ()[\]]+/g, '_').slice(0, 180) || 'document';
+  return cleaned.toLowerCase().endsWith('.pdf')
+    ? cleaned
+    : `${cleaned.replace(/\.[^.]+$/, '') || cleaned}.pdf`;
 }
 
 function quoteFromPayment(payment: Payment): PrintQuote {
@@ -129,7 +134,7 @@ export class OtpPrintService {
     const ttlSeconds = printConfig.ttlSeconds || this.config.otp.ttlSeconds;
 
     if (!files.length) {
-      throw new AppError('validation_error', 'At least one PDF is required', 400);
+      throw new AppError('validation_error', 'At least one file is required', 400);
     }
     if (files.length > printConfig.maxDocumentsPerSession) {
       throw new AppError(
@@ -141,37 +146,39 @@ export class OtpPrintService {
 
     const maxBytes = printConfig.maxFileSizeMb * 1024 * 1024;
     const prepared: Array<{
-      file: UploadedPdf;
+      pdfBytes: Buffer;
       pageCount: number;
       safeName: string;
+      byteSize: number;
     }> = [];
 
     let totalPages = 0;
     for (const file of files) {
-      if (!file.mimetype.includes('pdf') && !file.originalname.toLowerCase().endsWith('.pdf')) {
-        throw new AppError('invalid_file_type', 'Only PDF files are allowed', 400);
+      if (!isAcceptedPrintUpload(file.mimetype, file.originalname)) {
+        throw new AppError(
+          'invalid_file_type',
+          'Only PDF or image files (JPG/PNG) are allowed',
+          400,
+        );
       }
       if (file.size <= 0 || file.size > maxBytes) {
         throw new AppError(
           'file_too_large',
-          `Each PDF must be under ${printConfig.maxFileSizeMb} MB`,
+          `Each file must be under ${printConfig.maxFileSizeMb} MB`,
           400,
         );
       }
-      let pageCount: number;
-      try {
-        pageCount = await countPdfPages(file.buffer);
-      } catch {
-        throw new AppError('invalid_pdf', `Could not read PDF: ${file.originalname}`, 400);
-      }
-      if (pageCount < 1) {
-        throw new AppError('invalid_pdf', `PDF has no pages: ${file.originalname}`, 400);
-      }
-      totalPages += pageCount;
+      const normalized = await normalizeToPdf({
+        bytes: file.buffer,
+        mimeType: file.mimetype,
+        fileName: file.originalname,
+      });
+      totalPages += normalized.pageCount;
       prepared.push({
-        file,
-        pageCount,
-        safeName: file.originalname.replace(/[^\w.\- ()[\]]+/g, '_').slice(0, 180) || 'document.pdf',
+        pdfBytes: normalized.pdfBytes,
+        pageCount: normalized.pageCount,
+        safeName: pdfSafeName(file.originalname),
+        byteSize: normalized.pdfBytes.length,
       });
     }
 
@@ -228,13 +235,13 @@ export class OtpPrintService {
     try {
       for (const [index, item] of prepared.entries()) {
         const storagePath = join(challengeDir, `${String(index).padStart(2, '0')}-${item.safeName}`);
-        await writeFile(storagePath, item.file.buffer);
+        await writeFile(storagePath, item.pdfBytes);
         documentRows.push({
           fileName: item.safeName,
           storagePath,
           contentType: 'application/pdf',
           pageCount: item.pageCount,
-          byteSize: item.file.size,
+          byteSize: item.byteSize,
           sortOrder: index,
         });
       }

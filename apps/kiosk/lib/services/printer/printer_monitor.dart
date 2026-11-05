@@ -78,4 +78,17 @@ class PrinterMonitor {
   Future<UsbSnapshot> getUsbSnapshot({required bool full}) {
     return _native.getUsbSnapshot(scope: full ? 'full' : 'fast');
   }
+
+  /// Cancel [jobId] on the USB queue, or purge when unknown.
+  /// [documentTitle] helps native resolve the Windows job when [jobId] is null.
+  Future<SpoolerCancelResult> clearUsbSpoolerJobs({
+    int? jobId,
+    String? documentTitle,
+  }) {
+    return _native.cancelUsbSpoolerJobs(
+      printerName: _config.printerName,
+      jobId: jobId,
+      documentTitle: documentTitle,
+    );
+  }
 }
