@@ -2371,6 +2371,84 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdPlaylistResponse'
 
+  /emergency-contacts:
+    get:
+      tags: [Devices]
+      summary: List emergency helpline contacts (admin or device)
+      operationId: listEmergencyContacts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Ordered emergency contacts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyContactListResponse'
+    post:
+      tags: [Devices]
+      summary: Create an emergency helpline contact (admin)
+      operationId: createEmergencyContact
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmergencyContactInput'
+      responses:
+        '201':
+          description: Created contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyContact'
+
+  /emergency-contacts/{id}:
+    put:
+      tags: [Devices]
+      summary: Update an emergency helpline contact (admin)
+      operationId: updateEmergencyContact
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmergencyContactInput'
+      responses:
+        '200':
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyContact'
+    delete:
+      tags: [Devices]
+      summary: Delete an emergency helpline contact (admin)
+      operationId: deleteEmergencyContact
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
   /print-quota/usage:
     get:
       tags: [Printing]
@@ -4411,3 +4489,49 @@ components:
               type: array
               items:
                 type: string
+
+    EmergencyContact:
+      type: object
+      required: [id, name, phone, icon, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        icon:
+          type: string
+          enum: [sos, police, fire, ambulance, women, child, disaster, phone]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EmergencyContactInput:
+      type: object
+      required: [name, phone]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        icon:
+          type: string
+          enum: [sos, police, fire, ambulance, women, child, disaster, phone]
+        sortOrder:
+          type: integer
+
+    EmergencyContactListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmergencyContact'

@@ -3,16 +3,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/theme/athena_colors.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
+import 'package:skp_kiosk/features/emergency/application/emergency_contacts_controller.dart';
 import 'package:skp_kiosk/features/emergency/domain/emergency_contact.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
-class EmergencyPage extends ConsumerWidget {
+class EmergencyPage extends ConsumerStatefulWidget {
   const EmergencyPage({super.key});
 
+  @override
+  ConsumerState<EmergencyPage> createState() => _EmergencyPageState();
+}
+
+class _EmergencyPageState extends ConsumerState<EmergencyPage> {
   static const _danger = Color(0xFFE11D48);
 
-  Future<void> _endSession(WidgetRef ref) {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(emergencyContactsControllerProvider.notifier).load();
+    });
+  }
+
+  Future<void> _endSession() {
     return ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
@@ -26,18 +40,22 @@ class EmergencyPage extends ConsumerWidget {
       'women' => Icons.woman_outlined,
       'child' => Icons.child_care_outlined,
       'disaster' => Icons.crisis_alert_outlined,
+      'phone' => Icons.phone_in_talk_outlined,
       _ => Icons.sos_outlined,
     };
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final colors = context.athenaColors;
+    final state = ref.watch(emergencyContactsControllerProvider);
+    final contacts = state.contacts;
+
     return VisitorSessionPopScope(
       endSessionOnPop: false,
       child: KioskShell(
         title: 'Emergency',
-        onHome: () => _endSession(ref),
+        onHome: _endSession,
         footerLeading: KioskGhostButton(
           label: 'Back',
           icon: Icons.arrow_back,
@@ -64,18 +82,20 @@ class EmergencyPage extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: ListView.separated(
-                  itemCount: kEmergencyContacts.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final contact = kEmergencyContacts[index];
-                    return _EmergencyCard(
-                      contact: contact,
-                      icon: _iconFor(contact.icon),
-                      colors: colors,
-                    );
-                  },
-                ),
+                child: state.loading && contacts.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.separated(
+                        itemCount: contacts.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final contact = contacts[index];
+                          return _EmergencyCard(
+                            contact: contact,
+                            icon: _iconFor(contact.icon),
+                            colors: colors,
+                          );
+                        },
+                      ),
               ),
             ],
           ),
