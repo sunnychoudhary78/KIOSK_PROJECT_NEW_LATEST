@@ -433,8 +433,9 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
                   ? 'Preparing document preview…'
                   : (state.message ?? 'Loading…'),
             ),
-          DigilockerPhase.previewing || DigilockerPhase.printing
-              when state.previewBytes != null =>
+          DigilockerPhase.printing =>
+            KioskPrintingProgress(detail: state.message),
+          DigilockerPhase.previewing when state.previewBytes != null =>
             KioskPdfPreview(
               title: state.previewTitle ?? 'Document',
               pdfBytes: state.previewBytes!,

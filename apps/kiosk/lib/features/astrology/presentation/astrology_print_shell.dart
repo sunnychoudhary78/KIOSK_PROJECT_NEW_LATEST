@@ -305,8 +305,30 @@ class AstrologyPrintShell extends StatelessWidget {
       );
     }
 
-    if (print.phase == ReportPrintPhase.previewing ||
-        print.phase == ReportPrintPhase.printing) {
+    if (print.phase == ReportPrintPhase.printing) {
+      return VisitorSessionPopScope(
+        endSessionOnPop: false,
+        child: KioskShell(
+          title: title,
+          onHome: onHome,
+          stepLabel: 'Print',
+          footerLeading: KioskGhostButton(
+            label: 'Back',
+            icon: Icons.arrow_back,
+            onPressed: null,
+          ),
+          footerTrailing: KioskPrimaryButton(
+            label: 'Printing…',
+            icon: Icons.print,
+            loading: true,
+            onPressed: null,
+          ),
+          body: KioskPrintingProgress(detail: print.message),
+        ),
+      );
+    }
+
+    if (print.phase == ReportPrintPhase.previewing) {
       return VisitorSessionPopScope(
         endSessionOnPop: false,
         child: KioskShell(
@@ -316,9 +338,7 @@ class AstrologyPrintShell extends StatelessWidget {
           footerLeading: KioskGhostButton(
             label: 'Back',
             icon: Icons.arrow_back,
-            onPressed: print.phase == ReportPrintPhase.printing
-                ? null
-                : onBackFromPreview,
+            onPressed: onBackFromPreview,
           ),
           footerTrailing: print.printFailures >= 2
               ? KioskPrimaryButton(
@@ -326,14 +346,9 @@ class AstrologyPrintShell extends StatelessWidget {
                   onPressed: onTellStaff,
                 )
               : KioskPrimaryButton(
-                  label: print.phase == ReportPrintPhase.printing
-                      ? 'Printing…'
-                      : 'Print',
+                  label: 'Print',
                   icon: Icons.print,
-                  loading: print.phase == ReportPrintPhase.printing,
-                  onPressed: print.phase == ReportPrintPhase.printing
-                      ? null
-                      : onConfirmPrint,
+                  onPressed: onConfirmPrint,
                 ),
           body: print.previewBytes == null
               ? const KioskWaitAds(message: 'Preparing…')

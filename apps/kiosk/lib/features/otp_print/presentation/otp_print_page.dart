@@ -150,8 +150,8 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
                   ? 'Preparing document preview…'
                   : 'Fetching documents…',
             ),
-          OtpPrintPhase.previewing || OtpPrintPhase.printing
-              when state.previewBytes != null =>
+          OtpPrintPhase.printing => KioskPrintingProgress(detail: state.message),
+          OtpPrintPhase.previewing when state.previewBytes != null =>
             KioskPdfPreview(
               title: state.previewDoc?.fileName ?? 'Document',
               pdfBytes: state.previewBytes!,

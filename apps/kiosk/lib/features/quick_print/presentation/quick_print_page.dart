@@ -141,8 +141,8 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
                       ? 'Fetching documents…'
                       : 'Starting session…',
             ),
-          QuickPrintPhase.previewing || QuickPrintPhase.printing
-              when state.previewBytes != null =>
+          QuickPrintPhase.printing => KioskPrintingProgress(detail: state.message),
+          QuickPrintPhase.previewing when state.previewBytes != null =>
             KioskPdfPreview(
               title: state.previewDoc?.fileName ?? 'Document',
               pdfBytes: state.previewBytes!,

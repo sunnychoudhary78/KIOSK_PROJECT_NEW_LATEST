@@ -371,8 +371,29 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
       );
     }
 
-    if (print.phase == ReportPrintPhase.previewing ||
-        print.phase == ReportPrintPhase.printing) {
+    if (print.phase == ReportPrintPhase.printing) {
+      return VisitorSessionPopScope(
+        child: KioskShell(
+          title: 'Well Being',
+          onHome: _endSession,
+          stepLabel: 'Print',
+          footerLeading: KioskGhostButton(
+            label: 'Back',
+            icon: Icons.arrow_back,
+            onPressed: null,
+          ),
+          footerTrailing: KioskPrimaryButton(
+            label: 'Printing…',
+            icon: Icons.print,
+            loading: true,
+            onPressed: null,
+          ),
+          body: KioskPrintingProgress(detail: print.message),
+        ),
+      );
+    }
+
+    if (print.phase == ReportPrintPhase.previewing) {
       return VisitorSessionPopScope(
         child: KioskShell(
           title: 'Well Being',
@@ -381,9 +402,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
           footerLeading: KioskGhostButton(
             label: 'Back',
             icon: Icons.arrow_back,
-            onPressed: print.phase == ReportPrintPhase.printing
-                ? null
-                : () => controller.cancelPrintPreview(),
+            onPressed: () => controller.cancelPrintPreview(),
           ),
           footerTrailing: print.printFailures >= 2
               ? KioskPrimaryButton(
@@ -391,14 +410,9 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                   onPressed: controller.tellStaffPrint,
                 )
               : KioskPrimaryButton(
-                  label: print.phase == ReportPrintPhase.printing
-                      ? 'Printing…'
-                      : 'Print',
+                  label: 'Print',
                   icon: Icons.print,
-                  loading: print.phase == ReportPrintPhase.printing,
-                  onPressed: print.phase == ReportPrintPhase.printing
-                      ? null
-                      : controller.confirmPrint,
+                  onPressed: controller.confirmPrint,
                 ),
           body: print.previewBytes == null
               ? const KioskWaitAds(message: 'Preparing…')
