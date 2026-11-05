@@ -7,25 +7,6 @@ import 'package:skp_kiosk/services/printer/usb_page_watch.dart';
 import 'package:skp_kiosk/services/printer/usb_snapshot.dart';
 
 void main() {
-  test('decode maps page and next-care ids and ignores an unknown id', () {
-    final decoded = decodeBrotherUsbRecords([
-      0x00, 0x01, 0x04, 0x00, 0x00, 0x00, 176,
-      0x02, 0x01, 0x04, 0x00, 0x00, 0x00, 159,
-      0x01, 0x01, 0x04, 0x00, 0x00, 0x00, 17,
-      0x63, 0x01, 0x04, 0x00, 0x00, 0x00, 5,
-      0x88, 0x01, 0x04, 0x00, 0x00, 0xC2, 0x7E,
-      0x73, 0x01, 0x04, 0x00, 0x00, 0xC2, 0xA0,
-      0xFF,
-    ]);
-
-    expect(decoded.pagesTotal, 176);
-    expect(decoded.pagesColor, 159);
-    expect(decoded.pagesBlackAndWhite, 17);
-    expect(decoded.beltRemainingPages, 49790);
-    expect(decoded.fuserRemainingPages, 49824);
-    expect(decoded.ignoredIds, [0x63]);
-  });
-
   test('compare line records the USB page delta without touching heartbeat JSON', () {
     const health = PrinterHealth(
       state: 'ready',
@@ -215,27 +196,24 @@ void main() {
     expect(watch.paperOutLatched, isFalse);
   });
 
-  test('maintenance toner ids 129-132 are percents and out-of-range values are omitted', () {
-    final decoded = decodeBrotherUsbRecords([
-      0x81, 0x01, 0x04, 0x00, 0x00, 0x00, 80,
-      0x82, 0x01, 0x04, 0x00, 0x00, 0x00, 90,
-      0x83, 0x01, 0x04, 0x00, 0x00, 0x00, 90,
-      0x84, 0x01, 0x04, 0x00, 0x00, 0x00, 0,
-      0x81, 0x01, 0x04, 0x00, 0x00, 0x27, 0x10,
-      0x63, 0x01, 0x04, 0x00, 0x00, 0x00, 5,
-    ]);
-
-    expect(decoded.tonerBlack, 80);
-    expect(decoded.tonerCyan, 90);
-    expect(decoded.tonerMagenta, 90);
-    expect(decoded.tonerYellow, 0);
-    expect(decoded.ignoredIds, [0x63]);
-
-    final overRange = decodeBrotherUsbRecords([
-      0x82, 0x01, 0x04, 0x00, 0x00, 0x27, 0x10,
-    ]);
-    expect(overRange.tonerCyan, isNull);
-    expect(overRange.ignoredIds, isEmpty);
+  test('fromJson reads typed HTTP helper fields without hex records', () {
+    final snapshot = UsbSnapshot.fromJson({
+      'ok': true,
+      'connected': true,
+      'pagesTotal': 176,
+      'pagesColor': 159,
+      'pagesBlackAndWhite': 17,
+      'tonerBlack': 80,
+      'tonerCyan': 90,
+      'pageCountHex': '000104000000b0',
+      'nextCareHex': '8801040000c27e',
+    });
+    expect(snapshot.pagesTotal, 176);
+    expect(snapshot.pagesColor, 159);
+    expect(snapshot.pagesBlackAndWhite, 17);
+    expect(snapshot.tonerBlack, 80);
+    expect(snapshot.tonerCyan, 90);
+    expect(snapshot.beltRemainingPages, isNull);
   });
 
   test('a fast snapshot and a busy read keep latched toner on the compare line', () {

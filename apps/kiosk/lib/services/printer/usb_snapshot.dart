@@ -1,139 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:skp_kiosk/services/printer/printer_health.dart';
-
-/// Known Brother USB record ids. Unknown ids are listed and not named.
-class BrotherUsbRecords {
-  const BrotherUsbRecords({
-    this.pagesTotal,
-    this.pagesColor,
-    this.pagesBlackAndWhite,
-    this.beltRemainingPages,
-    this.fuserRemainingPages,
-    this.tonerBlack,
-    this.tonerCyan,
-    this.tonerMagenta,
-    this.tonerYellow,
-    this.ignoredIds = const [],
-  });
-
-  final int? pagesTotal;
-  final int? pagesColor;
-  final int? pagesBlackAndWhite;
-  final int? beltRemainingPages;
-  final int? fuserRemainingPages;
-  final int? tonerBlack;
-  final int? tonerCyan;
-  final int? tonerMagenta;
-  final int? tonerYellow;
-  final List<int> ignoredIds;
-}
-
-/// Tag, 0x01, 0x04, four big-endian bytes. 0xFFFFFF is padding.
-BrotherUsbRecords decodeBrotherUsbRecords(List<int> bytes) {
-  int? pagesTotal;
-  int? pagesColor;
-  int? pagesBlackAndWhite;
-  int? belt;
-  int? fuser;
-  int? tonerBlack;
-  int? tonerCyan;
-  int? tonerMagenta;
-  int? tonerYellow;
-  final ignored = <int>[];
-  var i = 0;
-  while (i < bytes.length) {
-    if (i + 4 <= bytes.length &&
-        bytes[i] == 0xFF &&
-        bytes[i + 1] == 0xFF &&
-        bytes[i + 2] == 0xFF &&
-        bytes[i + 3] == 0xFF) {
-      break;
-    }
-    if (i + 3 <= bytes.length &&
-        bytes[i] == 0xFF &&
-        bytes[i + 1] == 0xFF &&
-        bytes[i + 2] == 0xFF) {
-      i += 3;
-      continue;
-    }
-    if (bytes[i] == 0xFF && i + 1 == bytes.length) {
-      break;
-    }
-    if (i + 3 > bytes.length || bytes[i + 1] != 0x01 || bytes[i + 2] != 0x04) {
-      break;
-    }
-    final id = bytes[i];
-    i += 3;
-    final valueBytes = <int>[];
-    while (valueBytes.length < 4 && i < bytes.length) {
-      if (i + 3 <= bytes.length &&
-          bytes[i] == 0xFF &&
-          bytes[i + 1] == 0xFF &&
-          bytes[i + 2] == 0xFF) {
-        i += 3;
-        continue;
-      }
-      valueBytes.add(bytes[i]);
-      i += 1;
-    }
-    if (valueBytes.length != 4) {
-      break;
-    }
-    final value = (valueBytes[0] << 24) |
-        (valueBytes[1] << 16) |
-        (valueBytes[2] << 8) |
-        valueBytes[3];
-    if (value < 0) {
-      ignored.add(id);
-      continue;
-    }
-    switch (id) {
-      case 0:
-        pagesTotal = value;
-        break;
-      case 1:
-        pagesBlackAndWhite = value;
-        break;
-      case 2:
-        pagesColor = value;
-        break;
-      case 136:
-        belt = value;
-        break;
-      case 115:
-        fuser = value;
-        break;
-      case 129:
-        if (value <= 100) tonerBlack = value;
-        break;
-      case 130:
-        if (value <= 100) tonerCyan = value;
-        break;
-      case 131:
-        if (value <= 100) tonerMagenta = value;
-        break;
-      case 132:
-        if (value <= 100) tonerYellow = value;
-        break;
-      default:
-        ignored.add(id);
-    }
-  }
-  return BrotherUsbRecords(
-    pagesTotal: pagesTotal,
-    pagesColor: pagesColor,
-    pagesBlackAndWhite: pagesBlackAndWhite,
-    beltRemainingPages: belt,
-    fuserRemainingPages: fuser,
-    tonerBlack: tonerBlack,
-    tonerCyan: tonerCyan,
-    tonerMagenta: tonerMagenta,
-    tonerYellow: tonerYellow,
-    ignoredIds: ignored,
-  );
-}
 
 class UsbSnapshot {
   const UsbSnapshot({
@@ -150,6 +17,13 @@ class UsbSnapshot {
     this.pagesTotal,
     this.pagesColor,
     this.pagesBlackAndWhite,
+    this.pagesDuplexTotal,
+    this.pagesDuplexColor,
+    this.pagesDuplexBlackAndWhite,
+    this.refillBlack,
+    this.refillCyan,
+    this.refillMagenta,
+    this.refillYellow,
     this.beltRemainingPages,
     this.fuserRemainingPages,
     this.firmwareMain,
@@ -172,6 +46,13 @@ class UsbSnapshot {
   final int? pagesTotal;
   final int? pagesColor;
   final int? pagesBlackAndWhite;
+  final int? pagesDuplexTotal;
+  final int? pagesDuplexColor;
+  final int? pagesDuplexBlackAndWhite;
+  final int? refillBlack;
+  final int? refillCyan;
+  final int? refillMagenta;
+  final int? refillYellow;
   final int? beltRemainingPages;
   final int? fuserRemainingPages;
   final String? firmwareMain;
@@ -188,8 +69,6 @@ class UsbSnapshot {
   }
 
   factory UsbSnapshot.fromJson(Map<String, dynamic> json) {
-    final records = _recordsFromHex(json['pageCountHex'])
-        .merge(_recordsFromHex(json['nextCareHex']));
     return UsbSnapshot(
       ok: json['ok'] == true,
       connected: json['connected'] == true,
@@ -201,14 +80,19 @@ class UsbSnapshot {
       tonerCyan: (json['tonerCyan'] as num?)?.toInt(),
       tonerMagenta: (json['tonerMagenta'] as num?)?.toInt(),
       tonerYellow: (json['tonerYellow'] as num?)?.toInt(),
-      pagesTotal: (json['pagesTotal'] as num?)?.toInt() ?? records.pagesTotal,
-      pagesColor: (json['pagesColor'] as num?)?.toInt() ?? records.pagesColor,
-      pagesBlackAndWhite: (json['pagesBlackAndWhite'] as num?)?.toInt() ??
-          records.pagesBlackAndWhite,
-      beltRemainingPages: (json['beltRemainingPages'] as num?)?.toInt() ??
-          records.beltRemainingPages,
-      fuserRemainingPages: (json['fuserRemainingPages'] as num?)?.toInt() ??
-          records.fuserRemainingPages,
+      pagesTotal: (json['pagesTotal'] as num?)?.toInt(),
+      pagesColor: (json['pagesColor'] as num?)?.toInt(),
+      pagesBlackAndWhite: (json['pagesBlackAndWhite'] as num?)?.toInt(),
+      pagesDuplexTotal: (json['pagesDuplexTotal'] as num?)?.toInt(),
+      pagesDuplexColor: (json['pagesDuplexColor'] as num?)?.toInt(),
+      pagesDuplexBlackAndWhite:
+          (json['pagesDuplexBlackAndWhite'] as num?)?.toInt(),
+      refillBlack: (json['refillBlack'] as num?)?.toInt(),
+      refillCyan: (json['refillCyan'] as num?)?.toInt(),
+      refillMagenta: (json['refillMagenta'] as num?)?.toInt(),
+      refillYellow: (json['refillYellow'] as num?)?.toInt(),
+      beltRemainingPages: (json['beltRemainingPages'] as num?)?.toInt(),
+      fuserRemainingPages: (json['fuserRemainingPages'] as num?)?.toInt(),
       firmwareMain: json['firmwareMain'] as String?,
       firmwareSub3: json['firmwareSub3'] as String?,
       model: json['model'] as String?,
@@ -232,39 +116,7 @@ class UsbSnapshot {
   }
 }
 
-extension on BrotherUsbRecords {
-  BrotherUsbRecords merge(BrotherUsbRecords other) {
-    return BrotherUsbRecords(
-      pagesTotal: pagesTotal ?? other.pagesTotal,
-      pagesColor: pagesColor ?? other.pagesColor,
-      pagesBlackAndWhite: pagesBlackAndWhite ?? other.pagesBlackAndWhite,
-      beltRemainingPages: beltRemainingPages ?? other.beltRemainingPages,
-      fuserRemainingPages: fuserRemainingPages ?? other.fuserRemainingPages,
-      tonerBlack: tonerBlack ?? other.tonerBlack,
-      tonerCyan: tonerCyan ?? other.tonerCyan,
-      tonerMagenta: tonerMagenta ?? other.tonerMagenta,
-      tonerYellow: tonerYellow ?? other.tonerYellow,
-      ignoredIds: [...ignoredIds, ...other.ignoredIds],
-    );
-  }
-}
-
-BrotherUsbRecords _recordsFromHex(Object? raw) {
-  if (raw is! String || raw.isEmpty) {
-    return const BrotherUsbRecords();
-  }
-  final hex = raw.replaceAll(RegExp(r'[^0-9a-fA-F]'), '');
-  if (hex.length < 2 || hex.length.isOdd) {
-    return const BrotherUsbRecords();
-  }
-  final bytes = Uint8List(hex.length ~/ 2);
-  for (var i = 0; i < bytes.length; i++) {
-    bytes[i] = int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16);
-  }
-  return decodeBrotherUsbRecords(bytes);
-}
-
-/// Lab-confirmed Brother QueryStatus codes. Anything else is unmapped.
+/// Lab-confirmed Brother status codes mapped from EWS monitor text. Anything else is unmapped.
 const int usbStatusSleep = 40000;
 const int usbStatusReady = 10001;
 const int usbStatusWait = 10003;

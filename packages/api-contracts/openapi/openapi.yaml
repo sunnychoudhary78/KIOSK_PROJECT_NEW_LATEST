@@ -2783,12 +2783,13 @@ components:
       type: object
       required: [available]
       description: >
-        Verified Brother HL-L3280CDW private tags. pages.total is not prtMarkerLifeCount.
-        A missing metric means that tag was not read. Zero is a real reading.
+        Brother DCP-T830DW HttpToUsbBridge EWS maintenance. Wire toner* keys hold ink %.
+        A missing metric means that value was not read. Zero is a real reading.
+        Scan/copy counters are not collected. duplex* and refill are ink-tank only.
       properties:
         available:
           type: boolean
-          description: True when at least one of the three maintenance octet strings was read
+          description: True when maintenance HTML was read successfully
         toner:
           type: object
           properties:
@@ -2824,6 +2825,37 @@ components:
               minimum: 0
               nullable: true
             blackAndWhite:
+              type: integer
+              minimum: 0
+              nullable: true
+            duplexTotal:
+              type: integer
+              minimum: 0
+              nullable: true
+            duplexColor:
+              type: integer
+              minimum: 0
+              nullable: true
+            duplexBlackAndWhite:
+              type: integer
+              minimum: 0
+              nullable: true
+        refill:
+          type: object
+          properties:
+            black:
+              type: integer
+              minimum: 0
+              nullable: true
+            cyan:
+              type: integer
+              minimum: 0
+              nullable: true
+            magenta:
+              type: integer
+              minimum: 0
+              nullable: true
+            yellow:
               type: integer
               minimum: 0
               nullable: true
@@ -2882,7 +2914,7 @@ components:
         model:
           type: string
           nullable: true
-          description: e.g. Brother HL-L3280CDW
+          description: e.g. Brother DCP-T830DW
         trays:
           type: array
           items:

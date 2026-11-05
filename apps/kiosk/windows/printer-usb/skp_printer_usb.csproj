@@ -37,12 +37,13 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BrotherRecords.cs" />
+    <Compile Include="BridgeHtml.cs" />
+    <Compile Include="HttpBridgeSession.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Snapshot.cs" />
-    <Compile Include="UsbSession.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

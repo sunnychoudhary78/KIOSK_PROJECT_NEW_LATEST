@@ -121,7 +121,40 @@ bool ReadLine(HANDLE pipe, OVERLAPPED* overlapped, std::string* line, DWORD time
   return !line->empty();
 }
 
-std::string Transact(const std::string& scope) {
+std::string EscapeJsonString(const std::string& value) {
+  std::string out;
+  out.reserve(value.size() + 8);
+  for (const unsigned char c : value) {
+    if (c == '\\' || c == '"') {
+      out.push_back('\\');
+      out.push_back(static_cast<char>(c));
+    } else if (c == '\n') {
+      out += "\\n";
+    } else if (c == '\r') {
+      out += "\\r";
+    } else if (c < 0x20) {
+      continue;
+    } else {
+      out.push_back(static_cast<char>(c));
+    }
+  }
+  return out;
+}
+
+std::string BuildRequestJson(const std::string& scope, const std::string& password) {
+  std::string request = "{\"scope\":\"";
+  request += EscapeJsonString(scope);
+  request += "\"";
+  if (!password.empty()) {
+    request += ",\"password\":\"";
+    request += EscapeJsonString(password);
+    request += "\"";
+  }
+  request += "}\n";
+  return request;
+}
+
+std::string Transact(const std::string& scope, const std::string& password) {
   const std::wstring helper = HelperPath();
   if (!HelperExists(helper)) {
     return "{\"ok\":false,\"connected\":false,\"error\":\"helper_missing\"}";
@@ -138,8 +171,9 @@ std::string Transact(const std::string& scope) {
   OVERLAPPED overlapped{};
   overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
   std::string response;
-  const std::string request = std::string("{\"scope\":\"") + scope + "\"}\n";
-  // First open of the printer can take the SDK's 15 second timeout.
+  // Do not log [request] — it may contain the printer password.
+  const std::string request = BuildRequestJson(scope, password);
+  // First open / login can take several seconds through HttpToUsbBridge.
   const bool wrote = overlapped.hEvent != nullptr &&
                      WriteAll(pipe, &overlapped, request, 5000);
   const bool read = wrote && ReadLine(pipe, &overlapped, &response, 25000);
@@ -160,13 +194,13 @@ std::mutex& BusyMutex() {
 
 }  // namespace
 
-std::string RequestUsbSnapshot(const std::string& scope) {
+std::string RequestUsbSnapshot(const std::string& scope, const std::string& password) {
   std::unique_lock<std::mutex> lock(BusyMutex(), std::try_to_lock);
   if (!lock.owns_lock()) {
     return "{\"ok\":false,\"connected\":false,\"error\":\"busy\"}";
   }
   const std::string normalized = scope == "full" ? "full" : "fast";
-  return Transact(normalized);
+  return Transact(normalized, password);
 }
 
 }  // namespace skp_printer

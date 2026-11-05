@@ -42,6 +42,13 @@ class MaintenanceMetricLines {
     required this.total,
     required this.color,
     required this.blackAndWhite,
+    required this.duplexTotal,
+    required this.duplexColor,
+    required this.duplexBlackAndWhite,
+    required this.refillBlack,
+    required this.refillCyan,
+    required this.refillMagenta,
+    required this.refillYellow,
     required this.belt,
     required this.fuser,
   });
@@ -53,6 +60,13 @@ class MaintenanceMetricLines {
   final String total;
   final String color;
   final String blackAndWhite;
+  final String duplexTotal;
+  final String duplexColor;
+  final String duplexBlackAndWhite;
+  final String refillBlack;
+  final String refillCyan;
+  final String refillMagenta;
+  final String refillYellow;
   final String belt;
   final String fuser;
 }
@@ -151,6 +165,36 @@ String? lastPollTitle(String? lastSuccessAt) {
   return 'Last successful printer poll ${formatTimestamp(parsed)}';
 }
 
+/// Laser belt/fuser only — hide Parts UI when neither value is present (e.g. DCP-T830DW).
+bool hasPrinterParts(PrinterHealth? health) {
+  final belt = health?.maintenance?.parts?.beltRemainingPages;
+  final fuser = health?.maintenance?.parts?.fuserRemainingPages;
+  return _isNonNegativeInt(belt) || _isNonNegativeInt(fuser);
+}
+
+/// Ink-tank refill counts — hide when none were read.
+bool hasPrinterRefill(PrinterHealth? health) {
+  final refill = health?.maintenance?.refill;
+  return _isNonNegativeInt(refill?.black) ||
+      _isNonNegativeInt(refill?.cyan) ||
+      _isNonNegativeInt(refill?.magenta) ||
+      _isNonNegativeInt(refill?.yellow);
+}
+
+/// 2-sided counters from the Total job-mix block.
+bool hasPrinterDuplex(PrinterHealth? health) {
+  final pages = health?.maintenance?.pages;
+  return _isNonNegativeInt(pages?.duplexTotal) ||
+      _isNonNegativeInt(pages?.duplexColor) ||
+      _isNonNegativeInt(pages?.duplexBlackAndWhite);
+}
+
+bool _isNonNegativeInt(num? value) {
+  if (value == null) return false;
+  if (value is! int && value != value.roundToDouble()) return false;
+  return value >= 0;
+}
+
 MaintenanceDisplay resolvePrinterMaintenance(PrinterHealth? health) {
   final maintenance = health?.maintenance;
   if (maintenance == null || maintenance.available != true) {
@@ -164,6 +208,13 @@ MaintenanceDisplay resolvePrinterMaintenance(PrinterHealth? health) {
     total: formatCount(maintenance.pages?.total),
     color: formatCount(maintenance.pages?.color),
     blackAndWhite: formatCount(maintenance.pages?.blackAndWhite),
+    duplexTotal: formatCount(maintenance.pages?.duplexTotal),
+    duplexColor: formatCount(maintenance.pages?.duplexColor),
+    duplexBlackAndWhite: formatCount(maintenance.pages?.duplexBlackAndWhite),
+    refillBlack: formatCount(maintenance.refill?.black),
+    refillCyan: formatCount(maintenance.refill?.cyan),
+    refillMagenta: formatCount(maintenance.refill?.magenta),
+    refillYellow: formatCount(maintenance.refill?.yellow),
     belt: formatCount(maintenance.parts?.beltRemainingPages),
     fuser: formatCount(maintenance.parts?.fuserRemainingPages),
   );
@@ -209,7 +260,7 @@ PrinterStatusDisplay resolvePrinterStatus(PrinterHealth? health) {
       PrinterStatusKind.printing => 'Printing',
       PrinterStatusKind.paperOut => 'Out of paper',
       PrinterStatusKind.jam => 'Paper jam',
-      PrinterStatusKind.tonerLow => 'Toner low',
+      PrinterStatusKind.tonerLow => 'Ink low',
       PrinterStatusKind.offline => 'Offline',
       PrinterStatusKind.error => 'Error',
       PrinterStatusKind.unavailable => 'Unavailable',

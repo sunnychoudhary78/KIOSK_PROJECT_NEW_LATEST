@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hasPrinterDuplex,
+  hasPrinterRefill,
   resolvePrinterErrorHistory,
   resolvePrinterMaintenance,
   resolvePrinterRowSummary,
@@ -76,6 +78,34 @@ describe('admin printer maintenance display', () => {
     if (display.status === 'current') {
       expect(display.toner.black).toBe('—');
       expect(display.toner.cyan).toBe('—');
+    }
+  });
+
+  it('formats duplex and refill counts when present', () => {
+    const health = {
+      snmpOk: true,
+      maintenance: {
+        available: true,
+        pages: {
+          total: 5,
+          duplexTotal: 1,
+          duplexColor: 1,
+          duplexBlackAndWhite: 0,
+        },
+        refill: { black: 0, cyan: 2, magenta: 0, yellow: 0 },
+      },
+    };
+    expect(hasPrinterDuplex(health)).toBe(true);
+    expect(hasPrinterRefill(health)).toBe(true);
+    expect(hasPrinterDuplex(verified)).toBe(false);
+    expect(hasPrinterRefill(verified)).toBe(false);
+    const display = resolvePrinterMaintenance(health);
+    expect(display.status).toBe('current');
+    if (display.status === 'current') {
+      expect(display.pages.duplexTotal).toBe('1');
+      expect(display.pages.duplexBlackAndWhite).toBe('0');
+      expect(display.refill.cyan).toBe('2');
+      expect(display.refill.black).toBe('0');
     }
   });
 });

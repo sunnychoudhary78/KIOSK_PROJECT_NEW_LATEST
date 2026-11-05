@@ -24,17 +24,48 @@ class TonerLevels {
 }
 
 class PageCounts {
-  const PageCounts({this.total, this.color, this.blackAndWhite});
+  const PageCounts({
+    this.total,
+    this.color,
+    this.blackAndWhite,
+    this.duplexTotal,
+    this.duplexColor,
+    this.duplexBlackAndWhite,
+  });
 
   final num? total;
   final num? color;
   final num? blackAndWhite;
+  final num? duplexTotal;
+  final num? duplexColor;
+  final num? duplexBlackAndWhite;
 
   factory PageCounts.fromJson(Map<String, dynamic> json) {
     return PageCounts(
       total: _num(json['total']),
       color: _num(json['color']),
       blackAndWhite: _num(json['blackAndWhite']),
+      duplexTotal: _num(json['duplexTotal']),
+      duplexColor: _num(json['duplexColor']),
+      duplexBlackAndWhite: _num(json['duplexBlackAndWhite']),
+    );
+  }
+}
+
+class RefillCounts {
+  const RefillCounts({this.black, this.cyan, this.magenta, this.yellow});
+
+  final num? black;
+  final num? cyan;
+  final num? magenta;
+  final num? yellow;
+
+  factory RefillCounts.fromJson(Map<String, dynamic> json) {
+    return RefillCounts(
+      black: _num(json['black']),
+      cyan: _num(json['cyan']),
+      magenta: _num(json['magenta']),
+      yellow: _num(json['yellow']),
     );
   }
 }
@@ -58,12 +89,14 @@ class PrinterMaintenance {
     this.available,
     this.toner,
     this.pages,
+    this.refill,
     this.parts,
   });
 
   final bool? available;
   final TonerLevels? toner;
   final PageCounts? pages;
+  final RefillCounts? refill;
   final PartLife? parts;
 
   factory PrinterMaintenance.fromJson(Map<String, dynamic> json) {
@@ -74,6 +107,9 @@ class PrinterMaintenance {
           : null,
       pages: json['pages'] is Map
           ? PageCounts.fromJson(Map<String, dynamic>.from(json['pages'] as Map))
+          : null,
+      refill: json['refill'] is Map
+          ? RefillCounts.fromJson(Map<String, dynamic>.from(json['refill'] as Map))
           : null,
       parts: json['parts'] is Map
           ? PartLife.fromJson(Map<String, dynamic>.from(json['parts'] as Map))

@@ -10,8 +10,8 @@ Printer _printer(String name) {
 }
 
 void main() {
-  const usbName = 'Brother HL-L3280CDW series';
-  const wifiName = 'Brother HL-L3280CDW series (Wi-Fi)';
+  const usbName = 'Brother DCP-T830DW';
+  const wifiName = 'Brother DCP-T830DW (Wi-Fi)';
 
   test('matchResolvedPrinter uses the USB queue name, not another Brother queue', () {
     final chosen = matchResolvedPrinter(

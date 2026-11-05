@@ -59,16 +59,25 @@ class PrinterMaintenancePages {
     this.total,
     this.color,
     this.blackAndWhite,
+    this.duplexTotal,
+    this.duplexColor,
+    this.duplexBlackAndWhite,
   });
 
   final int? total;
   final int? color;
   final int? blackAndWhite;
+  final int? duplexTotal;
+  final int? duplexColor;
+  final int? duplexBlackAndWhite;
 
   Map<String, dynamic> toJson() => {
         if (total != null) 'total': total,
         if (color != null) 'color': color,
         if (blackAndWhite != null) 'blackAndWhite': blackAndWhite,
+        if (duplexTotal != null) 'duplexTotal': duplexTotal,
+        if (duplexColor != null) 'duplexColor': duplexColor,
+        if (duplexBlackAndWhite != null) 'duplexBlackAndWhite': duplexBlackAndWhite,
       };
 
   factory PrinterMaintenancePages.fromJson(Map<dynamic, dynamic> json) {
@@ -76,6 +85,39 @@ class PrinterMaintenancePages {
       total: (json['total'] as num?)?.toInt(),
       color: (json['color'] as num?)?.toInt(),
       blackAndWhite: (json['blackAndWhite'] as num?)?.toInt(),
+      duplexTotal: (json['duplexTotal'] as num?)?.toInt(),
+      duplexColor: (json['duplexColor'] as num?)?.toInt(),
+      duplexBlackAndWhite: (json['duplexBlackAndWhite'] as num?)?.toInt(),
+    );
+  }
+}
+
+class PrinterMaintenanceRefill {
+  const PrinterMaintenanceRefill({
+    this.black,
+    this.cyan,
+    this.magenta,
+    this.yellow,
+  });
+
+  final int? black;
+  final int? cyan;
+  final int? magenta;
+  final int? yellow;
+
+  Map<String, dynamic> toJson() => {
+        if (black != null) 'black': black,
+        if (cyan != null) 'cyan': cyan,
+        if (magenta != null) 'magenta': magenta,
+        if (yellow != null) 'yellow': yellow,
+      };
+
+  factory PrinterMaintenanceRefill.fromJson(Map<dynamic, dynamic> json) {
+    return PrinterMaintenanceRefill(
+      black: (json['black'] as num?)?.toInt(),
+      cyan: (json['cyan'] as num?)?.toInt(),
+      magenta: (json['magenta'] as num?)?.toInt(),
+      yellow: (json['yellow'] as num?)?.toInt(),
     );
   }
 }
@@ -102,28 +144,32 @@ class PrinterMaintenanceParts {
   }
 }
 
-/// Verified Brother private maintenance tags. Absent fields are unread, not zero.
+/// Brother EWS maintenance. Absent fields are unread, not zero.
 class PrinterMaintenance {
   const PrinterMaintenance({
     required this.available,
     this.toner,
     this.pages,
+    this.refill,
     this.parts,
   });
 
   final bool available;
   final PrinterMaintenanceToner? toner;
   final PrinterMaintenancePages? pages;
+  final PrinterMaintenanceRefill? refill;
   final PrinterMaintenanceParts? parts;
 
   Map<String, dynamic> toJson() {
     final tonerJson = toner?.toJson();
     final pagesJson = pages?.toJson();
+    final refillJson = refill?.toJson();
     final partsJson = parts?.toJson();
     return {
       'available': available,
       if (tonerJson != null && tonerJson.isNotEmpty) 'toner': tonerJson,
       if (pagesJson != null && pagesJson.isNotEmpty) 'pages': pagesJson,
+      if (refillJson != null && refillJson.isNotEmpty) 'refill': refillJson,
       if (partsJson != null && partsJson.isNotEmpty) 'parts': partsJson,
     };
   }
@@ -131,6 +177,7 @@ class PrinterMaintenance {
   factory PrinterMaintenance.fromJson(Map<dynamic, dynamic> json) {
     final tonerRaw = json['toner'];
     final pagesRaw = json['pages'];
+    final refillRaw = json['refill'];
     final partsRaw = json['parts'];
     return PrinterMaintenance(
       available: json['available'] == true,
@@ -139,6 +186,9 @@ class PrinterMaintenance {
           : null,
       pages: pagesRaw is Map
           ? PrinterMaintenancePages.fromJson(pagesRaw)
+          : null,
+      refill: refillRaw is Map
+          ? PrinterMaintenanceRefill.fromJson(refillRaw)
           : null,
       parts: partsRaw is Map
           ? PrinterMaintenanceParts.fromJson(partsRaw)
@@ -325,7 +375,7 @@ class PrinterHealth {
       return 'Printer is out of paper — load A4 and try again.';
     }
     if (state == 'toner_low' || lowToner || noToner) {
-      return 'Toner is low — printing may still work.';
+      return 'Ink is low — printing may still work.';
     }
     if (lastErrorCode == 'USB_PRINTER_NOT_FOUND') {
       return 'USB printer was not found. Check the USB cable and that the Brother queue uses a USB port.';
@@ -454,7 +504,7 @@ class PrinterHealth {
     );
   }
 
-  /// USB toner, pages, and parts only. SNMP supplies and trays are dropped.
+  /// USB toner/ink, pages, refill, and parts only. SNMP supplies and trays are dropped.
   PrinterHealth withUsbMaintenance({
     int? blackPercent,
     int? cyanPercent,
@@ -463,6 +513,13 @@ class PrinterHealth {
     int? pagesTotal,
     int? pagesColor,
     int? pagesBlackAndWhite,
+    int? pagesDuplexTotal,
+    int? pagesDuplexColor,
+    int? pagesDuplexBlackAndWhite,
+    int? refillBlack,
+    int? refillCyan,
+    int? refillMagenta,
+    int? refillYellow,
     int? beltRemainingPages,
     int? fuserRemainingPages,
   }) {
@@ -485,6 +542,15 @@ class PrinterHealth {
           total: pagesTotal,
           color: pagesColor,
           blackAndWhite: pagesBlackAndWhite,
+          duplexTotal: pagesDuplexTotal,
+          duplexColor: pagesDuplexColor,
+          duplexBlackAndWhite: pagesDuplexBlackAndWhite,
+        ),
+        refill: PrinterMaintenanceRefill(
+          black: refillBlack,
+          cyan: refillCyan,
+          magenta: refillMagenta,
+          yellow: refillYellow,
         ),
         parts: PrinterMaintenanceParts(
           beltRemainingPages: beltRemainingPages,

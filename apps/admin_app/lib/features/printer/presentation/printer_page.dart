@@ -109,7 +109,7 @@ class _PrinterPageState extends ConsumerState<PrinterPage> {
           ],
           const SizedBox(height: 16),
           _Section(
-            title: 'Toner',
+            title: 'Ink',
             child: maintenance is! MaintenanceShown
                 ? const Text('Unavailable', style: TextStyle(color: AdminColors.muted))
                 : Wrap(
@@ -153,6 +153,13 @@ class _PrinterPageState extends ConsumerState<PrinterPage> {
                     'Color ${maintenance.lines.color} · Black and white ${maintenance.lines.blackAndWhite}',
                     style: const TextStyle(color: AdminColors.muted),
                   ),
+                  if (hasPrinterDuplex(device.printerHealth)) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '2-sided ${maintenance.lines.duplexTotal} · Color ${maintenance.lines.duplexColor} · B&W ${maintenance.lines.duplexBlackAndWhite}',
+                      style: const TextStyle(color: AdminColors.muted),
+                    ),
+                  ],
                 ],
                 if (canWrite) ...[
                   const SizedBox(height: 12),
@@ -215,12 +222,23 @@ class _PrinterPageState extends ConsumerState<PrinterPage> {
               ],
             ),
           ),
-          _Section(
-            title: 'Parts',
-            child: maintenance is! MaintenanceShown
-                ? const Text('Unavailable', style: TextStyle(color: AdminColors.muted))
-                : Text('Belt ${maintenance.lines.belt} · Fuser ${maintenance.lines.fuser}'),
-          ),
+          if (hasPrinterRefill(device.printerHealth))
+            _Section(
+              title: 'Refill',
+              child: maintenance is! MaintenanceShown
+                  ? const Text('Unavailable', style: TextStyle(color: AdminColors.muted))
+                  : Text(
+                      'Black ${maintenance.lines.refillBlack} · Cyan ${maintenance.lines.refillCyan} · Magenta ${maintenance.lines.refillMagenta} · Yellow ${maintenance.lines.refillYellow}',
+                      style: const TextStyle(color: AdminColors.muted),
+                    ),
+            ),
+          if (hasPrinterParts(device.printerHealth))
+            _Section(
+              title: 'Parts',
+              child: maintenance is! MaintenanceShown
+                  ? const Text('Unavailable', style: TextStyle(color: AdminColors.muted))
+                  : Text('Belt ${maintenance.lines.belt} · Fuser ${maintenance.lines.fuser}'),
+            ),
           _Section(
             title: 'Errors',
             child: switch (errors) {

@@ -5,9 +5,11 @@
 
 namespace skp_printer {
 
-// One JSON object from the x86 Brother USB helper. Never throws.
-// error is helper_missing, sdk_missing, busy, or usb_timeout when the read fails.
-std::string RequestUsbSnapshot(const std::string& scope);
+// One JSON object from the Brother USB HTTP helper. Never throws.
+// error is helper_missing, password_missing, auth_failed, bridge_unreachable,
+// busy, or usb_timeout when the read fails.
+// [password] is forwarded to the helper and must not be logged.
+std::string RequestUsbSnapshot(const std::string& scope, const std::string& password = {});
 
 }  // namespace skp_printer
 

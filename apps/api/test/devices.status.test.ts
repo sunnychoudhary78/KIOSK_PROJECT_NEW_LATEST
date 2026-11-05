@@ -251,8 +251,8 @@ describe('DevicesService.heartbeat', () => {
     const printer = {
       state: 'jam' as const,
       online: true,
-      printerName: 'Brother HL-L3280CDW',
-      model: 'Brother HL-L3280CDW',
+      printerName: 'Brother DCP-T830DW',
+      model: 'Brother DCP-T830DW',
       pageCounter: 12045,
       snmpOk: true,
       trays: [{ name: 'Tray 1', levelPercent: 40, status: 'ok' }],

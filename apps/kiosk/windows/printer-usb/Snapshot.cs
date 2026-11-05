@@ -19,6 +19,13 @@ namespace SkpPrinterUsb
         public int? PagesTotal;
         public int? PagesColor;
         public int? PagesBlackAndWhite;
+        public int? PagesDuplexTotal;
+        public int? PagesDuplexColor;
+        public int? PagesDuplexBlackAndWhite;
+        public int? RefillBlack;
+        public int? RefillCyan;
+        public int? RefillMagenta;
+        public int? RefillYellow;
         public int? BeltRemainingPages;
         public int? FuserRemainingPages;
         public string FirmwareMain;
@@ -79,6 +86,13 @@ namespace SkpPrinterUsb
             Num("pagesTotal", PagesTotal);
             Num("pagesColor", PagesColor);
             Num("pagesBlackAndWhite", PagesBlackAndWhite);
+            Num("pagesDuplexTotal", PagesDuplexTotal);
+            Num("pagesDuplexColor", PagesDuplexColor);
+            Num("pagesDuplexBlackAndWhite", PagesDuplexBlackAndWhite);
+            Num("refillBlack", RefillBlack);
+            Num("refillCyan", RefillCyan);
+            Num("refillMagenta", RefillMagenta);
+            Num("refillYellow", RefillYellow);
             Num("beltRemainingPages", BeltRemainingPages);
             Num("fuserRemainingPages", FuserRemainingPages);
             Str("firmwareMain", FirmwareMain);

@@ -9,6 +9,16 @@ export type PrinterMaintenancePages = {
   total?: number | null;
   color?: number | null;
   blackAndWhite?: number | null;
+  duplexTotal?: number | null;
+  duplexColor?: number | null;
+  duplexBlackAndWhite?: number | null;
+};
+
+export type PrinterMaintenanceRefill = {
+  black?: number | null;
+  cyan?: number | null;
+  magenta?: number | null;
+  yellow?: number | null;
 };
 
 export type PrinterMaintenanceParts = {
@@ -20,6 +30,7 @@ export type PrinterMaintenance = {
   available?: boolean | null;
   toner?: PrinterMaintenanceToner | null;
   pages?: PrinterMaintenancePages | null;
+  refill?: PrinterMaintenanceRefill | null;
   parts?: PrinterMaintenanceParts | null;
 };
 
@@ -62,6 +73,15 @@ export type MaintenanceMetricLines = {
     total: string;
     color: string;
     blackAndWhite: string;
+    duplexTotal: string;
+    duplexColor: string;
+    duplexBlackAndWhite: string;
+  };
+  refill: {
+    black: string;
+    cyan: string;
+    magenta: string;
+    yellow: string;
   };
   parts: {
     belt: string;
@@ -115,6 +135,39 @@ function formatCount(value: number | null | undefined): string {
   return value.toLocaleString();
 }
 
+function isNonNegativeInt(value: number | null | undefined): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+/** Laser belt/fuser only — hide Parts UI when neither value is present (e.g. DCP-T830DW). */
+export function hasPrinterParts(health: PrinterHealthView | null | undefined): boolean {
+  const parts = health?.maintenance?.parts;
+  return (
+    isNonNegativeInt(parts?.beltRemainingPages) || isNonNegativeInt(parts?.fuserRemainingPages)
+  );
+}
+
+/** Ink-tank refill counts — hide when none were read. */
+export function hasPrinterRefill(health: PrinterHealthView | null | undefined): boolean {
+  const refill = health?.maintenance?.refill;
+  return (
+    isNonNegativeInt(refill?.black) ||
+    isNonNegativeInt(refill?.cyan) ||
+    isNonNegativeInt(refill?.magenta) ||
+    isNonNegativeInt(refill?.yellow)
+  );
+}
+
+/** 2-sided counters from the Total job-mix block. */
+export function hasPrinterDuplex(health: PrinterHealthView | null | undefined): boolean {
+  const pages = health?.maintenance?.pages;
+  return (
+    isNonNegativeInt(pages?.duplexTotal) ||
+    isNonNegativeInt(pages?.duplexColor) ||
+    isNonNegativeInt(pages?.duplexBlackAndWhite)
+  );
+}
+
 function metricLines(maintenance: PrinterMaintenance): MaintenanceMetricLines {
   return {
     toner: {
@@ -127,6 +180,15 @@ function metricLines(maintenance: PrinterMaintenance): MaintenanceMetricLines {
       total: formatCount(maintenance.pages?.total),
       color: formatCount(maintenance.pages?.color),
       blackAndWhite: formatCount(maintenance.pages?.blackAndWhite),
+      duplexTotal: formatCount(maintenance.pages?.duplexTotal),
+      duplexColor: formatCount(maintenance.pages?.duplexColor),
+      duplexBlackAndWhite: formatCount(maintenance.pages?.duplexBlackAndWhite),
+    },
+    refill: {
+      black: formatCount(maintenance.refill?.black),
+      cyan: formatCount(maintenance.refill?.cyan),
+      magenta: formatCount(maintenance.refill?.magenta),
+      yellow: formatCount(maintenance.refill?.yellow),
     },
     parts: {
       belt: formatCount(maintenance.parts?.beltRemainingPages),
@@ -205,7 +267,7 @@ const PRINTER_STATUS_LABELS: Record<Exclude<PrinterStatusKind, 'unavailable'>, s
   printing: 'Printing',
   paper_out: 'Out of paper',
   jam: 'Paper jam',
-  toner_low: 'Toner low',
+  toner_low: 'Ink low',
   offline: 'Offline',
   error: 'Error',
 };

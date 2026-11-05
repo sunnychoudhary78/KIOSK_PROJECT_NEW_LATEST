@@ -48,7 +48,7 @@ target_include_directories(${BINARY_NAME} PRIVATE
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
 
-# x86 Brother USB helper. A missing MSBuild or SDK DLL must not fail the kiosk build.
+# x86 Brother USB HTTP helper (skp_printer_usb.exe). A missing MSBuild must not fail the kiosk build.
 add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND}
     -DSOURCE_CSPROJ=${CMAKE_CURRENT_SOURCE_DIR}/../printer-usb/skp_printer_usb.csproj

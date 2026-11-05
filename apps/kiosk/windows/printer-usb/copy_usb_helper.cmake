@@ -1,6 +1,7 @@
-# Builds the x86 Brother USB helper and copies it next to skp_kiosk.exe.
+# Builds the x86 Brother USB HTTP helper and copies it next to skp_kiosk.exe.
+# The helper talks to HttpToUsbBridge on 127.0.0.1:60910 (no AppDevKit DLLs).
 # Missing MSBuild or a failed helper build is a warning. The kiosk still runs;
-# USB compare then reports helper_missing. SNMP is unchanged.
+# USB compare then reports helper_missing.
 
 if(NOT EXISTS "${SOURCE_CSPROJ}")
   message(WARNING "USB helper project not found; kiosk will run without it")

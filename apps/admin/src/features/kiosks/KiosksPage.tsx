@@ -21,6 +21,9 @@ import {
   StatusBadge,
 } from '../../core/ui/primitives';
 import {
+  hasPrinterDuplex,
+  hasPrinterParts,
+  hasPrinterRefill,
   resolvePrinterErrorHistory,
   resolvePrinterMaintenance,
   resolvePrinterRowSummary,
@@ -239,7 +242,7 @@ function PrinterDetailsBody({
       </div>
 
       <section className="rounded-xl border border-border p-3">
-        <h3 className="mb-2 text-sm font-medium">Toner</h3>
+        <h3 className="mb-2 text-sm font-medium">Ink</h3>
         {maintenance.status === 'unavailable' ? (
           <p className="text-sm text-muted-foreground">Unavailable</p>
         ) : (
@@ -274,6 +277,12 @@ function PrinterDetailsBody({
         {pagesReady ? (
           <p className="mt-2 text-sm text-muted-foreground">
             Color {maintenance.pages.color} · Black and white {maintenance.pages.blackAndWhite}
+          </p>
+        ) : null}
+        {pagesReady && hasPrinterDuplex(health) ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            2-sided {maintenance.pages.duplexTotal} · Color {maintenance.pages.duplexColor} · B&W{' '}
+            {maintenance.pages.duplexBlackAndWhite}
           </p>
         ) : null}
 
@@ -321,16 +330,38 @@ function PrinterDetailsBody({
         ) : null}
       </section>
 
+      {hasPrinterRefill(health) ? (
+        <section className="rounded-xl border border-border p-3">
+          <h3 className="mb-2 text-sm font-medium">Refill</h3>
+          {maintenance.status === 'unavailable' ? (
+            <p className="text-sm text-muted-foreground">Unavailable</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Black {maintenance.refill.black} · Cyan {maintenance.refill.cyan} · Magenta{' '}
+              {maintenance.refill.magenta} · Yellow {maintenance.refill.yellow}
+            </p>
+          )}
+        </section>
+      ) : null}
+
       <section className="rounded-xl border border-border bg-muted/20 p-3">
-        <h3 className="mb-2 text-sm font-medium text-muted-foreground">Parts</h3>
-        {maintenance.status === 'unavailable' ? (
-          <p className="text-sm text-muted-foreground">Unavailable</p>
-        ) : (
-          <p className="text-sm">
-            Belt {maintenance.parts.belt} · Fuser {maintenance.parts.fuser}
-          </p>
-        )}
-        <h3 className="mb-2 mt-3 text-sm font-medium text-muted-foreground">Errors</h3>
+        {hasPrinterParts(health) ? (
+          <>
+            <h3 className="mb-2 text-sm font-medium text-muted-foreground">Parts</h3>
+            {maintenance.status === 'unavailable' ? (
+              <p className="text-sm text-muted-foreground">Unavailable</p>
+            ) : (
+              <p className="text-sm">
+                Belt {maintenance.parts.belt} · Fuser {maintenance.parts.fuser}
+              </p>
+            )}
+          </>
+        ) : null}
+        <h3
+          className={`mb-2 text-sm font-medium text-muted-foreground${hasPrinterParts(health) ? ' mt-3' : ''}`}
+        >
+          Errors
+        </h3>
         {errors.status === 'unavailable' ? (
           <p className="text-sm text-muted-foreground">Unavailable</p>
         ) : errors.status === 'empty' || errors.entries.length === 0 ? (

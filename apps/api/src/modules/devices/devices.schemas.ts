@@ -109,6 +109,17 @@ export const printerMaintenanceSchema = z.object({
       total: printerCounter,
       color: printerCounter,
       blackAndWhite: printerCounter,
+      duplexTotal: printerCounter,
+      duplexColor: printerCounter,
+      duplexBlackAndWhite: printerCounter,
+    })
+    .optional(),
+  refill: z
+    .object({
+      black: printerCounter,
+      cyan: printerCounter,
+      magenta: printerCounter,
+      yellow: printerCounter,
     })
     .optional(),
   parts: z

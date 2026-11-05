@@ -53,7 +53,10 @@ abstract class PrinterNative {
 
   Future<UsbPrinterResolution> resolveUsbPrinter({required String printerName});
 
-  Future<UsbSnapshot> getUsbSnapshot({required String scope});
+  Future<UsbSnapshot> getUsbSnapshot({
+    required String scope,
+    String password = '',
+  });
 
   /// Cancel [jobId] on the USB queue, or purge when [jobId] is null.
   /// When [jobId] is null and [documentTitle] is set, native resolves the id first.
@@ -146,10 +149,14 @@ class MethodChannelPrinterNative implements PrinterNative {
   }
 
   @override
-  Future<UsbSnapshot> getUsbSnapshot({required String scope}) async {
+  Future<UsbSnapshot> getUsbSnapshot({
+    required String scope,
+    String password = '',
+  }) async {
     try {
       final raw = await _methods.invokeMethod<dynamic>('getUsbSnapshot', {
         'scope': scope,
+        if (password.isNotEmpty) 'password': password,
       });
       if (raw is String && raw.isNotEmpty) {
         return UsbSnapshot.parse(raw);
@@ -212,7 +219,7 @@ class FakePrinterNative implements PrinterNative {
   int _healthReads = 0;
   UsbPrinterResolution usbPrinter = const UsbPrinterResolution(
     found: true,
-    name: 'Brother HL-L3280CDW series',
+    name: 'Brother DCP-T830DW',
     port: 'USB001',
   );
   UsbSnapshot usbSnapshot = UsbSnapshot.failed('helper_missing');
@@ -276,7 +283,10 @@ class FakePrinterNative implements PrinterNative {
   }
 
   @override
-  Future<UsbSnapshot> getUsbSnapshot({required String scope}) async {
+  Future<UsbSnapshot> getUsbSnapshot({
+    required String scope,
+    String password = '',
+  }) async {
     usbSnapshotCalls++;
     final seq = usbPagesSequence;
     if (seq != null && seq.isNotEmpty) {

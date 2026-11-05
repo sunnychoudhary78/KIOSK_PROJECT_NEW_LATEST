@@ -87,6 +87,55 @@ void main() {
       expect(shown.lines.black, '—');
       expect(shown.lines.cyan, '—');
     });
+
+    test('hasPrinterParts is false when belt and fuser are absent', () {
+      expect(hasPrinterParts(null), isFalse);
+      expect(
+        hasPrinterParts(
+          const PrinterHealth(
+            maintenance: PrinterMaintenance(available: true),
+          ),
+        ),
+        isFalse,
+      );
+      expect(hasPrinterParts(verified), isTrue);
+      expect(
+        hasPrinterParts(
+          const PrinterHealth(
+            maintenance: PrinterMaintenance(
+              available: true,
+              parts: PartLife(fuserRemainingPages: 0),
+            ),
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('hasPrinterDuplex and hasPrinterRefill follow optional counters', () {
+      expect(hasPrinterDuplex(null), isFalse);
+      expect(hasPrinterRefill(null), isFalse);
+      expect(hasPrinterDuplex(verified), isFalse);
+      expect(hasPrinterRefill(verified), isFalse);
+      final withExtras = PrinterHealth(
+        snmpOk: true,
+        maintenance: PrinterMaintenance(
+          available: true,
+          pages: const PageCounts(
+            total: 5,
+            duplexTotal: 1,
+            duplexColor: 1,
+            duplexBlackAndWhite: 0,
+          ),
+          refill: const RefillCounts(black: 0, cyan: 0, magenta: 0, yellow: 0),
+        ),
+      );
+      expect(hasPrinterDuplex(withExtras), isTrue);
+      expect(hasPrinterRefill(withExtras), isTrue);
+      final shown = resolvePrinterMaintenance(withExtras) as MaintenanceShown;
+      expect(shown.lines.duplexTotal, '1');
+      expect(shown.lines.refillBlack, '0');
+    });
   });
 
   group('printer error history display', () {
@@ -225,6 +274,10 @@ void main() {
       expect(printing.label, 'Printing');
       expect(printing.kind, PrinterStatusKind.printing);
       expect(printing.fault, isFalse);
+      final inkLow = resolvePrinterStatus(const PrinterHealth(state: 'toner_low'));
+      expect(inkLow.label, 'Ink low');
+      expect(inkLow.kind, PrinterStatusKind.tonerLow);
+      expect(inkLow.fault, isTrue);
     });
 
     test('shows Out of paper ahead of a recorded error', () {

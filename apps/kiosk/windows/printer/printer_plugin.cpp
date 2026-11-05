@@ -67,9 +67,11 @@ class PrinterPlugin : public flutter::Plugin {
     }
     if (call.method_name() == "getUsbSnapshot") {
       const std::string scope = StringArg(map, "scope");
+      const std::string password = StringArg(map, "password");
       auto held = std::shared_ptr<flutter::MethodResult<EncodableValue>>(result.release());
-      std::thread([held, scope]() {
-        held->Success(EncodableValue(skp_printer::RequestUsbSnapshot(scope)));
+      std::thread([held, scope, password]() {
+        // Do not log password — forwarded only to the local USB helper pipe.
+        held->Success(EncodableValue(skp_printer::RequestUsbSnapshot(scope, password)));
       }).detach();
       return;
     }

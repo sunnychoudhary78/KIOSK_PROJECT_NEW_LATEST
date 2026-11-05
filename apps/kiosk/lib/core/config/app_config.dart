@@ -5,7 +5,8 @@ class AppConfig {
     this.printerName = '',
     this.printReversePages = true,
     this.printReconcileTimeoutMs = 180000,
-    this.printerModel = 'Brother HL-L3280CDW',
+    this.printerModel = 'Brother DCP-T830DW',
+    this.printerPassword = 'Immortal@2026',
     this.surveillanceSegmentSeconds = 600,
     this.surveillanceWidth = 1280,
     this.surveillanceHeight = 720,
@@ -31,6 +32,10 @@ class AppConfig {
 
   /// Printer model stored on the heartbeat.
   final String printerModel;
+
+  /// Brother EWS login password for Maintenance Information over HttpToUsbBridge.
+  /// Never log this value.
+  final String printerPassword;
 
   final int surveillanceSegmentSeconds;
   final int surveillanceWidth;
@@ -76,7 +81,11 @@ class AppConfig {
     );
     const printerModel = String.fromEnvironment(
       'SKP_PRINTER_MODEL',
-      defaultValue: 'Brother HL-L3280CDW',
+      defaultValue: 'Brother DCP-T830DW',
+    );
+    const printerPassword = String.fromEnvironment(
+      'SKP_PRINTER_PASSWORD',
+      defaultValue: 'Immortal@2026',
     );
     const segmentSeconds = int.fromEnvironment(
       'SKP_SURVEILLANCE_SEGMENT_SECONDS',
@@ -110,6 +119,7 @@ class AppConfig {
       printReversePages: printReversePages,
       printReconcileTimeoutMs: reconcileTimeoutMs,
       printerModel: printerModel,
+      printerPassword: printerPassword,
       surveillanceSegmentSeconds: segmentSeconds,
       surveillanceWidth: width,
       surveillanceHeight: height,

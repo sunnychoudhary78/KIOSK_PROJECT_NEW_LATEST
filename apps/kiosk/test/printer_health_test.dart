@@ -90,6 +90,15 @@ void main() {
       expect(health.userMessage, contains('USB cable'));
     });
 
+    test('toner_low userMessage says Ink is low', () {
+      const health = PrinterHealth(
+        state: 'toner_low',
+        online: true,
+        lowToner: true,
+      );
+      expect(health.userMessage, 'Ink is low — printing may still work.');
+    });
+
     test('toJson omits community and includes telemetry fields', () {
       final json = const PrinterHealth(
         state: 'ready',

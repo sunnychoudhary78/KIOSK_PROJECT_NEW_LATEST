@@ -26,46 +26,90 @@ namespace SkpPrinterUsb
             using (mutex)
             {
                 if (!created) return 0;
-                var session = new UsbSession();
-                while (true)
+                using (var session = new HttpBridgeSession())
                 {
-                    using (var pipe = new NamedPipeServerStream(
-                        PipeName,
-                        PipeDirection.InOut,
-                        1,
-                        PipeTransmissionMode.Byte,
-                        PipeOptions.Asynchronous))
+                    while (true)
                     {
-                        pipe.WaitForConnection();
-                        try
+                        using (var pipe = new NamedPipeServerStream(
+                            PipeName,
+                            PipeDirection.InOut,
+                            1,
+                            PipeTransmissionMode.Byte,
+                            PipeOptions.Asynchronous))
                         {
-                            var request = ReadLine(pipe);
-                            var full = request != null &&
-                                       request.IndexOf("\"full\"", StringComparison.OrdinalIgnoreCase) >= 0;
-                            var json = session.Capture(full).ToJson();
-                            var payload = Encoding.UTF8.GetBytes(json + "\n");
-                            pipe.Write(payload, 0, payload.Length);
-                            pipe.Flush();
-                        }
-                        catch (Exception ex)
-                        {
+                            pipe.WaitForConnection();
                             try
                             {
-                                var json = Snapshot.Fail(ex.GetBaseException().Message).ToJson();
+                                var request = ReadLine(pipe);
+                                var full = RequestHasFull(request);
+                                var password = ExtractJsonString(request, "password");
+                                session.SetPassword(password);
+                                var json = session.Capture(full).ToJson();
                                 var payload = Encoding.UTF8.GetBytes(json + "\n");
                                 pipe.Write(payload, 0, payload.Length);
                                 pipe.Flush();
                             }
-                            catch
+                            catch (Exception ex)
                             {
-                                // The kiosk retries the next poll.
+                                try
+                                {
+                                    var json = Snapshot.Fail(ex.GetBaseException().Message).ToJson();
+                                    var payload = Encoding.UTF8.GetBytes(json + "\n");
+                                    pipe.Write(payload, 0, payload.Length);
+                                    pipe.Flush();
+                                }
+                                catch
+                                {
+                                    // The kiosk retries the next poll.
+                                }
                             }
+                            try { pipe.Disconnect(); }
+                            catch { /* already closed */ }
                         }
-                        try { pipe.Disconnect(); }
-                        catch { /* already closed */ }
                     }
                 }
             }
+        }
+
+        static bool RequestHasFull(string request)
+        {
+            if (string.IsNullOrEmpty(request)) return false;
+            return request.IndexOf("\"full\"", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
+        /// Minimal JSON string field reader. Does not log the request (may contain password).
+        /// </summary>
+        static string ExtractJsonString(string json, string name)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(name)) return null;
+            var key = "\"" + name + "\"";
+            var start = json.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+            if (start < 0) return null;
+            var colon = json.IndexOf(':', start + key.Length);
+            if (colon < 0) return null;
+            var i = colon + 1;
+            while (i < json.Length && char.IsWhiteSpace(json[i])) i++;
+            if (i >= json.Length || json[i] != '"') return null;
+            i++;
+            var sb = new StringBuilder();
+            while (i < json.Length)
+            {
+                var c = json[i++];
+                if (c == '\\' && i < json.Length)
+                {
+                    var next = json[i++];
+                    if (next == 'n') sb.Append('\n');
+                    else if (next == 'r') sb.Append('\r');
+                    else if (next == 't') sb.Append('\t');
+                    else sb.Append(next);
+                    continue;
+                }
+                if (c == '"') break;
+                sb.Append(c);
+            }
+            var value = sb.ToString();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
         }
 
         static string ReadLine(Stream stream)
@@ -79,7 +123,8 @@ namespace SkpPrinterUsb
                 var c = (char)one[0];
                 if (c == '\n') break;
                 if (c != '\r') buffer.Append(c);
-                if (buffer.Length > 4096) break;
+                // Password may be present; keep room for a normal request line.
+                if (buffer.Length > 8192) break;
             }
             return buffer.ToString();
         }

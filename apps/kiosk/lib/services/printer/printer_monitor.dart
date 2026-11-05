@@ -57,6 +57,13 @@ class PrinterMonitor {
       pagesTotal: watch.latestPages,
       pagesColor: watch.pagesColor,
       pagesBlackAndWhite: watch.pagesBlackAndWhite,
+      pagesDuplexTotal: watch.pagesDuplexTotal,
+      pagesDuplexColor: watch.pagesDuplexColor,
+      pagesDuplexBlackAndWhite: watch.pagesDuplexBlackAndWhite,
+      refillBlack: watch.refillBlack,
+      refillCyan: watch.refillCyan,
+      refillMagenta: watch.refillMagenta,
+      refillYellow: watch.refillYellow,
       beltRemainingPages: watch.beltRemainingPages,
       fuserRemainingPages: watch.fuserRemainingPages,
     );
@@ -76,7 +83,10 @@ class PrinterMonitor {
   }
 
   Future<UsbSnapshot> getUsbSnapshot({required bool full}) {
-    return _native.getUsbSnapshot(scope: full ? 'full' : 'fast');
+    return _native.getUsbSnapshot(
+      scope: full ? 'full' : 'fast',
+      password: _config.printerPassword,
+    );
   }
 
   /// Cancel [jobId] on the USB queue, or purge when unknown.

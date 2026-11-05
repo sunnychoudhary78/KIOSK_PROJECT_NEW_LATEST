@@ -22,6 +22,13 @@ class UsbPageWatch {
   int? _tonerYellow;
   int? _pagesColor;
   int? _pagesBlackAndWhite;
+  int? _pagesDuplexTotal;
+  int? _pagesDuplexColor;
+  int? _pagesDuplexBlackAndWhite;
+  int? _refillBlack;
+  int? _refillCyan;
+  int? _refillMagenta;
+  int? _refillYellow;
   int? _beltRemainingPages;
   int? _fuserRemainingPages;
   List<PrinterErrorHistoryEntry>? _errorHistory;
@@ -51,6 +58,20 @@ class UsbPageWatch {
   int? get pagesColor => _pagesColor;
 
   int? get pagesBlackAndWhite => _pagesBlackAndWhite;
+
+  int? get pagesDuplexTotal => _pagesDuplexTotal;
+
+  int? get pagesDuplexColor => _pagesDuplexColor;
+
+  int? get pagesDuplexBlackAndWhite => _pagesDuplexBlackAndWhite;
+
+  int? get refillBlack => _refillBlack;
+
+  int? get refillCyan => _refillCyan;
+
+  int? get refillMagenta => _refillMagenta;
+
+  int? get refillYellow => _refillYellow;
 
   int? get beltRemainingPages => _beltRemainingPages;
 
@@ -82,6 +103,19 @@ class UsbPageWatch {
     if (snapshot.pagesBlackAndWhite != null) {
       _pagesBlackAndWhite = snapshot.pagesBlackAndWhite;
     }
+    if (snapshot.pagesDuplexTotal != null) {
+      _pagesDuplexTotal = snapshot.pagesDuplexTotal;
+    }
+    if (snapshot.pagesDuplexColor != null) {
+      _pagesDuplexColor = snapshot.pagesDuplexColor;
+    }
+    if (snapshot.pagesDuplexBlackAndWhite != null) {
+      _pagesDuplexBlackAndWhite = snapshot.pagesDuplexBlackAndWhite;
+    }
+    if (snapshot.refillBlack != null) _refillBlack = snapshot.refillBlack;
+    if (snapshot.refillCyan != null) _refillCyan = snapshot.refillCyan;
+    if (snapshot.refillMagenta != null) _refillMagenta = snapshot.refillMagenta;
+    if (snapshot.refillYellow != null) _refillYellow = snapshot.refillYellow;
     if (snapshot.beltRemainingPages != null) {
       _beltRemainingPages = snapshot.beltRemainingPages;
     }
