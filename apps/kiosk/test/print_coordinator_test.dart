@@ -101,6 +101,8 @@ void main() {
     Duration? pollInterval,
     Duration? counterRetryDelay,
     int counterRetryAttempts = 2,
+    Future<void> Function(String line)? sendSerialLine,
+    List<String>? trayLines,
   }) {
     return PrintCoordinator(
       spooler: spooler ?? _FakeSpooler(),
@@ -115,6 +117,12 @@ void main() {
       counterRetryDelay: counterRetryDelay ?? const Duration(milliseconds: 5),
       usbBaselineGrace: usbBaselineGrace ?? const Duration(milliseconds: 60),
       reconcileTimeout: reconcileTimeout ?? const Duration(milliseconds: 120),
+      sendSerialLine: sendSerialLine ??
+          (trayLines == null
+              ? null
+              : (line) async {
+                  trayLines.add(line);
+                }),
     );
   }
 
@@ -472,6 +480,69 @@ void main() {
     expect(result.pageCounterAfter, 190);
     expect(result.pagesReported, 4);
     expect(native.usbSnapshotCalls, 0);
+  });
+
+  test('print tray sends start then done on verified USB print', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 10));
+    final tray = <String>[];
+    final coordinator = buildCoordinator(
+      native: native,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(seconds: 2),
+      trayLines: tray,
+    );
+    Future<void>.delayed(const Duration(milliseconds: 30), () {
+      watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 11));
+    });
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-tray-ok',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 1,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.verified);
+    expect(tray, [
+      '{"print":"start"}',
+      '{"print":"done"}',
+    ]);
+  });
+
+  test('print tray sends start then stop when USB reconcile times out', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(state: 'ready', online: true),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 186));
+    final tray = <String>[];
+    final coordinator = buildCoordinator(
+      native: native,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(milliseconds: 80),
+      trayLines: tray,
+    );
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-tray-timeout',
+      title: 't.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 4,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+    );
+
+    expect(result.outcome, PrintReconcileOutcome.reconciliationRequired);
+    expect(tray, [
+      '{"print":"start"}',
+      '{"print":"stop"}',
+    ]);
   });
 
   test('failed USB baseline ends unknown', () async {

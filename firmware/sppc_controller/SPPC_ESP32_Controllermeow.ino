@@ -4,6 +4,7 @@
 #include "spo2_algorithm.h"
 #include <esp_task_wdt.h>
 #include <esp_system.h>
+#include <ESP32Servo.h>   // Library Manager -> "ESP32Servo" (Kevin Harrington / John K. Bennett)
 
 // =====================================================
 // SPPC ESP32 CONTROLLER
@@ -16,13 +17,45 @@
 // 4. USB JSON communication (115200 baud)
 // 5. INA226 charger monitor: phone plugged in / plugged out
 //    detection, and automatic Relay 1 OFF when the phone is full
+// 6. Tray shutter: 20 kg servo -> pinion -> rack, JSON controlled
+//    (driven through the ESP32Servo library)
+// 7. Printer roller motor (PWM + driver) and a one-command print
+//    sequence: {"print":"start"} ... {"print":"done"}
 //
 // RELAYS: GPIO25 -> Relay 1, GPIO26 -> Relay 2
 // I2C:    GPIO21 -> SDA,     GPIO22 -> SCL
 //
-// This kiosk relay board energizes on HIGH. RELAY_ACTIVE_LOW
-// must stay false so {"relay":1,"state":"on"} drives the pin HIGH
-// and powers the charging socket for the kiosk timer.
+// The opto-isolated 2-channel relay board is ACTIVE-LOW (relay pulls
+// in when its IN pin is pulled to GND). RELAY_ACTIVE_LOW is therefore
+// true, and {"relay":1,"state":"on"} pulls the pin LOW. With
+// RELAY_OPEN_DRAIN the OFF state releases the pin (high-Z) instead of
+// driving 3.3 V into a 5 V opto input, which can leave the relay
+// half-on or on at boot.
+//
+// SHUTTER: GPIO13 (D13) -> servo signal. See the SHUTTER CONFIGURATION block.
+//   {"shutter":"open"} {"shutter":"close"} {"shutter":"status"}
+//   {"shutter_angle":90}   (calibration, moves straight there)
+//   {"shutter_set":"open","angle":120}  / "close"  (RAM only)
+//   {"shutter_us":1500}    (raw pulse width, for continuous servos)
+//   Continuous servo tuning: {"shutter_set":"stop"|"speed"|"travel"|"dir",
+//                             "value":N}
+//
+// SERVO TEST (do this first if the shutter does nothing):
+//   {"shutter_us":1700}  -> spins one way   = continuous servo
+//   {"shutter_us":1300}  -> spins other way
+//   {"shutter_us":1500}  -> stops
+//   {"shutter_us":0}     -> releases the servo
+//   If it instead jumps to a position and stays, it is a POSITION
+//   servo: set SHUTTER_CONTINUOUS to false.
+//
+// PRINT SEQUENCE (what kiosk.exe sends):
+//   {"print":"start"}  -> PRINT_START_DELAY_MS later: shutter opens and
+//                         the roller motor starts
+//   {"print":"done"}   -> PRINT_END_DELAY_MS later: motor stops and the
+//                         shutter closes
+//   {"print":"stop"}   -> stop motor + close shutter immediately
+//   {"print":"status"}
+//   MOTOR: {"motor":"on"} {"motor":"off"} {"motor_speed":80}
 // =====================================================
 
 
@@ -78,7 +111,122 @@ void startWatchdog()
 
 // true : LOW = relay ON,  HIGH = relay OFF
 // false: HIGH = relay ON, LOW  = relay OFF
-#define RELAY_ACTIVE_LOW false
+// Bench test: unplug the ESP32 wire from IN1 and touch IN1 to GND.
+// Relay clicks ON -> active-low (true). Clicks OFF -> set false.
+#define RELAY_ACTIVE_LOW true
+
+// Only used when RELAY_ACTIVE_LOW is true. OFF = release the pin
+// (input / high-Z) so 3.3 V logic cannot half-drive a 5 V opto input.
+#define RELAY_OPEN_DRAIN true
+
+
+// =====================================================
+// SHUTTER CONFIGURATION
+// =====================================================
+
+// Servo signal pin = D13 / GPIO13 (21/22 = I2C, 25/26 = relays)
+#define SHUTTER_PIN 13
+
+// false: 360-degree POSITION servo (angle commands)
+// true : CONTINUOUS rotation servo (timed moves, no position feedback)
+// Now set to POSITION mode: open = SHUTTER_OPEN_DEG, close = 0 deg.
+#define SHUTTER_CONTINUOUS false
+
+// --- position servo ---
+// Pulse width that maps to 0 and to SHUTTER_RANGE_DEG. Most 360 deg
+// digital servos use 500-2500 us for the full turn. If your servo only
+// turns 180 or 270 deg over this pulse range, change SHUTTER_RANGE_DEG.
+#define SHUTTER_RANGE_DEG 360
+#define SHUTTER_MIN_US 500
+#define SHUTTER_MAX_US 2500
+
+// Servo angles for closed / open. START WITH SMALL VALUES and calibrate
+// with {"shutter_angle":N} so the rack never hits the end of its guide.
+#define SHUTTER_CLOSED_DEG 0
+
+// Direction. Open (0 -> 180 deg) should turn ANTICLOCKWISE and close
+// (180 -> 0 deg) CLOCKWISE, seen from the servo horn side.
+// If it turns the wrong way, change this to true.
+#define SHUTTER_REVERSE false
+#define SHUTTER_OPEN_DEG 160
+
+// Travel speed and update interval (slow = gentle on the printed gear)
+#define SHUTTER_SPEED_DEG_S 600
+#define SHUTTER_STEP_MS 10
+
+// --- continuous servo (DEFAULTS; tune live, see the commands below) ---
+//   {"shutter_set":"stop","value":1500}    pulse where it stands still
+//   {"shutter_set":"speed","value":150}    us away from stop (bigger = faster)
+//   {"shutter_set":"travel","value":1500}  ms of running per open / close
+//   {"shutter_set":"dir","value":-1}       swap open / close direction
+// There is no position feedback: distance = speed x time.
+#define SHUTTER_CONT_STOP_US 1500
+#define SHUTTER_CONT_SPEED_US 150
+#define SHUTTER_CONT_OPEN_DIR 1
+#define SHUTTER_CONT_TRAVEL_MS 1500
+
+// Shutter closes by itself this long after opening (0 = never).
+// Failsafe only if the host app forgets to close it. Keep it LONGER
+// than PRINT_MAX_S so it never closes in the middle of a print.
+#define SHUTTER_AUTO_CLOSE_S 300
+
+// Position servo only: release the servo this long after it has closed
+// (0 = keep holding forever). The shutter is always held while OPEN so
+// gravity cannot drop it.
+#define SHUTTER_DETACH_CLOSED_MS 0
+
+
+// =====================================================
+// ROLLER MOTOR CONFIGURATION
+// =====================================================
+//
+// The printer's brushed DC roller motor is driven through a motor
+// driver / MOSFET board with its OWN supply (never from an ESP32 pin).
+// Join the driver ground to the ESP32 ground.
+//
+//   MOTOR_PWM_PIN  -> driver PWM / EN input (speed)
+//   MOTOR_DIR_PIN  -> driver IN1 (direction). -1 if not used.
+//   MOTOR_DIR2_PIN -> driver IN2 (gets the opposite level of IN1,
+//                     for L298N-style boards). -1 if not used.
+//
+// L298N module wiring (red board):
+//   GPIO32 -> ENA   (REMOVE the jumper cap on ENA, or PWM does nothing)
+//   GPIO33 -> IN1
+//   GPIO18 -> IN2
+//   motor  -> OUT1 / OUT2
+//   supply + -> 12V terminal, supply - -> GND, ESP32 GND -> same GND
+#define MOTOR_PWM_PIN 32
+#define MOTOR_DIR_PIN 33
+#define MOTOR_DIR2_PIN 18
+
+// Level on MOTOR_DIR_PIN that rolls the paper OUT of the machine.
+// If the rollers turn the wrong way, change HIGH to LOW.
+#define MOTOR_FORWARD_LEVEL HIGH
+
+// Speed while running (percent) and soft start / soft stop time.
+// L298N drops about 2 V, so for a 6 V motor:
+//   duty % = 6 / (supply volts - 2) * 100
+//   8 V -> 100,  9 V -> 86,  12 V -> 60
+#define MOTOR_SPEED_PCT 50
+#define MOTOR_RAMP_MS 400
+
+// Motor is forced off after this long, whatever the host does
+#define MOTOR_MAX_RUN_S 300
+
+
+// =====================================================
+// PRINT SEQUENCE CONFIGURATION
+// =====================================================
+
+// {"print":"start"} -> wait this long, then open shutter + start motor
+#define PRINT_START_DELAY_MS 3000
+
+// {"print":"done"}  -> wait this long, then stop motor + close shutter
+#define PRINT_END_DELAY_MS 5000
+
+// Whole sequence is aborted (motor off, shutter closed) after this long
+// if "done" never arrives (app crash, printer jam, cable pulled...).
+#define PRINT_MAX_S 240
 
 
 // =====================================================
@@ -115,12 +263,13 @@ void startWatchdog()
 
 #define BPM_HARD_MIN 60
 #define BPM_HARD_MAX 200
-#define BPM_SOFT_MAX 120
 
 #define SPO2_MIN 70
-#define SPO2_MAX 98
+#define SPO2_MAX 100
 
 #define MAX_COLLECTION_SECONDS 15
+// Extra collect window when finger stays on but SpO2 never accumulated.
+#define MAX_SPO2_EXTEND_SECONDS 12
 
 #define SAMPLE_TIMEOUT_MS 1500
 
@@ -296,6 +445,10 @@ int bpmCount = 0;
 
 float spo2Sum = 0.0;
 int spo2Count = 0;
+int validSpO2Hits = 0;
+bool lastFingerPresent = false;
+bool maxSpO2ExtendUsed = false;
+unsigned long maxCollectionMs = (unsigned long)MAX_COLLECTION_SECONDS * 1000UL;
 
 float objectFSum = 0.0;
 float ambientFSum = 0.0;
@@ -329,6 +482,8 @@ void printStatus(const char* message);
 // RELAY CONTROL
 // =====================================================
 
+bool relayLogicalState[3] = { false, false, false };
+
 bool relayPin(uint8_t relay, uint8_t &pin)
 {
   if (relay == 1) { pin = RELAY1_PIN; return true; }
@@ -336,15 +491,39 @@ bool relayPin(uint8_t relay, uint8_t &pin)
   return false;
 }
 
+void relayDrive(uint8_t pin, bool on)
+{
+  if (RELAY_ACTIVE_LOW)
+  {
+    if (on)
+    {
+      pinMode(pin, OUTPUT);
+      digitalWrite(pin, LOW);
+    }
+    else if (RELAY_OPEN_DRAIN)
+    {
+      pinMode(pin, INPUT);
+    }
+    else
+    {
+      pinMode(pin, OUTPUT);
+      digitalWrite(pin, HIGH);
+    }
+  }
+  else
+  {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, on ? HIGH : LOW);
+  }
+}
+
 void setRelay(uint8_t relay, bool state)
 {
   uint8_t pin;
   if (!relayPin(relay, pin)) return;
 
-  if (RELAY_ACTIVE_LOW)
-    digitalWrite(pin, state ? LOW : HIGH);
-  else
-    digitalWrite(pin, state ? HIGH : LOW);
+  relayDrive(pin, state);
+  relayLogicalState[relay] = state;
 }
 
 bool getRelayState(uint8_t relay)
@@ -352,10 +531,7 @@ bool getRelayState(uint8_t relay)
   uint8_t pin;
   if (!relayPin(relay, pin)) return false;
 
-  if (RELAY_ACTIVE_LOW)
-    return digitalRead(pin) == LOW;
-  else
-    return digitalRead(pin) == HIGH;
+  return relayLogicalState[relay];
 }
 
 void allRelaysOff()
@@ -428,6 +604,739 @@ void processRelayCommand(JsonDocument &command)
   bool actualState = getRelayState(relay);
 
   sendRelayResponse(true, relay, actualState ? "on" : "off");
+}
+
+
+// =====================================================
+// SHUTTER CONTROL (servo + pinion + rack)
+// =====================================================
+
+enum ShutterState
+{
+  SHUTTER_CLOSED,
+  SHUTTER_OPENING,
+  SHUTTER_OPEN,
+  SHUTTER_CLOSING
+};
+
+ShutterState shutterState = SHUTTER_CLOSED;
+
+// ESP32Servo object. Pulses are written in microseconds, which works
+// for both position and continuous-rotation servos.
+Servo shutterServo;
+
+bool shutterPwmOn = false;
+bool shutterManual = false;
+
+float shutterAngle = SHUTTER_CLOSED_DEG;
+float shutterTarget = SHUTTER_CLOSED_DEG;
+float shutterOpenDeg = SHUTTER_OPEN_DEG;
+float shutterClosedDeg = SHUTTER_CLOSED_DEG;
+
+unsigned long shutterLastStep = 0;
+unsigned long shutterOpenedAt = 0;
+unsigned long shutterIdleSince = 0;
+unsigned long shutterContEnd = 0;
+
+int shutterContStopUs = SHUTTER_CONT_STOP_US;
+int shutterContSpeedUs = SHUTTER_CONT_SPEED_US;
+int shutterContDir = SHUTTER_CONT_OPEN_DIR;
+unsigned long shutterContTravelMs = SHUTTER_CONT_TRAVEL_MS;
+
+const char* shutterStateName()
+{
+  switch (shutterState)
+  {
+    case SHUTTER_OPENING: return "opening";
+    case SHUTTER_OPEN:    return "open";
+    case SHUTTER_CLOSING: return "closing";
+    default:              return "closed";
+  }
+}
+
+// Send a servo pulse of `us` microseconds (attaches the servo the
+// first time it is used).
+void shutterPwmWriteUs(uint32_t us)
+{
+  if (us < 500) us = 500;
+  if (us > 2500) us = 2500;
+
+  if (!shutterPwmOn)
+  {
+    shutterServo.setPeriodHertz(50);
+    shutterServo.attach(SHUTTER_PIN, 500, 2500);
+    shutterPwmOn = true;
+  }
+
+  shutterServo.writeMicroseconds((int)us);
+}
+
+// Stop sending pulses and hold the signal pin LOW.
+void shutterPwmOff()
+{
+  if (!shutterPwmOn) return;
+
+  shutterServo.detach();
+  shutterPwmOn = false;
+
+  pinMode(SHUTTER_PIN, OUTPUT);
+  digitalWrite(SHUTTER_PIN, LOW);
+}
+
+uint32_t shutterAngleToUs(float deg)
+{
+  if (deg < 0.0f) deg = 0.0f;
+  if (deg > (float)SHUTTER_RANGE_DEG) deg = (float)SHUTTER_RANGE_DEG;
+
+  float span = (float)(SHUTTER_MAX_US - SHUTTER_MIN_US);
+  float frac = deg / (float)SHUTTER_RANGE_DEG;
+
+  if (SHUTTER_REVERSE)
+    return (uint32_t)((float)SHUTTER_MAX_US - frac * span);
+
+  return (uint32_t)((float)SHUTTER_MIN_US + frac * span);
+}
+
+void shutterBegin()
+{
+  pinMode(SHUTTER_PIN, OUTPUT);
+  digitalWrite(SHUTTER_PIN, LOW);
+
+  shutterState = SHUTTER_CLOSED;
+  shutterIdleSince = millis();
+
+  // A continuous servo has no position feedback, so there is nothing
+  // to home. A position servo is driven to the closed angle at boot.
+  if (!SHUTTER_CONTINUOUS)
+  {
+    shutterAngle = shutterClosedDeg;
+    shutterTarget = shutterClosedDeg;
+    shutterPwmWriteUs(shutterAngleToUs(shutterAngle));
+  }
+}
+
+void shutterMove(bool open)
+{
+  if (open && (shutterState == SHUTTER_OPEN || shutterState == SHUTTER_OPENING))
+    return;
+
+  if (!open && (shutterState == SHUTTER_CLOSED || shutterState == SHUTTER_CLOSING))
+    return;
+
+  shutterManual = false;
+  shutterState = open ? SHUTTER_OPENING : SHUTTER_CLOSING;
+
+  if (SHUTTER_CONTINUOUS)
+  {
+    int dir = open ? shutterContDir : -shutterContDir;
+
+    shutterPwmWriteUs(shutterContStopUs + dir * shutterContSpeedUs);
+    shutterContEnd = millis() + shutterContTravelMs;
+  }
+  else
+  {
+    shutterTarget = open ? shutterOpenDeg : shutterClosedDeg;
+    shutterLastStep = millis();
+
+    shutterPwmWriteUs(shutterAngleToUs(shutterAngle));
+  }
+
+  printStatus(open ? "shutter_opening" : "shutter_closing");
+}
+
+void shutterFinished()
+{
+  unsigned long now = millis();
+
+  if (shutterState == SHUTTER_OPENING)
+  {
+    shutterState = SHUTTER_OPEN;
+    shutterOpenedAt = now;
+    printStatus("shutter_open");
+  }
+  else
+  {
+    shutterState = SHUTTER_CLOSED;
+    shutterIdleSince = now;
+    printStatus("shutter_closed");
+  }
+
+  if (SHUTTER_CONTINUOUS)
+  {
+    shutterPwmOff();
+  }
+}
+
+// Non-blocking. Called every loop().
+void shutterUpdate()
+{
+  unsigned long now = millis();
+
+  if (shutterState == SHUTTER_OPENING || shutterState == SHUTTER_CLOSING)
+  {
+    if (SHUTTER_CONTINUOUS)
+    {
+      if ((long)(now - shutterContEnd) >= 0)
+      {
+        shutterPwmWriteUs(shutterContStopUs);
+        shutterFinished();
+      }
+    }
+    else if (now - shutterLastStep >= SHUTTER_STEP_MS)
+    {
+      float step =
+        (float)SHUTTER_SPEED_DEG_S * (float)(now - shutterLastStep) / 1000.0f;
+
+      shutterLastStep = now;
+
+      if (fabsf(shutterTarget - shutterAngle) <= step)
+        shutterAngle = shutterTarget;
+      else
+        shutterAngle += (shutterTarget > shutterAngle) ? step : -step;
+
+      shutterPwmWriteUs(shutterAngleToUs(shutterAngle));
+
+      if (shutterAngle == shutterTarget)
+      {
+        shutterFinished();
+      }
+    }
+
+    return;
+  }
+
+  if (
+    SHUTTER_AUTO_CLOSE_S > 0 &&
+    shutterState == SHUTTER_OPEN &&
+    !shutterManual &&
+    now - shutterOpenedAt >= (unsigned long)SHUTTER_AUTO_CLOSE_S * 1000UL
+  )
+  {
+    printStatus("shutter_auto_close");
+    shutterMove(false);
+    return;
+  }
+
+  if (
+    !SHUTTER_CONTINUOUS &&
+    SHUTTER_DETACH_CLOSED_MS > 0 &&
+    shutterState == SHUTTER_CLOSED &&
+    shutterPwmOn &&
+    now - shutterIdleSince >= (unsigned long)SHUTTER_DETACH_CLOSED_MS
+  )
+  {
+    shutterPwmOff();
+  }
+}
+
+void sendShutterResponse(bool ok, const char* error = nullptr)
+{
+  JsonDocument response;
+
+  response["ok"] = ok;
+  response["shutter"] = shutterStateName();
+
+  if (!SHUTTER_CONTINUOUS)
+  {
+    response["angle"] = (int)(shutterAngle + 0.5f);
+    response["open_deg"] = (int)(shutterOpenDeg + 0.5f);
+    response["closed_deg"] = (int)(shutterClosedDeg + 0.5f);
+  }
+  else
+  {
+    response["stop_us"] = shutterContStopUs;
+    response["speed_us"] = shutterContSpeedUs;
+    response["travel_ms"] = (unsigned long)shutterContTravelMs;
+    response["dir"] = shutterContDir;
+  }
+
+  if (error != nullptr) response["error"] = error;
+
+  serializeJson(response, Serial);
+  Serial.println();
+}
+
+void processShutterCommand(JsonDocument &command)
+{
+  // {"shutter":"open" | "close" | "status"}
+  if (command["shutter"].is<const char*>())
+  {
+    const char* action = command["shutter"];
+
+    if (strcmp(action, "open") == 0)
+    {
+      shutterMove(true);
+    }
+    else if (strcmp(action, "close") == 0)
+    {
+      shutterMove(false);
+    }
+    else if (strcmp(action, "status") != 0)
+    {
+      sendShutterResponse(false, "invalid_shutter_action");
+      return;
+    }
+
+    sendShutterResponse(true);
+    return;
+  }
+
+  // {"shutter_angle":N}  calibration: go straight to N degrees
+  if (!command["shutter_angle"].isNull())
+  {
+    if (SHUTTER_CONTINUOUS)
+    {
+      sendShutterResponse(false, "continuous_servo_use_shutter_us");
+      return;
+    }
+
+    float a = command["shutter_angle"].as<float>();
+
+    if (a < 0.0f) a = 0.0f;
+    if (a > (float)SHUTTER_RANGE_DEG) a = (float)SHUTTER_RANGE_DEG;
+
+    shutterManual = true;
+    shutterAngle = a;
+    shutterTarget = a;
+    shutterState =
+      (fabsf(a - shutterClosedDeg) < 1.0f) ? SHUTTER_CLOSED : SHUTTER_OPEN;
+    shutterOpenedAt = millis();
+    shutterIdleSince = millis();
+
+    shutterPwmWriteUs(shutterAngleToUs(a));
+
+    sendShutterResponse(true);
+    return;
+  }
+
+  // {"shutter_us":N}  raw pulse width; 0 releases the servo
+  if (!command["shutter_us"].isNull())
+  {
+    int us = command["shutter_us"].as<int>();
+
+    shutterManual = true;
+
+    if (us <= 0)
+      shutterPwmOff();
+    else
+      shutterPwmWriteUs((uint32_t)us);
+
+    sendShutterResponse(true);
+    return;
+  }
+
+  // {"shutter_set":"open"|"close","angle":N}  runtime angle (RAM only)
+  if (command["shutter_set"].is<const char*>())
+  {
+    const char* which = command["shutter_set"];
+
+    if (
+      strcmp(which, "stop") == 0 ||
+      strcmp(which, "speed") == 0 ||
+      strcmp(which, "travel") == 0 ||
+      strcmp(which, "dir") == 0
+    )
+    {
+      if (command["value"].isNull())
+      {
+        sendShutterResponse(false, "missing_value");
+        return;
+      }
+
+      int v = command["value"].as<int>();
+
+      if (strcmp(which, "stop") == 0)
+        shutterContStopUs = constrain(v, 1300, 1700);
+      else if (strcmp(which, "speed") == 0)
+        shutterContSpeedUs = constrain(v, 20, 500);
+      else if (strcmp(which, "travel") == 0)
+        shutterContTravelMs = (unsigned long)constrain(v, 100, 10000);
+      else
+        shutterContDir = (v < 0) ? -1 : 1;
+
+      sendShutterResponse(true);
+      return;
+    }
+
+    if (command["angle"].isNull())
+    {
+      sendShutterResponse(false, "missing_angle");
+      return;
+    }
+
+    float a = command["angle"].as<float>();
+
+    if (a < 0.0f) a = 0.0f;
+    if (a > (float)SHUTTER_RANGE_DEG) a = (float)SHUTTER_RANGE_DEG;
+
+    if (strcmp(which, "open") == 0)
+      shutterOpenDeg = a;
+    else if (strcmp(which, "close") == 0)
+      shutterClosedDeg = a;
+    else
+    {
+      sendShutterResponse(false, "invalid_shutter_set");
+      return;
+    }
+
+    sendShutterResponse(true);
+    return;
+  }
+
+  sendShutterResponse(false, "invalid_shutter_command");
+}
+
+
+// =====================================================
+// ROLLER MOTOR CONTROL
+// =====================================================
+
+#define MOTOR_PWM_HZ 20000
+#define MOTOR_PWM_BITS 10
+#define MOTOR_PWM_CH 6
+
+bool motorPwmAttached = false;
+bool motorRunning = false;
+
+float motorCurPct = 0.0f;
+float motorTargetPct = 0.0f;
+float motorSpeedPct = MOTOR_SPEED_PCT;
+
+unsigned long motorLastStep = 0;
+unsigned long motorStartedAt = 0;
+
+void motorPwmWritePct(float pct)
+{
+  if (pct < 0.0f) pct = 0.0f;
+  if (pct > 100.0f) pct = 100.0f;
+
+  uint32_t duty =
+    (uint32_t)((pct / 100.0f) * (float)((1UL << MOTOR_PWM_BITS) - 1));
+
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  if (!motorPwmAttached)
+  {
+    ledcAttach(MOTOR_PWM_PIN, MOTOR_PWM_HZ, MOTOR_PWM_BITS);
+    motorPwmAttached = true;
+  }
+  ledcWrite(MOTOR_PWM_PIN, duty);
+#else
+  if (!motorPwmAttached)
+  {
+    ledcSetup(MOTOR_PWM_CH, MOTOR_PWM_HZ, MOTOR_PWM_BITS);
+    ledcAttachPin(MOTOR_PWM_PIN, MOTOR_PWM_CH);
+    motorPwmAttached = true;
+  }
+  ledcWrite(MOTOR_PWM_CH, duty);
+#endif
+}
+
+void motorDirIdle()
+{
+  if (MOTOR_DIR_PIN >= 0) digitalWrite(MOTOR_DIR_PIN, LOW);
+  if (MOTOR_DIR2_PIN >= 0) digitalWrite(MOTOR_DIR2_PIN, LOW);
+}
+
+void motorDirForward()
+{
+  if (MOTOR_DIR_PIN >= 0)
+    digitalWrite(MOTOR_DIR_PIN, MOTOR_FORWARD_LEVEL);
+
+  if (MOTOR_DIR2_PIN >= 0)
+    digitalWrite(MOTOR_DIR2_PIN, MOTOR_FORWARD_LEVEL ? LOW : HIGH);
+}
+
+void motorPwmRelease()
+{
+  if (motorPwmAttached)
+  {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+    ledcDetach(MOTOR_PWM_PIN);
+#else
+    ledcDetachPin(MOTOR_PWM_PIN);
+#endif
+    motorPwmAttached = false;
+  }
+
+  pinMode(MOTOR_PWM_PIN, OUTPUT);
+  digitalWrite(MOTOR_PWM_PIN, LOW);
+
+  motorDirIdle();
+}
+
+void motorBegin()
+{
+  pinMode(MOTOR_PWM_PIN, OUTPUT);
+  digitalWrite(MOTOR_PWM_PIN, LOW);
+
+  if (MOTOR_DIR_PIN >= 0) pinMode(MOTOR_DIR_PIN, OUTPUT);
+  if (MOTOR_DIR2_PIN >= 0) pinMode(MOTOR_DIR2_PIN, OUTPUT);
+
+  motorDirIdle();
+}
+
+void motorStart()
+{
+  if (!motorRunning)
+  {
+    motorRunning = true;
+    motorStartedAt = millis();
+    motorLastStep = millis();
+
+    motorDirForward();
+
+    printStatus("motor_on");
+  }
+
+  motorTargetPct = motorSpeedPct;
+}
+
+void motorStop()
+{
+  if (motorRunning)
+  {
+    motorRunning = false;
+    motorLastStep = millis();
+
+    printStatus("motor_off");
+  }
+
+  motorTargetPct = 0.0f;
+}
+
+// Non-blocking soft start / soft stop. Called every loop().
+void motorUpdate()
+{
+  unsigned long now = millis();
+
+  if (
+    motorRunning &&
+    MOTOR_MAX_RUN_S > 0 &&
+    now - motorStartedAt >= (unsigned long)MOTOR_MAX_RUN_S * 1000UL
+  )
+  {
+    printStatus("motor_timeout");
+    motorStop();
+  }
+
+  if (motorCurPct != motorTargetPct && now - motorLastStep >= 10)
+  {
+    float step = 100.0f * (float)(now - motorLastStep) / (float)MOTOR_RAMP_MS;
+
+    motorLastStep = now;
+
+    if (fabsf(motorTargetPct - motorCurPct) <= step)
+      motorCurPct = motorTargetPct;
+    else
+      motorCurPct += (motorTargetPct > motorCurPct) ? step : -step;
+
+    motorPwmWritePct(motorCurPct);
+  }
+
+  if (!motorRunning && motorCurPct == 0.0f && motorPwmAttached)
+  {
+    motorPwmRelease();
+  }
+}
+
+void sendMotorResponse(bool ok, const char* error = nullptr)
+{
+  JsonDocument response;
+
+  response["ok"] = ok;
+  response["motor"] = motorRunning ? "on" : "off";
+  response["speed"] = (int)(motorSpeedPct + 0.5f);
+
+  if (error != nullptr) response["error"] = error;
+
+  serializeJson(response, Serial);
+  Serial.println();
+}
+
+void processMotorCommand(JsonDocument &command)
+{
+  if (command["motor"].is<const char*>())
+  {
+    const char* action = command["motor"];
+
+    if (strcmp(action, "on") == 0)
+    {
+      motorStart();
+    }
+    else if (strcmp(action, "off") == 0)
+    {
+      motorStop();
+    }
+    else if (strcmp(action, "status") != 0)
+    {
+      sendMotorResponse(false, "invalid_motor_action");
+      return;
+    }
+
+    sendMotorResponse(true);
+    return;
+  }
+
+  if (!command["motor_speed"].isNull())
+  {
+    float v = command["motor_speed"].as<float>();
+
+    if (v < 0.0f) v = 0.0f;
+    if (v > 100.0f) v = 100.0f;
+
+    motorSpeedPct = v;
+
+    if (motorRunning) motorTargetPct = motorSpeedPct;
+
+    sendMotorResponse(true);
+    return;
+  }
+
+  sendMotorResponse(false, "invalid_motor_command");
+}
+
+
+// =====================================================
+// PRINT SEQUENCE (shutter + roller motor)
+// =====================================================
+
+enum PrintSeqState
+{
+  PSEQ_IDLE,
+  PSEQ_WAIT_START,
+  PSEQ_RUNNING,
+  PSEQ_WAIT_END
+};
+
+PrintSeqState printSeq = PSEQ_IDLE;
+
+unsigned long printSeqAt = 0;
+unsigned long printSeqStartedAt = 0;
+bool printDonePending = false;
+
+const char* printSeqName()
+{
+  switch (printSeq)
+  {
+    case PSEQ_WAIT_START: return "waiting_start";
+    case PSEQ_RUNNING:    return "running";
+    case PSEQ_WAIT_END:   return "waiting_end";
+    default:              return "idle";
+  }
+}
+
+void sendPrintResponse(bool ok, const char* error = nullptr)
+{
+  JsonDocument response;
+
+  response["ok"] = ok;
+  response["print"] = printSeqName();
+  response["shutter"] = shutterStateName();
+  response["motor"] = motorRunning ? "on" : "off";
+
+  if (error != nullptr) response["error"] = error;
+
+  serializeJson(response, Serial);
+  Serial.println();
+}
+
+void printSeqEnd(const char* reason)
+{
+  motorStop();
+  shutterMove(false);
+
+  printSeq = PSEQ_IDLE;
+  printDonePending = false;
+
+  printStatus(reason);
+}
+
+void processPrintCommand(JsonDocument &command)
+{
+  if (!command["print"].is<const char*>())
+  {
+    sendPrintResponse(false, "invalid_print_command");
+    return;
+  }
+
+  const char* action = command["print"];
+  unsigned long now = millis();
+
+  if (strcmp(action, "start") == 0)
+  {
+    if (printSeq == PSEQ_IDLE)
+    {
+      printSeq = PSEQ_WAIT_START;
+      printSeqAt = now + PRINT_START_DELAY_MS;
+      printSeqStartedAt = now;
+      printDonePending = false;
+
+      printStatus("print_sequence_waiting");
+    }
+    else if (printSeq == PSEQ_WAIT_END)
+    {
+      // A new job arrived before the shutter closed: keep going.
+      printSeq = PSEQ_RUNNING;
+      printDonePending = false;
+    }
+  }
+  else if (strcmp(action, "done") == 0)
+  {
+    if (printSeq == PSEQ_WAIT_START)
+    {
+      printDonePending = true;
+    }
+    else if (printSeq == PSEQ_RUNNING)
+    {
+      printSeq = PSEQ_WAIT_END;
+      printSeqAt = now + PRINT_END_DELAY_MS;
+    }
+  }
+  else if (strcmp(action, "stop") == 0)
+  {
+    printSeqEnd("print_sequence_stopped");
+  }
+  else if (strcmp(action, "status") != 0)
+  {
+    sendPrintResponse(false, "invalid_print_action");
+    return;
+  }
+
+  sendPrintResponse(true);
+}
+
+// Non-blocking. Called every loop().
+void printSeqUpdate()
+{
+  if (printSeq == PSEQ_IDLE) return;
+
+  unsigned long now = millis();
+
+  if (now - printSeqStartedAt >= (unsigned long)PRINT_MAX_S * 1000UL)
+  {
+    printSeqEnd("print_failsafe");
+    return;
+  }
+
+  if (printSeq == PSEQ_WAIT_START && (long)(now - printSeqAt) >= 0)
+  {
+    shutterMove(true);
+    motorStart();
+
+    printSeq = PSEQ_RUNNING;
+    printStatus("print_sequence_running");
+
+    if (printDonePending)
+    {
+      printSeq = PSEQ_WAIT_END;
+      printSeqAt = now + PRINT_END_DELAY_MS;
+      printDonePending = false;
+    }
+  }
+  else if (printSeq == PSEQ_WAIT_END && (long)(now - printSeqAt) >= 0)
+  {
+    printSeqEnd("print_sequence_complete");
+  }
 }
 
 
@@ -508,6 +1417,10 @@ void resetAccumulators()
 
   spo2Sum = 0.0;
   spo2Count = 0;
+  validSpO2Hits = 0;
+  lastFingerPresent = false;
+  maxSpO2ExtendUsed = false;
+  maxCollectionMs = (unsigned long)MAX_COLLECTION_SECONDS * 1000UL;
 
   objectFSum = 0.0;
   ambientFSum = 0.0;
@@ -677,12 +1590,7 @@ void accumulateBPM(int32_t bpm)
     return;
   }
 
-  float corrected =
-    (bpm > BPM_SOFT_MAX)
-      ? (float)bpm / 2.0f
-      : (float)bpm;
-
-  bpmSum += corrected;
+  bpmSum += (float)bpm;
   bpmWeightSum += 1.0f;
   bpmCount++;
 }
@@ -693,6 +1601,7 @@ void accumulateSpO2(int32_t spo2)
   {
     spo2Sum += spo2;
     spo2Count++;
+    validSpO2Hits++;
   }
 }
 
@@ -912,10 +1821,17 @@ void printMAXCountdown(int secondsElapsed)
 {
   JsonDocument response;
 
+  const int totalSeconds = (int)(maxCollectionMs / 1000UL);
+  int remaining = totalSeconds - secondsElapsed;
+  if (remaining < 0)
+  {
+    remaining = 0;
+  }
+
   response["status"] = "recording";
   response["sensor"] = "max30102";
   response["elapsed"] = secondsElapsed;
-  response["remaining"] = MAX_COLLECTION_SECONDS - secondsElapsed;
+  response["remaining"] = remaining;
   response["ts"] = millis();
 
   serializeJson(response, Serial);
@@ -951,9 +1867,15 @@ void sendResult()
     response["bpm"] = nullptr;
 
   if (sessionMAX && spo2Count > 0)
+  {
     response["spo2"] = spo2Sum / spo2Count;
-  else
+    response["spo2_quality"] = "ok";
+  }
+  else if (sessionMAX)
+  {
     response["spo2"] = nullptr;
+    response["spo2_quality"] = "missing";
+  }
 
   if (sessionTEMP && tempCount > 0)
   {
@@ -968,6 +1890,18 @@ void sendResult()
 
   response["status"] = "complete";
   response["ts"] = millis();
+
+  if (sessionMAX)
+  {
+    Serial.printf(
+      "[MAX] complete bpmCount=%d spo2Count=%d validSpO2Hits=%d finger=%d extend=%d\n",
+      bpmCount,
+      spo2Count,
+      validSpO2Hits,
+      lastFingerPresent ? 1 : 0,
+      maxSpO2ExtendUsed ? 1 : 0
+    );
+  }
 
   serializeJson(response, Serial);
   Serial.println();
@@ -1538,6 +2472,29 @@ void processJSONCommand(String input)
     return;
   }
 
+  if (!command["print"].isNull())
+  {
+    processPrintCommand(command);
+    return;
+  }
+
+  if (!command["motor"].isNull() || !command["motor_speed"].isNull())
+  {
+    processMotorCommand(command);
+    return;
+  }
+
+  if (
+    !command["shutter"].isNull() ||
+    !command["shutter_angle"].isNull() ||
+    !command["shutter_us"].isNull() ||
+    !command["shutter_set"].isNull()
+  )
+  {
+    processShutterCommand(command);
+    return;
+  }
+
   if (!command["command"].is<const char*>())
   {
     printStatus("unknown_command");
@@ -1640,6 +2597,14 @@ void processLegacyCommand(String command)
   {
     stopSession();
   }
+  else if (command == "SHUTTER OPEN")
+  {
+    shutterMove(true);
+  }
+  else if (command == "SHUTTER CLOSE")
+  {
+    shutterMove(false);
+  }
   else if (command == "CHARGER")
   {
     sendChargerSnapshot();
@@ -1708,14 +2673,27 @@ void processCommands()
 
 void setup()
 {
+  // Hold the servo signal LOW from the very first instruction so the
+  // line is never left floating (a floating signal makes a continuous
+  // servo creep or spin). Before setup() runs the pin is still
+  // high-Z, so also fit a 10k resistor from the signal wire to GND.
+  pinMode(SHUTTER_PIN, OUTPUT);
+  digitalWrite(SHUTTER_PIN, LOW);
+
+  // ESP32Servo: reserve LEDC timer 0 for the servo so it does not
+  // collide with the roller motor's 20 kHz PWM. Must run before the
+  // servo is first attached (shutterBegin() may do that).
+  ESP32PWM::allocateTimer(0);
+
   Serial.begin(SERIAL_BAUD);
 
   delay(1000);
 
-  pinMode(RELAY1_PIN, OUTPUT);
-  pinMode(RELAY2_PIN, OUTPUT);
-
   allRelaysOff();
+
+  shutterBegin();
+
+  motorBegin();
 
   startI2C();
 
@@ -1744,6 +2722,8 @@ void setup()
   startup["ina226"] = inaOK;
   startup["relay1"] = getRelayState(1);
   startup["relay2"] = getRelayState(2);
+  startup["shutter"] = shutterStateName();
+  startup["motor"] = motorRunning ? "on" : "off";
 
   serializeJson(startup, Serial);
   Serial.println();
@@ -1766,6 +2746,12 @@ void loop()
   esp_task_wdt_reset();
 
   processCommands();
+
+  shutterUpdate();
+
+  motorUpdate();
+
+  printSeqUpdate();
 
   if (
     currentState != STATE_IDLE &&
@@ -1898,6 +2884,7 @@ void loop()
         return;
       }
 
+      lastFingerPresent = true;
       accumulateBPM(bpm);
       accumulateSpO2(spo2);
     }
@@ -1936,10 +2923,11 @@ void loop()
     {
       unsigned long maxElapsed = millis() - collectionStart;
       int maxSeconds = (int)(maxElapsed / 1000UL);
+      int maxTotalSeconds = (int)(maxCollectionMs / 1000UL);
 
       if (
         maxSeconds != lastMaxSecondReported &&
-        maxSeconds <= MAX_COLLECTION_SECONDS
+        maxSeconds <= maxTotalSeconds
       )
       {
         lastMaxSecondReported = maxSeconds;
@@ -1966,10 +2954,28 @@ void loop()
 
     bool maxDone =
       !sessionMAX ||
-      (
-        millis() - collectionStart >=
-        (unsigned long)MAX_COLLECTION_SECONDS * 1000UL
+      (millis() - collectionStart >= maxCollectionMs);
+
+    // Finger still on but no SpO2 yet: extend once before completing.
+    if (
+      sessionMAX &&
+      maxDone &&
+      spo2Count == 0 &&
+      lastFingerPresent &&
+      !maxSpO2ExtendUsed
+    )
+    {
+      maxSpO2ExtendUsed = true;
+      maxCollectionMs +=
+        (unsigned long)MAX_SPO2_EXTEND_SECONDS * 1000UL;
+      maxDone = false;
+      printStatus("spo2_extending");
+      Serial.printf(
+        "[MAX] spo2 extend +%ds bpmCount=%d\n",
+        MAX_SPO2_EXTEND_SECONDS,
+        bpmCount
       );
+    }
 
     bool tempDone;
 

@@ -246,12 +246,17 @@ class _ChargingActiveView extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              charging ? 'Phone connected' : 'Socket is on',
+              charging
+                  ? 'Phone connected'
+                  : 'Socket armed — plug in your phone',
               style: theme.textTheme.headlineMedium,
               textAlign: TextAlign.center,
             ),
             if (statusMessage !=
-                (charging ? 'Phone connected' : 'Socket is on')) ...[
+                (charging
+                    ? 'Phone connected'
+                    : 'Socket armed — plug in your phone') &&
+                statusMessage != 'Plug in your phone') ...[
               const SizedBox(height: 8),
               Text(
                 statusMessage,

@@ -57,6 +57,9 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   ProviderSubscription<SerialUiState>? _serialWatch;
   Timer? _paymentPollTimer;
 
+  /// One silent re-start when SpO2 or HR is missing from a complete result.
+  bool _oxiAutoRetryUsed = false;
+
   static const _cmdStop = '{"command":"stop"}';
   static const _cmdStartMax =
       '{"command":"start","sensor":"max30102"}';
@@ -179,6 +182,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     ref
         .read(serviceAnalyticsTrackerProvider)
         .track(ServiceEventKeys.wellBeingOxygen);
+    _oxiAutoRetryUsed = false;
     state = state.copyWith(
       activeMode: WellBeingMode.oxi,
       phase: WellBeingPhase.oxiIdle,
@@ -805,19 +809,19 @@ class WellBeingController extends Notifier<WellBeingUiState> {
 
     if (sample.isMaxRecording ||
         (sample.isRecording && sample.sensor == null)) {
-      final rem = sample.remSeconds?.ceil().clamp(
-            0,
-            VitalsLineParser.maxCollectionSeconds,
-          );
+      final rem = sample.remSeconds?.ceil().clamp(0, 120);
       final total = VitalsLineParser.maxCollectionSeconds;
       final remaining = rem ?? state.secondsRemaining;
       final pct = ((total - remaining) / total * 100).clamp(0.0, 100.0);
+      final extending = sample.status == 'spo2_extending';
       state = state.copyWith(
         phase: WellBeingPhase.oxiMeasuring,
         fingerDetected: true,
         secondsRemaining: remaining,
         measurePct: pct,
-        statusMessage: 'Keep your finger still',
+        statusMessage: extending
+            ? 'Hold still — refining oxygen reading…'
+            : 'Keep your finger still',
       );
       return;
     }
@@ -871,21 +875,57 @@ class WellBeingController extends Notifier<WellBeingUiState> {
         state = state.copyWith(
           phase: WellBeingPhase.oxiIdle,
           fingerDetected: false,
+          clearFinalHeartRate: true,
+          clearFinalSpO2: true,
           statusMessage: 'No reading — place your finger again',
         );
         unawaited(_sendCommand(_cmdStartMax, silent: true));
         return;
       }
+      if (finalHr != null && finalSpo2 != null) {
+        state = state.copyWith(
+          phase: WellBeingPhase.oxiComplete,
+          fingerDetected: false,
+          secondsRemaining: 0,
+          measurePct: 100,
+          finalHeartRate: finalHr,
+          finalSpO2: finalSpo2,
+          statusMessage: 'Measurement complete — you may remove your finger',
+        );
+        AppLogger.info('Oxi result: HR=$finalHr SpO2=$finalSpo2');
+        return;
+      }
+      // Incomplete (HR-only or SpO2-only): one silent auto-retry, then idle.
+      if (!_oxiAutoRetryUsed) {
+        _oxiAutoRetryUsed = true;
+        state = state.copyWith(
+          phase: WellBeingPhase.oxiMeasuring,
+          fingerDetected: true,
+          secondsRemaining: VitalsLineParser.maxCollectionSeconds,
+          measurePct: 0,
+          clearFinalHeartRate: true,
+          clearFinalSpO2: true,
+          statusMessage: 'Hold still — recapturing oxygen…',
+        );
+        AppLogger.info(
+          'Oxi incomplete HR=$finalHr SpO2=$finalSpo2 — auto-retry',
+        );
+        unawaited(_sendCommand(_cmdStartMax, silent: true));
+        return;
+      }
       state = state.copyWith(
-        phase: WellBeingPhase.oxiComplete,
+        phase: WellBeingPhase.oxiIdle,
         fingerDetected: false,
-        secondsRemaining: 0,
-        measurePct: 100,
-        finalHeartRate: finalHr,
-        finalSpO2: finalSpo2,
-        statusMessage: 'Measurement complete — you may remove your finger',
+        secondsRemaining: VitalsLineParser.maxCollectionSeconds,
+        measurePct: 0,
+        clearFinalHeartRate: true,
+        clearFinalSpO2: true,
+        statusMessage:
+            'Oxygen/heart rate incomplete — place your finger and try again',
       );
-      AppLogger.info('Oxi result: HR=$finalHr SpO2=$finalSpo2');
+      AppLogger.info(
+        'Oxi incomplete after retry HR=$finalHr SpO2=$finalSpo2',
+      );
     }
   }
 

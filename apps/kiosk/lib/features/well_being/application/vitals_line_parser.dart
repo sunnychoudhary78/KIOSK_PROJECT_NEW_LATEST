@@ -209,6 +209,18 @@ class VitalsLineParser {
           fingerAbsent: false,
           rawLine: raw,
         );
+      case 'spo2_extending':
+        // Firmware keeps collecting when SpO2 has not accumulated yet.
+        return VitalsParseResult(
+          kind: VitalsMessageKind.recording,
+          status: status,
+          sensor: 'max30102',
+          elapsedSeconds: elapsed,
+          remSeconds: remaining?.toDouble(),
+          finger: true,
+          fingerAbsent: false,
+          rawLine: raw,
+        );
       case 'aborted':
         return VitalsParseResult(
           kind: VitalsMessageKind.aborted,

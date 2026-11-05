@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/hardware/serial/print_tray_commands.dart';
+import 'package:skp_kiosk/core/hardware/serial/serial_provider.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/services/print_spooler.dart';
 import 'package:skp_kiosk/services/printer/print_job_status_reporter.dart';
@@ -14,6 +16,14 @@ final printCoordinatorProvider = Provider<PrintCoordinator>((ref) {
     spooler: ref.watch(printSpoolerProvider),
     monitor: ref.watch(printerMonitorProvider),
     usbPageWatch: ref.watch(usbPageWatchProvider),
+    sendSerialLine: (line) async {
+      final serial = ref.read(serialControllerProvider);
+      if (!serial.isConnected) {
+        AppLogger.info('PRINTER tray skipped (serial disconnected): $line');
+        return;
+      }
+      await ref.read(serialControllerProvider.notifier).sendLine(line);
+    },
   );
 });
 
@@ -27,10 +37,12 @@ class PrintCoordinator {
     this.usbBaselineGrace = const Duration(seconds: 20),
     UsbPageWatch? usbPageWatch,
     Duration? reconcileTimeout,
+    Future<void> Function(String line)? sendSerialLine,
   })  : _spooler = spooler,
         _monitor = monitor,
         _usbPageWatch = usbPageWatch ?? UsbPageWatch(),
-        _reconcileTimeout = reconcileTimeout;
+        _reconcileTimeout = reconcileTimeout,
+        _sendSerialLine = sendSerialLine;
 
   final PrintSpooler _spooler;
   final PrinterMonitor _monitor;
@@ -40,14 +52,45 @@ class PrintCoordinator {
   final Duration counterRetryDelay;
   final Duration usbBaselineGrace;
   final Duration? _reconcileTimeout;
+  final Future<void> Function(String line)? _sendSerialLine;
 
   bool _locked = false;
   int _runId = 0;
   bool _abortRequested = false;
   int? _activeSpoolerJobId;
   String? _activePrintTitle;
+  /// True after `print:start` until `done` or `stop`.
+  bool _traySequenceActive = false;
 
   bool get isLocked => _locked;
+
+  Future<void> _sendTray(String line) async {
+    final send = _sendSerialLine;
+    if (send == null) return;
+    try {
+      await send(line);
+      AppLogger.info('PRINTER tray $line');
+    } catch (error) {
+      AppLogger.error('PRINTER tray serial failed: $line', error);
+    }
+  }
+
+  Future<void> _trayStart() async {
+    await _sendTray(PrintTrayCommands.start());
+    _traySequenceActive = true;
+  }
+
+  Future<void> _trayDone() async {
+    if (!_traySequenceActive) return;
+    await _sendTray(PrintTrayCommands.done());
+    _traySequenceActive = false;
+  }
+
+  Future<void> _trayStop() async {
+    if (!_traySequenceActive) return;
+    await _sendTray(PrintTrayCommands.stop());
+    _traySequenceActive = false;
+  }
 
   Duration get reconcileTimeout =>
       _reconcileTimeout ??
@@ -223,6 +266,7 @@ class PrintCoordinator {
     int? pageCounterAfter,
     int pagesReported = 0,
   }) async {
+    await _trayStop();
     final spoolerJobId = _activeSpoolerJobId?.toString();
     await _clearActiveSpoolerWork();
     await reportStatus(
@@ -270,6 +314,7 @@ class PrintCoordinator {
     void Function(String message)? onProgress,
   }) async {
     final expected = pagesExpected < 1 ? 1 : pagesExpected;
+    _traySequenceActive = false;
 
     onProgress?.call('Checking printer…');
     final preHealth = await _monitor.getHealth();
@@ -359,6 +404,9 @@ class PrintCoordinator {
       );
     }
 
+    // Paper is leaving the printer — open shutter + roller.
+    await _trayStart();
+
     await _captureSpoolerJob(title);
     final spoolerJobId = _activeSpoolerJobId?.toString();
     if (spoolerJobId != null) {
@@ -420,6 +468,7 @@ class PrintCoordinator {
       final health = await _monitor.getHealth();
       if (health.isPhysicalFatal) {
         final spoolerJobId = _activeSpoolerJobId?.toString();
+        await _trayStop();
         await _clearActiveSpoolerWork();
         await reportStatus(
           jobId: jobId,
@@ -439,6 +488,7 @@ class PrintCoordinator {
       }
     }
     final spoolerJobId = _activeSpoolerJobId?.toString();
+    await _trayStop();
     await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,
@@ -555,6 +605,7 @@ class PrintCoordinator {
         );
         final spoolerJobId = _activeSpoolerJobId?.toString();
         _forgetActiveSpoolerJob();
+        await _trayDone();
         await reportStatus(
           jobId: jobId,
           status: 'completed',
@@ -583,6 +634,7 @@ class PrintCoordinator {
                 ? 'jam'
                 : (health.lastErrorCode ?? health.state));
         final spoolerJobId = _activeSpoolerJobId?.toString();
+        await _trayStop();
         await _clearActiveSpoolerWork();
         if (pagesReported > 0) {
           await reportStatus(
@@ -633,6 +685,7 @@ class PrintCoordinator {
         'PRINTER reconcile job=$jobId not verified detail=$unavailableDetail',
       );
       final spoolerJobId = _activeSpoolerJobId?.toString();
+      await _trayStop();
       await _clearActiveSpoolerWork();
       await reportStatus(
         jobId: jobId,
@@ -660,6 +713,7 @@ class PrintCoordinator {
       'PRINTER reconcile job=$jobId not verified delta=$pagesReported expected=$expected detail=timeout',
     );
     final spoolerJobId = _activeSpoolerJobId?.toString();
+    await _trayStop();
     await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,

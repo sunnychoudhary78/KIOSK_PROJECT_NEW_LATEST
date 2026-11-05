@@ -1905,19 +1905,21 @@ class _TempCompleteView extends StatelessWidget {
           const SizedBox(height: 20),
           _MetricCard(
             title: 'Temperature',
-            value: c == null ? '—' : c.toStringAsFixed(1),
-            unit: '°C',
+            value: f == null ? '—' : f.toStringAsFixed(1),
+            unit: '°F',
             caption: state.temperatureInterpretation,
           ),
-          if (f != null) ...[
+          if (c != null) ...[
             const SizedBox(height: 8),
             Text(
-              '${f.toStringAsFixed(1)} °F',
+              '${c.toStringAsFixed(1)} °C',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(color: SkpColors.muted),
             ),
           ],
           const SizedBox(height: 16),
-          const _ReferenceCard(lines: ['Typical body temperature: 36.1 – 37.2 °C']),
+          const _ReferenceCard(
+            lines: ['Typical body temperature: ~97 – 99 °F (36.1 – 37.2 °C)'],
+          ),
           const SizedBox(height: 12),
           const _MedicalDisclaimer(),
         ],
