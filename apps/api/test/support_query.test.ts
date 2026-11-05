@@ -557,3 +557,126 @@ describe('quick print support notes', () => {
     );
   });
 });
+
+describe('kiosk support notes', () => {
+  const deviceId = '55555555-5555-5555-5555-555555555555';
+
+  it('creates a kiosk support query with source kiosk', async () => {
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({ id: deviceId, name: 'Kiosk A' })),
+      },
+      supportQuery: {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: queryId,
+          paymentId: null,
+          printJobId: null,
+          deviceId: data.deviceId,
+          userId: null,
+          phone: data.phone,
+          message: data.message,
+          category: data.category,
+          status: SupportQueryStatus.open,
+          razorpayOrderId: null,
+          amountPaise: 0,
+          failureReason: null,
+          paymentReference: null,
+          resolution: null,
+          createdAt: new Date('2026-11-05T12:00:00.000Z'),
+          resolvedAt: null,
+          payment: null,
+          printJob: null,
+          device: { id: deviceId, name: 'Kiosk A' },
+        })),
+      },
+    };
+    const { service, audit } = makeService(db);
+    const result = await service.openKioskSupportQuery(deviceId, {
+      category: 'print',
+      message: 'Paper stuck in the tray',
+      phone: '9876543210',
+    });
+    expect(result.source).toBe('kiosk');
+    expect(result.category).toBe('print');
+    expect(result.kioskName).toBe('Kiosk A');
+    expect(result.amountPaise).toBe(0);
+    expect(result.message).toBe('Paper stuck in the tray');
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'support_query.created',
+        principalType: 'device',
+        principalId: deviceId,
+      }),
+    );
+  });
+
+  it('rate-limits a second kiosk note within five minutes', async () => {
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({ id: deviceId, name: 'Kiosk A' })),
+      },
+      supportQuery: {
+        findFirst: vi.fn(async () => ({
+          id: queryId,
+          createdAt: new Date(),
+        })),
+        create: vi.fn(),
+      },
+    };
+    const { service } = makeService(db);
+    await expect(
+      service.openKioskSupportQuery(deviceId, {
+        category: 'other',
+        message: 'Still broken',
+      }),
+    ).rejects.toMatchObject({
+      code: 'rate_limited',
+      statusCode: 429,
+    } satisfies Partial<AppError>);
+    expect(db.supportQuery.create).not.toHaveBeenCalled();
+  });
+
+  it('lists kiosk source separately from payment and print', async () => {
+    const row = {
+      id: queryId,
+      paymentId: null,
+      printJobId: null,
+      deviceId,
+      userId: null,
+      phone: '',
+      message: 'Sensor offline',
+      category: 'sensors',
+      status: SupportQueryStatus.open,
+      razorpayOrderId: null,
+      amountPaise: 0,
+      failureReason: null,
+      paymentReference: null,
+      resolution: null,
+      createdAt: new Date('2026-11-05T12:00:00.000Z'),
+      resolvedAt: null,
+      payment: null,
+      printJob: null,
+      device: { id: deviceId, name: 'Kiosk A' },
+    };
+    const db = {
+      supportQuery: {
+        findMany: vi.fn(async () => [row]),
+        count: vi.fn(async () => 1),
+      },
+    };
+    const { service } = makeService(db);
+    const listed = await service.listSupportQueries({ source: 'kiosk' });
+    expect(db.supportQuery.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          deviceId: { not: null },
+          paymentId: null,
+          printJobId: null,
+        }),
+      }),
+    );
+    expect(listed.items[0]?.source).toBe('kiosk');
+    expect(listed.openCount).toBe(1);
+  });
+});

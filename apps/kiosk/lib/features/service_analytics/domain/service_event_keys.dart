@@ -11,6 +11,8 @@ abstract final class ServiceEventKeys {
   static const homeAstrology = 'home.astrology';
   static const homeFuelStations = 'home.fuel_stations';
   static const homeEmergency = 'home.emergency';
+  static const homeSupport = 'home.support';
+  static const supportSubmit = 'support.submit';
 
   static const printQuick = 'print.quick_print';
   static const printOtp = 'print.otp_print';
@@ -52,6 +54,8 @@ abstract final class ServiceEventKeys {
         return homeFuelStations;
       case AppRoutes.emergency:
         return homeEmergency;
+      case AppRoutes.support:
+        return homeSupport;
       case AppRoutes.quickPrint:
         return printQuick;
       case AppRoutes.otpPrint:

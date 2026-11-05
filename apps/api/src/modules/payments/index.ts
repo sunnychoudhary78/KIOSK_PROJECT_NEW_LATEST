@@ -13,6 +13,7 @@ import { RazorpayClient } from './razorpay.client.js';
 import {
   createRazorpayOrderSchema,
   listSupportQueriesQuerySchema,
+  openKioskSupportQuerySchema,
   openSupportQuerySchema,
   resolveSupportQuerySchema,
   supportQueryChallengeQuerySchema,
@@ -143,6 +144,27 @@ export function registerPaymentsModule(router: Router, deps: AppDeps): void {
     },
   );
 
+  router.post(
+    '/support-queries/kiosk',
+    authRequired(deps.config, ['device']),
+    validateBody(openKioskSupportQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.openKioskSupportQuery(
+          req.principal.id,
+          req.body,
+          req.correlationId,
+        );
+        res.status(201).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.get(
     '/support-queries',
     authRequired(deps.config, ['admin']),
@@ -153,9 +175,12 @@ export function registerPaymentsModule(router: Router, deps: AppDeps): void {
         const status = req.query.status === 'open' || req.query.status === 'resolved'
           ? req.query.status
           : undefined;
-        const source = req.query.source === 'payment' || req.query.source === 'print'
-          ? req.query.source
-          : undefined;
+        const source =
+          req.query.source === 'payment' ||
+          req.query.source === 'print' ||
+          req.query.source === 'kiosk'
+            ? req.query.source
+            : undefined;
         res.json(await service.listSupportQueries({ status, source }));
       } catch (error) {
         next(error);

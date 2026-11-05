@@ -20,6 +20,7 @@ import {
 } from './razorpay.client.js';
 import type {
   CreateRazorpayOrderInput,
+  OpenKioskSupportQueryInput,
   OpenSupportQueryInput,
   VerifyRazorpayPaymentInput,
 } from './payments.schemas.js';
@@ -38,6 +39,7 @@ const supportQueryInclude = {
       quickPrintSession: true,
     },
   },
+  device: { select: { id: true, name: true } },
 } satisfies Prisma.SupportQueryInclude;
 
 type SupportQueryRecord = Prisma.SupportQueryGetPayload<{ include: typeof supportQueryInclude }>;
@@ -65,6 +67,7 @@ function supportContextFromRecord(row: SupportQueryRecord): SupportPublicContext
     payment?.challenge?.device?.name ??
     payment?.quickPrintSession?.device?.name ??
     job?.device?.name ??
+    row.device?.name ??
     null;
   const fallbackPhone =
     payment?.challenge?.user?.phone ??
@@ -82,6 +85,17 @@ function supportContextFromRecord(row: SupportQueryRecord): SupportPublicContext
     pagesReported: job?.pagesReported ?? null,
     printJobError: job?.errorMessage ?? null,
   };
+}
+
+function supportSourceOf(query: {
+  printJobId?: string | null;
+  paymentId?: string | null;
+  deviceId?: string | null;
+}): 'print' | 'payment' | 'kiosk' {
+  if (query.printJobId) return 'print';
+  if (query.paymentId) return 'payment';
+  if (query.deviceId) return 'kiosk';
+  return 'payment';
 }
 
 type WebhookPayload = {
@@ -724,7 +738,7 @@ export class PaymentsService {
 
   async listSupportQueries(filter: {
     status?: 'open' | 'resolved';
-    source?: 'payment' | 'print';
+    source?: 'payment' | 'print' | 'kiosk';
   } = {}) {
     const where: Prisma.SupportQueryWhereInput = {};
     if (filter.status) {
@@ -732,8 +746,14 @@ export class PaymentsService {
     }
     if (filter.source === 'payment') {
       where.printJobId = null;
+      where.paymentId = { not: null };
+      where.deviceId = null;
     } else if (filter.source === 'print') {
       where.printJobId = { not: null };
+    } else if (filter.source === 'kiosk') {
+      where.deviceId = { not: null };
+      where.paymentId = null;
+      where.printJobId = null;
     }
     const [rows, openCount] = await Promise.all([
       this.db.supportQuery.findMany({
@@ -747,6 +767,63 @@ export class PaymentsService {
       items: rows.map((row) => this.toPublicSupportQuery(row, supportContextFromRecord(row))),
       openCount,
     };
+  }
+
+  async openKioskSupportQuery(
+    deviceId: string,
+    input: OpenKioskSupportQueryInput,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      select: { id: true, name: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    const windowStart = new Date(Date.now() - 5 * 60 * 1000);
+    const recent = await this.db.supportQuery.findFirst({
+      where: {
+        deviceId,
+        paymentId: null,
+        printJobId: null,
+        createdAt: { gte: windowStart },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (recent) {
+      throw new AppError(
+        'rate_limited',
+        'Please wait a few minutes before sending another support message',
+        429,
+      );
+    }
+
+    const phone = input.phone?.trim() ?? '';
+    const created = await this.db.supportQuery.create({
+      data: {
+        deviceId,
+        category: input.category,
+        message: input.message.trim(),
+        phone,
+        amountPaise: 0,
+        status: SupportQueryStatus.open,
+      },
+      include: supportQueryInclude,
+    });
+
+    await this.audit.record({
+      action: 'support_query.created',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'support_query',
+      resourceId: created.id,
+      correlationId,
+      metadata: { source: 'kiosk', category: input.category },
+    });
+
+    return this.toPublicSupportQuery(created, supportContextFromRecord(created));
   }
 
   async resolveSupportQuery(
@@ -894,13 +971,18 @@ export class PaymentsService {
     };
   }
 
-  private toPublicSupportQuery(query: SupportQuery, context: SupportPublicContext) {
+  private toPublicSupportQuery(
+    query: SupportQuery & { deviceId?: string | null; category?: string | null },
+    context: SupportPublicContext,
+  ) {
     const phone = query.phone.trim() || context.fallbackPhone?.trim() || '';
     return {
       id: query.id,
       status: query.status,
       message: query.message,
       phone,
+      category: query.category ?? null,
+      deviceId: query.deviceId ?? null,
       amountPaise: query.amountPaise,
       razorpayOrderId: query.razorpayOrderId,
       failureReason: query.failureReason,
@@ -913,7 +995,7 @@ export class PaymentsService {
       pagesExpected: context.pagesExpected,
       pagesReported: context.pagesReported,
       printJobError: context.printJobError,
-      source: query.printJobId ? 'print' as const : 'payment' as const,
+      source: supportSourceOf(query),
       resolution: query.resolution,
       createdAt: query.createdAt.toISOString(),
       resolvedAt: query.resolvedAt?.toISOString() ?? null,

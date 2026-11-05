@@ -9,6 +9,7 @@ import 'package:skp_kiosk/features/fuel_stations/presentation/fuel_stations_page
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_print_page.dart';
 import 'package:skp_kiosk/features/emergency/presentation/emergency_page.dart';
 import 'package:skp_kiosk/features/home/presentation/home_page.dart';
+import 'package:skp_kiosk/features/support/presentation/support_page.dart';
 import 'package:skp_kiosk/features/local_services/domain/local_service.dart';
 import 'package:skp_kiosk/features/local_services/presentation/local_service_contacts_page.dart';
 import 'package:skp_kiosk/features/local_services/presentation/local_services_page.dart';
@@ -37,6 +38,7 @@ class AppRoutes {
   static const localServices = '/local-services';
   static const localServiceContacts = '/local-services/contacts';
   static const emergency = '/emergency';
+  static const support = '/support';
   static const serialDebug = '/serial-debug';
 }
 
@@ -79,6 +81,8 @@ class AppRouter {
         );
       case AppRoutes.emergency:
         return MaterialPageRoute(builder: (_) => const EmergencyPage());
+      case AppRoutes.support:
+        return MaterialPageRoute(builder: (_) => const SupportPage());
       case AppRoutes.serialDebug:
         return MaterialPageRoute(builder: (_) => const SerialDebugPage());
       case AppRoutes.home:

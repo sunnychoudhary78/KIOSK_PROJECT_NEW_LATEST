@@ -8,6 +8,7 @@ type SupportQuery = {
   status: string;
   message: string;
   phone: string;
+  category?: string | null;
   amountPaise: number;
   razorpayOrderId?: string | null;
   failureReason?: string | null;
@@ -37,6 +38,10 @@ const RESOLUTIONS = [
   { value: 'refunded', label: 'Refunded' },
 ] as const;
 
+const KIOSK_RESOLUTIONS = [
+  { value: 'no_action', label: 'Acknowledged / closed' },
+] as const;
+
 function rupees(amountPaise: number) {
   return `₹${(amountPaise / 100).toFixed(amountPaise % 100 === 0 ? 0 : 2)}`;
 }
@@ -53,10 +58,22 @@ function roleFromToken(token: string | null) {
   }
 }
 
-function resolutionLabel(value: string) {
+function resolutionLabel(value: string, source?: string) {
   if (value === 'otp_sent') return 'OTP sent';
   if (value === 'session_ready') return 'Session ready';
+  if (value === 'no_action' && source === 'kiosk') return 'Acknowledged / closed';
   return RESOLUTIONS.find((item) => item.value === value)?.label ?? value.replace(/_/g, ' ');
+}
+
+function sourceLabel(source?: string) {
+  if (source === 'print') return 'Print';
+  if (source === 'kiosk') return 'Kiosk';
+  return 'Payment';
+}
+
+function categoryLabel(category?: string | null) {
+  if (!category) return '—';
+  return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
 export function SupportPage() {
@@ -68,10 +85,12 @@ export function SupportPage() {
   const [resending, setResending] = useState(false);
   const [resolution, setResolution] = useState<(typeof RESOLUTIONS)[number]['value']>('no_action');
   const [status, setStatus] = useState<'open' | 'resolved' | 'all'>('open');
-  const [source, setSource] = useState<'all' | 'payment' | 'print'>('all');
+  const [source, setSource] = useState<'all' | 'payment' | 'print' | 'kiosk'>('all');
   const [kiosk, setKiosk] = useState('all');
   const canResolve = roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
   const selected = items.find((item) => item.id === selectedId) ?? null;
+  const isKiosk = selected?.source === 'kiosk';
+  const outcomeOptions = isKiosk ? KIOSK_RESOLUTIONS : RESOLUTIONS;
   const kiosks = Array.from(
     new Set(items.map((item) => item.kioskName).filter((name): name is string => Boolean(name))),
   ).sort();
@@ -103,6 +122,12 @@ export function SupportPage() {
     };
   }, [token, status, source]);
 
+  useEffect(() => {
+    if (isKiosk && resolution !== 'no_action') {
+      setResolution('no_action');
+    }
+  }, [isKiosk, resolution]);
+
   function applyUpdate(updated: SupportQuery) {
     setItems((current) => {
       const next = current.map((item) => (item.id === updated.id ? updated : item));
@@ -128,7 +153,7 @@ export function SupportPage() {
       const updated = await apiRequest<SupportQuery>(`/support-queries/${selected.id}/resolve`, {
         method: 'POST',
         token,
-        body: { resolution },
+        body: { resolution: isKiosk ? 'no_action' : resolution },
       });
       applyUpdate(updated);
     } catch (err) {
@@ -159,7 +184,7 @@ export function SupportPage() {
     <div>
       <PageHeader
         title="Support"
-        subtitle="Payment notes and print notes from the kiosk"
+        subtitle="Payment notes, print notes, and kiosk concerns"
       />
       <Panel>
         <Toolbar>
@@ -177,11 +202,14 @@ export function SupportPage() {
             aria-label="Source"
             className="max-w-40"
             value={source}
-            onChange={(event) => setSource(event.target.value as 'all' | 'payment' | 'print')}
+            onChange={(event) =>
+              setSource(event.target.value as 'all' | 'payment' | 'print' | 'kiosk')
+            }
           >
             <option value="all">All sources</option>
             <option value="payment">Payment</option>
             <option value="print">Print</option>
+            <option value="kiosk">Kiosk</option>
           </Select>
           <Select
             aria-label="Kiosk"
@@ -201,7 +229,7 @@ export function SupportPage() {
         {visible.length === 0 && !error ? (
           <EmptyState
             title="No support messages"
-            description="A message appears here when a payment or a print needs staff."
+            description="A message appears here when a payment, print, or kiosk needs staff."
           />
         ) : (
           <table className="table">
@@ -227,13 +255,17 @@ export function SupportPage() {
                   <td className="text-muted-foreground whitespace-nowrap">
                     {new Date(item.createdAt).toLocaleString()}
                   </td>
-                  <td>{item.source === 'print' ? 'Print' : 'Payment'}</td>
+                  <td>{sourceLabel(item.source)}</td>
                   <td>{item.kioskName || '—'}</td>
                   <td>{item.phone || '—'}</td>
                   <td>
-                    {item.amountPaise === 0 && !item.razorpayOrderId ? '—' : rupees(item.amountPaise)}
+                    {item.source === 'kiosk' || (item.amountPaise === 0 && !item.razorpayOrderId)
+                      ? '—'
+                      : rupees(item.amountPaise)}
                   </td>
-                  <td className="font-mono text-xs">{item.razorpayOrderId || '—'}</td>
+                  <td className="font-mono text-xs">
+                    {item.source === 'kiosk' ? '—' : item.razorpayOrderId || '—'}
+                  </td>
                   <td className="max-w-xs truncate">{item.message}</td>
                   <td>
                     <StatusBadge status={item.status} />
@@ -248,31 +280,42 @@ export function SupportPage() {
         <Panel title="Message" className="mt-6">
           <p className="whitespace-pre-wrap">{selected.message}</p>
           <dl className="mt-4 grid gap-2 text-sm text-muted-foreground">
+            <div>Source: {sourceLabel(selected.source)}</div>
+            {isKiosk ? <div>Category: {categoryLabel(selected.category)}</div> : null}
             <div>Kiosk: {selected.kioskName || '—'}</div>
             <div>Phone: {selected.phone || '—'}</div>
-            <div>
-              {selected.source === 'print' ? 'Print job' : 'Payment status:'}{' '}
-              {selected.paymentStatus ? <StatusBadge status={selected.paymentStatus} /> : '—'}
-              {selected.failureReason ? ` · ${selected.failureReason}` : ''}
-            </div>
-            {selected.razorpayOrderId ? (
-              <div className="font-mono text-xs">Order: {selected.razorpayOrderId}</div>
+            {!isKiosk ? (
+              <>
+                <div>
+                  {selected.source === 'print' ? 'Print job' : 'Payment status:'}{' '}
+                  {selected.paymentStatus ? <StatusBadge status={selected.paymentStatus} /> : '—'}
+                  {selected.failureReason ? ` · ${selected.failureReason}` : ''}
+                </div>
+                {selected.razorpayOrderId ? (
+                  <div className="font-mono text-xs">Order: {selected.razorpayOrderId}</div>
+                ) : null}
+                {selected.paymentReference ? (
+                  <div>Payment reference: {selected.paymentReference}</div>
+                ) : null}
+                {selected.printJobId ? (
+                  <div>
+                    Job {selected.printJobStatus || '—'}
+                    {selected.pagesExpected != null
+                      ? ` · ${selected.pagesReported ?? '—'}/${selected.pagesExpected} pages`
+                      : ''}
+                    {selected.printJobError ? ` · ${selected.printJobError}` : ''}
+                  </div>
+                ) : null}
+              </>
             ) : null}
-            {selected.paymentReference ? <div>Payment reference: {selected.paymentReference}</div> : null}
-            {selected.printJobId ? (
-              <div>
-                Job {selected.printJobStatus || '—'}
-                {selected.pagesExpected != null
-                  ? ` · ${selected.pagesReported ?? '—'}/${selected.pagesExpected} pages`
-                  : ''}
-                {selected.printJobError ? ` · ${selected.printJobError}` : ''}
-              </div>
+            {selected.resolution ? (
+              <div>Outcome: {resolutionLabel(selected.resolution, selected.source)}</div>
             ) : null}
-            {selected.resolution ? <div>Outcome: {resolutionLabel(selected.resolution)}</div> : null}
           </dl>
           {canResolve && selected.status === 'open' ? (
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              {selected.source !== 'print' &&
+              {!isKiosk &&
+              selected.source !== 'print' &&
               selected.paymentStatus === 'PAID' &&
               selected.challengeId ? (
                 <Button type="button" variant="secondary" disabled={resending} onClick={() => void resendOtp()}>
@@ -282,12 +325,12 @@ export function SupportPage() {
               <Select
                 aria-label="Outcome"
                 className="max-w-56"
-                value={resolution}
+                value={isKiosk ? 'no_action' : resolution}
                 onChange={(event) =>
                   setResolution(event.target.value as (typeof RESOLUTIONS)[number]['value'])
                 }
               >
-                {RESOLUTIONS.map((item) => (
+                {outcomeOptions.map((item) => (
                   <option key={item.value} value={item.value}>
                     {item.label}
                   </option>
