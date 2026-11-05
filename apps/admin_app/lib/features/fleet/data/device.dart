@@ -49,6 +49,8 @@ class KioskDevice {
     this.printerRefreshRequestedAt,
     this.printingPausedReason,
     this.pagesLeft,
+    this.trayReserved,
+    this.trayAvailable,
   });
 
   final String id;
@@ -67,6 +69,8 @@ class KioskDevice {
   final DateTime? printerRefreshRequestedAt;
   final String? printingPausedReason;
   final int? pagesLeft;
+  final int? trayReserved;
+  final int? trayAvailable;
 
   String get locationLabel {
     final trimmed = address?.trim();
@@ -108,6 +112,10 @@ class KioskDevice {
       ),
       printingPausedReason: json['printingPausedReason'] as String?,
       pagesLeft: json['pagesLeft'] is num ? (json['pagesLeft'] as num).toInt() : null,
+      trayReserved:
+          json['trayReserved'] is num ? (json['trayReserved'] as num).toInt() : null,
+      trayAvailable:
+          json['trayAvailable'] is num ? (json['trayAvailable'] as num).toInt() : null,
     );
   }
 }

@@ -20,6 +20,7 @@ import type {
   UpdateDeviceInput,
 } from './devices.schemas.js';
 import { applyTrayLoad, pagesLeft, usbPagesTotal } from './printer_tray.js';
+import { getTrayCapacity } from '../printing/tray_capacity.js';
 import { isWithinLocalTimeWindow } from '../print_quota/print_quota.time.js';
 import { printLimitsFromDevice } from './device_print_limits.js';
 
@@ -103,6 +104,16 @@ function mapDevice(device: {
   };
 }
 
+async function mapDeviceWithTray(db: DbClient, device: Parameters<typeof mapDevice>[0]) {
+  const base = mapDevice(device);
+  const cap = await getTrayCapacity(db, device.id);
+  return {
+    ...base,
+    trayReserved: cap.reserved,
+    trayAvailable: cap.available,
+  };
+}
+
 export class DevicesService {
   constructor(
     private readonly db: DbClient,
@@ -114,7 +125,10 @@ export class DevicesService {
       include: { site: true },
       orderBy: { createdAt: 'desc' },
     });
-    return { items: devices.map(mapDevice) };
+    const items = await Promise.all(
+      devices.map((device) => mapDeviceWithTray(this.db, device)),
+    );
+    return { items };
   }
 
   async nearby(query: NearbyDevicesQuery) {
@@ -223,7 +237,7 @@ export class DevicesService {
     });
 
     return {
-      ...mapDevice(device),
+      ...(await mapDeviceWithTray(this.db, device)),
       deviceKey,
       deviceSecret,
     };
@@ -292,7 +306,7 @@ export class DevicesService {
       },
     });
 
-    return mapDevice(updated);
+    return mapDeviceWithTray(this.db, updated);
   }
 
   async setStatus(
@@ -328,7 +342,7 @@ export class DevicesService {
       metadata: { status: nextStatus },
     });
 
-    return mapDevice(updated);
+    return mapDeviceWithTray(this.db, updated);
   }
 
   async setSurveillance(
@@ -361,7 +375,7 @@ export class DevicesService {
       metadata: { surveillanceEnabled: enabled },
     });
 
-    return mapDevice(updated);
+    return mapDeviceWithTray(this.db, updated);
   }
 
   async setPrintLimits(
@@ -413,7 +427,7 @@ export class DevicesService {
       metadata: { ...input },
     });
 
-    return mapDevice(updated);
+    return mapDeviceWithTray(this.db, updated);
   }
 
   async setPrinterTray(
@@ -463,7 +477,7 @@ export class DevicesService {
         trayBaselinePages: next.trayBaselinePages,
       },
     });
-    return mapDevice(updated);
+    return mapDeviceWithTray(this.db, updated);
   }
 
   async requestPrinterRefresh(deviceId: string) {
@@ -564,7 +578,7 @@ export class DevicesService {
       );
     }
     if (!device.printingPausedReason) {
-      return mapDevice(device);
+      return mapDeviceWithTray(this.db, device);
     }
     const updated = await this.db.device.update({
       where: { id: deviceId },
@@ -579,6 +593,6 @@ export class DevicesService {
       resourceId: deviceId,
       correlationId,
     });
-    return mapDevice(updated);
+    return mapDeviceWithTray(this.db, updated);
   }
 }

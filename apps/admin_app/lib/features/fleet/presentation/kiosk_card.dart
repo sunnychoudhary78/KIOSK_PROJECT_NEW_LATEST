@@ -63,7 +63,9 @@ class KioskCard extends StatelessWidget {
                       ToneText(label: summary.label, tone: summary.tone),
                       const SizedBox(height: 4),
                       Text(
-                        'Pages left ${device.pagesLeft ?? '—'} · ${formatTimestamp(device.lastHeartbeatAt)}',
+                        'Pages left ${device.pagesLeft ?? '—'}'
+                        '${device.trayAvailable != null ? ' · Available ${device.trayAvailable}' : ''}'
+                        ' · ${formatTimestamp(device.lastHeartbeatAt)}',
                         style: const TextStyle(color: AdminColors.muted),
                       ),
                       const SizedBox(height: 4),

@@ -218,6 +218,8 @@ void main() {
     expect(result.outcome, PrintReconcileOutcome.unknown);
     expect(result.reconcileDetail, 'usb_baseline_unavailable');
     expect(reports.last['reconcileStatus'], isNot('verified'));
+    expect(reports.last['status'], 'failed');
+    expect(reports.last['needsAdminReview'], isTrue);
   });
 
   test('paper_out before print fails without verifying', () async {

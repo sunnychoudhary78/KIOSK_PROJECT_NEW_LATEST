@@ -69,6 +69,8 @@ type Device = {
   bannerHorizontalEnabled?: boolean;
   bannerVerticalEnabled?: boolean;
   pagesLeft?: number | null;
+  trayReserved?: number | null;
+  trayAvailable?: number | null;
 };
 
 function latestReportPaperOut(health: PrinterHealthView | null | undefined) {
@@ -133,11 +135,19 @@ function PrinterSummaryCell({
 }) {
   const summary = resolvePrinterRowSummary(device.printerHealth);
   const pagesLeft = device.pagesLeft == null ? '—' : String(device.pagesLeft);
+  const available = device.trayAvailable == null ? null : String(device.trayAvailable);
   return (
     <div className="flex items-center gap-3 whitespace-nowrap text-sm">
       <span className={PRINTER_ROW_TONE[summary.tone]}>{summary.label}</span>
       <span className="text-muted-foreground">
         Pages left <span className={PAGES_LEFT_NUMBER[pagesLeftBand(device.pagesLeft ?? null)]}>{pagesLeft}</span>
+        {available != null ? (
+          <>
+            {' '}
+            · Available{' '}
+            <span className={PAGES_LEFT_NUMBER[pagesLeftBand(device.trayAvailable ?? null)]}>{available}</span>
+          </>
+        ) : null}
       </span>
       <Button type="button" variant="secondary" className="h-8 px-2" onClick={onDetails}>
         Details
@@ -192,21 +202,31 @@ function usbPagesTotal(health: PrinterHealthView | null | undefined) {
 function PrinterDetailsBody({
   health,
   pagesLeft,
+  trayReserved,
+  trayAvailable,
   canEditTray,
+  canClearOpen,
   trayInput,
   onTrayInput,
   trayError,
   traySaving,
   onSaveTray,
+  clearOpenSaving,
+  onClearOpen,
 }: {
   health: PrinterHealthView | null | undefined;
   pagesLeft: number | null;
+  trayReserved: number | null;
+  trayAvailable: number | null;
   canEditTray: boolean;
+  canClearOpen: boolean;
   trayInput: string;
   onTrayInput: (value: string) => void;
   trayError: string | null;
   traySaving: boolean;
   onSaveTray: (mode: 'add' | 'replace') => void;
+  clearOpenSaving: boolean;
+  onClearOpen: () => void;
 }) {
   const maintenance = resolvePrinterMaintenance(health);
   const errors = resolvePrinterErrorHistory(health);
@@ -227,7 +247,10 @@ function PrinterDetailsBody({
   const pagesReady = maintenance.status !== 'unavailable';
   const pagesLeftLabel = pagesLeft == null ? '—' : String(pagesLeft);
   const pagesBand = pagesLeftBand(pagesLeft);
+  const availableBand = pagesLeftBand(trayAvailable);
   const trayBlocked = traySaving || usbPagesTotal(health) == null;
+  const reservedBlocking =
+    trayAvailable === 0 && pagesLeft != null && pagesLeft > 0 && (trayReserved ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-4 pr-1">
@@ -257,7 +280,7 @@ function PrinterDetailsBody({
 
       <section className="rounded-xl border border-border p-3">
         <h3 className="mb-2 text-sm font-medium">Pages</h3>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <div className="rounded-lg bg-muted/40 px-3 py-3">
             <p className="text-xs text-muted-foreground">Total</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums">
@@ -273,11 +296,37 @@ function PrinterDetailsBody({
               <p className={`text-xs font-medium ${PAGES_LEFT_FIGURE[pagesBand]}`}>{PAGES_LEFT_NOTE[pagesBand]}</p>
             ) : null}
           </div>
+          <div className={`rounded-lg px-3 py-3 ${PAGES_LEFT_TILE[availableBand]}`}>
+            <p className="text-xs text-muted-foreground">Available</p>
+            <p className={`mt-1 text-2xl font-semibold tabular-nums ${PAGES_LEFT_FIGURE[availableBand]}`}>
+              {trayAvailable == null ? '—' : String(trayAvailable)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Reserved {trayReserved == null ? '—' : String(trayReserved)}
+            </p>
+          </div>
         </div>
+        {reservedBlocking ? (
+          <p className="mt-2 text-sm text-amber-700">
+            Open print jobs are reserving paper. Clear them to free Available.
+          </p>
+        ) : null}
         {pagesReady ? (
           <p className="mt-2 text-sm text-muted-foreground">
             Color {maintenance.pages.color} · Black and white {maintenance.pages.blackAndWhite}
           </p>
+        ) : null}
+        {canClearOpen ? (
+          <div className="mt-3">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={clearOpenSaving}
+              onClick={onClearOpen}
+            >
+              {clearOpenSaving ? 'Clearing…' : 'Clear open jobs'}
+            </Button>
+          </div>
         ) : null}
         {pagesReady && hasPrinterDuplex(health) ? (
           <p className="mt-1 text-sm text-muted-foreground">
@@ -485,6 +534,7 @@ export function KiosksPage() {
   const [trayInput, setTrayInput] = useState('');
   const [trayError, setTrayError] = useState<string | null>(null);
   const [traySaving, setTraySaving] = useState(false);
+  const [clearOpenSaving, setClearOpenSaving] = useState(false);
   const [usageDevice, setUsageDevice] = useState<Device | null>(null);
   const [usageDays, setUsageDays] = useState<7 | 30>(30);
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
@@ -852,7 +902,32 @@ export function KiosksPage() {
     setPrinterRefreshNote(null);
     setTrayInput('');
     setTrayError(null);
+    setClearOpenSaving(false);
     setPrinterDeviceId(null);
+  }
+
+  async function clearOpenJobs() {
+    if (!printerDeviceId || clearOpenSaving || !canEnablePrinting) return;
+    setClearOpenSaving(true);
+    setPrinterRefreshNote(null);
+    try {
+      const result = await apiRequest<{ closedCount: number }>(
+        `/devices/${printerDeviceId}/print-jobs/close-open`,
+        { method: 'POST', token },
+      );
+      await load();
+      setPrinterRefreshNote(
+        result.closedCount === 0
+          ? 'No open print jobs to clear.'
+          : `Cleared ${result.closedCount} open print job${result.closedCount === 1 ? '' : 's'}.`,
+      );
+    } catch (err) {
+      setPrinterRefreshNote(
+        err instanceof Error ? err.message : 'Could not clear open print jobs',
+      );
+    } finally {
+      setClearOpenSaving(false);
+    }
   }
 
   async function saveTray(mode: 'add' | 'replace') {
@@ -1451,12 +1526,25 @@ export function KiosksPage() {
           </>
         }
       >
-        {printerRefreshNote ? <p className="error">{printerRefreshNote}</p> : null}
+        {printerRefreshNote ? (
+          <p
+            className={
+              printerRefreshNote.startsWith('Cleared') || printerRefreshNote.startsWith('No open')
+                ? 'mb-2 text-sm text-muted-foreground'
+                : 'error'
+            }
+          >
+            {printerRefreshNote}
+          </p>
+        ) : null}
         {printerDevice ? (
           <PrinterDetailsBody
             health={printerDevice.printerHealth}
             pagesLeft={printerDevice.pagesLeft ?? null}
+            trayReserved={printerDevice.trayReserved ?? null}
+            trayAvailable={printerDevice.trayAvailable ?? null}
             canEditTray={canEnablePrinting}
+            canClearOpen={canEnablePrinting}
             trayInput={trayInput}
             onTrayInput={(value) => {
               setTrayInput(value);
@@ -1465,6 +1553,8 @@ export function KiosksPage() {
             trayError={trayError}
             traySaving={traySaving}
             onSaveTray={(mode) => void saveTray(mode)}
+            clearOpenSaving={clearOpenSaving}
+            onClearOpen={() => void clearOpenJobs()}
           />
         ) : null}
       </Modal>

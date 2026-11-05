@@ -323,6 +323,91 @@ export class PrintingService {
     return mapJob(updated);
   }
 
+  /**
+   * Admin/operator: close an open job as failed so it stops reserving tray pages.
+   */
+  async adminCloseJob(
+    jobId: string,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const job = await this.db.printJob.findUnique({ where: { id: jobId } });
+    if (!job) {
+      throw new AppError('not_found', 'Print job not found', 404);
+    }
+    const open: PrintJobStatus[] = [
+      PrintJobStatus.created,
+      PrintJobStatus.ready,
+      PrintJobStatus.printing,
+    ];
+    if (!open.includes(job.status)) {
+      throw new AppError(
+        'invalid_state',
+        'Only open print jobs (created, ready, printing) can be cleared',
+        409,
+      );
+    }
+
+    const updated = await this.db.printJob.update({
+      where: { id: jobId },
+      data: {
+        status: PrintJobStatus.failed,
+        needsAdminReview: true,
+        reconcileDetail: 'admin_clear_stuck',
+        reconciledAt: job.reconciledAt ?? new Date(),
+      },
+    });
+
+    await this.quota.releaseForPrintJob(jobId).catch(() => undefined);
+
+    await this.audit.record({
+      action: 'print_job.admin_close',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'print_job',
+      resourceId: jobId,
+      correlationId,
+      metadata: {
+        previousStatus: job.status,
+        deviceId: job.deviceId,
+        reason: 'admin_clear_stuck',
+      },
+    });
+
+    return mapJob(updated);
+  }
+
+  /** Admin/operator: fail all open jobs for one kiosk (lab / stuck-tray reset). */
+  async adminCloseOpenForDevice(
+    deviceId: string,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      select: { id: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    const open = await this.db.printJob.findMany({
+      where: {
+        deviceId,
+        status: {
+          in: [PrintJobStatus.created, PrintJobStatus.ready, PrintJobStatus.printing],
+        },
+      },
+      select: { id: true },
+    });
+
+    const closed = [];
+    for (const row of open) {
+      closed.push(await this.adminCloseJob(row.id, adminId, correlationId));
+    }
+    return { closedCount: closed.length, items: closed };
+  }
+
   async openJobSupportNote(
     jobId: string,
     deviceId: string,

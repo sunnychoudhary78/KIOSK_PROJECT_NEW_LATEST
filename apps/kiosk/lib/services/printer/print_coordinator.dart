@@ -227,7 +227,7 @@ class PrintCoordinator {
     await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,
-      status: 'printing',
+      status: 'failed',
       pagesReported: pagesReported,
       spoolerJobId: spoolerJobId,
       pageCounterBefore: pageCounterBefore,
@@ -442,7 +442,7 @@ class PrintCoordinator {
     await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,
-      status: 'printing',
+      status: 'failed',
       pagesReported: 0,
       spoolerJobId: spoolerJobId,
       reconcileStatus: 'unknown',
@@ -636,7 +636,7 @@ class PrintCoordinator {
       await _clearActiveSpoolerWork();
       await reportStatus(
         jobId: jobId,
-        status: 'printing',
+        status: 'failed',
         pagesReported: 0,
         spoolerJobId: spoolerJobId,
         pageCounterBefore: baseline,
@@ -663,7 +663,7 @@ class PrintCoordinator {
     await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,
-      status: 'printing',
+      status: 'failed',
       pagesReported: pagesReported,
       spoolerJobId: spoolerJobId,
       pageCounterBefore: baseline ?? provisionalWatermark,

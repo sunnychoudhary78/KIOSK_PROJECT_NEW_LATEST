@@ -145,8 +145,30 @@ class _PrinterPageState extends ConsumerState<PrinterPage> {
                         large: true,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _Metric(
+                        label: 'Available',
+                        value: device.trayAvailable?.toString() ?? '—',
+                        large: true,
+                      ),
+                    ),
                   ],
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  'Reserved ${device.trayReserved?.toString() ?? '—'}',
+                  style: const TextStyle(color: AdminColors.muted),
+                ),
+                if (device.trayAvailable == 0 &&
+                    (device.pagesLeft ?? 0) > 0 &&
+                    (device.trayReserved ?? 0) > 0) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Open print jobs are reserving paper.',
+                    style: TextStyle(color: AdminColors.danger),
+                  ),
+                ],
                 if (maintenance is MaintenanceShown) ...[
                   const SizedBox(height: 8),
                   Text(
