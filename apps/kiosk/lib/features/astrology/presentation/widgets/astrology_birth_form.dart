@@ -220,7 +220,7 @@ class _AstrologyBirthFormPanelState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AstrologyCosmicTextField(
-          label: 'Name',
+          label: 'Name *',
           value: nameController.text,
           focused: focus == 0,
           accent: accent,
@@ -228,7 +228,7 @@ class _AstrologyBirthFormPanelState
         ),
         const SizedBox(height: 8),
         AstrologyCosmicTextField(
-          label: 'Place of birth',
+          label: 'Place of birth *',
           value: placeController.text,
           focused: focus == 1,
           accent: accent,
@@ -311,6 +311,16 @@ class _AstrologyBirthFormPanelState
             ),
           ),
         ],
+        const SizedBox(height: 2),
+        Text(
+          'Fields marked * are required',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: AstrologyColors.muted,
+            height: 1.1,
+          ),
+        ),
         const SizedBox(height: 8),
         Expanded(
           child: Row(
@@ -497,19 +507,245 @@ class _AstrologyBirthFormPanelState
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
             child: SizedBox(
-              height: 200,
-              child: KioskDateStepper(value: dob, onChanged: onDob),
+              height: 120,
+              child: _KioskDateDropdowns(
+                value: dob,
+                onChanged: onDob,
+                accent: accent,
+              ),
             ),
           )
         else if (showTime)
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),
             child: SizedBox(
-              height: 200,
-              child: KioskTimeStepper(value: birthTime, onChanged: onTime),
+              height: 120,
+              child: _KioskTimeDropdowns(
+                value: birthTime,
+                onChanged: onTime,
+                accent: accent,
+              ),
             ),
           ),
       ],
+    );
+  }
+}
+
+const _monthLabels = <String>[
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+class _KioskDateDropdowns extends StatelessWidget {
+  const _KioskDateDropdowns({
+    required this.value,
+    required this.onChanged,
+    required this.accent,
+  });
+
+  final DateTime value;
+  final ValueChanged<DateTime> onChanged;
+  final Color accent;
+
+  static const _firstYear = 1920;
+
+  int get _lastYear => DateTime.now().year;
+
+  int _daysInMonth(int year, int month) => DateTime(year, month + 1, 0).day;
+
+  void _set({int? year, int? month, int? day}) {
+    final y = (year ?? value.year).clamp(_firstYear, _lastYear);
+    final m = (month ?? value.month).clamp(1, 12);
+    final maxD = _daysInMonth(y, m);
+    final d = (day ?? value.day).clamp(1, maxD);
+    var next = DateTime(y, m, d);
+    final now = DateTime.now();
+    if (next.isAfter(now)) {
+      next = DateTime(now.year, now.month, now.day);
+    }
+    onChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxDay = _daysInMonth(value.year, value.month);
+    return Row(
+      children: [
+        Expanded(
+          child: _KioskDropdown<int>(
+            label: 'Day',
+            value: value.day.clamp(1, maxDay),
+            accent: accent,
+            items: [
+              for (var d = 1; d <= maxDay; d++)
+                DropdownMenuItem(value: d, child: Text('$d'.padLeft(2, '0'))),
+            ],
+            onChanged: (day) {
+              if (day != null) _set(day: day);
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: _KioskDropdown<int>(
+            label: 'Month',
+            value: value.month,
+            accent: accent,
+            items: [
+              for (var m = 1; m <= 12; m++)
+                DropdownMenuItem(value: m, child: Text(_monthLabels[m - 1])),
+            ],
+            onChanged: (month) {
+              if (month != null) _set(month: month);
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: _KioskDropdown<int>(
+            label: 'Year',
+            value: value.year.clamp(_firstYear, _lastYear),
+            accent: accent,
+            items: [
+              for (var y = _lastYear; y >= _firstYear; y--)
+                DropdownMenuItem(value: y, child: Text('$y')),
+            ],
+            onChanged: (year) {
+              if (year != null) _set(year: year);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _KioskTimeDropdowns extends StatelessWidget {
+  const _KioskTimeDropdowns({
+    required this.value,
+    required this.onChanged,
+    required this.accent,
+  });
+
+  final TimeOfDay value;
+  final ValueChanged<TimeOfDay> onChanged;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _KioskDropdown<int>(
+            label: 'Hour',
+            value: value.hour,
+            accent: accent,
+            items: [
+              for (var h = 0; h < 24; h++)
+                DropdownMenuItem(
+                  value: h,
+                  child: Text('$h'.padLeft(2, '0')),
+                ),
+            ],
+            onChanged: (hour) {
+              if (hour != null) {
+                onChanged(TimeOfDay(hour: hour, minute: value.minute));
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _KioskDropdown<int>(
+            label: 'Minute',
+            value: value.minute,
+            accent: accent,
+            items: [
+              for (var m = 0; m < 60; m++)
+                DropdownMenuItem(
+                  value: m,
+                  child: Text('$m'.padLeft(2, '0')),
+                ),
+            ],
+            onChanged: (minute) {
+              if (minute != null) {
+                onChanged(TimeOfDay(hour: value.hour, minute: minute));
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _KioskDropdown<T> extends StatelessWidget {
+  const _KioskDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    required this.accent,
+  });
+
+  final String label;
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AstrologyColors.panelSolid,
+        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        border: Border.all(color: accent.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: AstrologyColors.muted,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<T>(
+                value: value,
+                isExpanded: true,
+                dropdownColor: AstrologyColors.panelSolid,
+                iconEnabledColor: accent,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: AstrologyColors.text,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+                items: items,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -750,14 +986,29 @@ class AstrologyStyleSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const options = [('north', 'North Indian'), ('south', 'South Indian')];
+    final theme = Theme.of(context);
     return Semantics(
       label: 'Chart style',
-      child: _AstrologyPillSegment(
-        height: height,
-        accent: accent,
-        options: options,
-        selected: style,
-        onSelected: onStyle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Chart style *',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: AstrologyColors.muted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          _AstrologyPillSegment(
+            height: height,
+            accent: accent,
+            options: options,
+            selected: style,
+            onSelected: onStyle,
+          ),
+        ],
       ),
     );
   }

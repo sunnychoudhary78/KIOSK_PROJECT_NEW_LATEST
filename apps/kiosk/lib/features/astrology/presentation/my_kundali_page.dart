@@ -12,6 +12,7 @@ import 'package:skp_kiosk/features/astrology/domain/kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_form_defaults.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
@@ -232,8 +233,18 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
 
   void _resetForm() {
     ref.read(myKundaliControllerProvider.notifier).reset();
+    _name.clear();
+    _place.clear();
     setState(() {
+      _dob = AstrologyFormDefaults.dob;
+      _birthTime = AstrologyFormDefaults.birthTime;
+      _timeUnknown = false;
+      _gender = AstrologyFormDefaults.gender;
+      _style = AstrologyFormDefaults.chartStyle;
+      _placeCoords = null;
       _focus = 0;
+      _stepperColumn = 0;
+      _selectedChartKey = AstrologyFormDefaults.selectedChartKey;
     });
   }
 

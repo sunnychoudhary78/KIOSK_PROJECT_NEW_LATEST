@@ -16,6 +16,7 @@ import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_phase.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_form_defaults.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_result_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
@@ -369,9 +370,12 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     _name.clear();
     _place.clear();
     setState(() {
-      _dob = DateTime(1995, 1, 1);
+      _dob = AstrologyFormDefaults.dob;
+      _birthTime = AstrologyFormDefaults.birthTime;
       _timeUnknown = false;
+      _gender = AstrologyFormDefaults.gender;
       _focus = 0;
+      _stepperColumn = 0;
       _placeCoords = null;
     });
     ref.read(astrologyControllerProvider.notifier).retake();

@@ -9,6 +9,7 @@ import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/today_periods_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_form_defaults.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
@@ -177,8 +178,16 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
 
   void _resetForm() {
     ref.read(todayPeriodsControllerProvider.notifier).reset();
+    _name.clear();
+    _place.clear();
     setState(() {
+      _dob = AstrologyFormDefaults.dob;
+      _birthTime = AstrologyFormDefaults.birthTime;
+      _timeUnknown = false;
+      _gender = AstrologyFormDefaults.gender;
+      _placeCoords = null;
       _focus = 0;
+      _stepperColumn = 0;
     });
   }
 

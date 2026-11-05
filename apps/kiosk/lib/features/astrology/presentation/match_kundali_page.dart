@@ -11,6 +11,7 @@ import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_form_defaults.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
@@ -258,7 +259,18 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
     _groomPlace.clear();
     _brideName.clear();
     _bridePlace.clear();
-    setState(() => _focus = 0);
+    setState(() {
+      _groomDob = AstrologyFormDefaults.groomDob;
+      _brideDob = AstrologyFormDefaults.brideDob;
+      _groomTime = AstrologyFormDefaults.birthTime;
+      _brideTime = AstrologyFormDefaults.birthTime;
+      _groomTimeUnknown = false;
+      _brideTimeUnknown = false;
+      _groomPlaceCoords = null;
+      _bridePlaceCoords = null;
+      _focus = 0;
+      _stepperColumn = 0;
+    });
   }
 
   @override
