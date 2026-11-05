@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/theme/athena_colors.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/emergency/domain/emergency_contact.dart';
@@ -8,6 +9,8 @@ import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scop
 
 class EmergencyPage extends ConsumerWidget {
   const EmergencyPage({super.key});
+
+  static const _danger = Color(0xFFE11D48);
 
   Future<void> _endSession(WidgetRef ref) {
     return ref
@@ -29,6 +32,7 @@ class EmergencyPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.athenaColors;
     return VisitorSessionPopScope(
       endSessionOnPop: false,
       child: KioskShell(
@@ -48,14 +52,14 @@ class EmergencyPage extends ConsumerWidget {
                 'Emergency contacts',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: SkpColors.danger,
+                      color: _danger,
                     ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Dial from your phone',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: SkpColors.muted,
+                      color: colors.textSecondary,
                     ),
               ),
               const SizedBox(height: 16),
@@ -68,6 +72,7 @@ class EmergencyPage extends ConsumerWidget {
                     return _EmergencyCard(
                       contact: contact,
                       icon: _iconFor(contact.icon),
+                      colors: colors,
                     );
                   },
                 ),
@@ -84,19 +89,30 @@ class _EmergencyCard extends StatelessWidget {
   const _EmergencyCard({
     required this.contact,
     required this.icon,
+    required this.colors,
   });
 
   final EmergencyContact contact;
   final IconData icon;
+  final AthenaColors colors;
+
+  static const _danger = Color(0xFFE11D48);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: SkpColors.panel,
+        color: colors.surfaceCard,
         borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-        border: Border.all(color: SkpColors.danger.withValues(alpha: 0.35)),
+        border: Border.all(color: _danger.withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.cardGlow,
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -106,10 +122,10 @@ class _EmergencyCard extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: SkpColors.danger.withValues(alpha: 0.1),
+                color: _danger.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
               ),
-              child: Icon(icon, color: SkpColors.danger, size: 28),
+              child: Icon(icon, color: _danger, size: 28),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -117,6 +133,7 @@ class _EmergencyCard extends StatelessWidget {
                 contact.name,
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
+                  color: colors.textPrimary,
                 ),
               ),
             ),
@@ -126,7 +143,7 @@ class _EmergencyCard extends StatelessWidget {
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1.2,
-                color: SkpColors.danger,
+                color: _danger,
               ),
             ),
           ],

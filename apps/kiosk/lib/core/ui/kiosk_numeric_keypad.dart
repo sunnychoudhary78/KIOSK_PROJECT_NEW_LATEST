@@ -63,27 +63,50 @@ class _Key extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final special = label == 'C' || label == '⌫';
+
+    final Color bgColor = isDark
+        ? (special ? const Color(0xFF1E163E) : const Color(0xFF281C54))
+        : (special ? Colors.white : const Color(0xFFF1F5F9));
+
+    final Color borderColor = isDark
+        ? const Color(0xFF4A347D)
+        : const Color(0xFFDCE4EE);
+
+    final Color textColor = isDark ? Colors.white : const Color(0xFF1B2234);
+
     return Material(
-      color: special ? SkpColors.panel : SkpColors.raised,
-      borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+      color: bgColor,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          constraints: const BoxConstraints(minHeight: SkpTokens.keypadKeySize),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-            border: Border.all(color: SkpColors.line),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? const Color(0x2E8B35FF)
+                    : Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: label == '⌫'
-              ? const Icon(Icons.backspace_outlined, size: 28, color: SkpColors.text)
+              ? Icon(Icons.backspace_outlined, size: 24, color: textColor)
               : Text(
                   label,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: label == 'C' ? SkpColors.gold : SkpColors.text,
-                      ),
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: label == 'C' ? const Color(0xFFE6007A) : textColor,
+                  ),
                 ),
         ),
       ),

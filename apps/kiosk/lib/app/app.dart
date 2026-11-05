@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/core/config/app_config.dart';
 import 'package:skp_kiosk/core/theme/app_theme.dart';
+import 'package:skp_kiosk/core/theme/theme_mode_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/kiosk_activity_scope.dart';
 import 'package:skp_kiosk/features/session/presentation/kiosk_session_route_observer.dart';
@@ -42,10 +43,13 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeModeControllerProvider);
     return MaterialApp(
       title: 'ATHENA',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.kiosk(),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeMode,
       navigatorKey: kioskNavigatorKey,
       navigatorObservers: [_routeObserver, _analyticsObserver],
       initialRoute: AppRoutes.home,

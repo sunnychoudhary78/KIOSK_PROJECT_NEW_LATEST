@@ -59,29 +59,49 @@ class _Slot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final Color bgColor = isDark
+        ? const Color(0xFF241A4C)
+        : (filled ? Colors.white : const Color(0xFFF1F5F9));
+
+    final Color borderColor = active
+        ? const Color(0xFFE6007A)
+        : (filled
+            ? const Color(0xFF0084FF)
+            : (isDark ? const Color(0xFF4A347D) : const Color(0xFFDCE4EE)));
+
+    final Color textColor = isDark ? Colors.white : const Color(0xFF1B2234);
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: SkpColors.raised,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: active
-              ? SkpColors.accentBright
-              : filled
-                  ? SkpColors.accent
-                  : SkpColors.line,
-          width: active ? 2 : SkpTokens.hairline,
+          color: borderColor,
+          width: active ? 2.0 : 1.2,
         ),
+        boxShadow: active
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFE6007A).withValues(alpha: 0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: Text(
         char,
-        style: style?.copyWith(
+        style: TextStyle(
+          fontFamily: 'PlusJakartaSans',
           fontWeight: FontWeight.w700,
-          color: SkpColors.text,
-          fontSize: size * 0.42,
+          color: textColor,
+          fontSize: size * 0.44,
         ),
       ),
     );

@@ -43,6 +43,8 @@ flutter:
     - assets/well_being/
     - assets/astrology/
     - assets/brand/
+    - assets/new_theme_icons/
+    - assets/new_theme_icons/how_do_you_print/
   fonts:
     - family: PlusJakartaSans
       fonts:
