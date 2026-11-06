@@ -504,92 +504,15 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
           ),
         ),
         onHome: _endSession,
-        headerExtra: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (kDebugMode)
-              IconButton(
+        headerExtra: kDebugMode
+            ? IconButton(
                 tooltip: 'Serial Debug',
                 onPressed: () {
                   Navigator.of(context).pushNamed(AppRoutes.serialDebug);
                 },
                 icon: const Icon(Icons.bug_report_outlined, color: SkpColors.muted),
-              ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0F172A) : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                  width: 1.0,
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x08000000),
-                    blurRadius: 8,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 9,
-                    height: 9,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: state.isConnected
-                          ? const Color(0xFF10B981)
-                          : const Color(0xFFEF4444),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (state.isConnected
-                                  ? const Color(0xFF10B981)
-                                  : const Color(0xFFEF4444))
-                              .withValues(alpha: 0.5),
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        state.isConnected ? 'Device Ready' : 'Device Offline',
-                        style: TextStyle(
-                          fontFamily: 'PlusJakartaSans',
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : const Color(0xFF0F172A),
-                          height: 1.1,
-                        ),
-                      ),
-                      Text(
-                        state.isConnected
-                            ? 'Connected · ${state.portName ?? "COM3"}'
-                            : 'Disconnected',
-                        style: TextStyle(
-                          fontFamily: 'PlusJakartaSans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                          color: isDark
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFF64748B),
-                          height: 1.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+              )
+            : null,
         footerCenter: _WellBeingStepIndicator(step: currentStep),
         footerLeading: Container(
           decoration: BoxDecoration(
@@ -1013,7 +936,6 @@ class _ChooseView extends StatelessWidget {
                         ),
                   borderColor: isDark ? const Color(0xFF9F1239) : const Color(0xFFFBCFE8),
                   shadowColor: const Color(0xFFE11D48),
-                  showProgressBar: true,
                   onTap: onTemperature,
                   isDark: isDark,
                 ),
@@ -1177,7 +1099,6 @@ class _MeasurementCard extends StatelessWidget {
     required this.onTap,
     required this.isDark,
     this.tags,
-    this.showProgressBar = false,
   });
 
   final String title;
@@ -1190,7 +1111,6 @@ class _MeasurementCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool isDark;
   final List<({String icon, String label})>? tags;
-  final bool showProgressBar;
 
   @override
   Widget build(BuildContext context) {
@@ -1286,52 +1206,6 @@ class _MeasurementCard extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                          ],
-                        ),
-                      ],
-                      if (showProgressBar) ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                height: 14,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(7),
-                                  color: isDark ? const Color(0xFF332A55) : const Color(0xFFFCE7F3),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(7),
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: FractionallySizedBox(
-                                      widthFactor: 0.58,
-                                      child: Container(
-                                        decoration: const BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              Color(0xFFE11D48),
-                                              Color(0xFFF43F5E),
-                                              Color(0xFFFB7185),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              '58%',
-                              style: TextStyle(
-                                fontFamily: 'PlusJakartaSans',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                              ),
-                            ),
                           ],
                         ),
                       ],

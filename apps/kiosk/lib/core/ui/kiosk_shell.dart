@@ -84,7 +84,7 @@ class KioskShell extends StatelessWidget {
                   Container(width: 1, height: 22, color: divider),
                   const SizedBox(width: 16),
                   if (titleIcon != null) ...[
-                    Icon(titleIcon, size: 20, color: colors.accentMagenta),
+                    Icon(titleIcon, size: 22, color: colors.accentMagenta),
                     const SizedBox(width: 8),
                   ],
                   Flexible(
@@ -93,7 +93,7 @@ class KioskShell extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontFamily: 'PlusJakartaSans',
-                        fontSize: 15,
+                        fontSize: 17,
                         fontWeight: FontWeight.w600,
                         color: colors.textPrimary,
                       ),
@@ -146,13 +146,13 @@ class KioskShell extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.home_outlined, size: 17, color: colors.textPrimary),
+                              Icon(Icons.home_outlined, size: 18, color: colors.textPrimary),
                               const SizedBox(width: 6),
                               Text(
                                 'Home',
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 14,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: colors.textPrimary,
                                 ),

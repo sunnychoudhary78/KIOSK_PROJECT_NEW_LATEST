@@ -182,36 +182,30 @@ class _KeyboardBodyState extends State<_KeyboardBody> {
             ),
           ),
 
-          // Row 4: Modifiers (Shift, 123/ABC, Space, Backspace)
+          // Row 4: Shift (letters only), 123/ABC, Space, Backspace.
+          // On the symbol layout Shift is omitted so ABC appears once.
           Expanded(
             child: Row(
               children: [
-                // Shift Key
-                Expanded(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 2.5,
-                      vertical: 2.5,
-                    ),
-                    child: _KbKey(
-                      label: _symbols ? 'ABC' : 'Shift',
-                      icon: _symbols ? null : Icons.arrow_upward_rounded,
-                      highlighted: _shifted && !_symbols,
-                      isSpecial: true,
-                      onTap: () => setState(() {
-                        if (_symbols) {
-                          _symbols = false;
-                          _shifted = true;
-                        } else {
-                          _shifted = !_shifted;
-                        }
-                      }),
-                      accentColor: accent,
-                      isDark: isDark,
+                if (!_symbols)
+                  Expanded(
+                    flex: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2.5,
+                        vertical: 2.5,
+                      ),
+                      child: _KbKey(
+                        label: 'Shift',
+                        icon: Icons.arrow_upward_rounded,
+                        highlighted: _shifted,
+                        isSpecial: true,
+                        onTap: () => setState(() => _shifted = !_shifted),
+                        accentColor: accent,
+                        isDark: isDark,
+                      ),
                     ),
                   ),
-                ),
 
                 // 123 / ABC Symbol Toggle
                 Expanded(

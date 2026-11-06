@@ -75,7 +75,7 @@ class PrintChooserPage extends ConsumerWidget {
                                       text: 'How do you want to ',
                                       style: TextStyle(
                                         fontFamily: 'PlusJakartaSans',
-                                        fontSize: 28,
+                                        fontSize: 34,
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: -0.5,
                                         color: colors.textPrimary,
@@ -86,7 +86,7 @@ class PrintChooserPage extends ConsumerWidget {
                                       text: 'Print?',
                                       style: TextStyle(
                                         fontFamily: 'PlusJakartaSans',
-                                        fontSize: 28,
+                                        fontSize: 34,
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: -0.5,
                                         color: colors.accentMagenta,
@@ -111,7 +111,7 @@ class PrintChooserPage extends ConsumerWidget {
                                 'Scan a QR, enter an OTP, or print from DigiLocker.',
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 15,
+                                  fontSize: 17,
                                   fontWeight: FontWeight.w500,
                                   color: colors.textSecondary,
                                 ),
@@ -151,7 +151,7 @@ class PrintChooserPage extends ConsumerWidget {
                               'We do not save your documents. Files are used only to print this session, then removed from this kiosk.',
                               style: TextStyle(
                                 fontFamily: 'PlusJakartaSans',
-                                fontSize: 13,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w500,
                                 color: isDark
                                     ? const Color(0xFF4ADE80)
@@ -279,7 +279,7 @@ class PrintChooserPage extends ConsumerWidget {
                                     'Back',
                                     style: TextStyle(
                                       fontFamily: 'PlusJakartaSans',
-                                      fontSize: 15,
+                                      fontSize: 16,
                                       fontWeight: FontWeight.w600,
                                       color: colors.textPrimary,
                                     ),
@@ -418,7 +418,7 @@ class _PrintMethodCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 22,
+                          fontSize: 25,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.4,
                           height: 1.2,
@@ -435,7 +435,7 @@ class _PrintMethodCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: FontWeight.w500,
                           height: 1.35,
                           color: colors.textSecondary,

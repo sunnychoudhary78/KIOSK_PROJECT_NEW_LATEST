@@ -997,7 +997,7 @@ class _AstrologyReadingCardState extends State<AstrologyReadingCard> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 22,
+                                  fontSize: 25,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -0.4,
                                   color: isDark ? Colors.white : const Color(0xFF0F172A),
@@ -1010,7 +1010,7 @@ class _AstrologyReadingCardState extends State<AstrologyReadingCard> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 14,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w500,
                                   color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                                   height: 1.35,

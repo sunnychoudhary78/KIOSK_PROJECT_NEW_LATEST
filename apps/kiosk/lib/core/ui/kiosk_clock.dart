@@ -80,13 +80,13 @@ class _KioskClockState extends State<KioskClock> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.access_time_rounded, size: 16, color: colors.textSecondary),
+            Icon(Icons.access_time_rounded, size: 18, color: colors.textSecondary),
             const SizedBox(width: 8),
             Text(
               timeStr,
               style: TextStyle(
                 fontFamily: 'PlusJakartaSans',
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: colors.textPrimary,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -106,7 +106,7 @@ class _KioskClockState extends State<KioskClock> {
             timeStr,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.w700,
               color: colors.textPrimary,
               fontFeatures: const [FontFeature.tabularFigures()],
@@ -117,7 +117,7 @@ class _KioskClockState extends State<KioskClock> {
             _formatDate(),
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: FontWeight.w500,
               color: colors.textSecondary,
             ),

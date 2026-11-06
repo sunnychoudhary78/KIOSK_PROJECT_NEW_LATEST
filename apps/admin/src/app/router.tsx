@@ -10,6 +10,7 @@ import { SupportPage } from '../features/support/SupportPage';
 import { FreePrintUsagePage } from '../features/print-quota/FreePrintUsagePage';
 import { SocietyPhonesPage } from '../features/society-phones/SocietyPhonesPage';
 import { EmergencyContactsPage } from '../features/emergency-contacts/EmergencyContactsPage';
+import { FindServicesPage } from '../features/find-services/FindServicesPage';
 import { DigiLockerPage } from '../features/digilocker/DigiLockerPage';
 import { AuditLogsPage } from '../features/audit-logs/AuditLogsPage';
 import { RecordingsPage } from '../features/surveillance/RecordingsPage';
@@ -37,6 +38,7 @@ export function AppRouter() {
             <Route path="campaigns/new" element={<CampaignWizardPage />} />
             <Route path="campaigns/:id" element={<CampaignDetailPage />} />
             <Route path="services" element={<ServicesPage />} />
+            <Route path="find-services" element={<FindServicesPage />} />
             <Route path="fuel-stations" element={<FuelStationsPage />} />
             <Route path="print-jobs" element={<PrintJobsPage />} />
             <Route path="support" element={<SupportPage />} />

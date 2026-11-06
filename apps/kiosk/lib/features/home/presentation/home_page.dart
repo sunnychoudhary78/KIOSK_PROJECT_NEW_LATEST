@@ -303,13 +303,13 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.auto_awesome_rounded, size: 13, color: Color(0xFFEC4899)),
+                        const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFFEC4899)),
                         const SizedBox(width: 6),
                         Text(
                           'Athena Smart Kiosk',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 12,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: isDark ? const Color(0xFFF472B6) : const Color(0xFFBE185D),
                           ),
@@ -326,7 +326,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                         'Select a ',
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 34,
+                          fontSize: 40,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.6,
                           color: colors.textPrimary,
@@ -340,7 +340,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                           'Service',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 34,
+                            fontSize: 40,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.6,
                             color: Colors.white,
@@ -348,7 +348,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      const Text('✨', style: TextStyle(fontSize: 22)),
+                      const Text('✨', style: TextStyle(fontSize: 26)),
                     ],
                   ),
                   const SizedBox(height: 5),
@@ -378,7 +378,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                     children: [
                       Icon(
                         Icons.touch_app_outlined,
-                        size: 16,
+                        size: 18,
                         color: colors.textSecondary.withValues(alpha: 0.8),
                       ),
                       const SizedBox(width: 6),
@@ -386,7 +386,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                         'Touch any card below to start your service',
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 15,
+                          fontSize: 18,
                           fontWeight: FontWeight.w500,
                           color: colors.textSecondary,
                         ),
@@ -432,7 +432,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                           'Emergency',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 15,
+                            fontSize: 17,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
@@ -478,7 +478,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                           'Support',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 15,
+                            fontSize: 17,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
@@ -639,13 +639,13 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.touch_app_rounded, size: 14, color: colors.accentMagenta),
-                      const SizedBox(width: 5),
+                      Icon(Icons.touch_app_rounded, size: 16, color: colors.accentMagenta),
+                      const SizedBox(width: 6),
                       Text(
                         'Your Smart Everyday Assistant',
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 12,
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: colors.accentMagenta,
                         ),
@@ -709,7 +709,7 @@ class _HomeFooterBar extends StatelessWidget {
           const SizedBox(width: 16),
 
           // Right: Empowering Businesses with Smart IT Solutions
-          Icon(Icons.rocket_launch_rounded, size: 16, color: colors.accentMagenta),
+          Icon(Icons.rocket_launch_rounded, size: 18, color: colors.accentMagenta),
           const SizedBox(width: 8),
           RichText(
             text: TextSpan(
@@ -718,7 +718,7 @@ class _HomeFooterBar extends StatelessWidget {
                   text: 'Empowering Businesses with ',
                   style: TextStyle(
                     fontFamily: 'PlusJakartaSans',
-                    fontSize: 12.5,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w500,
                     color: colors.textSecondary,
                   ),
@@ -727,7 +727,7 @@ class _HomeFooterBar extends StatelessWidget {
                   text: 'Smart IT Solutions',
                   style: TextStyle(
                     fontFamily: 'PlusJakartaSans',
-                    fontSize: 12.5,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w700,
                     color: colors.accentMagenta,
                   ),

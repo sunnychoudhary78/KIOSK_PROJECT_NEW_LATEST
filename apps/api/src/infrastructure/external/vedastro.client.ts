@@ -274,6 +274,16 @@ function shortVerdict(value: unknown): string {
   return text.length <= 140 ? text : `${text.slice(0, 137).trimEnd()}…`;
 }
 
+/**
+ * VedAstro's KutaScore is `round((gunas / 36) * 100)`, a percent of the
+ * 36-guna total. Turn that percent back into gunas out of 36.
+ */
+export function gunasFromKutaPercent(percent: number): number {
+  if (!Number.isFinite(percent)) return 0;
+  const gunas = Math.round((percent / 100) * 36);
+  return Math.min(36, Math.max(0, gunas));
+}
+
 export function mapVedAstroMatchReport(body: unknown): VedAstroMatchResult {
   const root = asRecord(body);
   const payload = asRecord(root?.Payload ?? root?.payload) ?? root;
@@ -287,7 +297,7 @@ export function mapVedAstroMatchReport(body: unknown): VedAstroMatchResult {
   const predictions = Array.isArray(report.PredictionList)
     ? report.PredictionList.map(asRecord).filter((row): row is Record<string, unknown> => row !== null)
     : [];
-  const total = asNumber(report.KutaScore) ?? 0;
+  const total = gunasFromKutaPercent(asNumber(report.KutaScore) ?? 0);
   const summaryRecord = asRecord(report.Summary);
   const summary =
     asString(summaryRecord?.ScoreSummary) ??

@@ -59,7 +59,7 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
                           text: 'Choose a ',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 32,
+                            fontSize: 38,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.5,
                             color: colors.textPrimary,
@@ -69,7 +69,7 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
                           text: 'Service',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 32,
+                            fontSize: 38,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.5,
                             color: colors.accentMagenta,
@@ -92,7 +92,7 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
                     'Select a service to find nearby professionals.',
                     style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
-                      fontSize: 15,
+                      fontSize: 18,
                       fontWeight: FontWeight.w500,
                       color: colors.textSecondary,
                     ),
@@ -157,7 +157,7 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
                               'Back',
                               style: TextStyle(
                                 fontFamily: 'PlusJakartaSans',
-                                fontSize: 15,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: colors.textPrimary,
                               ),
@@ -176,54 +176,9 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
     );
   }
 
-  /// Ensure we always have the 16 standard trades shown in Mockup Images
   List<LocalServiceCategory> _resolveCategories(
       List<LocalServiceCategory> apiList) {
-    if (apiList.length >= 16) return apiList;
-
-    final default16 = [
-      _createCategory('appliance-repair', 'Appliance Repair', 7),
-      _createCategory('scrap-dealer', 'Scrap Dealer', 8),
-      _createCategory('two-wheeler-mechanic', 'Two-wheeler Mechanic', 10),
-      _createCategory('tailor', 'Tailor', 10),
-      _createCategory('carpenter', 'Carpenter', 10),
-      _createCategory('gas-stove-repair', 'Gas Stove Repair', 10),
-      _createCategory('electrician', 'Electrician', 9),
-      _createCategory('pigeon-net', 'Pigeon Net', 7),
-      _createCategory('puncture', 'Puncture', 10),
-      _createCategory('painter', 'Painter', 6),
-      _createCategory('mason', 'Mason', 3),
-      _createCategory('interior', 'Interior', 1),
-      _createCategory('car-mechanic', 'Car Mechanic', 5),
-      _createCategory('key-maker', 'Key Maker', 9),
-      _createCategory('fabricator', 'Fabricator', 4),
-      _createCategory('plumber', 'Plumber', 4),
-    ];
-
-    if (apiList.isEmpty) return default16;
-
-    final map = <String, LocalServiceCategory>{};
-    for (final def in default16) {
-      map[def.slug] = def;
-    }
-    for (final api in apiList) {
-      map[api.slug] = api;
-    }
-    return map.values.toList();
-  }
-
-  LocalServiceCategory _createCategory(String slug, String name, int count) {
-    return LocalServiceCategory(
-      slug: slug,
-      name: name,
-      contacts: List.generate(
-        count,
-        (i) => LocalServiceContact(
-          name: '$name Specialist ${i + 1}',
-          phone: '+91 98765 432${i.toString().padLeft(2, '0')}',
-        ),
-      ),
-    );
+    return apiList;
   }
 }
 
@@ -263,40 +218,52 @@ class _TradeGrid extends StatelessWidget {
     const maxVisibleRows = 4;
     final rowCount = (categories.length / columns).ceil();
 
+    Widget rowAt(int row) {
+      return Row(
+        children: [
+          for (var col = 0; col < columns; col++) ...[
+            if (col > 0) const SizedBox(width: gap),
+            Expanded(
+              child: Builder(
+                builder: (ctx) {
+                  final idx = row * columns + col;
+                  if (idx >= categories.length) {
+                    return const SizedBox.expand();
+                  }
+                  final cat = categories[idx];
+                  return _TradeCard(
+                    category: cat,
+                    count: cat.contacts.length,
+                    onTap: () => Navigator.of(ctx).pushNamed(
+                      AppRoutes.localServiceContacts,
+                      arguments: cat,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    if (rowCount > maxVisibleRows) {
+      return ListView(
+        children: [
+          for (var row = 0; row < rowCount; row++) ...[
+            if (row > 0) const SizedBox(height: gap),
+            SizedBox(height: 92, child: rowAt(row)),
+          ],
+        ],
+      );
+    }
+
     return Column(
       children: [
         for (var row = 0; row < maxVisibleRows; row++) ...[
           if (row > 0) const SizedBox(height: gap),
           Expanded(
-            child: row < rowCount
-                ? Row(
-                    children: [
-                      for (var col = 0; col < columns; col++) ...[
-                        if (col > 0) const SizedBox(width: gap),
-                        Expanded(
-                          child: Builder(
-                            builder: (ctx) {
-                              final idx = row * columns + col;
-                              if (idx >= categories.length) {
-                                return const SizedBox.expand();
-                              }
-                              final cat = categories[idx];
-                              final count = cat.contacts.length;
-                              return _TradeCard(
-                                category: cat,
-                                count: count,
-                                onTap: () => Navigator.of(ctx).pushNamed(
-                                  AppRoutes.localServiceContacts,
-                                  arguments: cat,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ],
-                  )
-                : const SizedBox.expand(),
+            child: row < rowCount ? rowAt(row) : const SizedBox.expand(),
           ),
         ],
       ],
@@ -377,7 +344,7 @@ class _TradeCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 15,
+                          fontSize: 18,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.1,
                           height: 1.2,
@@ -391,7 +358,7 @@ class _TradeCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 12.5,
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w500,
                           color: colors.textSecondary,
                         ),

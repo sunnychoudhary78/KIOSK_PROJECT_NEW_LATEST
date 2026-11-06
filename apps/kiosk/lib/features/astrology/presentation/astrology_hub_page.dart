@@ -399,7 +399,7 @@ class AstrologyHubPage extends ConsumerWidget {
                 'Astrology Services',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: isDark ? Colors.white : const Color(0xFF1E1B4B),
                 ),
@@ -445,7 +445,7 @@ class AstrologyHubPage extends ConsumerWidget {
                       'Back',
                       style: TextStyle(
                         fontFamily: 'PlusJakartaSans',
-                        fontSize: 14,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: colors.textPrimary,
                       ),
@@ -470,7 +470,7 @@ class AstrologyHubPage extends ConsumerWidget {
                     'Choose a ',
                     style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
-                      fontSize: 32,
+                      fontSize: 38,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.6,
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
@@ -484,7 +484,7 @@ class AstrologyHubPage extends ConsumerWidget {
                       'Reading',
                       style: TextStyle(
                         fontFamily: 'PlusJakartaSans',
-                        fontSize: 32,
+                        fontSize: 38,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.6,
                         color: Colors.white,
@@ -494,7 +494,7 @@ class AstrologyHubPage extends ConsumerWidget {
                   const SizedBox(width: 6),
                   const Text(
                     '✨',
-                    style: TextStyle(fontSize: 24),
+                    style: TextStyle(fontSize: 26),
                   ),
                 ],
               ),
@@ -503,7 +503,7 @@ class AstrologyHubPage extends ConsumerWidget {
                 'Kundali, palm, matching, and daily periods.',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 15,
+                  fontSize: 18,
                   fontWeight: FontWeight.w500,
                   color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 ),
@@ -572,7 +572,7 @@ class AstrologyHubPage extends ConsumerWidget {
                         'We do not save birth details or palm photos. Data is used only for this reading, then cleared when you leave.',
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 13.5,
+                          fontSize: 15.5,
                           fontWeight: FontWeight.w600,
                           color: isDark
                               ? const Color(0xFFA7F3D0)

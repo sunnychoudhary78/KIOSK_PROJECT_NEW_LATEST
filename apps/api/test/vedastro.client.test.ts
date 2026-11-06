@@ -12,6 +12,7 @@ import {
   formatDasaLabel,
   formatVedAstroNowStdTime,
   formatVedAstroStdTime,
+  gunasFromKutaPercent,
   kundaliCalculatorForStyle,
   mapVedAstroMatchReport,
   mapVedAstroPanchangaTable,
@@ -215,9 +216,9 @@ describe('MatchReport mapping', () => {
     ).toBe('14:20 15/01/1990 +05:30');
     const result = mapVedAstroMatchReport(matchReportFixture);
     expect(result).toMatchObject({
-      total: 20,
+      total: 7,
       max: 36,
-      tone: 'mixed',
+      tone: 'poor',
       summary: 'Problematic relationship',
     });
     expect(result.kutas).toHaveLength(8);
@@ -233,6 +234,20 @@ describe('MatchReport mapping', () => {
     ]);
     expect(result.kutas[4]).toMatchObject({ points: 0, maxPoints: 5, nature: 'Bad' });
     expect(result.kutas.every((entry) => entry.verdict.length <= 140)).toBe(true);
+  });
+
+  it('converts VedAstro’s percent-of-36 score back into gunas', () => {
+    expect(gunasFromKutaPercent(0)).toBe(0);
+    expect(gunasFromKutaPercent(60)).toBe(22);
+    expect(gunasFromKutaPercent(100)).toBe(36);
+    for (let gunas = 0; gunas <= 36; gunas += 1) {
+      const percent = Math.round((gunas / 36) * 100);
+      expect(gunasFromKutaPercent(percent)).toBe(gunas);
+    }
+    const result = mapVedAstroMatchReport({
+      Payload: { MatchReport: { KutaScore: 60, PredictionList: [] } },
+    });
+    expect(result).toMatchObject({ total: 22, max: 36, tone: 'mixed' });
   });
 });
 
@@ -750,7 +765,7 @@ describe('createVedAstroClient', () => {
       },
     );
 
-    expect(result).toMatchObject({ total: 25, max: 36, tone: 'good' });
+    expect(result).toMatchObject({ total: 9, max: 36, tone: 'poor' });
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     expect(posted).toMatchObject({
       Ayanamsa: 'RAMAN',

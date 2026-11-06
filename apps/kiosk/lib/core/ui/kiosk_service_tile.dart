@@ -213,7 +213,7 @@ class _KioskServiceTileState extends State<KioskServiceTile> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 21,
+                                  fontSize: 25,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -0.4,
                                   color: titleColor,
@@ -227,7 +227,7 @@ class _KioskServiceTileState extends State<KioskServiceTile> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 13.5,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w500,
                                   height: 1.35,
                                   color: subtitleColor,

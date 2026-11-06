@@ -57,7 +57,7 @@ class WeatherHeaderStrip extends ConsumerWidget {
             locationLabel ?? 'Kiosk 6',
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
               color: colors.textPrimary,
             ),
@@ -71,7 +71,7 @@ class WeatherHeaderStrip extends ConsumerWidget {
             tempStr,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
               color: colors.textPrimary,
             ),
@@ -85,7 +85,7 @@ class WeatherHeaderStrip extends ConsumerWidget {
             humidityStr,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
               color: colors.textPrimary,
             ),
@@ -99,7 +99,7 @@ class WeatherHeaderStrip extends ConsumerWidget {
             windStr,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
               color: colors.textPrimary,
             ),
@@ -113,7 +113,7 @@ class WeatherHeaderStrip extends ConsumerWidget {
             uvStr,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
               color: colors.textPrimary,
             ),
@@ -135,7 +135,7 @@ class WeatherHeaderStrip extends ConsumerWidget {
               'AQI $aqiVal',
               style: const TextStyle(
                 fontFamily: 'PlusJakartaSans',
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFFE74C3C),
               ),

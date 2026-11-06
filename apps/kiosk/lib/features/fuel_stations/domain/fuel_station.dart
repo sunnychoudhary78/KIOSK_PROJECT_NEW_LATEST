@@ -29,9 +29,9 @@ enum ApproachTraffic {
   }
 
   String? get badgeLabel => switch (this) {
-        ApproachTraffic.clear => 'Clear',
-        ApproachTraffic.moderate => 'Busy',
-        ApproachTraffic.heavy => 'Very busy',
+        ApproachTraffic.clear => 'Traffic: Clear',
+        ApproachTraffic.moderate => 'Traffic: Busy',
+        ApproachTraffic.heavy => 'Traffic: Very busy',
         ApproachTraffic.unknown => null,
       };
 }

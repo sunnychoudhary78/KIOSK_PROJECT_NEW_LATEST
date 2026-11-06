@@ -84,7 +84,7 @@ class _FuelStationsPageState extends ConsumerState<FuelStationsPage> {
                                 text: 'Nearby ',
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 32,
+                                  fontSize: 38,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -0.5,
                                   color: colors.textPrimary,
@@ -94,7 +94,7 @@ class _FuelStationsPageState extends ConsumerState<FuelStationsPage> {
                                 text: 'Fuel Stations',
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 32,
+                                  fontSize: 38,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -0.5,
                                   color: colors.accentMagenta,
@@ -118,7 +118,7 @@ class _FuelStationsPageState extends ConsumerState<FuelStationsPage> {
                           'Find Petrol, Diesel, CNG, and EV charging points within ~5 km with real-time wait times.',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 15,
+                            fontSize: 18,
                             fontWeight: FontWeight.w500,
                             color: colors.textSecondary,
                           ),
@@ -197,7 +197,7 @@ class _FuelStationsPageState extends ConsumerState<FuelStationsPage> {
                               'Back',
                               style: TextStyle(
                                 fontFamily: 'PlusJakartaSans',
-                                fontSize: 15,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: colors.textPrimary,
                               ),
