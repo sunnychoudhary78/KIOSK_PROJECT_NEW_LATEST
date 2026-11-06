@@ -12,6 +12,7 @@ import 'package:skp_kiosk/features/astrology/domain/match_kundali_phase.dart';
 import 'package:skp_kiosk/features/astrology/domain/match_kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_form_defaults.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_print_quota_dialog.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
@@ -275,6 +276,14 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
     });
   }
 
+  Future<void> _verifyOtpAndShowQuota(MatchKundaliController controller) async {
+    final summary = await controller.verifyPrintPhoneOtp();
+    if (!mounted || summary == null) return;
+    await showAstrologyPrintQuotaDialog(context: context, summary: summary);
+    if (!mounted) return;
+    await controller.continueAfterQuotaSummary(summary);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(matchKundaliControllerProvider);
@@ -300,11 +309,17 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
         title: 'Match Kundalis',
         print: state.print,
         onHome: _endSession,
-        onBackFromPreview: controller.cancelPrintPreview,
+        onBackFromPreview: controller.backFromPrintFlow,
         onConfirmPrint: controller.confirmPrint,
         onTellStaff: controller.tellStaffPrint,
         onClearResult: controller.clearPrintResult,
         onReportMissing: controller.reportPrintPagesMissing,
+        onChoosePhoneQuota: controller.choosePhoneQuota,
+        onChoosePayDirect: controller.choosePayDirect,
+        onPhoneChanged: controller.setPrintPhoneDigits,
+        onOtpChanged: controller.setPrintOtpDigits,
+        onRequestOtp: controller.requestPrintPhoneOtp,
+        onVerifyOtp: () => _verifyOtpAndShowQuota(controller),
       );
     }
 

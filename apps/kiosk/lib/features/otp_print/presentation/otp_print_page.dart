@@ -10,7 +10,6 @@ import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.da
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
-import 'package:skp_kiosk/features/weather/presentation/weather_header_strip.dart';
 
 class OtpPrintPage extends ConsumerStatefulWidget {
   const OtpPrintPage({super.key});
@@ -139,7 +138,6 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
       child: KioskShell(
         title: 'Print Documents',
         titleIcon: Icons.print_rounded,
-        headerExtra: const WeatherHeaderStrip(),
         onHome: _endSession,
         stepLabel: step,
         footerLeading: leading,

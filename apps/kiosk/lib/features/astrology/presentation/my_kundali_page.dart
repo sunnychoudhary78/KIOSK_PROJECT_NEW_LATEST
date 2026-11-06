@@ -13,6 +13,7 @@ import 'package:skp_kiosk/features/astrology/domain/kundali_result.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_assets.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_casting_view.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_form_defaults.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_print_quota_dialog.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_print_shell.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birth_form.dart';
@@ -59,49 +60,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
   Future<void> _verifyOtpAndShowQuota(MyKundaliController controller) async {
     final summary = await controller.verifyPrintPhoneOtp();
     if (!mounted || summary == null) return;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Free print check'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                summary.remainingLabel,
-                style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                summary.printCostLine,
-                style: Theme.of(dialogContext).textTheme.bodyLarge,
-              ),
-              if (summary.message != null &&
-                  summary.message!.trim().isNotEmpty &&
-                  !summary.freeEligible) ...[
-                const SizedBox(height: 12),
-                Text(
-                  summary.message!,
-                  style: Theme.of(dialogContext).textTheme.bodyMedium,
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            KioskPrimaryButton(
-              label: 'OK',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-          ],
-        );
-      },
-    );
-
+    await showAstrologyPrintQuotaDialog(context: context, summary: summary);
     if (!mounted) return;
     await controller.continueAfterQuotaSummary(summary);
   }

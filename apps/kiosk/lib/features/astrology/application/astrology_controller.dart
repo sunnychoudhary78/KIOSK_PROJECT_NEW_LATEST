@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
+import 'package:skp_kiosk/features/astrology/application/astrology_paid_print.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_print_mixin.dart';
 import 'package:skp_kiosk/features/astrology/application/palm_quality_checker.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
@@ -68,9 +69,35 @@ class AstrologyController extends Notifier<AstrologyUiState> {
   final PalmQualityChecker _checker = const PalmQualityChecker();
   DateTime? _goodSince;
   int _goodStreak = 0;
+  late AstrologyPaidPrint _paid;
 
   @override
-  AstrologyUiState build() => const AstrologyUiState();
+  AstrologyUiState build() {
+    _paid = AstrologyPaidPrint(
+      mounted: () => ref.mounted,
+      readPrint: () => state.print,
+      applyPrint: (print) {
+        state = state.copyWith(
+          print: print,
+          error: print.error,
+          clearError: print.error == null,
+        );
+      },
+      loadChargeRupees: () async {
+        final options = await _repository.kundaliPrintOptions();
+        return (options['chargeRupees'] as num?)?.toInt() ?? 0;
+      },
+      sendOtp: (phone) async {
+        await _repository.requestKundaliPhoneOtp(phone);
+      },
+      checkOtp: _repository.verifyKundaliPhoneOtp,
+      prepareJob: _preparePaidJob,
+      pollPayment: (current) => _printSupport.pollPayment(current),
+      productLabel: 'Palm reading',
+    );
+    ref.onDispose(_paid.dispose);
+    return const AstrologyUiState();
+  }
 
   AstrologyRepository get _repository => ref.read(astrologyRepositoryProvider);
 
@@ -225,17 +252,39 @@ class AstrologyController extends Notifier<AstrologyUiState> {
       return;
     }
 
-    state = state.copyWith(
-      clearError: true,
-      print: state.print.copyWith(
-        phase: ReportPrintPhase.preparingPreview,
-        clearError: true,
-        clearMessage: true,
-      ),
-    );
+    await _paid.begin();
+  }
 
+  Future<void> choosePhoneQuota() => _paid.choosePhone();
+
+  Future<void> choosePayDirect() => _paid.choosePay();
+
+  void setPrintPhoneDigits(String value) => _paid.setPhoneDigits(value);
+
+  void setPrintOtpDigits(String value) => _paid.setOtpDigits(value);
+
+  Future<void> requestPrintPhoneOtp() => _paid.requestOtp();
+
+  Future<AstrologyPrintQuota?> verifyPrintPhoneOtp() => _paid.verifyOtp();
+
+  Future<void> continueAfterQuotaSummary(AstrologyPrintQuota summary) =>
+      _paid.continueAfterQuota(summary);
+
+  Future<void> backFromPrintFlow() => _paid.back(cancel: cancelPrintPreview);
+
+  Future<ReportPrintSnapshot> _preparePaidJob(String? phoneProofToken) async {
+    final reading = state.reading;
+    final subject = state.subject;
+    if (reading == null || subject == null) {
+      return state.print.copyWith(
+        phase: ReportPrintPhase.printResult,
+        printConfirmed: false,
+        error: 'No reading to print',
+        message: 'No reading to print',
+      );
+    }
     final palmBytes = state.palmBytes;
-    final next = await _printSupport.prepare(
+    return _printSupport.prepare(
       createJobPath: '/astrology/readings/print',
       body: {
         'subject': subject.toJson(),
@@ -265,11 +314,10 @@ class AstrologyController extends Notifier<AstrologyUiState> {
         },
         if (palmBytes != null) 'palmJpegBase64': base64Encode(palmBytes),
         'disclaimer': reading.disclaimer,
+        'phoneProofToken': ?phoneProofToken,
       },
       previous: state.print,
     );
-    if (!ref.mounted) return;
-    state = state.copyWith(print: next, error: next.error, clearError: next.error == null);
   }
 
   Future<void> confirmPrint() async {
@@ -295,6 +343,8 @@ class AstrologyController extends Notifier<AstrologyUiState> {
   }
 
   Future<void> cancelPrintPreview() async {
+    _paid.stopPoll();
+    _paid.clearPendingToken();
     await _printSupport.abandonRetry(state.print);
     if (!ref.mounted) return;
     state = state.copyWith(print: const ReportPrintSnapshot());
@@ -311,6 +361,8 @@ class AstrologyController extends Notifier<AstrologyUiState> {
   }
 
   void clearPrintResult() {
+    _paid.stopPoll();
+    _paid.clearPendingToken();
     state = state.copyWith(print: const ReportPrintSnapshot());
   }
 }

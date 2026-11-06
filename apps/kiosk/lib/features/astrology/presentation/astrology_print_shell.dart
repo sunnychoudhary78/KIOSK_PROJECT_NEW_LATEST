@@ -69,7 +69,7 @@ class AstrologyPrintShell extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Color Kundali print is ₹$rupees. Society members can use one free color page.',
+                  'This color print is ₹$rupees. Society members can use one free color page.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 28),

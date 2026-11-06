@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
+import 'package:skp_kiosk/features/astrology/application/astrology_paid_print.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_print_mixin.dart';
 import 'package:skp_kiosk/features/astrology/data/astrology_repository.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
@@ -45,8 +46,36 @@ class TodayPeriodsUiState {
 }
 
 class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
+  AstrologyInsightLocale _printLocale = AstrologyInsightLocale.en;
+  late AstrologyPaidPrint _paid;
+
   @override
-  TodayPeriodsUiState build() => const TodayPeriodsUiState();
+  TodayPeriodsUiState build() {
+    _paid = AstrologyPaidPrint(
+      mounted: () => ref.mounted,
+      readPrint: () => state.print,
+      applyPrint: (print) {
+        state = state.copyWith(
+          print: print,
+          error: print.error,
+          clearError: print.error == null,
+        );
+      },
+      loadChargeRupees: () async {
+        final options = await _repository.kundaliPrintOptions();
+        return (options['chargeRupees'] as num?)?.toInt() ?? 0;
+      },
+      sendOtp: (phone) async {
+        await _repository.requestKundaliPhoneOtp(phone);
+      },
+      checkOtp: _repository.verifyKundaliPhoneOtp,
+      prepareJob: _preparePaidJob,
+      pollPayment: (current) => _printSupport.pollPayment(current),
+      productLabel: 'Today & Periods',
+    );
+    ref.onDispose(_paid.dispose);
+    return const TodayPeriodsUiState();
+  }
 
   AstrologyRepository get _repository => ref.read(astrologyRepositoryProvider);
 
@@ -57,6 +86,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
       );
 
   void reset() {
+    _paid.stopPoll();
+    _paid.clearPendingToken();
     state = const TodayPeriodsUiState();
   }
 
@@ -134,26 +165,47 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
   }) async {
     final result = state.result;
     final subject = state.subject;
+    _printLocale = locale;
     if (result == null ||
         subject == null ||
         state.phase != TodayPeriodsPhase.result) {
       return;
     }
+    await _paid.begin();
+  }
 
-    final printLocale = locale;
+  Future<void> choosePhoneQuota() => _paid.choosePhone();
+
+  Future<void> choosePayDirect() => _paid.choosePay();
+
+  void setPrintPhoneDigits(String value) => _paid.setPhoneDigits(value);
+
+  void setPrintOtpDigits(String value) => _paid.setOtpDigits(value);
+
+  Future<void> requestPrintPhoneOtp() => _paid.requestOtp();
+
+  Future<AstrologyPrintQuota?> verifyPrintPhoneOtp() => _paid.verifyOtp();
+
+  Future<void> continueAfterQuotaSummary(AstrologyPrintQuota summary) =>
+      _paid.continueAfterQuota(summary);
+
+  Future<void> backFromPrintFlow() => _paid.back(cancel: cancelPrintPreview);
+
+  Future<ReportPrintSnapshot> _preparePaidJob(String? phoneProofToken) async {
+    final result = state.result;
+    final subject = state.subject;
+    if (result == null || subject == null) {
+      return state.print.copyWith(
+        phase: ReportPrintPhase.printResult,
+        printConfirmed: false,
+        error: 'No reading to print',
+        message: 'No reading to print',
+      );
+    }
+    final printLocale = _printLocale;
     final bullets = result.insights.forLocale(printLocale);
-
-    state = state.copyWith(
-      clearError: true,
-      print: state.print.copyWith(
-        phase: ReportPrintPhase.preparingPreview,
-        clearError: true,
-        clearMessage: true,
-      ),
-    );
-
     final p = result.panchang;
-    final next = await _printSupport.prepare(
+    return _printSupport.prepare(
       createJobPath: '/astrology/today/print',
       body: {
         'subject': subject.toJson(),
@@ -179,11 +231,10 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
         'disclaimer': result.disclaimer,
         'locale': printLocale.apiValue,
         if (bullets.isNotEmpty) 'insightBullets': bullets,
+        'phoneProofToken': ?phoneProofToken,
       },
       previous: state.print,
     );
-    if (!ref.mounted) return;
-    state = state.copyWith(print: next, error: next.error, clearError: next.error == null);
   }
 
   Future<void> confirmPrint() async {
@@ -209,6 +260,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
   }
 
   Future<void> cancelPrintPreview() async {
+    _paid.stopPoll();
+    _paid.clearPendingToken();
     await _printSupport.abandonRetry(state.print);
     if (!ref.mounted) return;
     state = state.copyWith(print: const ReportPrintSnapshot());
@@ -225,6 +278,8 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
   }
 
   void clearPrintResult() {
+    _paid.stopPoll();
+    _paid.clearPendingToken();
     state = state.copyWith(print: const ReportPrintSnapshot());
   }
 }

@@ -11,7 +11,6 @@ import 'package:skp_kiosk/features/quick_print/application/quick_print_controlle
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
-import 'package:skp_kiosk/features/weather/presentation/weather_header_strip.dart';
 
 class QuickPrintPage extends ConsumerStatefulWidget {
   const QuickPrintPage({super.key});
@@ -125,7 +124,6 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
       child: KioskShell(
         title: 'Print Documents',
         titleIcon: Icons.print_rounded,
-        headerExtra: const WeatherHeaderStrip(),
         onHome: _endSession,
         stepLabel: step,
         footerLeading: leading,
@@ -402,7 +400,7 @@ class _QrWaitState extends State<_QrWait> {
                 _StepItem(
                   stepNumber: '3',
                   icon: Icons.upload_file_rounded,
-                  title: 'Upload your document (PDF)',
+                  title: 'Upload a photo or a PDF',
                   subtitle: 'and complete payment if asked',
                   isDark: isDark,
                   colors: colors,
