@@ -52,9 +52,12 @@
 // PRINT SEQUENCE (what kiosk.exe sends):
 //   {"print":"start"}  -> PRINT_START_DELAY_MS later: shutter opens and
 //                         the roller motor starts
-//   {"print":"done"}   -> PRINT_END_DELAY_MS later: motor stops and the
-//                         shutter closes
-//   {"print":"stop"}   -> stop motor + close shutter immediately
+//   {"print":"done"}   -> stop motor and close the shutter immediately.
+//                         The app sends this only after the USB page count
+//                         verifies the job (Print successful).
+//   {"print":"stop"}   -> stop motor + close shutter immediately.
+//                         Manual serial command. The app does not send it.
+//   If "done" never arrives, the shutter closes after PRINT_MAX_S (5 min).
 //   {"print":"status"}
 //   MOTOR: {"motor":"on"} {"motor":"off"} {"motor_speed":80}
 // =====================================================
@@ -167,8 +170,8 @@ void startWatchdog()
 #define SHUTTER_CONT_TRAVEL_MS 1500
 
 // Shutter closes by itself this long after opening (0 = never).
-// Failsafe only if the host app forgets to close it. Keep it LONGER
-// than PRINT_MAX_S so it never closes in the middle of a print.
+// Backup if the shutter was opened outside a print sequence. During a
+// print, PRINT_MAX_S is the failsafe and it is restarted on each start.
 #define SHUTTER_AUTO_CLOSE_S 300
 
 // Position servo only: release the servo this long after it has closed
@@ -224,12 +227,15 @@ void startWatchdog()
 // {"print":"start"} -> wait this long, then open shutter + start motor
 #define PRINT_START_DELAY_MS 3000
 
-// {"print":"done"}  -> wait this long, then stop motor + close shutter
-#define PRINT_END_DELAY_MS 5000
+// {"print":"done"}  -> wait this long, then stop motor + close shutter.
+// 0 = close on the next loop. The app sends "done" only when the print
+// is verified, so there is no extra hold after Print successful.
+#define PRINT_END_DELAY_MS 0
 
 // Whole sequence is aborted (motor off, shutter closed) after this long
 // if "done" never arrives (app crash, printer jam, cable pulled...).
-#define PRINT_MAX_S 240
+// Restarted when another {"print":"start"} arrives while still open.
+#define PRINT_MAX_S 300
 
 
 // =====================================================
@@ -1304,20 +1310,26 @@ void processPrintCommand(JsonDocument &command)
 
   if (strcmp(action, "start") == 0)
   {
+    printDonePending = false;
+    printSeqStartedAt = now;
+
     if (printSeq == PSEQ_IDLE)
     {
       printSeq = PSEQ_WAIT_START;
       printSeqAt = now + PRINT_START_DELAY_MS;
-      printSeqStartedAt = now;
-      printDonePending = false;
 
       printStatus("print_sequence_waiting");
     }
-    else if (printSeq == PSEQ_WAIT_END)
+    else
     {
-      // A new job arrived before the shutter closed: keep going.
-      printSeq = PSEQ_RUNNING;
-      printDonePending = false;
+      // Another job started while this sequence is still open. Do not
+      // close. Restart the 5-minute clock so the previous job cannot
+      // shut the tray in the middle of the new one.
+      if (printSeq == PSEQ_WAIT_END)
+        printSeq = PSEQ_RUNNING;
+
+      if (shutterState == SHUTTER_OPEN || shutterState == SHUTTER_OPENING)
+        shutterOpenedAt = now;
     }
   }
   else if (strcmp(action, "done") == 0)

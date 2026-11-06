@@ -515,7 +515,7 @@ void main() {
     ]);
   });
 
-  test('print tray sends start then stop when USB reconcile times out', () async {
+  test('print tray sends start only when USB reconcile times out', () async {
     final native = FakePrinterNative(
       health: const PrinterHealth(state: 'ready', online: true),
     );
@@ -541,7 +541,6 @@ void main() {
     expect(result.outcome, PrintReconcileOutcome.reconciliationRequired);
     expect(tray, [
       '{"print":"start"}',
-      '{"print":"stop"}',
     ]);
   });
 

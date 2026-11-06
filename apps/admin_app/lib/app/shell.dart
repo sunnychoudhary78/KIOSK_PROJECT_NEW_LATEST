@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_admin/features/fleet/presentation/home_page.dart';
 import 'package:skp_admin/features/fleet/presentation/kiosks_page.dart';
+import 'package:skp_admin/features/more/presentation/more_page.dart';
 import 'package:skp_admin/features/print_jobs/presentation/print_jobs_page.dart';
 import 'package:skp_admin/features/support/presentation/support_controller.dart';
 import 'package:skp_admin/features/support/presentation/support_page.dart';
@@ -27,6 +28,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           KiosksPage(),
           PrintJobsPage(),
           SupportPage(),
+          MorePage(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -45,6 +47,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
             ),
             label: 'Support',
           ),
+          const NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
         ],
       ),
     );

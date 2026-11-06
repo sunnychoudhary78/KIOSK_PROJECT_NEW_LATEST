@@ -172,10 +172,6 @@ class _AstrologyResultViewState extends State<AstrologyResultView>
     final title = reading.name.isEmpty
         ? 'Your reading'
         : "${reading.name}'s reading";
-    final trimmedName = reading.name.trim();
-    final initial = trimmedName.isEmpty
-        ? '✦'
-        : String.fromCharCode(trimmedName.runes.first).toUpperCase();
 
     final lifeTab =
         lifeSections.isEmpty ? 0 : _lifeTab.clamp(0, lifeSections.length - 1);
@@ -193,17 +189,7 @@ class _AstrologyResultViewState extends State<AstrologyResultView>
                   animation: _slot(0.0, 0.45),
                   child: _HeroSeal(
                     title: title,
-                    initial: initial,
                     disclaimer: reading.disclaimer,
-                    orbitChips: chartTiles
-                        .take(4)
-                        .map(
-                          (t) => _OrbitChipData(
-                            label: '${t.label}: ${t.value}',
-                            art: t.art,
-                          ),
-                        )
-                        .toList(),
                   ),
                 ),
                 if (chartTiles.isNotEmpty) ...[
@@ -316,90 +302,20 @@ class _StaggerItem extends StatelessWidget {
   }
 }
 
-class _OrbitChipData {
-  const _OrbitChipData({required this.label, this.art});
-
-  final String label;
-  final String? art;
-}
-
 class _HeroSeal extends StatelessWidget {
   const _HeroSeal({
     required this.title,
-    required this.initial,
     required this.disclaimer,
-    required this.orbitChips,
   });
 
   final String title;
-  final String initial;
   final String disclaimer;
-  final List<_OrbitChipData> orbitChips;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
       children: [
-        SizedBox(
-          height: 188,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              for (var i = 0; i < orbitChips.length; i++)
-                _OrbitChip(
-                  data: orbitChips[i],
-                  angle: -math.pi / 2 +
-                      (i * (math.pi * 2 / math.max(orbitChips.length, 1))),
-                  radius: 118,
-                ),
-              Container(
-                width: 118,
-                height: 118,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AstrologyColors.palm.withValues(alpha: 0.85),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AstrologyColors.palm.withValues(alpha: 0.32),
-                      blurRadius: 22,
-                    ),
-                  ],
-                ),
-                child: ClipOval(
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      const AstrologyAssetImage(
-                        asset: AstrologyAssets.sealMedallion,
-                        fit: BoxFit.cover,
-                      ),
-                      Container(
-                        color: AstrologyColors.canvas.withValues(alpha: 0.35),
-                      ),
-                      Center(
-                        child: Text(
-                          initial,
-                          style: theme.textTheme.displaySmall?.copyWith(
-                            color: AstrologyColors.goldSoft,
-                            fontWeight: FontWeight.w700,
-                            shadows: const [
-                              Shadow(blurRadius: 8, color: Colors.black54),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
         Text(
           'Your stars have spoken',
           textAlign: TextAlign.center,
@@ -436,60 +352,6 @@ class _HeroSeal extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _OrbitChip extends StatelessWidget {
-  const _OrbitChip({
-    required this.data,
-    required this.angle,
-    required this.radius,
-  });
-
-  final _OrbitChipData data;
-  final double angle;
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) {
-    return Transform.translate(
-      offset: Offset(math.cos(angle) * radius * 0.55, math.sin(angle) * radius * 0.42),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 168),
-        padding: const EdgeInsets.fromLTRB(6, 5, 10, 5),
-        decoration: BoxDecoration(
-          color: AstrologyColors.panelSolid.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AstrologyColors.gold.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (data.art != null) ...[
-              ClipOval(
-                child: AstrologyAssetImage(
-                  asset: data.art!,
-                  width: 22,
-                  height: 22,
-                ),
-              ),
-              const SizedBox(width: 6),
-            ],
-            Flexible(
-              child: Text(
-                data.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AstrologyColors.goldSoft,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

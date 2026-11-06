@@ -264,6 +264,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
           if (row > 0) const SizedBox(height: gap),
           Expanded(
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(child: tiles[row * 2]),
                 const SizedBox(width: gap),
@@ -520,7 +521,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
               showVertical ? 20 : 28,
               showHorizontal ? 10 : 8,
               showVertical ? 20 : 28,
-              12,
+              0,
             ),
             child: contentArea,
           ),
@@ -532,8 +533,6 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
           ),
           const HomeBannerStrip(),
         ],
-        // Bottom Footer Bar (Image 1)
-        _HomeFooterBar(colors: colors),
       ],
     );
 
@@ -646,62 +645,6 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
             ),
           ),
           Expanded(child: mainBody),
-        ],
-      ),
-    );
-  }
-}
-
-class _HomeFooterBar extends StatelessWidget {
-  const _HomeFooterBar({required this.colors});
-
-  final AthenaColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Row(
-        children: [
-          // Need help stays off the footer in the current design.
-          const Spacer(),
-
-          // Divider
-          Container(
-            width: 1,
-            height: 18,
-            color: colors.cardBorder,
-          ),
-          const SizedBox(width: 16),
-
-          // Right: Empowering Businesses with Smart IT Solutions
-          Icon(Icons.rocket_launch_rounded, size: 18, color: colors.accentMagenta),
-          const SizedBox(width: 8),
-          RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: 'Empowering Businesses with ',
-                  style: TextStyle(
-                    fontFamily: 'PlusJakartaSans',
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w500,
-                    color: colors.textSecondary,
-                  ),
-                ),
-                TextSpan(
-                  text: 'Smart IT Solutions',
-                  style: TextStyle(
-                    fontFamily: 'PlusJakartaSans',
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: colors.accentMagenta,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

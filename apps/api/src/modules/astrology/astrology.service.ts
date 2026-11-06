@@ -713,11 +713,53 @@ export class AstrologyService {
     };
   }
 
-  async printKundali(deviceId: string, input: PrintKundaliBody, correlationId?: string) {
-    await this.services.assertEnabled(deviceId, 'astrology');
-    await assertPrintingAvailable(this.db, deviceId);
+  /** Fail before building a PDF when a paid print has no Razorpay keys. */
+  private async assertAstrologyColorPrintReady(deviceId: string, phoneProofToken?: string) {
     const device = await this.db.device.findUnique({
       where: { id: deviceId },
+      select: kundaliQuotaDeviceSelect,
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    const chargeRupees = Math.max(0, device.kundaliColorPrintChargeRupees ?? 0);
+    if (chargeRupees <= 0) return;
+    if (phoneProofToken) {
+      const proof = verifyKundaliPhoneProofToken({
+        token: phoneProofToken,
+        deviceId,
+        jwtSecret: this.config.auth.jwtSecret,
+      });
+      if (proof) {
+        const eligibility = await this.evaluateKundaliFreeEligibility(deviceId, proof.phone);
+        if (eligibility.freeEligible) return;
+      }
+    }
+    if (!this.config.razorpay.keyId || !this.config.razorpay.keySecret) {
+      throw new AppError(
+        'payments_not_configured',
+        'Paid printing is not available on this kiosk right now',
+        503,
+      );
+    }
+  }
+
+  /**
+   * Same color charge, society free page, and UPI QR for every astrology print.
+   * Call after the PDF job exists.
+   */
+  private async settleAstrologyColorPrint<T extends { id: string; pageCount?: number | null }>(input: {
+    deviceId: string;
+    job: T;
+    phoneProofToken?: string;
+    correlationId?: string;
+    auditAction: string;
+    qrName: string;
+    qrDescription: string;
+    qrKind: string;
+  }) {
+    const device = await this.db.device.findUnique({
+      where: { id: input.deviceId },
       select: kundaliQuotaDeviceSelect,
     });
     if (!device) {
@@ -730,16 +772,11 @@ export class AstrologyService {
     if (chargeRupees > 0 && input.phoneProofToken) {
       const proof = verifyKundaliPhoneProofToken({
         token: input.phoneProofToken,
-        deviceId,
+        deviceId: input.deviceId,
         jwtSecret: this.config.auth.jwtSecret,
       });
-      if (!proof) {
-        // Wrong-device or corrupt token → reject; expired/invalid for free → fall through to paid.
-        // Distinguishing: if signature fails for another device id inside payload, verify returns null.
-        // Treat null as paid path (expired or bad). Only 403 if payload device mismatches after parse —
-        // verify already returns null for mismatch. Paid path is fine.
-      } else {
-        const eligibility = await this.evaluateKundaliFreeEligibility(deviceId, proof.phone);
+      if (proof) {
+        const eligibility = await this.evaluateKundaliFreeEligibility(input.deviceId, proof.phone);
         if (eligibility.freeEligible) {
           freePhone = proof.phone;
           freePeriodKey = eligibility.periodKey;
@@ -755,6 +792,109 @@ export class AstrologyService {
       );
     }
 
+    await this.audit.record({
+      action: input.auditAction,
+      principalType: 'device',
+      principalId: input.deviceId,
+      resourceType: 'print_job',
+      resourceId: input.job.id,
+      correlationId: input.correlationId,
+      metadata: freePhone
+        ? { freeColorPage: true, phoneSuffix: freePhone.slice(-4) }
+        : { freeColorPage: false },
+    });
+
+    if (chargeRupees <= 0 || freePhone) {
+      if (freePhone && freePeriodKey) {
+        await this.quota.reserveFreePages({
+          phone: freePhone,
+          mode: 'color',
+          pages: 1,
+          periodKey: freePeriodKey,
+          printJobId: input.job.id,
+        });
+      }
+      return {
+        ...input.job,
+        paymentRequired: false,
+        amountPaise: 0,
+        currency: 'INR',
+        paymentId: null,
+        checkoutToken: null,
+        checkoutUrl: null,
+        qrImageUrl: null,
+        freePages: freePhone ? 1 : 0,
+      };
+    }
+
+    const amountPaise = chargeRupees * 100;
+    const nowMs = Date.now();
+    const windowMs = this.config.payments.windowMinutes * 60_000;
+    const closeByMs = Math.min(
+      Math.max(nowMs + windowMs, nowMs + 2 * 60_000),
+      nowMs + 2 * 60 * 60_000,
+    );
+    const closeByUnix = Math.floor(closeByMs / 1000);
+
+    const qr = await this.razorpay.createUpiQrCode({
+      amountPaise,
+      description: input.qrDescription.slice(0, 512),
+      name: input.qrName,
+      closeByUnix,
+      notes: {
+        print_job_id: input.job.id,
+        device_id: input.deviceId,
+        kind: input.qrKind,
+      },
+    });
+
+    const expiresAt = new Date((qr.closeBy || closeByUnix) * 1000);
+    const payment = await this.db.payment.create({
+      data: {
+        printJobId: input.job.id,
+        status: PaymentStatus.PENDING,
+        pageCount: input.job.pageCount ?? 1,
+        freePages: 0,
+        extraPages: 1,
+        printColorMode: PrintColorMode.color,
+        amountPaise,
+        currency: 'INR',
+        razorpayQrCodeId: qr.id,
+        qrImageUrl: qr.imageUrl,
+        expiresAt,
+      },
+    });
+
+    await this.audit.record({
+      action: 'payment.qr_created',
+      principalType: 'device',
+      principalId: input.deviceId,
+      resourceType: 'payment',
+      resourceId: payment.id,
+      correlationId: input.correlationId,
+      metadata: {
+        printJobId: input.job.id,
+        razorpayQrCodeId: qr.id,
+        amountPaise,
+      },
+    });
+
+    return {
+      ...input.job,
+      paymentRequired: true,
+      amountPaise,
+      currency: 'INR',
+      paymentId: payment.id,
+      checkoutToken: null,
+      checkoutUrl: null,
+      qrImageUrl: qr.imageUrl,
+    };
+  }
+
+  async printKundali(deviceId: string, input: PrintKundaliBody, correlationId?: string) {
+    await this.services.assertEnabled(deviceId, 'astrology');
+    await assertPrintingAvailable(this.db, deviceId);
+    await this.assertAstrologyColorPrintReady(deviceId, input.phoneProofToken);
     const bytes = await buildKundaliReportPdf({
       subject: { ...input.subject, birthTimeUnknown: Boolean(input.subject.birthTimeUnknown) },
       style: input.style,
@@ -780,105 +920,16 @@ export class AstrologyService {
       'device',
       correlationId,
     );
-    await this.audit.record({
-      action: 'astrology.kundali_print_requested',
-      principalType: 'device',
-      principalId: deviceId,
-      resourceType: 'print_job',
-      resourceId: job.id,
+    return this.settleAstrologyColorPrint({
+      deviceId,
+      job,
+      phoneProofToken: input.phoneProofToken,
       correlationId,
-      metadata: freePhone
-        ? { freeColorPage: true, phoneSuffix: freePhone.slice(-4) }
-        : { freeColorPage: false },
+      auditAction: 'astrology.kundali_print_requested',
+      qrName: 'Kundali color print',
+      qrDescription: `Kundali color print - ${input.subject.name}`,
+      qrKind: 'kundali_color_print',
     });
-
-    if (chargeRupees <= 0 || freePhone) {
-      if (freePhone && freePeriodKey) {
-        await this.quota.reserveFreePages({
-          phone: freePhone,
-          mode: 'color',
-          pages: 1,
-          periodKey: freePeriodKey,
-          printJobId: job.id,
-        });
-      }
-      return {
-        ...job,
-        paymentRequired: false,
-        amountPaise: 0,
-        currency: 'INR',
-        paymentId: null,
-        checkoutToken: null,
-        checkoutUrl: null,
-        qrImageUrl: null,
-        freePages: freePhone ? 1 : 0,
-      };
-    }
-
-    const amountPaise = chargeRupees * 100;
-    const nowMs = Date.now();
-    const windowMs = this.config.payments.windowMinutes * 60_000;
-    // Razorpay single-use QR: close_by between +2 minutes and +2 hours.
-    const closeByMs = Math.min(
-      Math.max(nowMs + windowMs, nowMs + 2 * 60_000),
-      nowMs + 2 * 60 * 60_000,
-    );
-    const closeByUnix = Math.floor(closeByMs / 1000);
-
-    const qr = await this.razorpay.createUpiQrCode({
-      amountPaise,
-      description: `Kundali color print - ${input.subject.name}`.slice(0, 512),
-      name: 'Kundali color print',
-      closeByUnix,
-      notes: {
-        print_job_id: job.id,
-        device_id: deviceId,
-        kind: 'kundali_color_print',
-      },
-    });
-
-    const expiresAt = new Date((qr.closeBy || closeByUnix) * 1000);
-
-    const payment = await this.db.payment.create({
-      data: {
-        printJobId: job.id,
-        status: PaymentStatus.PENDING,
-        pageCount: job.pageCount ?? 1,
-        freePages: 0,
-        extraPages: 1,
-        printColorMode: PrintColorMode.color,
-        amountPaise,
-        currency: 'INR',
-        razorpayQrCodeId: qr.id,
-        qrImageUrl: qr.imageUrl,
-        expiresAt,
-      },
-    });
-
-    await this.audit.record({
-      action: 'payment.qr_created',
-      principalType: 'device',
-      principalId: deviceId,
-      resourceType: 'payment',
-      resourceId: payment.id,
-      correlationId,
-      metadata: {
-        printJobId: job.id,
-        razorpayQrCodeId: qr.id,
-        amountPaise,
-      },
-    });
-
-    return {
-      ...job,
-      paymentRequired: true,
-      amountPaise,
-      currency: 'INR',
-      paymentId: payment.id,
-      checkoutToken: null,
-      checkoutUrl: null,
-      qrImageUrl: qr.imageUrl,
-    };
   }
 
   async getPrintCheckout(token: string) {
@@ -1092,6 +1143,7 @@ export class AstrologyService {
       locale: input.locale,
       disclaimer: input.disclaimer,
     });
+    await this.assertAstrologyColorPrintReady(deviceId, input.phoneProofToken);
     const job = await createPrintJobWithPdf(
       this.printing,
       {
@@ -1100,6 +1152,7 @@ export class AstrologyService {
         deviceId,
         bytes,
         folder: 'astrology',
+        printColorMode: PrintColorMode.color,
         idempotencyKey:
           input.idempotencyKey ??
           `ast-match-${deviceId}-${input.groom.name}-${input.bride.name}-${Date.now()}`.slice(0, 100),
@@ -1107,20 +1160,22 @@ export class AstrologyService {
       'device',
       correlationId,
     );
-    await this.audit.record({
-      action: 'astrology.match_print_requested',
-      principalType: 'device',
-      principalId: deviceId,
-      resourceType: 'print_job',
-      resourceId: job.id,
+    return this.settleAstrologyColorPrint({
+      deviceId,
+      job,
+      phoneProofToken: input.phoneProofToken,
       correlationId,
+      auditAction: 'astrology.match_print_requested',
+      qrName: 'Match Kundali print',
+      qrDescription: `Match Kundali — ${input.groom.name} & ${input.bride.name}`,
+      qrKind: 'astrology_color_print',
     });
-    return job;
   }
 
   async printReading(deviceId: string, input: PrintReadingBody, correlationId?: string) {
     await this.services.assertEnabled(deviceId, 'astrology');
     await assertPrintingAvailable(this.db, deviceId);
+    await this.assertAstrologyColorPrintReady(deviceId, input.phoneProofToken);
     const bytes = await buildPalmReportPdf({
       subject: { ...input.subject, birthTimeUnknown: Boolean(input.subject.birthTimeUnknown) },
       chart: input.chart,
@@ -1137,6 +1192,7 @@ export class AstrologyService {
         deviceId,
         bytes,
         folder: 'astrology',
+        printColorMode: PrintColorMode.color,
         idempotencyKey:
           input.idempotencyKey ??
           `ast-palm-${deviceId}-${input.subject.name}-${Date.now()}`.slice(0, 100),
@@ -1144,20 +1200,22 @@ export class AstrologyService {
       'device',
       correlationId,
     );
-    await this.audit.record({
-      action: 'astrology.reading_print_requested',
-      principalType: 'device',
-      principalId: deviceId,
-      resourceType: 'print_job',
-      resourceId: job.id,
+    return this.settleAstrologyColorPrint({
+      deviceId,
+      job,
+      phoneProofToken: input.phoneProofToken,
       correlationId,
+      auditAction: 'astrology.reading_print_requested',
+      qrName: 'Palm reading print',
+      qrDescription: `Palm reading — ${input.subject.name}`,
+      qrKind: 'astrology_color_print',
     });
-    return job;
   }
 
   async printToday(deviceId: string, input: PrintTodayBody, correlationId?: string) {
     await this.services.assertEnabled(deviceId, 'astrology');
     await assertPrintingAvailable(this.db, deviceId);
+    await this.assertAstrologyColorPrintReady(deviceId, input.phoneProofToken);
     const bytes = await buildTodayReportPdf({
       subject: { ...input.subject, birthTimeUnknown: Boolean(input.subject.birthTimeUnknown) },
       asOf: input.asOf,
@@ -1176,6 +1234,7 @@ export class AstrologyService {
         deviceId,
         bytes,
         folder: 'astrology',
+        printColorMode: PrintColorMode.color,
         idempotencyKey:
           input.idempotencyKey ??
           `ast-today-${deviceId}-${input.subject.name}-${Date.now()}`.slice(0, 100),
@@ -1183,15 +1242,16 @@ export class AstrologyService {
       'device',
       correlationId,
     );
-    await this.audit.record({
-      action: 'astrology.today_print_requested',
-      principalType: 'device',
-      principalId: deviceId,
-      resourceType: 'print_job',
-      resourceId: job.id,
+    return this.settleAstrologyColorPrint({
+      deviceId,
+      job,
+      phoneProofToken: input.phoneProofToken,
       correlationId,
+      auditAction: 'astrology.today_print_requested',
+      qrName: 'Today and Panchang print',
+      qrDescription: `Today & Panchang — ${input.subject.name}`,
+      qrKind: 'astrology_color_print',
     });
-    return job;
   }
 
   private async safeKundaliInsights(

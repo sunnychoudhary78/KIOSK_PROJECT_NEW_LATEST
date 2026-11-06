@@ -93,7 +93,7 @@ class AstrologyInsightsPanel extends StatelessWidget {
     required this.bullets,
     required this.locale,
     required this.onLocaleChanged,
-    this.title = 'AI insights',
+    this.title = '',
     this.accent = AstrologyColors.gold,
     this.compact = false,
   });

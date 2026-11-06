@@ -361,6 +361,7 @@ export const printMatchBodySchema = z.object({
   insightBullets: insightBulletListSchema.optional(),
   disclaimer: z.string().trim().max(400).optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
+  phoneProofToken: z.string().trim().min(1).max(800).optional(),
 });
 
 export type PrintMatchBody = z.infer<typeof printMatchBodySchema>;
@@ -373,6 +374,7 @@ export const printReadingBodySchema = z.object({
   palmJpegBase64: z.string().max(8_000_000).optional(),
   disclaimer: z.string().trim().max(400).optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
+  phoneProofToken: z.string().trim().min(1).max(800).optional(),
 });
 
 export type PrintReadingBody = z.infer<typeof printReadingBodySchema>;
@@ -390,6 +392,7 @@ export const printTodayBodySchema = z.object({
   insightBullets: insightBulletListSchema.optional(),
   disclaimer: z.string().trim().max(400).optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
+  phoneProofToken: z.string().trim().min(1).max(800).optional(),
 });
 
 export type PrintTodayBody = z.infer<typeof printTodayBodySchema>;

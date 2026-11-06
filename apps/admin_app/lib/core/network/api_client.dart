@@ -64,6 +64,23 @@ class ApiClient {
     return _decode(response);
   }
 
+  Future<Map<String, dynamic>> put(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final response = await _http.put(
+      _uri(path),
+      headers: _headers(),
+      body: body == null ? null : jsonEncode(body),
+    );
+    return _decode(response);
+  }
+
+  Future<Map<String, dynamic>> delete(String path) async {
+    final response = await _http.delete(_uri(path), headers: _headers());
+    return _decode(response);
+  }
+
   Uri _uri(String path) {
     final base = AppConfig.current.apiBaseUrl.replaceAll(RegExp(r'/+$'), '');
     return Uri.parse('$base$path');

@@ -18,9 +18,9 @@ import crypto from 'node:crypto';
 
 vi.mock('../src/modules/astrology/astrology_report_pdf.js', () => ({
   buildKundaliReportPdf: vi.fn(async () => Buffer.from('%PDF-1.4 mock')),
-  buildMatchReportPdf: vi.fn(),
-  buildPalmReportPdf: vi.fn(),
-  buildTodayReportPdf: vi.fn(),
+  buildMatchReportPdf: vi.fn(async () => Buffer.from('%PDF-1.4 mock')),
+  buildPalmReportPdf: vi.fn(async () => Buffer.from('%PDF-1.4 mock')),
+  buildTodayReportPdf: vi.fn(async () => Buffer.from('%PDF-1.4 mock')),
 }));
 
 vi.mock('../src/modules/printing/report_pdf.js', () => ({
@@ -96,6 +96,7 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
       },
       printJob: {
         findUnique: vi.fn(async () => null),
+        aggregate: vi.fn(async () => ({ _sum: { pagesExpected: 0 } })),
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
           id: 'job-1',
           status: PrintJobStatus.ready,
@@ -316,6 +317,236 @@ describe('AstrologyService.printKundali UPI QR payment', () => {
         charts: [{ key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg: '<svg/>' }],
       }),
     ).rejects.toMatchObject({ code: 'payments_not_configured' });
+  });
+});
+
+describe('AstrologyService other color prints share the kundali charge', () => {
+  const person = {
+    name: 'Asha',
+    gender: 'female' as const,
+    dateOfBirth: '1992-03-18',
+    birthTime: '12:00',
+    birthPlace: 'Jaipur',
+    birthTimeUnknown: true,
+  };
+  const matchBody = {
+    groom: { ...person, name: 'Arun', gender: 'male' as const },
+    bride: person,
+    score: { total: 18, max: 36, summary: 'Mixed', tone: 'mixed' },
+    kutas: [],
+  };
+  const palmBody = {
+    subject: person,
+    chart: {},
+    palm: {
+      summary: 'a',
+      lifeLine: 'a',
+      heartLine: 'a',
+      headLine: 'a',
+      fateLine: 'a',
+    },
+    reading: {
+      overview: 'a',
+      personality: 'a',
+      career: 'a',
+      health: 'a',
+      relationships: 'a',
+      period: 'a',
+    },
+  };
+  const todayBody = {
+    subject: person,
+    asOf: '2026-11-06T00:00:00.000Z',
+    panchang: {},
+    dasha: { label: 'Sun', levels: [] as string[] },
+  };
+
+  function setup(chargeRupees: number) {
+    const config = {
+      env: 'test',
+      auth: { jwtSecret: 'test-jwt-secret-at-least-32-characters!!' },
+      razorpay: { keyId: 'rzp_test', keySecret: 'secret', webhookSecret: 'whsec' },
+      payments: { windowMinutes: 15 },
+      printWeb: { publicUrl: 'http://localhost:5174' },
+    } as AppConfig;
+    const razorpay = {
+      getKeyId: () => 'rzp_test',
+      getKeySecret: () => 'secret',
+      createOrder: vi.fn(),
+      createUpiQrCode: vi.fn(async () => ({
+        id: 'qr_1',
+        imageUrl: 'https://rzp.io/i/test-qr',
+        closeBy: Math.floor(Date.now() / 1000) + 900,
+      })),
+      closeQrCode: vi.fn(async () => undefined),
+    } as unknown as RazorpayClient;
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          kundaliColorPrintChargeRupees: chargeRupees,
+          freeColorPagesPerSession: 2,
+          freePagesPerSession: 2,
+          maxPagesPerSession: 10,
+          freeDisabledFromLocal: null,
+          freeDisabledToLocal: null,
+          printingPausedReason: null,
+        })),
+      },
+      societyPhone: { findUnique: vi.fn(async () => null) },
+      phoneFreePageLedger: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'ledger-1',
+          ...data,
+        })),
+      },
+      platformSetting: { findUnique: vi.fn(async () => null) },
+      printJob: {
+        findUnique: vi.fn(async () => null),
+        aggregate: vi.fn(async () => ({ _sum: { pagesExpected: 0 } })),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'job-1',
+          status: PrintJobStatus.ready,
+          source: data.source,
+          title: data.title,
+          pageCount: data.pageCount ?? 1,
+          pagesExpected: data.pagesExpected ?? 1,
+          pagesReported: null,
+          spoolerJobId: null,
+          pageCounterBefore: null,
+          pageCounterAfter: null,
+          reconcileStatus: 'pending',
+          needsAdminReview: false,
+          reconcileDetail: null,
+          reconciledAt: null,
+          printColorMode: PrintColorMode.color,
+          deviceId: data.deviceId,
+          payloadUrl: data.payloadUrl ?? null,
+          payloadPath: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+        update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'job-1',
+          status: PrintJobStatus.ready,
+          source: 'astrology_print',
+          title: 'Report',
+          pageCount: 1,
+          pagesExpected: 1,
+          pagesReported: null,
+          spoolerJobId: null,
+          pageCounterBefore: null,
+          pageCounterAfter: null,
+          reconcileStatus: 'pending',
+          needsAdminReview: false,
+          reconcileDetail: null,
+          reconciledAt: null,
+          printColorMode: PrintColorMode.color,
+          deviceId: 'device-1',
+          payloadUrl: data.payloadUrl ?? '/v1/print-jobs/job-1/content',
+          payloadPath: data.payloadPath ?? 'tmp/astrology/job-1.pdf',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+      },
+      payment: {
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'pay-1',
+          ...data,
+          paidAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+      },
+    };
+    const service = new AstrologyService(
+      db as unknown as DbClient,
+      {} as VedAstroClient,
+      {} as AstrologyLlmClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+      { assertEnabled: vi.fn(async () => undefined) } as unknown as ServicesCatalogService,
+      silentLogger,
+      config,
+      razorpay,
+      {} as PaymentsService,
+      { sendOtp: vi.fn() } as never,
+    );
+    return { service, db, razorpay, config };
+  }
+
+  function societyProof(config: AppConfig) {
+    return createKundaliPhoneProofToken({
+      deviceId: 'device-1',
+      phone: '+919876543210',
+      jwtSecret: config.auth.jwtSecret,
+    });
+  }
+
+  function enableSociety(db: { societyPhone: { findUnique: ReturnType<typeof vi.fn> }; platformSetting: { findUnique: ReturnType<typeof vi.fn> } }) {
+    db.societyPhone.findUnique = vi.fn(async () => ({ id: 'soc-1' }));
+    db.platformSetting.findUnique = vi.fn(async ({ where }: { where: { settingKey: string } }) => {
+      if (where.settingKey === 'society_free_quota_config') {
+        return {
+          settingKey: where.settingKey,
+          settingValue: { period: 'monthly', freeBwPages: 0, freeColorPages: 5 },
+          isActive: true,
+          description: null,
+        };
+      }
+      return null;
+    });
+  }
+
+  it('creates a UPI QR for match when the charge is 50 and no phone is given', async () => {
+    const { service, razorpay } = setup(50);
+    const result = await service.printMatch('device-1', matchBody);
+    expect(result.paymentRequired).toBe(true);
+    expect(result.amountPaise).toBe(5000);
+    expect(result.qrImageUrl).toBe('https://rzp.io/i/test-qr');
+    expect(razorpay.createUpiQrCode).toHaveBeenCalledOnce();
+  });
+
+  it('keeps match free when the charge is 0', async () => {
+    const { service, db, razorpay } = setup(0);
+    const result = await service.printMatch('device-1', matchBody);
+    expect(result.paymentRequired).toBe(false);
+    expect(result.amountPaise).toBe(0);
+    expect(db.payment.create).not.toHaveBeenCalled();
+    expect(razorpay.createUpiQrCode).not.toHaveBeenCalled();
+  });
+
+  it('reserves one free color page for a society phone on match', async () => {
+    const { service, db, razorpay, config } = setup(50);
+    enableSociety(db);
+    const result = await service.printMatch('device-1', {
+      ...matchBody,
+      phoneProofToken: societyProof(config),
+    });
+    expect(result.paymentRequired).toBe(false);
+    expect(result.freePages).toBe(1);
+    expect(razorpay.createUpiQrCode).not.toHaveBeenCalled();
+    expect(db.phoneFreePageLedger.create).toHaveBeenCalled();
+  });
+
+  it('accepts a phone proof on palm and today prints', async () => {
+    const palm = setup(50);
+    enableSociety(palm.db);
+    const palmResult = await palm.service.printReading('device-1', {
+      ...palmBody,
+      phoneProofToken: societyProof(palm.config),
+    });
+    expect(palmResult.paymentRequired).toBe(false);
+    expect(palmResult.freePages).toBe(1);
+
+    const today = setup(50);
+    enableSociety(today.db);
+    const todayResult = await today.service.printToday('device-1', {
+      ...todayBody,
+      phoneProofToken: societyProof(today.config),
+    });
+    expect(todayResult.paymentRequired).toBe(false);
+    expect(todayResult.freePages).toBe(1);
   });
 });
 

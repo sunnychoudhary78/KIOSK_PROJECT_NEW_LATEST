@@ -60,11 +60,8 @@ class PrintCoordinator {
   bool _abortRequested = false;
   int? _activeSpoolerJobId;
   String? _activePrintTitle;
-  /// True after `print:start` until `done` or `stop`.
+  /// True after `print:start` until a verified `done`.
   bool _traySequenceActive = false;
-
-  /// True once the Windows queue showed this job, so an empty queue means printing finished.
-  bool _sawSpoolerActivity = false;
 
   bool get isLocked => _locked;
 
@@ -84,33 +81,11 @@ class PrintCoordinator {
     _traySequenceActive = true;
   }
 
+  /// Close the shutter. Call only after the USB page count verifies the job.
   Future<void> _trayDone() async {
     if (!_traySequenceActive) return;
     await _sendTray(PrintTrayCommands.done());
     _traySequenceActive = false;
-  }
-
-  Future<void> _trayStop() async {
-    if (!_traySequenceActive) return;
-    await _sendTray(PrintTrayCommands.stop());
-    _traySequenceActive = false;
-  }
-
-  /// `print:done` once the Windows queue has finished the job.
-  ///
-  /// Firmware then waits 5 seconds and closes the shutter. USB page confirmation
-  /// can finish later; a second done is ignored.
-  Future<void> _closeGateWhenSpoolerIdle(PrinterHealth health) async {
-    if (!_traySequenceActive) return;
-    final queued = health.spoolerJobsQueued ?? 0;
-    final printing = health.spoolerJobsPrinting ?? 0;
-    if (queued + printing > 0) {
-      _sawSpoolerActivity = true;
-      return;
-    }
-    if (_sawSpoolerActivity) {
-      await _trayDone();
-    }
   }
 
   Duration get reconcileTimeout =>
@@ -287,7 +262,6 @@ class PrintCoordinator {
     int? pageCounterAfter,
     int pagesReported = 0,
   }) async {
-    await _trayStop();
     final spoolerJobId = _activeSpoolerJobId?.toString();
     await _clearActiveSpoolerWork();
     await reportStatus(
@@ -336,7 +310,6 @@ class PrintCoordinator {
   }) async {
     final expected = pagesExpected < 1 ? 1 : pagesExpected;
     _traySequenceActive = false;
-    _sawSpoolerActivity = false;
 
     onProgress?.call('Checking printer…');
     final preHealth = await _monitor.getHealth();
@@ -410,7 +383,6 @@ class PrintCoordinator {
         colorMode: colorMode,
       );
     } catch (error) {
-      await _trayStop();
       await _clearActiveSpoolerWork();
       await reportStatus(
         jobId: jobId,
@@ -489,10 +461,8 @@ class PrintCoordinator {
       }
       await Future<void>.delayed(pollInterval);
       final health = await _monitor.getHealth();
-      await _closeGateWhenSpoolerIdle(health);
       if (health.isPhysicalFatal) {
         final spoolerJobId = _activeSpoolerJobId?.toString();
-        await _trayStop();
         await _clearActiveSpoolerWork();
         await reportStatus(
           jobId: jobId,
@@ -512,7 +482,6 @@ class PrintCoordinator {
       }
     }
     final spoolerJobId = _activeSpoolerJobId?.toString();
-    await _trayStop();
     await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,
@@ -582,7 +551,6 @@ class PrintCoordinator {
       }
 
       final health = await _monitor.getHealth();
-      await _closeGateWhenSpoolerIdle(health);
       // A null read is a miss. USB `busy` and SNMP timeouts both look like this.
       final after = await readCounter();
       if (after == null) {
@@ -659,7 +627,6 @@ class PrintCoordinator {
                 ? 'jam'
                 : (health.lastErrorCode ?? health.state));
         final spoolerJobId = _activeSpoolerJobId?.toString();
-        await _trayStop();
         await _clearActiveSpoolerWork();
         if (pagesReported > 0) {
           await reportStatus(
@@ -710,7 +677,6 @@ class PrintCoordinator {
         'PRINTER reconcile job=$jobId not verified detail=$unavailableDetail',
       );
       final spoolerJobId = _activeSpoolerJobId?.toString();
-      await _trayStop();
       await _clearActiveSpoolerWork();
       await reportStatus(
         jobId: jobId,
@@ -738,7 +704,6 @@ class PrintCoordinator {
       'PRINTER reconcile job=$jobId not verified delta=$pagesReported expected=$expected detail=timeout',
     );
     final spoolerJobId = _activeSpoolerJobId?.toString();
-    await _trayStop();
     await _clearActiveSpoolerWork();
     await reportStatus(
       jobId: jobId,

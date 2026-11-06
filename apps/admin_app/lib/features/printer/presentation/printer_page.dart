@@ -124,7 +124,7 @@ class _PrinterPageState extends ConsumerState<PrinterPage> {
                   ),
           ),
           _Section(
-            title: 'Pages',
+            title: 'Paper in the tray',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

@@ -44,78 +44,67 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
         titleIcon: Icons.handyman_outlined,
         onHome: _endSession,
         body: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 12, 28, 14),
+          padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  RichText(
-                    text: TextSpan(
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        TextSpan(
-                          text: 'Choose a ',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontSize: 38,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5,
-                            color: colors.textPrimary,
+                        RichText(
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Choose a ',
+                                style: TextStyle(
+                                  fontFamily: 'PlusJakartaSans',
+                                  fontSize: 38,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                  color: colors.textPrimary,
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'Service',
+                                style: TextStyle(
+                                  fontFamily: 'PlusJakartaSans',
+                                  fontSize: 38,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                  color: colors.accentMagenta,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        TextSpan(
-                          text: 'Service',
+                        const SizedBox(height: 4),
+                        Container(
+                          width: 48,
+                          height: 3.5,
+                          decoration: BoxDecoration(
+                            color: colors.accentMagenta,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Select a service to find nearby professionals.',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 38,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5,
-                            color: colors.accentMagenta,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            color: colors.textSecondary,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Container(
-                    width: 48,
-                    height: 3.5,
-                    decoration: BoxDecoration(
-                      color: colors.accentMagenta,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Select a service to find nearby professionals.',
-                    style: TextStyle(
-                      fontFamily: 'PlusJakartaSans',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: colors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 14),
-
-              // 4x4 Grid of Trade Cards (16 trades total)
-              Expanded(
-                child: _TradeGrid(
-                  categories: effectiveCategories,
-                  isLoading: state.loading && state.categories.isEmpty,
-                  error: state.error,
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Bottom Bar: Back Button (Mockup Images 2 & 3)
-              Row(
-                children: [
+                  const SizedBox(width: 16),
                   Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -169,6 +158,16 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
                   ),
                 ],
               ),
+
+              const SizedBox(height: 14),
+
+              Expanded(
+                child: _TradeGrid(
+                  categories: effectiveCategories,
+                  isLoading: state.loading && state.categories.isEmpty,
+                  error: state.error,
+                ),
+              ),
             ],
           ),
         ),
@@ -215,11 +214,11 @@ class _TradeGrid extends StatelessWidget {
 
     const columns = 4;
     const gap = 12.0;
-    const maxVisibleRows = 4;
     final rowCount = (categories.length / columns).ceil();
 
     Widget rowAt(int row) {
       return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var col = 0; col < columns; col++) ...[
             if (col > 0) const SizedBox(width: gap),
@@ -247,24 +246,11 @@ class _TradeGrid extends StatelessWidget {
       );
     }
 
-    if (rowCount > maxVisibleRows) {
-      return ListView(
-        children: [
-          for (var row = 0; row < rowCount; row++) ...[
-            if (row > 0) const SizedBox(height: gap),
-            SizedBox(height: 92, child: rowAt(row)),
-          ],
-        ],
-      );
-    }
-
     return Column(
       children: [
-        for (var row = 0; row < maxVisibleRows; row++) ...[
+        for (var row = 0; row < rowCount; row++) ...[
           if (row > 0) const SizedBox(height: gap),
-          Expanded(
-            child: row < rowCount ? rowAt(row) : const SizedBox.expand(),
-          ),
+          Expanded(child: rowAt(row)),
         ],
       ],
     );
