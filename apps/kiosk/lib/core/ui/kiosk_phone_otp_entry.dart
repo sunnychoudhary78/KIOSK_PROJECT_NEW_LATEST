@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/kiosk_numeric_keypad.dart';
 import 'package:skp_kiosk/core/ui/kiosk_text_caret.dart';
 
@@ -42,23 +41,41 @@ class KioskPhoneOtpEntry extends StatelessWidget {
         ? 'Mobile number'
         : 'OTP';
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : const Color(0xFF101828);
+    final mutedColor = isDark ? const Color(0xFFCBD2E1) : const Color(0xFF64748B);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           decoration: BoxDecoration(
-            color: SkpColors.raised,
-            borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-            border: Border.all(color: SkpColors.line),
+            color: isDark ? const Color(0xFF211747) : Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isDark ? const Color(0xFF4A347D) : const Color(0xFFDCE4EE),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? const Color(0x332E2452)
+                    : Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 hint,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: SkpColors.muted,
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: mutedColor,
                 ),
               ),
               const SizedBox(height: 6),
@@ -69,12 +86,14 @@ class KioskPhoneOtpEntry extends StatelessWidget {
                     : null,
                 showCaret: enabled,
                 caretHeight: 28,
-                caretColor: SkpColors.text,
+                caretColor: titleColor,
                 maxLines: 1,
-                style: theme.textTheme.headlineSmall?.copyWith(
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: theme.textTheme.headlineSmall?.fontSize,
                   fontWeight: FontWeight.w700,
                   letterSpacing: mode == KioskPhoneOtpMode.otp ? 4 : 0.5,
-                  color: digits.isEmpty ? SkpColors.muted : SkpColors.text,
+                  color: digits.isEmpty ? mutedColor : titleColor,
                 ),
               ),
             ],

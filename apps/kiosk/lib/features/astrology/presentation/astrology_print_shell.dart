@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
@@ -58,57 +56,28 @@ class AstrologyPrintShell extends StatelessWidget {
             icon: Icons.arrow_back,
             onPressed: onBackFromPreview,
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'How would you like to print?',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'This color print is ₹$rupees. Society members can use one free color page.',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 28),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _PayChoiceCard(
-                          icon: Icons.phone_android,
-                          title: 'Use phone number',
-                          subtitle: 'Check your society free color quota first.',
-                          onPressed: print.phoneBusy || onChoosePhoneQuota == null
-                              ? null
-                              : () => onChoosePhoneQuota!(),
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: _PayChoiceCard(
-                          icon: Icons.qr_code_2,
-                          title: 'Pay without phone',
-                          subtitle: 'Scan UPI and pay ₹$rupees directly.',
-                          onPressed: print.phoneBusy || onChoosePayDirect == null
-                              ? null
-                              : () => onChoosePayDirect!(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (print.error != null && print.error!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  KioskStatusBanner(
-                    message: print.error!,
-                    tone: KioskBannerTone.danger,
-                    icon: Icons.error_outline,
-                  ),
-                ],
-              ],
+          body: KioskPrintChoiceBody(
+            headline: 'How would you like to print?',
+            subtitle:
+                'This color print is ₹$rupees. Society members can use one free color page.',
+            error: print.error,
+            left: KioskPrintChoiceCard(
+              icon: Icons.phone_android,
+              title: 'Use phone number',
+              accent: KioskPrintChoiceAccents.phone,
+              subtitle: 'Check your society free color quota first.',
+              onPressed: print.phoneBusy || onChoosePhoneQuota == null
+                  ? null
+                  : () => onChoosePhoneQuota!(),
+            ),
+            right: KioskPrintChoiceCard(
+              icon: Icons.qr_code_2,
+              title: 'Pay without phone',
+              accent: KioskPrintChoiceAccents.pay,
+              subtitle: 'Scan UPI and pay ₹$rupees directly.',
+              onPressed: print.phoneBusy || onChoosePayDirect == null
+                  ? null
+                  : () => onChoosePayDirect!(),
             ),
           ),
         ),
@@ -229,77 +198,14 @@ class AstrologyPrintShell extends StatelessWidget {
             icon: Icons.arrow_back,
             onPressed: onBackFromPreview,
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Pay to print',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Scan with any UPI app to pay ₹$rupees for a color Kundali print.',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Printing starts after payment is confirmed.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      if (print.phoneNotice != null &&
-                          print.phoneNotice!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        KioskStatusBanner(
-                          message: print.phoneNotice!,
-                          tone: KioskBannerTone.warning,
-                          icon: Icons.info_outline,
-                        ),
-                      ],
-                      if (print.error != null && print.error!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        KioskStatusBanner(
-                          message: print.error!,
-                          tone: KioskBannerTone.danger,
-                          icon: Icons.error_outline,
-                        ),
-                      ],
-                      const Spacer(),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 24),
-                Container(
-                  width: 480,
-                  height: 480,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-                  ),
-                  child: qrImageUrl.isNotEmpty
-                      ? Image.network(
-                          qrImageUrl,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(Icons.qr_code_2, size: 64),
-                          ),
-                        )
-                      : fallbackUrl.isEmpty
-                          ? const Center(child: CircularProgressIndicator())
-                          : QrImageView(
-                              data: fallbackUrl,
-                              version: QrVersions.auto,
-                              backgroundColor: Colors.white,
-                            ),
-                ),
-              ],
-            ),
+          body: KioskUpiPayPanel(
+            detail:
+                'Scan with any UPI app to pay ₹$rupees for this $title print.',
+            followUp: 'Printing starts after payment is confirmed.',
+            qrImageUrl: qrImageUrl,
+            fallbackUrl: fallbackUrl,
+            notice: print.phoneNotice,
+            error: print.error,
           ),
         ),
       );
@@ -408,59 +314,6 @@ class AstrologyPrintShell extends StatelessWidget {
     }
 
     return const SizedBox.shrink();
-  }
-}
-
-class _PayChoiceCard extends StatelessWidget {
-  const _PayChoiceCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: SkpColors.raised,
-      borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-        child: Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-            border: Border.all(color: SkpColors.line),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 42, color: SkpColors.accentBright),
-              const Spacer(),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: SkpColors.muted,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

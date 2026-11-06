@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
@@ -40,46 +39,11 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
     final summary = await controller.verifyPrintPhoneOtp();
     if (!mounted || summary == null) return;
 
-    await showDialog<void>(
+    await showKioskPrintQuotaDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Free print check'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                summary.remainingLabel,
-                style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                summary.printCostLine,
-                style: Theme.of(dialogContext).textTheme.bodyLarge,
-              ),
-              if (summary.message != null &&
-                  summary.message!.trim().isNotEmpty &&
-                  !summary.freeEligible) ...[
-                const SizedBox(height: 12),
-                Text(
-                  summary.message!,
-                  style: Theme.of(dialogContext).textTheme.bodyMedium,
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            KioskPrimaryButton(
-              label: 'OK',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-          ],
-        );
-      },
+      remainingLabel: summary.remainingLabel,
+      costLine: summary.printCostLine,
+      notice: summary.freeEligible ? null : summary.message,
     );
     if (!mounted) return;
     await controller.continueAfterQuotaSummary(summary);
@@ -129,23 +93,25 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
             icon: Icons.arrow_back,
             onPressed: controller.backFromPrintFlow,
           ),
-          body: _ChoiceBody(
+          body: KioskPrintChoiceBody(
             headline: 'Black & white or color?',
             subtitle: state.pendingDocumentTitle == null
                 ? 'Choose how this document should print.'
                 : 'Choose how “${state.pendingDocumentTitle}” should print.',
             error: state.error,
-            left: _ChoiceCard(
+            left: KioskPrintChoiceCard(
               icon: Icons.filter_b_and_w,
               title: 'Black & white',
+              accent: KioskPrintChoiceAccents.bw,
               subtitle: state.bwChargeRupees <= 0
                   ? 'Free on this kiosk'
                   : '₹${state.bwChargeRupees} per page',
               onPressed: () => controller.chooseColorMode('bw'),
             ),
-            right: _ChoiceCard(
+            right: KioskPrintChoiceCard(
               icon: Icons.palette_outlined,
               title: 'Color',
+              accent: KioskPrintChoiceAccents.color,
               subtitle: state.colorChargeRupees <= 0
                   ? 'Free on this kiosk'
                   : '₹${state.colorChargeRupees} per page',
@@ -170,20 +136,22 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
             icon: Icons.arrow_back,
             onPressed: controller.backFromPrintFlow,
           ),
-          body: _ChoiceBody(
+          body: KioskPrintChoiceBody(
             headline: 'How would you like to print?',
             subtitle:
                 '$modeLabel print is ₹$rupees per page. Society members can use free $modeLabel pages when available.',
             error: state.error,
-            left: _ChoiceCard(
+            left: KioskPrintChoiceCard(
               icon: Icons.phone_android,
               title: 'Use phone number',
+              accent: KioskPrintChoiceAccents.phone,
               subtitle: 'Check your society free $modeLabel quota first.',
               onPressed: state.phoneBusy ? null : controller.choosePhoneQuota,
             ),
-            right: _ChoiceCard(
+            right: KioskPrintChoiceCard(
               icon: Icons.qr_code_2,
               title: 'Pay without phone',
+              accent: KioskPrintChoiceAccents.pay,
               subtitle: 'Scan UPI and pay ₹$rupees per page.',
               onPressed: state.phoneBusy ? null : controller.choosePayDirect,
             ),
@@ -295,73 +263,13 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
             icon: Icons.arrow_back,
             onPressed: controller.backFromPrintFlow,
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Pay to print',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Scan with any UPI app to pay ₹$rupees for this $modeLabel DigiLocker print.',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Preview opens after payment is confirmed.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      if (state.phoneNotice != null &&
-                          state.phoneNotice!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        KioskStatusBanner(
-                          message: state.phoneNotice!,
-                          tone: KioskBannerTone.warning,
-                          icon: Icons.info_outline,
-                        ),
-                      ],
-                      if (state.error != null &&
-                          state.error!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        KioskStatusBanner(
-                          message: state.error!,
-                          tone: KioskBannerTone.danger,
-                          icon: Icons.error_outline,
-                        ),
-                      ],
-                      const Spacer(),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 24),
-                Container(
-                  width: 480,
-                  height: 480,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-                  ),
-                  child: qrImageUrl.isNotEmpty
-                      ? Image.network(
-                          qrImageUrl,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Center(
-                            child: Icon(Icons.qr_code_2, size: 64),
-                          ),
-                        )
-                      : const Center(child: CircularProgressIndicator()),
-                ),
-              ],
-            ),
+          body: KioskUpiPayPanel(
+            detail:
+                'Scan with any UPI app to pay ₹$rupees for this $modeLabel DigiLocker print.',
+            followUp: 'Preview opens after payment is confirmed.',
+            qrImageUrl: qrImageUrl,
+            notice: state.phoneNotice,
+            error: state.error,
           ),
         ),
       );
@@ -492,108 +400,6 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
               ),
             ),
         },
-      ),
-    );
-  }
-}
-
-class _ChoiceBody extends StatelessWidget {
-  const _ChoiceBody({
-    required this.headline,
-    required this.subtitle,
-    required this.left,
-    required this.right,
-    this.error,
-  });
-
-  final String headline;
-  final String subtitle;
-  final Widget left;
-  final Widget right;
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(headline, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(subtitle, style: Theme.of(context).textTheme.bodyLarge),
-          const SizedBox(height: 28),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: left),
-                const SizedBox(width: 20),
-                Expanded(child: right),
-              ],
-            ),
-          ),
-          if (error != null && error!.trim().isNotEmpty) ...[
-            const SizedBox(height: 16),
-            KioskStatusBanner(
-              message: error!,
-              tone: KioskBannerTone.danger,
-              icon: Icons.error_outline,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ChoiceCard extends StatelessWidget {
-  const _ChoiceCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: SkpColors.raised,
-      borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-        child: Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-            border: Border.all(color: SkpColors.line),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 42, color: SkpColors.accentBright),
-              const Spacer(),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: SkpColors.muted,
-                    ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
@@ -44,46 +43,11 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
     final summary = await controller.verifyPrintPhoneOtp();
     if (!mounted || summary == null) return;
 
-    await showDialog<void>(
+    await showKioskPrintQuotaDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Free print check'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                summary.remainingLabel,
-                style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                summary.printCostLine,
-                style: Theme.of(dialogContext).textTheme.bodyLarge,
-              ),
-              if (summary.message != null &&
-                  summary.message!.trim().isNotEmpty &&
-                  !summary.freeEligible) ...[
-                const SizedBox(height: 12),
-                Text(
-                  summary.message!,
-                  style: Theme.of(dialogContext).textTheme.bodyMedium,
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            KioskPrimaryButton(
-              label: 'OK',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-          ],
-        );
-      },
+      remainingLabel: summary.remainingLabel,
+      costLine: summary.printCostLine,
+      notice: summary.freeEligible ? null : summary.message,
     );
     if (!mounted) return;
     await controller.continueAfterQuotaSummary(summary);
@@ -130,21 +94,23 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
             icon: Icons.arrow_back,
             onPressed: controller.backFromPrintFlow,
           ),
-          body: _PrintChoiceBody(
+          body: KioskPrintChoiceBody(
             headline: 'Black & white or color?',
             subtitle: 'Choose how this health report should print.',
             error: print.error,
-            left: _PrintChoiceCard(
+            left: KioskPrintChoiceCard(
               icon: Icons.filter_b_and_w,
               title: 'Black & white',
+              accent: KioskPrintChoiceAccents.bw,
               subtitle: print.bwChargeRupees <= 0
                   ? 'Free on this kiosk'
                   : '₹${print.bwChargeRupees} per page',
               onPressed: () => controller.chooseColorMode('bw'),
             ),
-            right: _PrintChoiceCard(
+            right: KioskPrintChoiceCard(
               icon: Icons.palette_outlined,
               title: 'Color',
+              accent: KioskPrintChoiceAccents.color,
               subtitle: print.colorChargeRupees <= 0
                   ? 'Free on this kiosk'
                   : '₹${print.colorChargeRupees} per page',
@@ -168,20 +134,22 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
             icon: Icons.arrow_back,
             onPressed: controller.backFromPrintFlow,
           ),
-          body: _PrintChoiceBody(
+          body: KioskPrintChoiceBody(
             headline: 'How would you like to print?',
             subtitle:
                 '$modeLabel print is ₹$rupees per page. Society members can use free $modeLabel pages when available.',
             error: print.error,
-            left: _PrintChoiceCard(
+            left: KioskPrintChoiceCard(
               icon: Icons.phone_android,
               title: 'Use phone number',
+              accent: KioskPrintChoiceAccents.phone,
               subtitle: 'Check your society free $modeLabel quota first.',
               onPressed: print.phoneBusy ? null : controller.choosePhoneQuota,
             ),
-            right: _PrintChoiceCard(
+            right: KioskPrintChoiceCard(
               icon: Icons.qr_code_2,
               title: 'Pay without phone',
+              accent: KioskPrintChoiceAccents.pay,
               subtitle: 'Scan UPI and pay ₹$rupees per page.',
               onPressed: print.phoneBusy ? null : controller.choosePayDirect,
             ),
@@ -294,79 +262,14 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
             icon: Icons.arrow_back,
             onPressed: controller.backFromPrintFlow,
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Pay to print',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Scan with any UPI app to pay ₹$rupees for a $modeLabel health report.',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Printing starts after payment is confirmed.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      if (print.phoneNotice != null &&
-                          print.phoneNotice!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        KioskStatusBanner(
-                          message: print.phoneNotice!,
-                          tone: KioskBannerTone.warning,
-                          icon: Icons.info_outline,
-                        ),
-                      ],
-                      if (print.error != null &&
-                          print.error!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        KioskStatusBanner(
-                          message: print.error!,
-                          tone: KioskBannerTone.danger,
-                          icon: Icons.error_outline,
-                        ),
-                      ],
-                      const Spacer(),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 24),
-                Container(
-                  width: 480,
-                  height: 480,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-                  ),
-                  child: qrImageUrl.isNotEmpty
-                      ? Image.network(
-                          qrImageUrl,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Center(
-                            child: Icon(Icons.qr_code_2, size: 64),
-                          ),
-                        )
-                      : fallbackUrl.isEmpty
-                          ? const Center(child: CircularProgressIndicator())
-                          : QrImageView(
-                              data: fallbackUrl,
-                              version: QrVersions.auto,
-                              backgroundColor: Colors.white,
-                            ),
-                ),
-              ],
-            ),
+          body: KioskUpiPayPanel(
+            detail:
+                'Scan with any UPI app to pay ₹$rupees for a $modeLabel health report.',
+            followUp: 'Printing starts after payment is confirmed.',
+            qrImageUrl: qrImageUrl,
+            fallbackUrl: fallbackUrl,
+            notice: print.phoneNotice,
+            error: print.error,
           ),
         ),
       );
@@ -2023,108 +1926,6 @@ class _MedicalDisclaimer extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PrintChoiceBody extends StatelessWidget {
-  const _PrintChoiceBody({
-    required this.headline,
-    required this.subtitle,
-    required this.left,
-    required this.right,
-    this.error,
-  });
-
-  final String headline;
-  final String subtitle;
-  final Widget left;
-  final Widget right;
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(headline, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(subtitle, style: Theme.of(context).textTheme.bodyLarge),
-          const SizedBox(height: 28),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: left),
-                const SizedBox(width: 20),
-                Expanded(child: right),
-              ],
-            ),
-          ),
-          if (error != null && error!.trim().isNotEmpty) ...[
-            const SizedBox(height: 16),
-            KioskStatusBanner(
-              message: error!,
-              tone: KioskBannerTone.danger,
-              icon: Icons.error_outline,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PrintChoiceCard extends StatelessWidget {
-  const _PrintChoiceCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: SkpColors.raised,
-      borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-        child: Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
-            border: Border.all(color: SkpColors.line),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 42, color: SkpColors.accentBright),
-              const Spacer(),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: SkpColors.muted,
-                    ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
