@@ -585,7 +585,7 @@ class _IdleAdPlayerState extends ConsumerState<IdleAdPlayer> {
               top: 28,
               child: IgnorePointer(
                 child: Image(
-                  image: AssetImage('assets/brand/athena_logo.png'),
+                  image: AssetImage('assets/new_theme_icons/athena_new_logo.png'),
                   height: 40,
                   fit: BoxFit.contain,
                 ),

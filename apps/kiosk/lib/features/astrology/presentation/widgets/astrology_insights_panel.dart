@@ -131,7 +131,11 @@ class AstrologyInsightsPanel extends StatelessWidget {
                 title,
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
+<<<<<<< Updated upstream
                   fontSize: 16,
+=======
+                  fontSize: compact ? 13.5 : 16,
+>>>>>>> Stashed changes
                   fontWeight: FontWeight.w800,
                   color: isDark ? Colors.white : const Color(0xFF0F172A),
                 ),
@@ -144,16 +148,31 @@ class AstrologyInsightsPanel extends StatelessWidget {
             ),
           ],
         ),
+<<<<<<< Updated upstream
         SizedBox(height: compact ? 8 : 12),
         for (var i = 0; i < bullets.length; i++) ...[
           if (i > 0) SizedBox(height: compact ? 6 : 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+=======
+        SizedBox(height: compact ? 6 : 12),
+        for (var i = 0; i < bullets.length; i++) ...[
+          if (i > 0) SizedBox(height: compact ? 5 : 8),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 14,
+              vertical: compact ? 6 : 10,
+            ),
+>>>>>>> Stashed changes
             decoration: BoxDecoration(
               color: isDark
                   ? const Color(0xFF1E1738).withValues(alpha: 0.6)
                   : const Color(0xFFF8FAFC),
+<<<<<<< Updated upstream
               borderRadius: BorderRadius.circular(14),
+=======
+              borderRadius: BorderRadius.circular(compact ? 10 : 14),
+>>>>>>> Stashed changes
               border: Border.all(
                 color: accent.withValues(alpha: isDark ? 0.25 : 0.2),
               ),
@@ -169,10 +188,17 @@ class AstrologyInsightsPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
+<<<<<<< Updated upstream
                   padding: const EdgeInsets.only(top: 4),
                   child: Container(
                     width: 7,
                     height: 7,
+=======
+                  padding: EdgeInsets.only(top: compact ? 3 : 4),
+                  child: Container(
+                    width: compact ? 6 : 7,
+                    height: compact ? 6 : 7,
+>>>>>>> Stashed changes
                     decoration: BoxDecoration(
                       color: accent,
                       shape: BoxShape.circle,
@@ -185,6 +211,7 @@ class AstrologyInsightsPanel extends StatelessWidget {
                     ),
                   ),
                 ),
+<<<<<<< Updated upstream
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -197,6 +224,20 @@ class AstrologyInsightsPanel extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                       color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
                       height: 1.4,
+=======
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    bullets[i],
+                    maxLines: compact ? 2 : 6,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: compact ? 12 : 13.5,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                      height: 1.35,
+>>>>>>> Stashed changes
                     ),
                   ),
                 ),

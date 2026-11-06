@@ -289,6 +289,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Top Pill Badge
+<<<<<<< Updated upstream
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     margin: const EdgeInsets.only(bottom: 6),
@@ -313,10 +314,91 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                             fontWeight: FontWeight.w700,
                             color: isDark ? const Color(0xFFF472B6) : const Color(0xFFBE185D),
                           ),
+=======
+                  // Container(
+                  //   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  //   margin: const EdgeInsets.only(bottom: 6),
+                  //   decoration: BoxDecoration(
+                  //     color: isDark ? const Color(0xFF2E1C48) : const Color(0xFFFDF2F8),
+                  //     borderRadius: BorderRadius.circular(16),
+                  //     border: Border.all(
+                  //       color: isDark ? const Color(0xFF6B21A8) : const Color(0xFFFBCFE8),
+                  //       width: 1.1,
+                  //     ),
+                  //   ),
+                  //   child: Row(
+                  //     mainAxisSize: MainAxisSize.min,
+                  //     children: [
+                  //       const Icon(Icons.auto_awesome_rounded, size: 13, color: Color(0xFFEC4899)),
+                  //       const SizedBox(width: 6),
+                  //       Text(
+                  //         'Athena Smart Kiosk',
+                  //         style: TextStyle(
+                  //           fontFamily: 'PlusJakartaSans',
+                  //           fontSize: 12,
+                  //           fontWeight: FontWeight.w700,
+                  //           color: isDark ? const Color(0xFFF472B6) : const Color(0xFFBE185D),
+                  //         ),
+                  //       ),
+                  //     ],
+                  //   ),
+                  // ),
+
+                  // Headline: Select a Service ✨
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Select a ',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                      ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
+                        ).createShader(bounds),
+                        child: const Text(
+                          'Service',
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 34,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text('✨', style: TextStyle(fontSize: 22)),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+
+                  // Glowing Gradient Underline
+                  Container(
+                    width: 64,
+                    height: 4.5,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFE11D48).withValues(alpha: 0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+>>>>>>> Stashed changes
                         ),
                       ],
                     ),
                   ),
+<<<<<<< Updated upstream
 
                   // Headline: Select a Service ✨
                   Row(
@@ -371,6 +453,8 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                       ],
                     ),
                   ),
+=======
+>>>>>>> Stashed changes
                   const SizedBox(height: 8),
 
                   // Subtitle
@@ -525,7 +609,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset(
-                      'assets/brand/athena_logo.png',
+                      'assets/new_theme_icons/athena_new_logo.png',
                       height: 44,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => Container(
@@ -596,7 +680,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                       Icon(Icons.touch_app_rounded, size: 14, color: colors.accentMagenta),
                       const SizedBox(width: 5),
                       Text(
-                        'Smart Service Kiosk',
+                        'Your Smart Everyday Assistant',
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
                           fontSize: 12,
@@ -651,18 +735,18 @@ class _HomeFooterBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Row(
         children: [
-          // Left: Need help?
-          Icon(Icons.info_outline_rounded, size: 16, color: colors.textSecondary),
-          const SizedBox(width: 6),
-          Text(
-            'Need help? Please ask the attendant.',
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-              color: colors.textSecondary,
-            ),
-          ),
+          // // Left: Need help?
+          // Icon(Icons.info_outline_rounded, size: 16, color: colors.textSecondary),
+          // const SizedBox(width: 6),
+          // Text(
+          //   'Need help? Please ask the attendant.',
+          //   style: TextStyle(
+          //     fontFamily: 'PlusJakartaSans',
+          //     fontSize: 12.5,
+          //     fontWeight: FontWeight.w500,
+          //     color: colors.textSecondary,
+          //   ),
+          // ),
           const Spacer(),
 
           // Divider

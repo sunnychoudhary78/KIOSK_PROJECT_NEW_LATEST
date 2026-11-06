@@ -663,7 +663,11 @@ class _ChooseView extends StatelessWidget {
               Expanded(
                 child: _MeasurementCard(
                   title: 'Temperature',
+<<<<<<< Updated upstream
                   subtitle: 'Getting your body temperature...\n',
+=======
+                  subtitle: 'Measure your body temperature\nquickly and contactlessly with sensor.',
+>>>>>>> Stashed changes
                   graphic: const Thermometer3DGraphic(size: 88),
                   accentColor: const Color(0xFFE11D48),
                   cardGradient: isDark
@@ -680,7 +684,14 @@ class _ChooseView extends StatelessWidget {
                         ),
                   borderColor: isDark ? const Color(0xFF9F1239) : const Color(0xFFFBCFE8),
                   shadowColor: const Color(0xFFE11D48),
+<<<<<<< Updated upstream
                   showProgressBar: true,
+=======
+                  tags: const [
+                    (icon: '🌡️', label: 'Body Temp (°C / °F)'),
+                    (icon: '⚡', label: 'Contactless Sensor'),
+                  ],
+>>>>>>> Stashed changes
                   onTap: onTemperature,
                   isDark: isDark,
                 ),
@@ -844,7 +855,10 @@ class _MeasurementCard extends StatelessWidget {
     required this.onTap,
     required this.isDark,
     this.tags,
+<<<<<<< Updated upstream
     this.showProgressBar = false,
+=======
+>>>>>>> Stashed changes
   });
 
   final String title;
@@ -857,7 +871,10 @@ class _MeasurementCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool isDark;
   final List<({String icon, String label})>? tags;
+<<<<<<< Updated upstream
   final bool showProgressBar;
+=======
+>>>>>>> Stashed changes
 
   @override
   Widget build(BuildContext context) {
@@ -956,6 +973,7 @@ class _MeasurementCard extends StatelessWidget {
                           ],
                         ),
                       ],
+<<<<<<< Updated upstream
                       if (showProgressBar) ...[
                         const SizedBox(height: 12),
                         Row(
@@ -1002,6 +1020,8 @@ class _MeasurementCard extends StatelessWidget {
                           ],
                         ),
                       ],
+=======
+>>>>>>> Stashed changes
                     ],
                   ),
                 ),

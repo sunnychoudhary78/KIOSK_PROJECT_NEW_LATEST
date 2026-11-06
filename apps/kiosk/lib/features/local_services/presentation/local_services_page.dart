@@ -88,7 +88,7 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
                                 ),
                               ),
                               TextSpan(
-                                text: 'Trade',
+                                text: 'Service',
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
                                   fontSize: 32,

@@ -774,9 +774,9 @@ class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
 
   Color _toneColor(String tone) {
     return switch (tone.toLowerCase()) {
-      'good' => AstrologyColors.accent,
-      'poor' || 'bad' => AstrologyColors.danger,
-      _ => AstrologyColors.gold,
+      'good' => const Color(0xFF10B981),
+      'poor' || 'bad' => const Color(0xFFEF4444),
+      _ => const Color(0xFFF59E0B),
     };
   }
 
@@ -788,12 +788,12 @@ class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final result = widget.result;
     final score = result.score;
     final kutas = padMatchKutas(result.kutas);
     final tone = _toneColor(score.tone);
     final note = result.accuracyNote ?? result.disclaimer;
-    final bullets = result.insights.forLocale(_locale);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -806,17 +806,33 @@ class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SizedBox(
-                      width: 340,
-                      child: GlassPanel(
+                      width: 320,
+                      child: Container(
                         key: const ValueKey('match-score-card'),
-                        padding: const EdgeInsets.all(22),
-                        borderColor: tone.withValues(alpha: 0.65),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isDark
+                                ? tone.withValues(alpha: 0.45)
+                                : const Color(0xFFE2E8F0),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: tone.withValues(alpha: isDark ? 0.12 : 0.08),
+                              blurRadius: 18,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             SizedBox(
-                              width: 168,
-                              height: 168,
+                              width: 150,
+                              height: 150,
                               child: CustomPaint(
                                 painter: _ScoreRingPainter(
                                   progress: score.max == 0
@@ -827,33 +843,53 @@ class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
                                   color: tone,
                                 ),
                                 child: Center(
-                                  child: Text(
-                                    '${score.total.toStringAsFixed(score.total % 1 == 0 ? 0 : 1)} / ${score.max.toStringAsFixed(0)}',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineMedium
-                                        ?.copyWith(
-                                          color: tone,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '${score.total.toStringAsFixed(score.total % 1 == 0 ? 0 : 1)} / ${score.max.toStringAsFixed(0)}',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontFamily: 'PlusJakartaSans',
+                                          fontSize: 26,
                                           fontWeight: FontWeight.w900,
+                                          color: tone,
                                         ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Gun Milan',
+                                        style: TextStyle(
+                                          fontFamily: 'PlusJakartaSans',
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.5,
+                                          color: isDark
+                                              ? const Color(0xFF94A3B8)
+                                              : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 10),
                             Text(
                               score.summary,
                               textAlign: TextAlign.center,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    color: AstrologyColors.text,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                              style: TextStyle(
+                                fontFamily: 'PlusJakartaSans',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1E1B4B),
+                              ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 14),
                             Row(
                               children: [
                                 Expanded(
@@ -868,12 +904,14 @@ class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
                                   ),
                                   child: Text(
                                     '×',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(
-                                          color: AstrologyColors.goldSoft,
-                                        ),
+                                    style: TextStyle(
+                                      fontFamily: 'PlusJakartaSans',
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: isDark
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF64748B),
+                                    ),
                                   ),
                                 ),
                                 Expanded(
@@ -888,51 +926,28 @@ class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       key: const ValueKey('match-kuta-grid'),
                       child: Column(
                         children: [
-                          Expanded(
-                            flex: 5,
-                            child: Column(
-                              children: [
-                                for (var row = 0; row < 4; row++) ...[
-                                  if (row > 0) const SizedBox(height: 6),
+                          for (var row = 0; row < 4; row++) ...[
+                            if (row > 0) const SizedBox(height: 8),
+                            Expanded(
+                              child: Row(
+                                children: [
                                   Expanded(
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: _MatchKutaTile(
-                                            kuta: kutas[row * 2],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: _MatchKutaTile(
-                                            kuta: kutas[row * 2 + 1],
-                                          ),
-                                        ),
-                                      ],
+                                    child: _MatchKutaTile(
+                                      kuta: kutas[row * 2],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _MatchKutaTile(
+                                      kuta: kutas[row * 2 + 1],
                                     ),
                                   ),
                                 ],
-                              ],
-                            ),
-                          ),
-                          if (bullets.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            GlassPanel(
-                              padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                              borderColor: AstrologyColors.matchRose
-                                  .withValues(alpha: 0.4),
-                              child: AstrologyInsightsPanel(
-                                key: const ValueKey('match-insights-panel'),
-                                bullets: bullets,
-                                locale: _locale,
-                                onLocaleChanged: _setLocale,
-                                accent: AstrologyColors.matchRose,
-                                compact: true,
                               ),
                             ),
                           ],
@@ -966,33 +981,59 @@ class _MatchKutaTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final nature = kuta.nature.toLowerCase();
     final color = nature == 'good'
-        ? AstrologyColors.accent
-        : nature == 'bad'
-        ? AstrologyColors.danger
-        : AstrologyColors.gold;
+        ? const Color(0xFF10B981)
+        : (nature == 'bad' || nature == 'poor')
+            ? const Color(0xFFEF4444)
+            : const Color(0xFFF59E0B);
     final scoreText = kuta.points == null
         ? kuta.nature
         : '${kuta.points!.toStringAsFixed(kuta.points! % 1 == 0 ? 0 : 1)} / ${kuta.maxPoints.toStringAsFixed(0)}';
-    return GlassPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      borderColor: color.withValues(alpha: 0.4),
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? color.withValues(alpha: 0.35)
+              : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: isDark ? 0.08 : 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 8,
-            height: 42,
+            width: 4,
+            height: 24,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(99),
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.4),
+                  blurRadius: 4,
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
@@ -1001,42 +1042,68 @@ class _MatchKutaTile extends StatelessWidget {
                         kuta.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AstrologyColors.text,
-                          fontWeight: FontWeight.w800,
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF1E1B4B),
                         ),
                       ),
                     ),
-                    Text(
-                      scoreText,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w800,
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        scoreText,
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: color,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 2.5),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
                   child: LinearProgressIndicator(
-                    minHeight: 4,
+                    minHeight: 3,
                     value: kuta.maxPoints <= 0 || kuta.points == null
                         ? 0
                         : (kuta.points! / kuta.maxPoints).clamp(0, 1).toDouble(),
-                    backgroundColor: AstrologyColors.line,
+                    backgroundColor: isDark
+                        ? const Color(0xFF2D2545)
+                        : const Color(0xFFF1F5F9),
                     color: color,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  kuta.verdict,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AstrologyColors.muted),
-                ),
+                if (kuta.verdict.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Flexible(
+                    child: Text(
+                      kuta.verdict,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1054,21 +1121,24 @@ class _PersonNamePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
+        color: color.withValues(alpha: isDark ? 0.2 : 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.65)),
+        border: Border.all(color: color.withValues(alpha: isDark ? 0.6 : 0.35)),
       ),
       child: Text(
-        name,
+        name.isEmpty ? '-' : name,
         textAlign: TextAlign.center,
-        maxLines: 2,
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: color,
+        style: TextStyle(
+          fontFamily: 'PlusJakartaSans',
+          fontSize: 12.5,
           fontWeight: FontWeight.w800,
+          color: color,
         ),
       ),
     );

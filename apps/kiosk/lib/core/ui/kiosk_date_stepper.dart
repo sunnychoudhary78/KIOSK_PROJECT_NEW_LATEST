@@ -157,27 +157,49 @@ class _StepperColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: SkpColors.raised,
-        borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
-        border: Border.all(color: SkpColors.line),
+        color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF382F50) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _StepHit(icon: Icons.keyboard_arrow_up, onTap: onUp),
+          _StepHit(icon: Icons.keyboard_arrow_up_rounded, onTap: onUp),
           Text(
             display,
-            style: theme.textTheme.headlineMedium?.copyWith(
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF1E1B4B),
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
+          const SizedBox(height: 2),
           Text(
             label.toUpperCase(),
-            style: theme.textTheme.labelMedium,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
           ),
-          _StepHit(icon: Icons.keyboard_arrow_down, onTap: onDown),
+          _StepHit(icon: Icons.keyboard_arrow_down_rounded, onTap: onDown),
         ],
       ),
     );
@@ -192,12 +214,21 @@ class _StepHit extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SizedBox(
-      height: SkpTokens.tapMin * 0.7,
+      height: 48,
       width: double.infinity,
-      child: InkWell(
-        onTap: onTap,
-        child: Icon(icon, size: 32, color: SkpColors.accentBright),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Icon(
+            icon,
+            size: 32,
+            color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
+          ),
+        ),
       ),
     );
   }

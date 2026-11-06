@@ -22,7 +22,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.image(const AssetImage('assets/brand/athena_logo.png')),
+      find.image(const AssetImage('assets/new_theme_icons/athena_new_logo.png')),
       findsOneWidget,
     );
     expect(find.text('Activate this terminal'), findsOneWidget);
