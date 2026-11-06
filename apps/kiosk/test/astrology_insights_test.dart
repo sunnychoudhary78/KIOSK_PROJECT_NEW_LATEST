@@ -123,7 +123,7 @@ void main() {
     expect(find.text('स्थिर विकास'), findsNothing);
     expect(find.text('Lagna'), findsOneWidget);
     expect(find.text('Pisces'), findsOneWidget);
-    expect(find.text('AI insights'), findsOneWidget);
+    expect(find.text('AI insights'), findsNothing);
 
     await tester.tap(find.text('हिं'));
     await tester.pump();
@@ -132,7 +132,7 @@ void main() {
     expect(find.text('Steady growth'), findsNothing);
     expect(find.text('लग्न'), findsOneWidget);
     expect(find.text('मीन'), findsOneWidget);
-    expect(find.text('एआई अंतर्दृष्टि'), findsOneWidget);
+    expect(find.text('एआई अंतर्दृष्टि'), findsNothing);
   });
 
   testWidgets('match locale switch shows Hindi bullets', (tester) async {

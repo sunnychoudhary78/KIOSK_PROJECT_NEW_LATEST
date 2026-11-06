@@ -115,8 +115,9 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
     };
   }
 
-  /// Print always uses English insights (Helvetica/WinAnsi cannot render Hindi).
-  Future<void> preparePrint() async {
+  Future<void> preparePrint({
+    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
+  }) async {
     final result = state.result;
     final groom = state.groom;
     final bride = state.bride;
@@ -127,7 +128,7 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
       return;
     }
 
-    const printLocale = AstrologyInsightLocale.en;
+    final printLocale = locale;
     final bullets = result.insights.forLocale(printLocale);
 
     state = state.copyWith(

@@ -119,6 +119,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
 
   void _submit() {
     if (!_valid(_brideName, _bridePlace)) return;
+    setState(() => _insightLocale = AstrologyInsightLocale.en);
     ref
         .read(matchKundaliControllerProvider.notifier)
         .submit(
@@ -270,6 +271,7 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
       _bridePlaceCoords = null;
       _focus = 0;
       _stepperColumn = 0;
+      _insightLocale = AstrologyInsightLocale.en;
     });
   }
 
@@ -341,7 +343,8 @@ class _MatchKundaliPageState extends ConsumerState<MatchKundaliPage> {
               label: 'Print',
               icon: Icons.print,
               expand: false,
-              onPressed: () => controller.preparePrint(),
+              onPressed: () =>
+                  controller.preparePrint(locale: _insightLocale),
             ),
           ],
         );

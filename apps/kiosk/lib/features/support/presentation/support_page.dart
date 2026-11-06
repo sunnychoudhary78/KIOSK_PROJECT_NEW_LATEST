@@ -116,17 +116,22 @@ class _SupportPageState extends ConsumerState<SupportPage> {
                       child: _FieldCard(
                         label: 'Message',
                         requiredMark: true,
+                        expandChild: true,
                         selected: state.focus == SupportFormFocus.message,
                         onTap: () =>
                             controller.setFocus(SupportFormFocus.message),
-                        child: Text(
-                          state.message.isEmpty
-                              ? 'Describe the issue…'
-                              : state.message,
+                        child: KioskCaretText(
+                          text: state.message,
+                          hint: 'Describe the issue…',
+                          showCaret: state.focus == SupportFormFocus.message,
+                          caretHeight: 22,
+                          caretColor: colors.textPrimary,
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: state.message.isEmpty
-                                    ? colors.textSecondary
-                                    : colors.textPrimary,
+                                color: colors.textPrimary,
+                                height: 1.35,
+                              ),
+                          hintStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: colors.textSecondary,
                                 height: 1.35,
                               ),
                         ),
@@ -137,10 +142,19 @@ class _SupportPageState extends ConsumerState<SupportPage> {
                       label: 'Callback phone (optional)',
                       selected: state.focus == SupportFormFocus.phone,
                       onTap: () => controller.setFocus(SupportFormFocus.phone),
-                      child: Text(
-                        state.phone.isEmpty ? '+91 —' : '+91 ${state.phone}',
+                      child: KioskCaretText(
+                        text: state.phone.isEmpty
+                            ? (state.focus == SupportFormFocus.phone
+                                ? '+91 '
+                                : '+91 —')
+                            : '+91 ${state.phone}',
+                        showCaret: state.focus == SupportFormFocus.phone,
+                        caretHeight: 22,
+                        caretColor: colors.textPrimary,
+                        maxLines: 1,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: state.phone.isEmpty
+                              color: state.phone.isEmpty &&
+                                      state.focus != SupportFormFocus.phone
                                   ? colors.textSecondary
                                   : colors.textPrimary,
                               letterSpacing: 0.4,
@@ -287,6 +301,7 @@ class _FieldCard extends StatelessWidget {
     required this.onTap,
     required this.child,
     this.requiredMark = false,
+    this.expandChild = false,
   });
 
   final String label;
@@ -294,6 +309,7 @@ class _FieldCard extends StatelessWidget {
   final VoidCallback onTap;
   final Widget child;
   final bool requiredMark;
+  final bool expandChild;
 
   @override
   Widget build(BuildContext context) {
@@ -333,7 +349,15 @@ class _FieldCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              child,
+              if (expandChild)
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: SingleChildScrollView(child: child),
+                  ),
+                )
+              else
+                child,
             ],
           ),
         ),

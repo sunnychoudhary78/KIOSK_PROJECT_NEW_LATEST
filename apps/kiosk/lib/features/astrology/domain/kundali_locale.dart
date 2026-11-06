@@ -2,9 +2,6 @@ import 'package:skp_kiosk/features/astrology/domain/astrology_insights.dart';
 
 /// UI + chart-value localization for My Kundali result (EN/HI).
 abstract final class KundaliLocale {
-  static String insightsTitle(AstrologyInsightLocale locale) =>
-      locale == AstrologyInsightLocale.hi ? 'एआई अंतर्दृष्टि' : 'AI insights';
-
   static String styleLabel(String style, AstrologyInsightLocale locale) {
     final south = style == 'south';
     if (locale == AstrologyInsightLocale.hi) {

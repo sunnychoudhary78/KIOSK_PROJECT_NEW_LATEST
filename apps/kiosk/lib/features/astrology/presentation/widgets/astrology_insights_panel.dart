@@ -117,26 +117,29 @@ class AstrologyInsightsPanel extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+            if (title.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.auto_awesome, size: 14, color: accent),
               ),
-              child: Icon(Icons.auto_awesome, size: 14, color: accent),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontFamily: 'PlusJakartaSans',
-                  fontSize: compact ? 13.5 : 16,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: compact ? 13.5 : 16,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
                 ),
               ),
-            ),
+            ] else
+              const Spacer(),
             AstrologyLocaleSwitch(
               value: locale,
               onChanged: onLocaleChanged,

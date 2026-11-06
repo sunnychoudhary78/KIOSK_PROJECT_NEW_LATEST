@@ -129,8 +129,9 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
     }
   }
 
-  /// Print always uses English insights (Helvetica/WinAnsi cannot render Hindi).
-  Future<void> preparePrint() async {
+  Future<void> preparePrint({
+    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
+  }) async {
     final result = state.result;
     final subject = state.subject;
     if (result == null ||
@@ -139,7 +140,7 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
       return;
     }
 
-    const printLocale = AstrologyInsightLocale.en;
+    final printLocale = locale;
     final bullets = result.insights.forLocale(printLocale);
 
     state = state.copyWith(

@@ -15,23 +15,74 @@ import {
   buildTodayReportPdf,
 } from '../src/modules/astrology/astrology_report_pdf.js';
 
-/** Inflate FlateDecode streams and decode hex `<...> Tj` text (pdf-lib Helvetica). */
-function pdfDrawnText(bytes: Uint8Array): string {
-  const raw = Buffer.from(bytes).toString('latin1');
-  const parts: string[] = [];
-  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-  for (const match of raw.matchAll(re)) {
-    let content: string;
-    try {
-      content = inflateSync(Buffer.from(match[1], 'latin1')).toString('latin1');
-    } catch {
+function cmapChar(hex: string): string {
+  const buf = Buffer.from(hex, 'hex');
+  if (buf.length < 2) return buf.toString('latin1');
+  let out = '';
+  for (let i = 0; i + 1 < buf.length; i += 2) {
+    out += String.fromCharCode((buf[i] << 8) | buf[i + 1]);
+  }
+  return out;
+}
+
+function parseToUnicode(content: string): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const line of content.split(/\r?\n/)) {
+    const range = line.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
+    if (range) {
+      const start = parseInt(range[1], 16);
+      const end = parseInt(range[2], 16);
+      const first = parseInt(range[3], 16);
+      if (end >= start && end - start < 10000) {
+        for (let id = start; id <= end; id += 1) {
+          map.set(id, String.fromCodePoint(first + (id - start)));
+        }
+      }
       continue;
     }
-    for (const hexMatch of content.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
-      parts.push(Buffer.from(hexMatch[1], 'hex').toString('latin1'));
+    const pair = line.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
+    if (pair) {
+      map.set(parseInt(pair[1], 16), cmapChar(pair[2]));
     }
   }
-  return parts.join('\n');
+  return map;
+}
+
+/** Inflate PDF streams and recover drawn text, including subset custom fonts. */
+function pdfDrawnText(bytes: Uint8Array): string {
+  const raw = Buffer.from(bytes).toString('latin1');
+  const streams: string[] = [];
+  const re = /\/Length\s+(\d+)\s*>>\s*stream\r?\n/g;
+  for (const match of raw.matchAll(re)) {
+    const start = (match.index ?? 0) + match[0].length;
+    const body = Buffer.from(raw.slice(start, start + Number(match[1])), 'latin1');
+    try {
+      streams.push(inflateSync(body).toString('latin1'));
+    } catch {
+      streams.push(body.toString('latin1'));
+    }
+  }
+  const maps = streams
+    .filter((stream) => stream.includes('beginbfchar') || stream.includes('beginbfrange'))
+    .map(parseToUnicode)
+    .filter((map) => map.size > 0);
+  const draws: string[] = [];
+  for (const stream of streams) {
+    for (const hexMatch of stream.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
+      const hex = hexMatch[1];
+      if (maps.length > 0 && hex.length % 4 === 0) {
+        for (const map of maps) {
+          let text = '';
+          for (let i = 0; i < hex.length; i += 4) {
+            text += map.get(parseInt(hex.slice(i, i + 4), 16)) ?? '';
+          }
+          if (text.trim()) draws.push(text);
+        }
+      }
+      draws.push(Buffer.from(hex, 'hex').toString('latin1'));
+    }
+  }
+  return draws.join('\n');
 }
 
 const subject = {
@@ -121,10 +172,37 @@ describe('report PDF builders', () => {
 
     const drawn = pdfDrawnText(bytes);
     expect(drawn).toContain('Steady growth');
-    expect(drawn).toContain('AI insights');
+    expect(drawn).toContain('Reading');
+    expect(drawn).not.toContain('AI insights');
     expect(drawn).toContain(' | ');
-    expect(drawn).not.toContain('AI insights (HI)');
     expect(drawn.includes('?')).toBe(false);
+  });
+
+  it('builds a Hindi kundali PDF in the selected language', async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f5e6c8"/></svg>';
+    const bytes = await buildKundaliReportPdf({
+      subject,
+      style: 'north',
+      chart: { lagna: 'Aries', sunSign: 'Pisces' },
+      charts: [{ key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg }],
+      insights: [
+        {
+          key: 'RasiD1',
+          title: 'Birth',
+          bullets: ['स्थिर विकास और स्पष्ट आदतें।'],
+        },
+      ],
+      locale: 'hi',
+    });
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
+    const drawn = pdfDrawnText(bytes);
+    expect(drawn).toContain('जन्म');
+    expect(drawn).toContain('लग्न मेष');
+    expect(drawn).toContain('उत्तर भारतीय');
+    expect(drawn).toContain('आदत');
+    expect(drawn).not.toContain('AI insights');
+    expect(drawn).not.toContain('Reading');
   });
 
   it('builds match, palm, and today report PDFs', async () => {
@@ -137,6 +215,7 @@ describe('report PDF builders', () => {
       ],
     });
     expect(matchBytes.subarray(0, 4).toString()).toBe('%PDF');
+    expect(pdfDrawnText(matchBytes)).toContain('Gun Milan score');
 
     const palmBytes = await buildPalmReportPdf({
       subject,
@@ -158,6 +237,10 @@ describe('report PDF builders', () => {
       },
     });
     expect(palmBytes.subarray(0, 4).toString()).toBe('%PDF');
+    const palmDrawn = pdfDrawnText(palmBytes);
+    expect(palmDrawn).toContain('Palm lines');
+    expect(palmDrawn).toContain('Reading');
+    expect(palmDrawn).not.toContain('AI insights');
 
     const todayBytes = await buildTodayReportPdf({
       subject,
@@ -166,5 +249,34 @@ describe('report PDF builders', () => {
       dasha: { label: 'Rahu – Saturn', levels: ['Rahu', 'Saturn'] },
     });
     expect(todayBytes.subarray(0, 4).toString()).toBe('%PDF');
+    expect(pdfDrawnText(todayBytes)).toContain('Panchang');
+
+    const hindiMatch = await buildMatchReportPdf({
+      groom: { ...subject, name: 'Arjun', gender: 'male' },
+      bride: subject,
+      score: { total: 28, max: 36, summary: 'Strong match', tone: 'good' },
+      kutas: [{ name: 'Varna', maxPoints: 1, points: 1, verdict: 'Good' }],
+      insightBullets: ['खुलकर बात करें'],
+      locale: 'hi',
+    });
+    const hindiDrawn = pdfDrawnText(hindiMatch);
+    expect(hindiDrawn).toContain('अंक');
+    expect(hindiDrawn).toContain('अच्छा');
+    expect(hindiDrawn).toContain('वर');
+    expect(hindiDrawn).toContain('कूट');
+    expect(hindiDrawn).not.toContain('AI insights');
+
+    const hindiToday = await buildTodayReportPdf({
+      subject,
+      asOf: '2026-11-06',
+      panchang: { tithi: 'Shukla', nakshatra: 'Rohini' },
+      dasha: { label: 'Rahu', levels: ['Saturn'] },
+      insightBullets: ['आज धैर्य रखें'],
+      locale: 'hi',
+    });
+    const todayDrawn = pdfDrawnText(hindiToday);
+    expect(todayDrawn).toContain('पंचांग');
+    expect(todayDrawn).toContain('राहु');
+    expect(todayDrawn).not.toContain('AI insights');
   });
 });

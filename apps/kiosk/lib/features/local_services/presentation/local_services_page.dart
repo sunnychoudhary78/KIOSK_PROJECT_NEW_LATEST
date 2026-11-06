@@ -16,21 +16,12 @@ class LocalServicesPage extends ConsumerStatefulWidget {
 }
 
 class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
-  final _searchController = TextEditingController();
-  String _searchQuery = '';
-
   @override
   void initState() {
     super.initState();
     Future.microtask(() {
       ref.read(localServicesControllerProvider.notifier).load();
     });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   Future<void> _endSession() {
@@ -45,14 +36,7 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
     final colors = context.athenaColors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Resolve the 16 standard trades
     final effectiveCategories = _resolveCategories(state.categories);
-    final filteredCategories = _searchQuery.isEmpty
-        ? effectiveCategories
-        : effectiveCategories
-            .where((cat) =>
-                cat.name.toLowerCase().contains(_searchQuery.toLowerCase()))
-            .toList();
 
     return VisitorSessionPopScope(
       child: KioskShell(
@@ -64,146 +48,53 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Top Title + Search Bar Row (Mockup Images 2 & 3)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Left: Choose a Trade Title & Subtitle
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                  RichText(
+                    text: TextSpan(
                       children: [
-                        RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: 'Choose a ',
-                                style: TextStyle(
-                                  fontFamily: 'PlusJakartaSans',
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.5,
-                                  color: colors.textPrimary,
-                                ),
-                              ),
-                              TextSpan(
-                                text: 'Service',
-                                style: TextStyle(
-                                  fontFamily: 'PlusJakartaSans',
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.5,
-                                  color: colors.accentMagenta,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        // Magenta Accent Underline
-                        Container(
-                          width: 48,
-                          height: 3.5,
-                          decoration: BoxDecoration(
-                            color: colors.accentMagenta,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Select a service to find nearby professionals.',
+                        TextSpan(
+                          text: 'Choose a ',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: colors.textSecondary,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                        TextSpan(
+                          text: 'Service',
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                            color: colors.accentMagenta,
                           ),
                         ),
                       ],
                     ),
                   ),
-
-                  // Right: Search Bar Capsule — wide pill matching mockup
-                  SizedBox(
-                    width: 420,
-                    height: 48,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1C143F) : Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: isDark
-                              ? const Color(0xFF7445BD)
-                              : const Color(0xFFD0D9E8),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: isDark
-                                ? const Color(0x2E8B35FF)
-                                : const Color(0x08101828),
-                            blurRadius: 14,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_rounded,
-                            size: 20,
-                            color: colors.textSecondary,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              controller: _searchController,
-                              onChanged: (val) =>
-                                  setState(() => _searchQuery = val),
-                              style: TextStyle(
-                                fontFamily: 'PlusJakartaSans',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: colors.textPrimary,
-                              ),
-                              decoration: InputDecoration(
-                                hintText:
-                                    'Search for a trade (e.g., Electrician, Plumber...)',
-                                hintStyle: TextStyle(
-                                  fontFamily: 'PlusJakartaSans',
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w400,
-                                  color: colors.textSecondary
-                                      .withValues(alpha: 0.7),
-                                ),
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                isDense: true,
-                                contentPadding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                fillColor: Colors.transparent,
-                                filled: false,
-                              ),
-                            ),
-                          ),
-                          if (_searchQuery.isNotEmpty)
-                            GestureDetector(
-                              onTap: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                              child: Icon(
-                                Icons.close_rounded,
-                                size: 18,
-                                color: colors.textSecondary,
-                              ),
-                            ),
-                        ],
-                      ),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: 48,
+                    height: 3.5,
+                    decoration: BoxDecoration(
+                      color: colors.accentMagenta,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Select a service to find nearby professionals.',
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: colors.textSecondary,
                     ),
                   ),
                 ],
@@ -214,7 +105,7 @@ class _LocalServicesPageState extends ConsumerState<LocalServicesPage> {
               // 4x4 Grid of Trade Cards (16 trades total)
               Expanded(
                 child: _TradeGrid(
-                  categories: filteredCategories,
+                  categories: effectiveCategories,
                   isLoading: state.loading && state.categories.isEmpty,
                   error: state.error,
                 ),
@@ -364,7 +255,7 @@ class _TradeGrid extends StatelessWidget {
     }
 
     if (categories.isEmpty) {
-      return const Center(child: Text('No trades matched your search.'));
+      return const Center(child: Text('No services available.'));
     }
 
     const columns = 4;

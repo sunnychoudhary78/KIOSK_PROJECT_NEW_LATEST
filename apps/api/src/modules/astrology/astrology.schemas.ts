@@ -298,7 +298,7 @@ export const printKundaliBodySchema = z.object({
       z.object({
         key: z.string().min(1).max(40),
         title: z.string().min(1).max(40),
-        bullets: insightBulletListSchema,
+        bullets: z.array(z.string().trim().min(1).max(420)).max(8),
       }),
     )
     .max(6)

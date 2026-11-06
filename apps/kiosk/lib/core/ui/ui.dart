@@ -15,5 +15,6 @@ export 'kiosk_scaffold.dart';
 export 'kiosk_service_tile.dart';
 export 'kiosk_shell.dart';
 export 'kiosk_status.dart';
+export 'kiosk_text_caret.dart';
 export 'kiosk_wave_background.dart';
 export 'theme_mode_toggle_pill.dart';

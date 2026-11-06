@@ -1,3 +1,5 @@
+import './fontkit_runtime.js';
+import fontkit from '@pdf-lib/fontkit/dist/fontkit.es.js';
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { Resvg } from '@resvg/resvg-js';
 
@@ -21,7 +23,13 @@ export type ReportLine =
       format?: 'png' | 'jpg';
       caption?: string;
       maxHeight?: number;
+      frame?: boolean;
     };
+
+export type ReportPdfFontBytes = {
+  regular: Uint8Array;
+  bold: Uint8Array;
+};
 
 export type BuildReportPdfInput = {
   title: string;
@@ -29,6 +37,14 @@ export type BuildReportPdfInput = {
   lines: ReportLine[];
   disclaimer?: string;
   generatedAt?: Date;
+  fonts?: ReportPdfFontBytes;
+  /** Keep Devanagari and other non-ASCII glyphs. Requires [fonts]. */
+  preserveUnicode?: boolean;
+  /** Indigo band, gold rule, and the name set as the title. */
+  premiumHeader?: boolean;
+  /** Small line under ATHENA inside the premium band. */
+  bandLabel?: string;
+  footer?: string;
 };
 
 /** Helvetica/WinAnsi cannot encode many Unicode glyphs — normalize for print. */
@@ -45,8 +61,19 @@ export function sanitizePdfText(text: string): string {
     .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '?');
 }
 
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const normalized = sanitizePdfText(text).replace(/\s+/g, ' ').trim();
+function preparePdfText(text: string, preserveUnicode: boolean): string {
+  const source = preserveUnicode ? text : sanitizePdfText(text);
+  return source.replace(/\s+/g, ' ').trim();
+}
+
+function wrapText(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number,
+  preserveUnicode = false,
+): string[] {
+  const normalized = preparePdfText(text, preserveUnicode);
   if (!normalized) return [''];
   const words = normalized.split(' ');
   const rows: string[] = [];
@@ -94,10 +121,20 @@ export async function countPdfPages(buffer: Buffer | Uint8Array): Promise<number
 
 export async function buildReportPdf(input: BuildReportPdfInput): Promise<Buffer> {
   const doc = await PDFDocument.create();
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  if (input.fonts) {
+    doc.registerFontkit(fontkit as Parameters<PDFDocument['registerFontkit']>[0]);
+  }
+  const preserveUnicode = input.preserveUnicode === true && input.fonts != null;
+  const regular = input.fonts
+    ? await doc.embedFont(input.fonts.regular, { subset: true })
+    : await doc.embedFont(StandardFonts.Helvetica);
+  const bold = input.fonts
+    ? await doc.embedFont(input.fonts.bold, { subset: true })
+    : await doc.embedFont(StandardFonts.HelveticaBold);
   const generatedAt = input.generatedAt ?? new Date();
   const timestamp = generatedAt.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  const premium = input.premiumHeader === true;
+  const bandHeight = 78;
 
   let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   let y = PAGE_HEIGHT - MARGIN;
@@ -114,7 +151,7 @@ export async function buildReportPdf(input: BuildReportPdfInput): Promise<Buffer
     size: number,
     color = rgb(0.12, 0.14, 0.18),
   ) => {
-    const rows = wrapText(text, font, size, CONTENT_WIDTH);
+    const rows = wrapText(text, font, size, CONTENT_WIDTH, preserveUnicode);
     for (const row of rows) {
       ensureSpace(size + LINE_GAP);
       page.drawText(row, {
@@ -128,24 +165,61 @@ export async function buildReportPdf(input: BuildReportPdfInput): Promise<Buffer
     }
   };
 
-  // Header
-  drawWrapped('ATHENA Kiosk', bold, 11, rgb(0.35, 0.4, 0.48));
-  y -= 6;
-  drawWrapped(input.title, bold, 20);
-  if (input.subtitle) {
+  if (premium) {
+    page.drawRectangle({
+      x: 0,
+      y: PAGE_HEIGHT - bandHeight,
+      width: PAGE_WIDTH,
+      height: bandHeight,
+      color: rgb(0.11, 0.07, 0.27),
+    });
+    page.drawRectangle({
+      x: 0,
+      y: PAGE_HEIGHT - bandHeight - 3,
+      width: PAGE_WIDTH,
+      height: 3,
+      color: rgb(0.79, 0.6, 0.22),
+    });
+    page.drawText('ATHENA', {
+      x: MARGIN,
+      y: PAGE_HEIGHT - 34,
+      size: 13,
+      font: bold,
+      color: rgb(1, 1, 1),
+    });
+    page.drawText(preparePdfText(input.bandLabel ?? 'Kundali', preserveUnicode), {
+      x: MARGIN,
+      y: PAGE_HEIGHT - 54,
+      size: 11,
+      font: regular,
+      color: rgb(0.9, 0.84, 0.62),
+    });
+    y = PAGE_HEIGHT - bandHeight - 28;
+    drawWrapped(input.title, bold, 22);
+    if (input.subtitle) {
+      y -= 2;
+      drawWrapped(input.subtitle, regular, 12, rgb(0.35, 0.32, 0.48));
+    }
+    y -= 8;
+  } else {
+    drawWrapped('ATHENA Kiosk', bold, 11, rgb(0.35, 0.4, 0.48));
+    y -= 6;
+    drawWrapped(input.title, bold, 20);
+    if (input.subtitle) {
+      y -= 2;
+      drawWrapped(input.subtitle, regular, 11, rgb(0.35, 0.4, 0.48));
+    }
     y -= 2;
-    drawWrapped(input.subtitle, regular, 11, rgb(0.35, 0.4, 0.48));
+    drawWrapped(`Generated ${timestamp}`, regular, 9, rgb(0.45, 0.48, 0.52));
+    y -= 10;
+    page.drawLine({
+      start: { x: MARGIN, y },
+      end: { x: PAGE_WIDTH - MARGIN, y },
+      thickness: 1,
+      color: rgb(0.82, 0.84, 0.88),
+    });
+    y -= 16;
   }
-  y -= 2;
-  drawWrapped(`Generated ${timestamp}`, regular, 9, rgb(0.45, 0.48, 0.52));
-  y -= 10;
-  page.drawLine({
-    start: { x: MARGIN, y },
-    end: { x: PAGE_WIDTH - MARGIN, y },
-    thickness: 1,
-    color: rgb(0.82, 0.84, 0.88),
-  });
-  y -= 16;
 
   for (const line of input.lines) {
     switch (line.kind) {
@@ -168,9 +242,15 @@ export async function buildReportPdf(input: BuildReportPdfInput): Promise<Buffer
         drawWrapped(line.text, regular, 10, rgb(0.4, 0.44, 0.5));
         break;
       case 'kv': {
-        const label = sanitizePdfText(`${line.label}: `);
+        const label = preparePdfText(`${line.label}: `, preserveUnicode);
         const labelWidth = bold.widthOfTextAtSize(label, 11);
-        const valueRows = wrapText(line.value || '-', regular, 11, CONTENT_WIDTH - labelWidth);
+        const valueRows = wrapText(
+          line.value || '-',
+          regular,
+          11,
+          Math.max(40, CONTENT_WIDTH - labelWidth),
+          preserveUnicode,
+        );
         ensureSpace(11 + LINE_GAP);
         page.drawText(label, {
           x: MARGIN,
@@ -205,19 +285,32 @@ export async function buildReportPdf(input: BuildReportPdfInput): Promise<Buffer
           line.format === 'jpg'
             ? await doc.embedJpg(line.bytes)
             : await doc.embedPng(line.bytes);
-        const maxW = CONTENT_WIDTH;
+        const maxW = CONTENT_WIDTH - (line.frame ? 16 : 0);
         const maxH = line.maxHeight ?? 360;
         const scale = Math.min(maxW / embedded.width, maxH / embedded.height, 1);
         const w = embedded.width * scale;
         const h = embedded.height * scale;
-        ensureSpace(h + (line.caption ? 28 : 12));
+        const pad = line.frame ? 8 : 0;
+        ensureSpace(h + pad * 2 + (line.caption ? 28 : 12));
+        const imageX = MARGIN + (CONTENT_WIDTH - w) / 2;
+        if (line.frame) {
+          page.drawRectangle({
+            x: imageX - pad,
+            y: y - h - pad,
+            width: w + pad * 2,
+            height: h + pad * 2,
+            color: rgb(0.98, 0.97, 0.99),
+            borderColor: rgb(0.78, 0.74, 0.88),
+            borderWidth: 1,
+          });
+        }
         page.drawImage(embedded, {
-          x: MARGIN + (CONTENT_WIDTH - w) / 2,
+          x: imageX,
           y: y - h,
           width: w,
           height: h,
         });
-        y -= h + 6;
+        y -= h + pad + 6;
         if (line.caption) {
           drawWrapped(line.caption, regular, 9, rgb(0.4, 0.44, 0.5));
         }
@@ -243,7 +336,11 @@ export async function buildReportPdf(input: BuildReportPdfInput): Promise<Buffer
       thickness: 0.5,
       color: rgb(0.82, 0.84, 0.88),
     });
-    p.drawText('Printed at ATHENA kiosk | For personal reference only', {
+    const footer = preparePdfText(
+      input.footer ?? 'Printed at ATHENA kiosk | For personal reference only',
+      preserveUnicode,
+    );
+    p.drawText(footer, {
       x: MARGIN,
       y: MARGIN + 12,
       size: 8,

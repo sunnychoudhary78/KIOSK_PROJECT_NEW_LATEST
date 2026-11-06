@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
+import 'package:skp_kiosk/core/ui/kiosk_text_caret.dart';
 
 enum KioskBannerTone { info, success, warning, danger }
 
@@ -251,10 +252,17 @@ class KioskTextTapField extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              display.isEmpty ? (hint ?? '') : display,
+            KioskCaretText(
+              text: display,
+              hint: hint,
+              showCaret: focused,
+              caretHeight: 24,
+              caretColor: SkpColors.text,
               style: theme.textTheme.titleLarge?.copyWith(
-                color: display.isEmpty ? SkpColors.muted : SkpColors.text,
+                color: SkpColors.text,
+              ),
+              hintStyle: theme.textTheme.titleLarge?.copyWith(
+                color: SkpColors.muted,
               ),
             ),
           ],

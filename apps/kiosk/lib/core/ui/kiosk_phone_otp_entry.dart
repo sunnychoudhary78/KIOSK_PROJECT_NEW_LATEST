@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/kiosk_numeric_keypad.dart';
+import 'package:skp_kiosk/core/ui/kiosk_text_caret.dart';
 
 enum KioskPhoneOtpMode { phone, otp }
 
@@ -35,8 +36,8 @@ class KioskPhoneOtpEntry extends StatelessWidget {
     final theme = Theme.of(context);
     final digits = _digitsOnly;
     final display = mode == KioskPhoneOtpMode.phone
-        ? (digits.isEmpty ? '+91 ' : '+91 $digits')
-        : (digits.isEmpty ? '—' : digits);
+        ? '+91 $digits'
+        : digits;
     final hint = mode == KioskPhoneOtpMode.phone
         ? 'Mobile number'
         : 'OTP';
@@ -61,8 +62,15 @@ class KioskPhoneOtpEntry extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                display,
+              KioskCaretText(
+                text: display,
+                hint: digits.isEmpty && mode == KioskPhoneOtpMode.otp && !enabled
+                    ? '—'
+                    : null,
+                showCaret: enabled,
+                caretHeight: 28,
+                caretColor: SkpColors.text,
+                maxLines: 1,
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   letterSpacing: mode == KioskPhoneOtpMode.otp ? 4 : 0.5,

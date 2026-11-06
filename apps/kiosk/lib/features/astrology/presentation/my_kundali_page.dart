@@ -41,6 +41,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
   int _stepperColumn = 0;
   ResolvedBirthPlace? _placeCoords;
   String _selectedChartKey = 'RasiD1';
+  AstrologyInsightLocale _insightLocale = AstrologyInsightLocale.en;
 
   @override
   void dispose() {
@@ -245,6 +246,7 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
       _focus = 0;
       _stepperColumn = 0;
       _selectedChartKey = AstrologyFormDefaults.selectedChartKey;
+      _insightLocale = AstrologyInsightLocale.en;
     });
   }
 
@@ -315,8 +317,10 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
               label: 'Print',
               icon: Icons.print,
               expand: false,
-              onPressed: () =>
-                  controller.preparePrint(chartKey: _selectedChartKey),
+              onPressed: () => controller.preparePrint(
+                chartKey: _selectedChartKey,
+                locale: _insightLocale,
+              ),
             ),
           ],
         );
@@ -427,6 +431,8 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
               error: state.error,
               child: KundaliResultView(
                 result: state.result!,
+                onLocaleChanged: (locale) =>
+                    setState(() => _insightLocale = locale),
                 onChartTabChanged: (key) =>
                     setState(() => _selectedChartKey = key),
               ),
@@ -666,9 +672,7 @@ class _KundaliResultViewState extends State<KundaliResultView>
                                           key: const ValueKey(
                                             'kundali-insights-panel',
                                           ),
-                                          title: KundaliLocale.insightsTitle(
-                                            _locale,
-                                          ),
+                                          title: '',
                                           bullets: insightBullets,
                                           locale: _locale,
                                           onLocaleChanged: _setLocale,

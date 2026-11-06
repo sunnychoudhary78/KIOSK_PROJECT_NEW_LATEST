@@ -7,6 +7,7 @@ import {
   llmReadingSchema,
   localeBulletsSchema,
   parseLlmJson,
+  printKundaliBodySchema,
   sniffPalmImageMime,
 } from '../src/modules/astrology/astrology.schemas.js';
 import {
@@ -99,6 +100,29 @@ describe('astrology schemas', () => {
     expect(parsed.groom).not.toHaveProperty('gender');
     expect(parsed.bride).not.toHaveProperty('gender');
     expect(parsed.groom.birthTimeUnknown).toBe(false);
+  });
+
+  it('accepts a six-bullet kundali print insight block', () => {
+    const bullet = 'A'.repeat(300);
+    const parsed = printKundaliBodySchema.safeParse({
+      subject,
+      style: 'north',
+      chart: { lagna: 'Aries' },
+      charts: [{ key: 'RasiD1', title: 'Birth', subtitle: 'Rasi', svg: '<svg/>' }],
+      locale: 'hi',
+      insights: [
+        {
+          key: 'RasiD1',
+          title: 'Birth',
+          bullets: [bullet, bullet, bullet, bullet, bullet, bullet],
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.insights?.[0]?.bullets).toHaveLength(6);
+      expect(parsed.data.locale).toBe('hi');
+    }
   });
 
   it('rejects incomplete match payloads', () => {

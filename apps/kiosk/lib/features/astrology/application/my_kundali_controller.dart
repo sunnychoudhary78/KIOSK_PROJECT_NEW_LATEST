@@ -82,6 +82,8 @@ class MyKundaliUiState {
 
 class MyKundaliController extends Notifier<MyKundaliUiState> {
   Timer? _paymentPoll;
+  AstrologyInsightLocale _printLocale = AstrologyInsightLocale.en;
+  String _printChartKey = 'RasiD1';
 
   @override
   MyKundaliUiState build() {
@@ -128,6 +130,8 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
 
   void reset() {
     _stopPaymentPoll();
+    _printLocale = AstrologyInsightLocale.en;
+    _printChartKey = 'RasiD1';
     state = const MyKundaliUiState();
   }
 
@@ -210,10 +214,12 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     }
   }
 
-  /// Print always uses English insights (Helvetica/WinAnsi cannot render Hindi).
   Future<void> preparePrint({
     String chartKey = 'RasiD1',
+    AstrologyInsightLocale locale = AstrologyInsightLocale.en,
   }) async {
+    _printChartKey = chartKey;
+    _printLocale = locale;
     if (state.result == null ||
         state.subject == null ||
         state.phase != KundaliPhase.result) {
@@ -257,7 +263,7 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
       );
       return;
     }
-    await _runPreparePrint(chartKey: chartKey);
+    await _runPreparePrint();
   }
 
   Future<void> choosePhoneQuota() async {
@@ -273,12 +279,15 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
     );
   }
 
-  Future<void> choosePayDirect({String chartKey = 'RasiD1'}) async {
+  Future<void> choosePayDirect({String? chartKey}) async {
     if (state.print.phase != ReportPrintPhase.choosingPayMethod &&
         state.print.phase != ReportPrintPhase.enteringPhone) {
       return;
     }
-    await _runPreparePrint(chartKey: chartKey);
+    if (chartKey != null && chartKey.isNotEmpty) {
+      _printChartKey = chartKey;
+    }
+    await _runPreparePrint();
   }
 
   void setPrintPhoneDigits(String value) {
@@ -407,7 +416,6 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
   }
 
   Future<void> _runPreparePrint({
-    String chartKey = 'RasiD1',
     String? phoneProofToken,
   }) async {
     final result = state.result;
@@ -420,6 +428,7 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
       state = state.copyWith(error: 'No chart available to print');
       return;
     }
+    final chartKey = _printChartKey;
     final matched = tabs.where((entry) => entry.key == chartKey);
     final selected = matched.isNotEmpty ? matched.first : tabs.first;
     final charts = [
@@ -431,7 +440,7 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
       },
     ];
 
-    const printLocale = AstrologyInsightLocale.en;
+    final printLocale = _printLocale;
     final bullets =
         result.insights.forChart(selected.key)?.forLocale(printLocale) ??
             const [];

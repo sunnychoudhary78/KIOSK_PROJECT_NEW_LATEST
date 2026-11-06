@@ -69,6 +69,7 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
   }
 
   void _submit() {
+    setState(() => _insightLocale = AstrologyInsightLocale.en);
     ref
         .read(todayPeriodsControllerProvider.notifier)
         .submit(
@@ -188,6 +189,7 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
       _placeCoords = null;
       _focus = 0;
       _stepperColumn = 0;
+      _insightLocale = AstrologyInsightLocale.en;
     });
   }
 
@@ -249,7 +251,8 @@ class _TodayPeriodsPageState extends ConsumerState<TodayPeriodsPage> {
               label: 'Print',
               icon: Icons.print,
               expand: false,
-              onPressed: () => controller.preparePrint(),
+              onPressed: () =>
+                  controller.preparePrint(locale: _insightLocale),
             ),
           ],
         );
