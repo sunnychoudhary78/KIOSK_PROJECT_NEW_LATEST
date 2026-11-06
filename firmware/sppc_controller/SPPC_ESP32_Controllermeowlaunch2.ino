@@ -22,7 +22,8 @@
 // 7. Printer roller motor (PWM + driver) and a one-command print
 //    sequence: {"print":"start"} ... {"print":"done"}
 //
-// RELAYS: GPIO25 -> Relay 1, GPIO26 -> Relay 2
+// RELAYS: GPIO14 -> Relay 1 (charger), GPIO27 -> Relay 2 (light).
+// The roller motor is removed.
 // I2C:    GPIO21 -> SDA,     GPIO22 -> SCL
 //
 // The opto-isolated 2-channel relay board is ACTIVE-LOW (relay pulls
@@ -106,8 +107,8 @@ void startWatchdog()
 // RELAY CONFIGURATION
 // =====================================================
 
-#define RELAY1_PIN 25
-#define RELAY2_PIN 26
+#define RELAY1_PIN 14   // charger relay (Relay 1)
+#define RELAY2_PIN 27   // light relay (Relay 2). -1 = not used
 
 // true : LOW = relay ON,  HIGH = relay OFF
 // false: HIGH = relay ON, LOW  = relay OFF
@@ -117,7 +118,7 @@ void startWatchdog()
 
 // Only used when RELAY_ACTIVE_LOW is true. OFF = release the pin
 // (input / high-Z) so 3.3 V logic cannot half-drive a 5 V opto input.
-#define RELAY_OPEN_DRAIN true
+#define RELAY_OPEN_DRAIN false
 
 
 // =====================================================
@@ -195,9 +196,11 @@ void startWatchdog()
 //   GPIO18 -> IN2
 //   motor  -> OUT1 / OUT2
 //   supply + -> 12V terminal, supply - -> GND, ESP32 GND -> same GND
-#define MOTOR_PWM_PIN 32
-#define MOTOR_DIR_PIN 33
-#define MOTOR_DIR2_PIN 18
+// Roller motor REMOVED. Set MOTOR_ENABLED true and restore the pins to use it again.
+#define MOTOR_ENABLED false
+#define MOTOR_PWM_PIN -1
+#define MOTOR_DIR_PIN -1
+#define MOTOR_DIR2_PIN -1
 
 // Level on MOTOR_DIR_PIN that rolls the paper OUT of the machine.
 // If the rollers turn the wrong way, change HIGH to LOW.
@@ -375,6 +378,31 @@ void startWatchdog()
 #define CHARGER_FULL_W 3.0f
 
 // Samples (x CHARGER_POLL_MS) needed to confirm plug in / plug out
+// DETECTION MODE
+// true : decide plugged in / out / full from the CURRENT (mA). Works
+//        even when the INA226 VBUS pin is not wired (volts read 0).
+// false: decide from POWER (watts = volts x mA). Needs VBUS wired.
+#define CHARGER_USE_CURRENT true
+
+// Current thresholds (mA), used when CHARGER_USE_CURRENT is true.
+// Measured: nothing connected = 0-2 mA, phone connected = 60+ mA.
+//   PLUG_ON_MA  : above this for PLUG_CONFIRM samples = phone plugged in
+//   PLUG_OFF_MA : below this = nothing drawing current
+//   FULL_MA     : below this = charge has tapered off (almost full)
+#define CHARGER_PLUG_ON_MA 30.0f
+#define CHARGER_PLUG_OFF_MA 10.0f
+#define CHARGER_FULL_MA 25.0f
+
+#if CHARGER_USE_CURRENT
+  #define CH_PLUG_ON  CHARGER_PLUG_ON_MA
+  #define CH_PLUG_OFF CHARGER_PLUG_OFF_MA
+  #define CH_FULL     CHARGER_FULL_MA
+#else
+  #define CH_PLUG_ON  CHARGER_PLUG_ON_W
+  #define CH_PLUG_OFF CHARGER_PLUG_OFF_W
+  #define CH_FULL     CHARGER_FULL_W
+#endif
+
 #define CHARGER_PLUG_CONFIRM 3
 #define CHARGER_UNPLUG_CONFIRM 4
 
@@ -487,7 +515,7 @@ bool relayLogicalState[3] = { false, false, false };
 bool relayPin(uint8_t relay, uint8_t &pin)
 {
   if (relay == 1) { pin = RELAY1_PIN; return true; }
-  if (relay == 2) { pin = RELAY2_PIN; return true; }
+  if (relay == 2 && RELAY2_PIN >= 0) { pin = RELAY2_PIN; return true; }
   return false;
 }
 
@@ -574,7 +602,7 @@ void processRelayCommand(JsonDocument &command)
 
   int relay = command["relay"];
 
-  if (relay != 1 && relay != 2)
+  if (relay != 1 && !(relay == 2 && RELAY2_PIN >= 0))
   {
     sendRelayResponse(false, relay, nullptr, "invalid_relay");
     return;
@@ -1066,6 +1094,8 @@ void motorPwmRelease()
 
 void motorBegin()
 {
+  if (!MOTOR_ENABLED) return;
+
   pinMode(MOTOR_PWM_PIN, OUTPUT);
   digitalWrite(MOTOR_PWM_PIN, LOW);
 
@@ -1077,6 +1107,8 @@ void motorBegin()
 
 void motorStart()
 {
+  if (!MOTOR_ENABLED) return;
+
   if (!motorRunning)
   {
     motorRunning = true;
@@ -1107,6 +1139,8 @@ void motorStop()
 // Non-blocking soft start / soft stop. Called every loop().
 void motorUpdate()
 {
+  if (!MOTOR_ENABLED) return;
+
   unsigned long now = millis();
 
   if (
@@ -1155,6 +1189,12 @@ void sendMotorResponse(bool ok, const char* error = nullptr)
 
 void processMotorCommand(JsonDocument &command)
 {
+  if (!MOTOR_ENABLED)
+  {
+    sendMotorResponse(false, "motor_disabled");
+    return;
+  }
+
   if (command["motor"].is<const char*>())
   {
     const char* action = command["motor"];
@@ -2286,6 +2326,9 @@ void pollCharger()
   chargerMA = mA;
   chargerW = w;
 
+  // The value the plug in / out / full logic works on (mA or watts)
+  float level = CHARGER_USE_CURRENT ? mA : w;
+
   if (CHARGER_DEBUG_STREAM && (now - lastChargerDebug >= 2000))
   {
     lastChargerDebug = now;
@@ -2295,7 +2338,7 @@ void pollCharger()
   // ---------- no phone yet: wait for plug in ----------
   if (chargerState == CH_WAITING)
   {
-    if (w >= CHARGER_PLUG_ON_W)
+    if (level >= CH_PLUG_ON)
     {
       if (++chargerPlugCount >= CHARGER_PLUG_CONFIRM)
       {
@@ -2305,7 +2348,7 @@ void pollCharger()
         chargerPlugCount = 0;
         chargerUnplugCount = 0;
         chargerLowStreak = 0;
-        chargerPeakW = w;
+        chargerPeakW = level;
 
         chargerLastResult = "plugged_in";
         sendChargerEvent("plugged_in");
@@ -2322,12 +2365,12 @@ void pollCharger()
   // ---------- phone connected: watch for unplug / full ----------
   if (chargerState == CH_CHARGING)
   {
-    if (w > chargerPeakW)
+    if (level > chargerPeakW)
     {
-      chargerPeakW = w;
+      chargerPeakW = level;
     }
 
-    if (w >= CHARGER_FULL_W)
+    if (level >= CH_FULL)
     {
       // Still charging properly
       chargerLowStreak = 0;
@@ -2337,7 +2380,7 @@ void pollCharger()
     {
       // Sudden drop to ~0 right after real charging = cable pulled
       if (
-        w < CHARGER_PLUG_OFF_W &&
+        level < CH_PLUG_OFF &&
         chargerLowStreak < CHARGER_ABRUPT_SAMPLES
       )
       {
@@ -2361,7 +2404,7 @@ void pollCharger()
     // Power stayed low long enough after a real charge: phone is full
     if (
       chargerLowStreak >= CHARGER_FULL_HOLD_SAMPLES &&
-      chargerPeakW >= CHARGER_FULL_W
+      chargerPeakW >= CH_FULL
     )
     {
       chargerStop("charge_complete");
@@ -2671,8 +2714,26 @@ void processCommands()
 // SETUP
 // =====================================================
 
+// Unused GPIOs near the relay pin. Held LOW from boot so
+// they cannot float or couple into the relay input.
+static const uint8_t PARKED_PINS[] = { 25 };
+
+void parkUnusedPins()
+{
+  for (uint8_t i = 0; i < sizeof(PARKED_PINS); i++)
+  {
+    pinMode(PARKED_PINS[i], OUTPUT);
+    digitalWrite(PARKED_PINS[i], LOW);
+  }
+}
+
 void setup()
 {
+  // Relay OFF and neighbouring pins parked before anything else, so
+  // the charger relay is never left on by a floating pin at boot.
+  parkUnusedPins();
+  allRelaysOff();
+
   // Hold the servo signal LOW from the very first instruction so the
   // line is never left floating (a floating signal makes a continuous
   // servo creep or spin). Before setup() runs the pin is still
