@@ -18,6 +18,7 @@ const HOME_ORDER = [
   'home.astrology',
   'home.fuel_stations',
   'home.emergency',
+  'home.support',
 ] as const;
 
 const CHILD_PREFIX: Record<(typeof HOME_ORDER)[number], string | null> = {
@@ -28,6 +29,19 @@ const CHILD_PREFIX: Record<(typeof HOME_ORDER)[number], string | null> = {
   'home.astrology': 'astrology.',
   'home.fuel_stations': 'fuel_stations.',
   'home.emergency': null,
+  'home.support': 'support.',
+};
+
+/** Inner options that stay visible even when nobody has tapped them yet. */
+const KNOWN_CHILDREN: Partial<Record<(typeof HOME_ORDER)[number], readonly string[]>> = {
+  'home.print': ['print.quick_print', 'print.otp_print', 'print.digilocker_print'],
+  'home.well_being': ['well_being.path.oxygen', 'well_being.path.temperature'],
+  'home.astrology': [
+    'astrology.kundali',
+    'astrology.palm',
+    'astrology.match',
+    'astrology.today',
+  ],
 };
 
 const LABELS: Record<string, string> = {
@@ -38,6 +52,13 @@ const LABELS: Record<string, string> = {
   'home.astrology': 'Astrology',
   'home.fuel_stations': 'Fuel stations',
   'home.emergency': 'Emergency',
+  'home.support': 'Support',
+  'support.submit': 'Message sent',
+  'support.category.print': 'Category · Print',
+  'support.category.charging': 'Category · Charging',
+  'support.category.sensors': 'Category · Sensors',
+  'support.category.payment': 'Category · Payment',
+  'support.category.other': 'Category · Other',
   'print.quick_print': 'Quick Print',
   'print.otp_print': 'OTP Print',
   'print.digilocker_print': 'DigiLocker Print',
@@ -79,23 +100,21 @@ export function buildUsageRows(items: ServiceAnalyticsItem[]): UsageRow[] {
 
   for (const homeKey of HOME_ORDER) {
     const prefix = CHILD_PREFIX[homeKey];
-    const childKeys = prefix
+    const known = KNOWN_CHILDREN[homeKey] ?? [];
+    const knownSet = new Set<string>(known);
+    const tapped = prefix
       ? items
           .map((item) => item.eventKey)
-          .filter((key) => key.startsWith(prefix))
+          .filter((key) => key.startsWith(prefix) && !knownSet.has(key))
           .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0) || a.localeCompare(b))
       : [];
-
-    const homeCount = counts.get(homeKey) ?? 0;
-    if (homeCount === 0 && childKeys.length === 0) {
-      continue;
-    }
+    const childKeys = [...known, ...tapped];
 
     claimed.add(homeKey);
     rows.push({
       key: homeKey,
       label: labelForEventKey(homeKey),
-      count: homeCount,
+      count: counts.get(homeKey) ?? 0,
       depth: 0,
     });
 

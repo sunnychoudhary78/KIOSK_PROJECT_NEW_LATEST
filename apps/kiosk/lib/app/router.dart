@@ -44,50 +44,52 @@ class AppRoutes {
 
 class AppRouter {
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
+    Route<dynamic> page(WidgetBuilder builder) {
+      return MaterialPageRoute(builder: builder, settings: settings);
+    }
+
     switch (settings.name) {
       case AppRoutes.print:
-        return MaterialPageRoute(builder: (_) => const PrintChooserPage());
+        return page((_) => const PrintChooserPage());
       case AppRoutes.otpPrint:
-        return MaterialPageRoute(builder: (_) => const OtpPrintPage());
+        return page((_) => const OtpPrintPage());
       case AppRoutes.quickPrint:
-        return MaterialPageRoute(builder: (_) => const QuickPrintPage());
+        return page((_) => const QuickPrintPage());
       case AppRoutes.digilockerPrint:
-        return MaterialPageRoute(builder: (_) => const DigilockerPrintPage());
+        return page((_) => const DigilockerPrintPage());
       case AppRoutes.wellBeing:
-        return MaterialPageRoute(builder: (_) => const WellBeingPage());
+        return page((_) => const WellBeingPage());
       case AppRoutes.charging:
-        return MaterialPageRoute(builder: (_) => const ChargingPage());
+        return page((_) => const ChargingPage());
       case AppRoutes.astrology:
-        return MaterialPageRoute(builder: (_) => const AstrologyHubPage());
+        return page((_) => const AstrologyHubPage());
       case AppRoutes.astrologyPalm:
-        return MaterialPageRoute(builder: (_) => const AstrologyPage());
+        return page((_) => const AstrologyPage());
       case AppRoutes.astrologyKundali:
-        return MaterialPageRoute(builder: (_) => const MyKundaliPage());
+        return page((_) => const MyKundaliPage());
       case AppRoutes.astrologyMatch:
-        return MaterialPageRoute(builder: (_) => const MatchKundaliPage());
+        return page((_) => const MatchKundaliPage());
       case AppRoutes.astrologyToday:
-        return MaterialPageRoute(builder: (_) => const TodayPeriodsPage());
+        return page((_) => const TodayPeriodsPage());
       case AppRoutes.fuelStations:
-        return MaterialPageRoute(builder: (_) => const FuelStationsPage());
+        return page((_) => const FuelStationsPage());
       case AppRoutes.localServices:
-        return MaterialPageRoute(builder: (_) => const LocalServicesPage());
+        return page((_) => const LocalServicesPage());
       case AppRoutes.localServiceContacts:
         final category = settings.arguments;
         if (category is! LocalServiceCategory) {
-          return MaterialPageRoute(builder: (_) => const LocalServicesPage());
+          return page((_) => const LocalServicesPage());
         }
-        return MaterialPageRoute(
-          builder: (_) => LocalServiceContactsPage(category: category),
-        );
+        return page((_) => LocalServiceContactsPage(category: category));
       case AppRoutes.emergency:
-        return MaterialPageRoute(builder: (_) => const EmergencyPage());
+        return page((_) => const EmergencyPage());
       case AppRoutes.support:
-        return MaterialPageRoute(builder: (_) => const SupportPage());
+        return page((_) => const SupportPage());
       case AppRoutes.serialDebug:
-        return MaterialPageRoute(builder: (_) => const SerialDebugPage());
+        return page((_) => const SerialDebugPage());
       case AppRoutes.home:
       default:
-        return MaterialPageRoute(builder: (_) => const HomePage());
+        return page((_) => const HomePage());
     }
   }
 }

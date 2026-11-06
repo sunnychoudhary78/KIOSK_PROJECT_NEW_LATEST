@@ -85,16 +85,9 @@ class _SupportPageState extends ConsumerState<SupportPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Tell us what needs help',
+                      'How can we help?',
                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Staff will see this on the Support inbox',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: colors.textSecondary,
                           ),
                     ),
                     const SizedBox(height: 14),

@@ -68,6 +68,10 @@ class SupportController extends Notifier<SupportFormState> {
   void selectCategory(SupportCategory category) {
     if (state.submitting || state.submitted) return;
     state = state.copyWith(category: category, clearError: true);
+    // ignore: discarded_futures
+    ref.read(serviceAnalyticsTrackerProvider).track(
+          ServiceEventKeys.supportCategory(category.apiValue),
+        );
   }
 
   void setFocus(SupportFormFocus focus) {

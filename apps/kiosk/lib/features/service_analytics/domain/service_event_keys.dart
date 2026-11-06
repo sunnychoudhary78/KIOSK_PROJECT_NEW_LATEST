@@ -14,6 +14,9 @@ abstract final class ServiceEventKeys {
   static const homeSupport = 'home.support';
   static const supportSubmit = 'support.submit';
 
+  static String supportCategory(String category) =>
+      'support.category.$category';
+
   static const printQuick = 'print.quick_print';
   static const printOtp = 'print.otp_print';
   static const printDigilocker = 'print.digilocker_print';

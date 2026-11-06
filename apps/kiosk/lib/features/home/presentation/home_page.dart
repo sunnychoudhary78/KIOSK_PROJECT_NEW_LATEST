@@ -621,39 +621,6 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                     // ),
                   ],
                 ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 1.2,
-                  height: 24,
-                  color: colors.cardBorder,
-                ),
-                const SizedBox(width: 12),
-
-                // Smart Service Kiosk Chip
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: colors.accentMagenta.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.touch_app_rounded, size: 16, color: colors.accentMagenta),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Your Smart Everyday Assistant',
-                        style: TextStyle(
-                          fontFamily: 'PlusJakartaSans',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: colors.accentMagenta,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
                 const Spacer(),
 
                 // Right header cluster: Weather strip, Theme mode toggle, Clock
