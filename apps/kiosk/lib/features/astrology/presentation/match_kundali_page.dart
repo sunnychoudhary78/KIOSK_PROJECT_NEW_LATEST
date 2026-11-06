@@ -786,9 +786,9 @@ class _MatchKundaliResultViewState extends State<MatchKundaliResultView> {
 
   Color _toneColor(String tone) {
     return switch (tone.toLowerCase()) {
-      'good' => AstrologyColors.accent,
-      'poor' || 'bad' => AstrologyColors.danger,
-      _ => AstrologyColors.gold,
+      'good' => const Color(0xFF10B981),
+      'poor' || 'bad' => const Color(0xFFEF4444),
+      _ => const Color(0xFFF59E0B),
     };
   }
 
@@ -978,33 +978,59 @@ class _MatchKutaTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final nature = kuta.nature.toLowerCase();
     final color = nature == 'good'
-        ? AstrologyColors.accent
-        : nature == 'bad'
-        ? AstrologyColors.danger
-        : AstrologyColors.gold;
+        ? const Color(0xFF10B981)
+        : (nature == 'bad' || nature == 'poor')
+            ? const Color(0xFFEF4444)
+            : const Color(0xFFF59E0B);
     final scoreText = kuta.points == null
         ? kuta.nature
         : '${kuta.points!.toStringAsFixed(kuta.points! % 1 == 0 ? 0 : 1)} / ${kuta.maxPoints.toStringAsFixed(0)}';
-    return GlassPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      borderColor: color.withValues(alpha: 0.4),
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? color.withValues(alpha: 0.35)
+              : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: isDark ? 0.08 : 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 8,
-            height: 42,
+            width: 4,
+            height: 24,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(99),
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.4),
+                  blurRadius: 4,
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
@@ -1013,42 +1039,68 @@ class _MatchKutaTile extends StatelessWidget {
                         kuta.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AstrologyColors.text,
-                          fontWeight: FontWeight.w800,
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF1E1B4B),
                         ),
                       ),
                     ),
-                    Text(
-                      scoreText,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w800,
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        scoreText,
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: color,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 2.5),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
                   child: LinearProgressIndicator(
-                    minHeight: 4,
+                    minHeight: 3,
                     value: kuta.maxPoints <= 0 || kuta.points == null
                         ? 0
                         : (kuta.points! / kuta.maxPoints).clamp(0, 1).toDouble(),
-                    backgroundColor: AstrologyColors.line,
+                    backgroundColor: isDark
+                        ? const Color(0xFF2D2545)
+                        : const Color(0xFFF1F5F9),
                     color: color,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  kuta.verdict,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AstrologyColors.muted),
-                ),
+                if (kuta.verdict.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Flexible(
+                    child: Text(
+                      kuta.verdict,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1066,21 +1118,24 @@ class _PersonNamePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
+        color: color.withValues(alpha: isDark ? 0.2 : 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.65)),
+        border: Border.all(color: color.withValues(alpha: isDark ? 0.6 : 0.35)),
       ),
       child: Text(
-        name,
+        name.isEmpty ? '-' : name,
         textAlign: TextAlign.center,
-        maxLines: 2,
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: color,
+        style: TextStyle(
+          fontFamily: 'PlusJakartaSans',
+          fontSize: 12.5,
           fontWeight: FontWeight.w800,
+          color: color,
         ),
       ),
     );

@@ -474,16 +474,6 @@ class _AstrologyBirthFormPanelState
       ],
     );
 
-    final keyboardTheme = Theme(
-      data: Theme.of(context).copyWith(
-        colorScheme: Theme.of(context).colorScheme.copyWith(
-          surface: AstrologyColors.panelSolid,
-          onSurface: AstrologyColors.text,
-        ),
-      ),
-      child: KioskKeyboard(onKey: _type, onBackspace: onBackspace),
-    );
-
     return Column(
       children: [
         Expanded(
@@ -521,7 +511,17 @@ class _AstrologyBirthFormPanelState
           ),
         ),
         if (showKeyboard)
-          SizedBox(height: 180, child: keyboardTheme)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 0, 32, 10),
+            child: SizedBox(
+              height: 190,
+              child: KioskKeyboard(
+                onKey: _type,
+                onBackspace: onBackspace,
+                accentColor: accent,
+              ),
+            ),
+          )
         else if (showDate)
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 12),

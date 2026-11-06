@@ -69,7 +69,7 @@ class KioskShell extends StatelessWidget {
               children: [
                 // Athena Logo
                 Image.asset(
-                  'assets/brand/athena_logo.png',
+                  'assets/new_theme_icons/athena_new_logo.png',
                   height: 42,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => _AthenaFallbackLogo(colors: colors),

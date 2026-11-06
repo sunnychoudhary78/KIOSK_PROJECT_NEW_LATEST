@@ -996,7 +996,7 @@ class _ChooseView extends StatelessWidget {
               Expanded(
                 child: _MeasurementCard(
                   title: 'Temperature',
-                  subtitle: 'Getting your body temperature...\n',
+                  subtitle: 'Measure your body temperature\nquickly and contactlessly with sensor.',
                   graphic: const Thermometer3DGraphic(size: 88),
                   accentColor: const Color(0xFFE11D48),
                   cardGradient: isDark

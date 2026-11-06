@@ -571,7 +571,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset(
-                      'assets/brand/athena_logo.png',
+                      'assets/new_theme_icons/athena_new_logo.png',
                       height: 44,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => Container(
@@ -642,7 +642,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                       Icon(Icons.touch_app_rounded, size: 14, color: colors.accentMagenta),
                       const SizedBox(width: 5),
                       Text(
-                        'Smart Service Kiosk',
+                        'Your Smart Everyday Assistant',
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
                           fontSize: 12,
@@ -697,18 +697,7 @@ class _HomeFooterBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Row(
         children: [
-          // Left: Need help?
-          Icon(Icons.info_outline_rounded, size: 16, color: colors.textSecondary),
-          const SizedBox(width: 6),
-          Text(
-            'Need help? Please ask the attendant.',
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-              color: colors.textSecondary,
-            ),
-          ),
+          // Need help stays off the footer in the current design.
           const Spacer(),
 
           // Divider

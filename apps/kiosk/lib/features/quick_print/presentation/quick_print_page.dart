@@ -385,7 +385,9 @@ class _QrWaitState extends State<_QrWait> {
                   isDark: isDark,
                   colors: colors,
                 ),
+                const SizedBox(height: 4),
                 _StepConnector(isDark: isDark),
+                const SizedBox(height: 4),
                 _StepItem(
                   stepNumber: '2',
                   icon: Icons.link_rounded,
@@ -394,7 +396,9 @@ class _QrWaitState extends State<_QrWait> {
                   isDark: isDark,
                   colors: colors,
                 ),
+                const SizedBox(height: 4),
                 _StepConnector(isDark: isDark),
+                const SizedBox(height: 4),
                 _StepItem(
                   stepNumber: '3',
                   icon: Icons.upload_file_rounded,
@@ -744,11 +748,11 @@ class _StepConnector extends StatelessWidget {
       padding: const EdgeInsets.only(left: 12),
       child: Column(
         children: [
-          for (int i = 0; i < 3; i++) ...[
+          for (int i = 0; i < 4; i++) ...[
             Container(
-              width: 2,
-              height: 3,
-              margin: const EdgeInsets.symmetric(vertical: 1.5),
+              width: 2.2,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 2),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF7A2060) : const Color(0xFFE6007A).withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(1),
