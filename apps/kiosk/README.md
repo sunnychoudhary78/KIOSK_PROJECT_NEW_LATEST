@@ -9,7 +9,7 @@ The kiosk sends PDFs to the **USB** Brother queue via silent `directPrintPdf`, t
 ### Brother DCP-T830DW (current fleet)
 
 1. Install the Brother USB printer/scanner driver. Any Windows port whose name starts with `USB` is accepted. WSD, TCP/IP, and other network ports are never selected.
-2. Load **A4** plain paper; register cassette size as A4 on the printer panel.
+2. Load **A4** plain paper and register the cassette as A4 on the printer panel. The print job uses the USB queue’s Printing Preferences (`usePrinterSettings`), the same ticket as a Windows test page. Set that queue to paper size **A4**, source **Tray 1** or **Auto**, and type **Plain Paper**. A custom page size makes the DCP-T830DW ask for the MP tray even when Tray 1 is full.
 3. Brother **HttpToUsbBridge** must be running so `http://127.0.0.1:60910` serves the printer EWS. Telemetry does **not** use AppDevKit DLLs.
 4. Maintenance ink %, counters, and error history use the EWS login password (hardcoded lab default in `AppConfig`; override with `SKP_PRINTER_PASSWORD` if needed).
 

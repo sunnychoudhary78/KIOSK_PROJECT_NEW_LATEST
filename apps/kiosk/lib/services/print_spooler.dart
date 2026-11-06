@@ -101,8 +101,9 @@ class WindowsPdfPrintSpooler implements PrintSpooler {
       'colorMode=$colorMode)',
     );
 
-    // Request A4 explicitly so the Windows job matches the cassette
-    // registration (avoids paper-mismatch dialogs).
+    // Use the queue's saved ticket. Forcing a page size here makes the
+    // Windows plugin send custom paper (dmPaperSize 0), and the DCP-T830DW
+    // feeds that only from the MP slot.
     final send = directPrint;
     final ok = send != null
         ? await send(printer: printer, name: title, bytes: layoutBytes)
@@ -110,7 +111,7 @@ class WindowsPdfPrintSpooler implements PrintSpooler {
             printer: printer,
             name: title,
             format: PdfPageFormat.a4,
-            usePrinterSettings: false,
+            usePrinterSettings: true,
             onLayout: (_) async => layoutBytes,
           );
     if (!ok) {
