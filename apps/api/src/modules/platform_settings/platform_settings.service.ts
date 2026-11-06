@@ -3,7 +3,9 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
 import {
+  CABINET_LIGHT_CONFIG_KEY,
   CITIZEN_AUTH_CONFIG_KEY,
+  DEFAULT_CABINET_LIGHT_CONFIG,
   DEFAULT_CITIZEN_AUTH_CONFIG,
   DEFAULT_OTP_PRINT_CONFIG,
   DEFAULT_PRINT_FREE_QUOTA_CONFIG,
@@ -14,12 +16,14 @@ import {
   QUICK_PRINT_CONFIG_KEY,
   SOCIETY_FREE_QUOTA_CONFIG_KEY,
   SMS_CONFIG_KEY,
+  type CabinetLightConfig,
   type CitizenAuthConfig,
   type OtpPrintConfig,
   type PrintFreeQuotaConfig,
   type QuickPrintConfig,
 } from './platform_settings.defaults.js';
 import {
+  cabinetLightConfigSchema,
   citizenAuthConfigSchema,
   otpPrintConfigSchema,
   printFreeQuotaConfigSchema,
@@ -113,6 +117,18 @@ export class PlatformSettingsService {
       ...asObject(row.settingValue),
     });
     return parsed.success ? parsed.data : { ...DEFAULT_SOCIETY_FREE_QUOTA_CONFIG };
+  }
+
+  async getCabinetLightConfig(): Promise<CabinetLightConfig> {
+    const row = await this.getRaw(CABINET_LIGHT_CONFIG_KEY);
+    if (!row) {
+      return { ...DEFAULT_CABINET_LIGHT_CONFIG };
+    }
+    const parsed = cabinetLightConfigSchema.safeParse({
+      ...DEFAULT_CABINET_LIGHT_CONFIG,
+      ...asObject(row.settingValue),
+    });
+    return parsed.success ? parsed.data : { ...DEFAULT_CABINET_LIGHT_CONFIG };
   }
 
   async update(
@@ -216,6 +232,20 @@ export class PlatformSettingsService {
         throw new AppError(
           'validation_error',
           parsed.error.issues[0]?.message ?? `Invalid ${settingKey}`,
+          400,
+        );
+      }
+      return parsed.data;
+    }
+    if (settingKey === CABINET_LIGHT_CONFIG_KEY) {
+      const parsed = cabinetLightConfigSchema.safeParse({
+        ...DEFAULT_CABINET_LIGHT_CONFIG,
+        ...asObject(raw),
+      });
+      if (!parsed.success) {
+        throw new AppError(
+          'validation_error',
+          parsed.error.issues[0]?.message ?? 'Invalid cabinet_light_config',
           400,
         );
       }

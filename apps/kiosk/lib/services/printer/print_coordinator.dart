@@ -8,6 +8,7 @@ import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/services/print_spooler.dart';
 import 'package:skp_kiosk/services/printer/print_job_status_reporter.dart';
 import 'package:skp_kiosk/services/printer/print_reconcile_result.dart';
+import 'package:skp_kiosk/services/printer/printer_health.dart';
 import 'package:skp_kiosk/services/printer/printer_monitor.dart';
 import 'package:skp_kiosk/services/printer/usb_page_watch.dart';
 
@@ -62,6 +63,9 @@ class PrintCoordinator {
   /// True after `print:start` until `done` or `stop`.
   bool _traySequenceActive = false;
 
+  /// True once the Windows queue showed this job, so an empty queue means printing finished.
+  bool _sawSpoolerActivity = false;
+
   bool get isLocked => _locked;
 
   Future<void> _sendTray(String line) async {
@@ -90,6 +94,23 @@ class PrintCoordinator {
     if (!_traySequenceActive) return;
     await _sendTray(PrintTrayCommands.stop());
     _traySequenceActive = false;
+  }
+
+  /// `print:done` once the Windows queue has finished the job.
+  ///
+  /// Firmware then waits 5 seconds and closes the shutter. USB page confirmation
+  /// can finish later; a second done is ignored.
+  Future<void> _closeGateWhenSpoolerIdle(PrinterHealth health) async {
+    if (!_traySequenceActive) return;
+    final queued = health.spoolerJobsQueued ?? 0;
+    final printing = health.spoolerJobsPrinting ?? 0;
+    if (queued + printing > 0) {
+      _sawSpoolerActivity = true;
+      return;
+    }
+    if (_sawSpoolerActivity) {
+      await _trayDone();
+    }
   }
 
   Duration get reconcileTimeout =>
@@ -315,6 +336,7 @@ class PrintCoordinator {
   }) async {
     final expected = pagesExpected < 1 ? 1 : pagesExpected;
     _traySequenceActive = false;
+    _sawSpoolerActivity = false;
 
     onProgress?.call('Checking printer…');
     final preHealth = await _monitor.getHealth();
@@ -377,6 +399,9 @@ class PrintCoordinator {
       reconcileStatus: 'pending',
     );
 
+    // Firmware waits 3s, then opens the shutter. Start that wait as the job is sent.
+    await _trayStart();
+
     try {
       await _spooler.printDocument(
         jobId: jobId,
@@ -385,6 +410,7 @@ class PrintCoordinator {
         colorMode: colorMode,
       );
     } catch (error) {
+      await _trayStop();
       await _clearActiveSpoolerWork();
       await reportStatus(
         jobId: jobId,
@@ -403,9 +429,6 @@ class PrintCoordinator {
         reconcileDetail: 'spooler_reject',
       );
     }
-
-    // Paper is leaving the printer — open shutter + roller.
-    await _trayStart();
 
     await _captureSpoolerJob(title);
     final spoolerJobId = _activeSpoolerJobId?.toString();
@@ -466,6 +489,7 @@ class PrintCoordinator {
       }
       await Future<void>.delayed(pollInterval);
       final health = await _monitor.getHealth();
+      await _closeGateWhenSpoolerIdle(health);
       if (health.isPhysicalFatal) {
         final spoolerJobId = _activeSpoolerJobId?.toString();
         await _trayStop();
@@ -558,6 +582,7 @@ class PrintCoordinator {
       }
 
       final health = await _monitor.getHealth();
+      await _closeGateWhenSpoolerIdle(health);
       // A null read is a miss. USB `busy` and SNMP timeouts both look like this.
       final after = await readCounter();
       if (after == null) {

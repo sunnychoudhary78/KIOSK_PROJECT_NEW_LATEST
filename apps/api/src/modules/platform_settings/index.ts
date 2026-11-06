@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response, Router } from 'express';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired } from '../../shared/auth.js';
+import { assertActiveDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
@@ -11,6 +12,19 @@ import { PlatformSettingsService } from './platform_settings.service.js';
 
 export function registerPlatformSettingsModule(router: Router, deps: AppDeps): void {
   const service = new PlatformSettingsService(deps.db, deps.auditService);
+
+  router.get(
+    '/cabinet-light',
+    authRequired(deps.config, ['admin', 'device']),
+    assertActiveDevice(deps.db),
+    async (_req: Request, res: Response, next: NextFunction) => {
+      try {
+        res.json(await service.getCabinetLightConfig());
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.get(
     '/platform-settings',

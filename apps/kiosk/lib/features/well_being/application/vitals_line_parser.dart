@@ -33,6 +33,9 @@ class VitalsLineParser {
   static const double maxCaptureTempC = 43;
 
   static const int maxCollectionSeconds = 15;
+
+  /// Firmware adds this once when the finger stays on but SpO2 never accumulated.
+  static const int maxSpo2ExtendSeconds = 12;
   static const int tempCollectionSeconds = 5;
 
   /// Feed a raw UTF-8 chunk; returns one result per complete line.

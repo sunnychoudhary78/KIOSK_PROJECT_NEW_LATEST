@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cabinetLightConfigSchema,
   citizenAuthConfigSchema,
   otpPrintConfigSchema,
   quickPrintConfigSchema,
 } from '../src/modules/platform_settings/platform_settings.schemas.js';
 import {
+  DEFAULT_CABINET_LIGHT_CONFIG,
   DEFAULT_CITIZEN_AUTH_CONFIG,
   DEFAULT_OTP_PRINT_CONFIG,
   DEFAULT_QUICK_PRINT_CONFIG,
@@ -60,5 +62,25 @@ describe('platform settings schemas', () => {
       ttlSeconds: 7200,
     });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts cabinet light schedule and instant modes', () => {
+    expect(cabinetLightConfigSchema.parse(DEFAULT_CABINET_LIGHT_CONFIG).mode).toBe('schedule');
+    expect(
+      cabinetLightConfigSchema.parse({
+        enabled: true,
+        mode: 'on',
+        onTime: '18:00',
+        offTime: '06:00',
+      }).mode,
+    ).toBe('on');
+    expect(
+      cabinetLightConfigSchema.safeParse({
+        enabled: true,
+        mode: 'schedule',
+        onTime: '25:00',
+        offTime: '06:00',
+      }).success,
+    ).toBe(false);
   });
 });

@@ -17,6 +17,7 @@ import {
   ScrollText,
   Users,
   Settings,
+  Lightbulb,
   Wrench,
   LogOut,
   Menu,
@@ -59,6 +60,7 @@ const NAV = [
     items: [
       { to: '/services', label: 'Services', icon: AppWindow },
       { to: '/find-services', label: 'Find services', icon: Wrench },
+      { to: '/cabinet-light', label: 'Cabinet light', icon: Lightbulb },
       { to: '/fuel-stations', label: 'Fuel stations', icon: Fuel },
       { to: '/print-jobs', label: 'Print jobs', icon: Printer },
       { to: '/support', label: 'Support', icon: LifeBuoy },
@@ -79,6 +81,7 @@ const PAGE_TITLES: Array<{ prefix: string; title: string }> = [
   { prefix: '/campaigns', title: 'Campaigns' },
   { prefix: '/kiosks', title: 'Kiosks' },
   { prefix: '/find-services', title: 'Find services' },
+  { prefix: '/cabinet-light', title: 'Cabinet light' },
   { prefix: '/services', title: 'Services' },
   { prefix: '/fuel-stations', title: 'Fuel stations' },
   { prefix: '/print-jobs', title: 'Print jobs' },

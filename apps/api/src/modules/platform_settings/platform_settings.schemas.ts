@@ -25,6 +25,13 @@ export const printFreeQuotaConfigSchema = z.object({
   freeColorPages: z.number().int().min(0).max(500),
 });
 
+export const cabinetLightConfigSchema = z.object({
+  enabled: z.boolean(),
+  mode: z.enum(['schedule', 'on', 'off']),
+  onTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
+  offTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
+});
+
 export const updatePlatformSettingSchema = z.object({
   settingValue: z.unknown(),
   description: z.string().max(500).optional(),
