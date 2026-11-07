@@ -16,11 +16,12 @@ final cabinetLightControllerProvider =
 /// Applies the admin light schedule on firmware relay 2.
 ///
 /// The ESP32 has no clock, so the kiosk sends `{"relay":2,"state":"on"|"off"}`
-/// when the desired state changes.
+/// only when the desired state changes, or after the serial port reconnects.
 class CabinetLightController extends Notifier<CabinetLightConfig> {
   Timer? _timer;
   bool? _appliedOn;
   bool _ticking = false;
+  bool _wasConnected = false;
 
   @override
   CabinetLightConfig build() {
@@ -34,11 +35,24 @@ class CabinetLightController extends Notifier<CabinetLightConfig> {
         _timer?.cancel();
         _timer = null;
         _appliedOn = null;
+        _wasConnected = false;
       }
+    });
+    ref.listen(serialControllerProvider, (previous, next) {
+      final connected = next.isConnected;
+      if (connected && !_wasConnected) {
+        // Port just came up (or came back). Firmware may have reset relays.
+        _appliedOn = null;
+        if (ref.read(deviceAuthProvider).isAuthenticated) {
+          unawaited(_tick());
+        }
+      }
+      _wasConnected = connected;
     });
     if (ref.read(deviceAuthProvider).isAuthenticated) {
       Future.microtask(_start);
     }
+    _wasConnected = ref.read(serialControllerProvider).isConnected;
     return CabinetLightConfig.defaults;
   }
 
@@ -58,8 +72,11 @@ class CabinetLightController extends Notifier<CabinetLightConfig> {
       if (!ref.mounted) return;
       state = config;
       final wantOn = config.shouldBeOn(DateTime.now());
+      if (_appliedOn == wantOn) {
+        return;
+      }
       final sent = await _send(wantOn);
-      if (sent && _appliedOn != wantOn) {
+      if (sent) {
         _appliedOn = wantOn;
         AppLogger.info('Cabinet light relay 2 ${wantOn ? 'on' : 'off'}');
       }

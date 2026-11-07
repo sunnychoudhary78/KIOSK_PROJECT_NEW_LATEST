@@ -57,12 +57,11 @@ void main() {
   }
 
   group('ChargingMonitor', () {
-    test('relay on waits for a phone and does not start the safety cap', () {
+    test('relay on waits for a phone and does not start charging yet', () {
       final state = armed();
       expect(state.phase, ChargingPhase.waitingForPhone);
       expect(state.relayOn, isTrue);
       expect(state.chargeStartedAt, isNull);
-      expect(state.capSecondsRemaining, isNull);
       expect(state.statusMessage, ChargingCopy.plugIn);
     });
 
@@ -71,7 +70,6 @@ void main() {
       expect(state.phase, ChargingPhase.charging);
       expect(state.relayOn, isTrue);
       expect(state.chargeStartedAt, t0);
-      expect(state.capSecondsRemaining, ChargingMonitor.maxChargeSeconds);
       expect(state.volts, 5);
       expect(state.currentMa, 800);
       expect(state.powerW, 4);
@@ -194,24 +192,6 @@ void main() {
       expect(ready.phase, ChargingPhase.charging);
       expect(ready.sensorLost, isFalse);
       expect(ready.statusMessage, ChargingCopy.phoneConnected);
-    });
-
-    test('the safety cap reaching zero does not end charging', () {
-      final charging = apply(armed(), event(ChargerNotice.pluggedIn));
-      final atCap = ChargingMonitor.refreshCap(
-        charging,
-        t0.add(const Duration(minutes: ChargingMonitor.maxChargeMinutes)),
-      );
-      expect(atCap.phase, ChargingPhase.charging);
-      expect(atCap.capSecondsRemaining, 0);
-      expect(atCap.relayOn, isTrue);
-      expect(atCap.statusMessage, ChargingCopy.finishingCap);
-
-      final same = ChargingMonitor.refreshCap(
-        atCap,
-        t0.add(const Duration(minutes: ChargingMonitor.maxChargeMinutes)),
-      );
-      expect(identical(same, atCap), isTrue);
     });
 
     test('events before the socket is on are ignored', () {

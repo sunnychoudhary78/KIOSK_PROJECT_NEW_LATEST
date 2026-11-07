@@ -17,7 +17,6 @@ class ChargingUiState {
     this.powerW,
     this.stopReason,
     this.chargeStartedAt,
-    this.capSecondsRemaining,
     this.hostStopRequested = false,
   });
 
@@ -41,12 +40,7 @@ class ChargingUiState {
   final ChargingStopReason? stopReason;
 
   /// Wall clock when `plugged_in` (or a charging snapshot) was first seen.
-  /// The on-screen 240-minute cap is counted from here. It does not turn
-  /// the socket off.
   final DateTime? chargeStartedAt;
-
-  /// Seconds left in the firmware safety cap. Null while not charging.
-  final int? capSecondsRemaining;
 
   /// Host already asked for relay off. Snapshots must not reopen charging
   /// while `last_result` is still `plugged_in`.
@@ -77,8 +71,6 @@ class ChargingUiState {
     bool clearStopReason = false,
     DateTime? chargeStartedAt,
     bool clearChargeStarted = false,
-    int? capSecondsRemaining,
-    bool clearCap = false,
     bool? hostStopRequested,
   }) {
     return ChargingUiState(
@@ -97,9 +89,6 @@ class ChargingUiState {
       chargeStartedAt: clearChargeStarted
           ? null
           : (chargeStartedAt ?? this.chargeStartedAt),
-      capSecondsRemaining: clearCap
-          ? null
-          : (capSecondsRemaining ?? this.capSecondsRemaining),
       hostStopRequested: hostStopRequested ?? this.hostStopRequested,
     );
   }

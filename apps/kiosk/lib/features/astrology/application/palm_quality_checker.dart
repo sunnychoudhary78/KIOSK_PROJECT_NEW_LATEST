@@ -41,16 +41,16 @@ class PalmQualityChecker {
   static const minBrightness = 50.0;
   static const maxBrightness = 215.0;
 
-  static const minInsideSkinRatio = 0.52;
+  static const minInsideSkinRatio = 0.46;
   static const manualMinInsideSkinRatio = 0.42;
-  static const minSkinContrast = 0.28;
+  static const minSkinContrast = 0.24;
   static const manualMinSkinContrast = 0.20;
 
-  static const maxOutsideSkinRatio = 0.22;
+  static const maxOutsideSkinRatio = 0.26;
   static const manualMaxOutsideSkinRatio = 0.30;
 
   /// Reject “whole ROI is skin” (face close-up).
-  static const maxRoiSkinRatio = 0.72;
+  static const maxRoiSkinRatio = 0.76;
   static const manualMaxRoiSkinRatio = 0.82;
 
   static const minBlur = 12.0;
@@ -58,11 +58,11 @@ class PalmQualityChecker {
   /// Extremely high variance is usually sensor noise / failure, not a palm.
   static const maxBlur = 20000.0;
 
-  static const minFingerSkinRatio = 0.35;
+  static const minFingerSkinRatio = 0.30;
   static const manualMinFingerSkinRatio = 0.25;
 
   /// Max normalized distance of skin mass from palm-path center (0..~0.7).
-  static const maxCentroidDistance = 0.22;
+  static const maxCentroidDistance = 0.26;
   static const manualMaxCentroidDistance = 0.30;
 
   static const analysisMaxWidth = 160;

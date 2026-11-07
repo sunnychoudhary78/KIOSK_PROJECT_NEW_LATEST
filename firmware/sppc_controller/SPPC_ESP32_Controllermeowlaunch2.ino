@@ -421,9 +421,6 @@ void startWatchdog()
 #define CHARGER_FULL_HOLD_S 60
 #define CHARGER_FULL_HOLD_SAMPLES ((CHARGER_FULL_HOLD_S * 1000) / CHARGER_POLL_MS)
 
-// Safety: relay is switched OFF after this long on one phone.
-#define CHARGER_MAX_MINUTES 240
-
 // true: print a {"charger":"debug",...} line every 2 s with the
 // live volts / mA / watts, to tune the thresholds above.
 #define CHARGER_DEBUG_STREAM false
@@ -2106,7 +2103,6 @@ unsigned long lastChargerPoll = 0;
 unsigned long lastInaInit = 0;
 unsigned long lastChargerDebug = 0;
 unsigned long chargerRelayOnMs = 0;
-unsigned long chargerPlugMs = 0;
 
 const char* chargerLastResult = "none";
 
@@ -2355,7 +2351,6 @@ void pollCharger()
       if (++chargerPlugCount >= CHARGER_PLUG_CONFIRM)
       {
         chargerState = CH_CHARGING;
-        chargerPlugMs = now;
 
         chargerPlugCount = 0;
         chargerUnplugCount = 0;
@@ -2420,13 +2415,6 @@ void pollCharger()
     )
     {
       chargerStop("charge_complete");
-      return;
-    }
-
-    // Safety limit
-    if (now - chargerPlugMs >= (unsigned long)CHARGER_MAX_MINUTES * 60000UL)
-    {
-      chargerStop("charge_timeout");
       return;
     }
   }

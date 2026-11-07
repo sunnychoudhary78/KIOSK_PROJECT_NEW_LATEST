@@ -98,8 +98,10 @@ class SerialService {
       config.bits = 8;
       config.stopBits = 1;
       config.parity = SerialPortParity.none;
-      config.rts = SerialPortRts.on;
-      config.dtr = SerialPortDtr.on;
+      // Keep DTR/RTS off so opening the port does not reboot ESP32 boards
+      // (a reset runs allRelaysOff and drops the cabinet light).
+      config.rts = SerialPortRts.off;
+      config.dtr = SerialPortDtr.off;
       config.setFlowControl(SerialPortFlowControl.none);
       port.config = config;
     } catch (error) {
@@ -121,6 +123,9 @@ class SerialService {
       },
       cancelOnError: false,
     );
+
+    // Settle in case a board still reboots on open.
+    await Future<void>.delayed(const Duration(seconds: 1));
 
     AppLogger.info('Serial connected: $trimmed @ $baudRate baud');
   }

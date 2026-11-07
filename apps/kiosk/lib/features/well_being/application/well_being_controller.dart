@@ -68,7 +68,9 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   WellBeingUiState build() {
     ref.onDispose(() {
       _stopPaymentPoll();
-      unawaited(_tearDown(disconnect: true));
+      // Keep the shared USB port open so the cabinet light (relay 2) is not
+      // dropped by an ESP32 reset on disconnect.
+      unawaited(_tearDown());
     });
     return WellBeingUiState.initial();
   }
@@ -154,7 +156,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   }
 
   Future<void> stopSession() async {
-    await _tearDown(disconnect: true);
+    await _tearDown();
     if (ref.mounted) {
       state = WellBeingUiState.initial();
     }
@@ -1066,37 +1068,20 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     }
   }
 
-  Future<void> _tearDown({required bool disconnect}) async {
+  /// Stop the sensor session but leave the shared serial port open.
+  Future<void> _tearDown() async {
     _stopPaymentPoll();
-    var shouldDisconnect = false;
-    Future<void> Function()? doDisconnect;
     try {
-      shouldDisconnect = disconnect && state.sessionActive;
-      if (shouldDisconnect && ref.mounted) {
-        final controller = ref.read(serialControllerProvider.notifier);
-        try {
-          if (ref.read(serialControllerProvider).isConnected) {
-            await controller.sendLine(_cmdStop);
-          }
-        } catch (_) {}
-        doDisconnect = controller.disconnect;
+      if (ref.mounted && ref.read(serialControllerProvider).isConnected) {
+        await ref.read(serialControllerProvider.notifier).sendLine(_cmdStop);
       }
     } catch (_) {
       try {
-        if (disconnect) {
-          final service = ref.read(serialServiceProvider);
-          try {
-            if (service.isConnected) {
-              await service.sendLine(_cmdStop);
-            }
-          } catch (_) {}
-          doDisconnect = () => service.disconnect(silent: true);
-          shouldDisconnect = true;
+        final service = ref.read(serialServiceProvider);
+        if (service.isConnected) {
+          await service.sendLine(_cmdStop);
         }
-      } catch (_) {
-        shouldDisconnect = false;
-        doDisconnect = null;
-      }
+      } catch (_) {}
     }
 
     try {
@@ -1111,13 +1096,5 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     } catch (_) {}
 
     _parser.reset();
-
-    if (shouldDisconnect && doDisconnect != null) {
-      try {
-        await doDisconnect();
-      } catch (error) {
-        AppLogger.error('Well Being serial disconnect failed', error);
-      }
-    }
   }
 }

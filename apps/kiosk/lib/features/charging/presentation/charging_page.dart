@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
-import 'package:skp_kiosk/features/charging/domain/charging_monitor.dart';
 import 'package:skp_kiosk/features/charging/domain/charging_phase.dart';
 import 'package:skp_kiosk/features/charging/presentation/charging_ad_gate.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
@@ -32,13 +31,6 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
     return ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
-  }
-
-  String _formatCap(int totalSeconds) {
-    final h = totalSeconds ~/ 3600;
-    final m = (totalSeconds % 3600) ~/ 60;
-    final s = totalSeconds % 60;
-    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -119,12 +111,6 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
               volts: state.volts,
               currentMa: state.currentMa,
               powerW: state.powerW,
-              remainingLabel: _formatCap(
-                state.capSecondsRemaining ?? ChargingMonitor.maxChargeSeconds,
-              ),
-              totalSeconds: ChargingMonitor.maxChargeSeconds,
-              secondsRemaining:
-                  state.capSecondsRemaining ?? ChargingMonitor.maxChargeSeconds,
             ),
             ChargingPhase.done => Center(
               child: Column(
@@ -198,9 +184,6 @@ class _ChargingActiveView extends StatelessWidget {
     this.volts,
     this.currentMa,
     this.powerW,
-    this.remainingLabel,
-    this.totalSeconds,
-    this.secondsRemaining,
   });
 
   final bool charging;
@@ -209,21 +192,10 @@ class _ChargingActiveView extends StatelessWidget {
   final double? volts;
   final double? currentMa;
   final double? powerW;
-  final String? remainingLabel;
-  final int? totalSeconds;
-  final int? secondsRemaining;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final showCap =
-        charging &&
-        remainingLabel != null &&
-        totalSeconds != null &&
-        secondsRemaining != null;
-    final progress = !showCap || totalSeconds! <= 0
-        ? 0.0
-        : 1.0 - (secondsRemaining! / totalSeconds!);
 
     return Center(
       child: ConstrainedBox(
@@ -274,32 +246,6 @@ class _ChargingActiveView extends StatelessWidget {
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
                 textAlign: TextAlign.center,
-              ),
-            ],
-            if (showCap) ...[
-              const SizedBox(height: 32),
-              Text(
-                remainingLabel!,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Safety limit remaining',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: SkpColors.muted,
-                ),
-              ),
-              const SizedBox(height: 24),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
-                  minHeight: 12,
-                  backgroundColor: SkpColors.raised,
-                  color: SkpColors.accentBright,
-                ),
               ),
             ],
           ],

@@ -52,7 +52,9 @@ class ChargingController extends Notifier<ChargingUiState> {
   @override
   ChargingUiState build() {
     ref.onDispose(() {
-      unawaited(_tearDown(disconnect: true));
+      // Keep the shared USB port open so the cabinet light (relay 2) is not
+      // dropped by an ESP32 reset on disconnect.
+      unawaited(_tearDown());
     });
     return ChargingUiState.initial();
   }
@@ -89,7 +91,6 @@ class ChargingController extends Notifier<ChargingUiState> {
       clearReadings: true,
       clearStopReason: true,
       clearChargeStarted: true,
-      clearCap: true,
       hostStopRequested: false,
       statusMessage: 'Connecting to charging controller…',
     );
@@ -263,8 +264,8 @@ class ChargingController extends Notifier<ChargingUiState> {
     await startSession();
   }
 
-  /// Force relay off + disconnect. Safe to call from session reset.
-  Future<void> forceShutdown() => _tearDown(disconnect: true);
+  /// Force charger relay off. Keeps the shared serial port open.
+  Future<void> forceShutdown() => _tearDown();
 
   void _publish(ChargingUiState next) {
     if (!ref.mounted || _tearingDown) {
@@ -288,10 +289,6 @@ class ChargingController extends Notifier<ChargingUiState> {
     _pollTimer = Timer.periodic(chargerPollInterval, (_) {
       if (!ref.mounted || _tearingDown) {
         return;
-      }
-      final refreshed = ChargingMonitor.refreshCap(state, DateTime.now());
-      if (!identical(refreshed, state)) {
-        state = refreshed;
       }
       unawaited(_pollCharger());
     });
@@ -836,7 +833,8 @@ class ChargingController extends Notifier<ChargingUiState> {
     }
   }
 
-  Future<void> _tearDown({required bool disconnect}) async {
+  /// Turn the charger relay off but leave the shared serial port open.
+  Future<void> _tearDown() async {
     if (_tearingDown) {
       return;
     }
@@ -851,17 +849,18 @@ class ChargingController extends Notifier<ChargingUiState> {
     _serialWatch = null;
 
     try {
-      if (disconnect) {
-        // Best-effort off while the reader is still attached, then close.
-        // Closing the port may reset the ESP32, which also forces relays off.
-        try {
-          final service = ref.read(serialServiceProvider);
-          if (service.isConnected) {
-            await _requestRelay(on: false);
-          }
-        } catch (_) {}
+      final service = ref.read(serialServiceProvider);
+      if (service.isConnected) {
+        await _requestRelay(on: false);
       }
-    } catch (_) {}
+    } catch (_) {
+      try {
+        final service = ref.read(serialServiceProvider);
+        if (service.isConnected) {
+          await service.sendLine(RelayCommands.chargingOff());
+        }
+      } catch (_) {}
+    }
 
     _acceptReplies = false;
 
@@ -869,28 +868,6 @@ class ChargingController extends Notifier<ChargingUiState> {
     _incomingSub = null;
     try {
       await sub?.cancel();
-    } catch (_) {}
-
-    try {
-      if (disconnect) {
-        final serialState = ref.read(serialControllerProvider);
-        final service = ref.read(serialServiceProvider);
-        var closed = false;
-        if (serialState.isConnected) {
-          try {
-            await ref.read(serialControllerProvider.notifier).disconnect();
-            closed = !service.isConnected;
-          } catch (error) {
-            AppLogger.error('Charging serial disconnect failed', error);
-          }
-        }
-        if (!closed && service.isConnected) {
-          try {
-            await service.sendLine(RelayCommands.chargingOff());
-            await service.disconnect(silent: true);
-          } catch (_) {}
-        }
-      }
     } catch (_) {}
 
     _powerArmed = false;

@@ -3,16 +3,11 @@ import 'package:skp_kiosk/features/charging/domain/charger_message.dart';
 import 'package:skp_kiosk/features/charging/domain/charging_phase.dart';
 
 /// Pure mirror of the ESP32 charger monitor in
-/// `firmware/sppc_controller/kiosk_temp_update_16.ino`.
+/// `firmware/sppc_controller/SPPC_ESP32_Controllermeowlaunch2.ino`.
 ///
 /// Watt thresholds stay on the device. This only applies `charger` events,
 /// `{"command":"charger"}` snapshots, and host relay results.
 abstract final class ChargingMonitor {
-  /// Firmware `CHARGER_MAX_MINUTES`. Display only — `charge_timeout` ends
-  /// the session.
-  static const int maxChargeMinutes = 240;
-  static const int maxChargeSeconds = maxChargeMinutes * 60;
-
   /// Relay 1 just confirmed on.
   static ChargingUiState onRelayArmed(ChargingUiState state) {
     final sensorDown = state.sensorOk == false;
@@ -22,7 +17,6 @@ abstract final class ChargingMonitor {
       sensorLost: sensorDown,
       hostStopRequested: false,
       clearChargeStarted: true,
-      clearCap: true,
       clearStopReason: true,
       clearError: true,
       statusMessage: sensorDown
@@ -58,35 +52,9 @@ abstract final class ChargingMonitor {
       hostStopRequested: false,
       sensorLost: false,
       clearChargeStarted: true,
-      clearCap: true,
       clearStopReason: true,
       statusMessage: 'Charging controller reset',
       lastError: 'The socket turned off when the controller restarted.',
-    );
-  }
-
-  /// Updates the on-screen cap. Does not change phase and does not turn
-  /// the socket off when the cap reaches zero.
-  static ChargingUiState refreshCap(ChargingUiState state, DateTime now) {
-    if (state.phase != ChargingPhase.charging ||
-        state.chargeStartedAt == null) {
-      return state;
-    }
-    final elapsed = now.difference(state.chargeStartedAt!).inSeconds;
-    if (elapsed < 0) {
-      return state;
-    }
-    final remaining = elapsed >= maxChargeSeconds
-        ? 0
-        : maxChargeSeconds - elapsed;
-    if (remaining == state.capSecondsRemaining) {
-      return state;
-    }
-    return state.copyWith(
-      capSecondsRemaining: remaining,
-      statusMessage: remaining == 0 && !state.sensorLost
-          ? ChargingCopy.finishingCap
-          : null,
     );
   }
 
@@ -113,6 +81,7 @@ abstract final class ChargingMonitor {
         withReadings,
         ChargingStopReason.chargeComplete,
       ),
+      // Legacy firmware may still emit this; keep ending cleanly.
       ChargerNotice.chargeTimeout => _finish(
         withReadings,
         ChargingStopReason.chargeTimeout,
@@ -130,12 +99,7 @@ abstract final class ChargingMonitor {
   static ChargingUiState _onSensorReady(ChargingUiState state) {
     final cleared = state.copyWith(sensorOk: true, sensorLost: false);
     if (cleared.phase == ChargingPhase.charging) {
-      final finishing = cleared.capSecondsRemaining == 0;
-      return cleared.copyWith(
-        statusMessage: finishing
-            ? ChargingCopy.finishingCap
-            : ChargingCopy.phoneConnected,
-      );
+      return cleared.copyWith(statusMessage: ChargingCopy.phoneConnected);
     }
     return cleared.copyWith(statusMessage: ChargingCopy.plugIn);
   }
@@ -197,7 +161,6 @@ abstract final class ChargingMonitor {
       phase: ChargingPhase.waitingForPhone,
       relayOn: true,
       clearChargeStarted: true,
-      clearCap: true,
       clearStopReason: true,
       statusMessage: state.sensorLost
           ? ChargingCopy.sensorUnavailable
@@ -207,21 +170,14 @@ abstract final class ChargingMonitor {
 
   static ChargingUiState _enterCharging(ChargingUiState state, DateTime now) {
     final started = state.chargeStartedAt ?? now;
-    final elapsed = now.difference(started).inSeconds;
-    final remaining = elapsed <= 0
-        ? maxChargeSeconds
-        : (elapsed >= maxChargeSeconds ? 0 : maxChargeSeconds - elapsed);
     return state.copyWith(
       phase: ChargingPhase.charging,
       relayOn: true,
       sensorOk: true,
       sensorLost: false,
       chargeStartedAt: started,
-      capSecondsRemaining: remaining,
       clearStopReason: true,
-      statusMessage: remaining == 0
-          ? ChargingCopy.finishingCap
-          : ChargingCopy.phoneConnected,
+      statusMessage: ChargingCopy.phoneConnected,
     );
   }
 
@@ -249,7 +205,6 @@ abstract final class ChargingMonitor {
       sensorLost: false,
       stopReason: reason,
       clearChargeStarted: true,
-      clearCap: true,
       clearError: true,
       statusMessage: reason.detail,
     );

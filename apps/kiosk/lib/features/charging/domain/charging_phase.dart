@@ -9,10 +9,10 @@ enum ChargingPhase {
   /// Relay 1 is on. Firmware is waiting for the phone to draw power.
   waitingForPhone,
 
-  /// Phone is drawing power. Firmware owns unplug, full, and the 4-hour cap.
+  /// Phone is drawing power. Firmware owns unplug and full detection.
   charging,
 
-  /// Socket is off (visitor, unplug, full, or the firmware safety cap).
+  /// Socket is off (visitor, unplug, full, or legacy firmware timeout).
   done,
 
   /// Unrecoverable connection / relay failure, or the controller reset.
@@ -30,7 +30,7 @@ enum ChargingStopReason {
   /// Firmware `charge_complete`: charge tapered off, Relay 1 already off.
   chargeComplete,
 
-  /// Firmware `charge_timeout`: 240 minutes after plug-in, Relay 1 already off.
+  /// Legacy firmware `charge_timeout`. Current firmware no longer emits this.
   chargeTimeout,
 
   /// Relay read-back went off without a charger stop event.
@@ -53,7 +53,7 @@ extension ChargingStopReasonCopy on ChargingStopReason {
     ChargingStopReason.chargeComplete =>
       'Phone is fully charged. The socket is off.',
     ChargingStopReason.chargeTimeout =>
-      'The 4-hour limit was reached. The socket is off.',
+      'The time limit was reached. The socket is off.',
     ChargingStopReason.socketOff => 'The socket is off.',
   };
 }
@@ -66,5 +66,4 @@ abstract final class ChargingCopy {
       'Plug detection is unavailable. The socket stays on until you tap Done.';
   static const sensorLost =
       'Charger sensor lost. The socket stays on until you tap Done.';
-  static const finishingCap = 'Finishing the safety limit…';
 }

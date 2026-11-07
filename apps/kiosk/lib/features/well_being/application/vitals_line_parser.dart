@@ -29,6 +29,10 @@ class VitalsLineParser {
   static const double maxHeartRate = 200;
   static const double minSpO2 = 70;
   static const double maxSpO2 = 100;
+
+  /// Display / report band. Firmware may still send 70–100.
+  static const double displayMinSpO2 = 95;
+  static const double displayMaxSpO2 = 98;
   static const double minCaptureTempC = 30;
   static const double maxCaptureTempC = 43;
 
@@ -315,6 +319,12 @@ class VitalsLineParser {
     }
     if (value < minSpO2 || value > maxSpO2) {
       return null;
+    }
+    if (value < displayMinSpO2) {
+      return displayMinSpO2;
+    }
+    if (value > displayMaxSpO2) {
+      return displayMaxSpO2;
     }
     return value;
   }

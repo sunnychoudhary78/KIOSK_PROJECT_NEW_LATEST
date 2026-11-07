@@ -63,7 +63,8 @@ void main() {
   });
 
   test('manual gate accepts a slightly thinner palm fill', () {
-    // Contiguous inset palm (~0.46 of full silhouette area) with soft texture.
+    // Full fingers + palm, with the heel cleared so inside fill sits between
+    // the manual floor (0.42) and the relaxed strict floor (0.46).
     final rng = math.Random(5);
     const size = 220;
     final image = img.Image(width: size, height: size);
@@ -76,12 +77,8 @@ void main() {
       crop.height.toDouble(),
     );
     final fullPalm = openPalmPath(bounds);
-    final insetBounds = Rect.fromCenter(
-      center: bounds.center,
-      width: bounds.width * 0.70,
-      height: bounds.height * 0.70,
-    );
-    final insetPalm = openPalmPath(insetBounds);
+    // Fill fingers + mid palm; leave enough of the heel empty that fill is ~0.43.
+    final heelCutY = crop.top + crop.height * 0.48;
 
     var total = 0;
     var filled = 0;
@@ -92,7 +89,7 @@ void main() {
           continue;
         }
         total++;
-        if (!insetPalm.contains(pt)) {
+        if (y >= heelCutY) {
           continue;
         }
         filled++;
@@ -109,7 +106,7 @@ void main() {
       }
     }
     expect(filled / total, greaterThan(0.42));
-    expect(filled / total, lessThan(0.52));
+    expect(filled / total, lessThan(0.46));
 
     final bytes = encodePalmPng(image);
     final strict = checker.evaluate(bytes, strict: true);

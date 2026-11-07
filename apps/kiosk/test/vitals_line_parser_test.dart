@@ -223,6 +223,29 @@ void main() {
       expect(lowBpm.spo2, 98);
     });
 
+    test('clamps accepted spo2 into the 95–98 display band', () {
+      final high = parser.parseLine(
+        '{"status":"complete","bpm":72,"spo2":100,"object_f":null,"ambient_f":null}',
+      );
+      expect(high!.spo2, 98);
+      expect(high.finalSpO2, 98);
+
+      final almostHigh = parser.parseLine(
+        '{"status":"complete","bpm":72,"spo2":99,"object_f":null,"ambient_f":null}',
+      );
+      expect(almostHigh!.spo2, 98);
+
+      final mid = parser.parseLine(
+        '{"status":"complete","bpm":72,"spo2":96,"object_f":null,"ambient_f":null}',
+      );
+      expect(mid!.spo2, 96);
+
+      final lowValid = parser.parseLine(
+        '{"status":"complete","bpm":72,"spo2":92,"object_f":null,"ambient_f":null}',
+      );
+      expect(lowValid!.spo2, 95);
+    });
+
     test('parses sensor_started without implying a finger', () {
       final result = parser.parseLine('{"status":"sensor_started"}');
       expect(result!.kind, VitalsMessageKind.sensorStarted);
