@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_paid_print.dart';
@@ -133,6 +134,11 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
       subject: subject,
       print: const ReportPrintSnapshot(),
     );
+    Diag.astrologyInfo(
+      'astrology.kundali.submit_start',
+      'Kundali submit started',
+      {'feature': 'kundali', 'style': style, 'birthTimeUnknown': birthTimeUnknown},
+    );
 
     try {
       final result = await _repository.createKundali(
@@ -152,12 +158,22 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
         return;
       }
       if (result.svg.trim().isEmpty) {
+        Diag.astrologyError(
+          'astrology.kundali.submit_failed',
+          'Empty kundali SVG',
+          {'feature': 'kundali', 'style': style},
+        );
         state = state.copyWith(
           phase: KundaliPhase.form,
           error: 'Could not draw the kundali. Try again.',
         );
         return;
       }
+      Diag.astrologyInfo(
+        'astrology.kundali.submit_ok',
+        'Kundali ready',
+        {'feature': 'kundali', 'style': style},
+      );
       state = state.copyWith(
         phase: KundaliPhase.result,
         result: result,
@@ -167,9 +183,15 @@ class MyKundaliController extends Notifier<MyKundaliUiState> {
       if (!ref.mounted) {
         return;
       }
+      final message = userFacingError(error);
+      Diag.astrologyError(
+        'astrology.kundali.submit_failed',
+        message,
+        {'feature': 'kundali', 'style': style},
+      );
       state = state.copyWith(
         phase: KundaliPhase.form,
-        error: userFacingError(error),
+        error: message,
       );
     }
   }

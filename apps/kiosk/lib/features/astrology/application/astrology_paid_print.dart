@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
@@ -102,6 +103,11 @@ class AstrologyPaidPrint {
     } catch (error) {
       if (!mounted()) return;
       final message = userFacingError(error);
+      Diag.astrologyError(
+        'astrology.print_prepare_failed',
+        message,
+        {'product': productLabel},
+      );
       applyPrint(
         readPrint().copyWith(
           phase: ReportPrintPhase.printResult,
@@ -265,6 +271,21 @@ class AstrologyPaidPrint {
             notice.trim().isNotEmpty
         ? next.copyWith(phoneNotice: notice)
         : next;
+    if (withNotice.phase == ReportPrintPhase.printResult &&
+        withNotice.error != null) {
+      Diag.astrologyError(
+        'astrology.print_prepare_failed',
+        withNotice.error!,
+        {'product': productLabel},
+      );
+    } else if (withNotice.phase == ReportPrintPhase.previewing ||
+        withNotice.phase == ReportPrintPhase.awaitingPayment) {
+      Diag.astrologyInfo(
+        'astrology.print_prepare_ok',
+        'Print job prepared',
+        {'product': productLabel},
+      );
+    }
     applyPrint(withNotice);
     if (withNotice.phase == ReportPrintPhase.awaitingPayment) {
       startPoll();

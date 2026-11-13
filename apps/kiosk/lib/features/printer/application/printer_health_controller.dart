@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 import 'package:skp_kiosk/services/printer/printer_health.dart';
 import 'package:skp_kiosk/services/printer/printer_monitor.dart';
@@ -18,6 +19,7 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
   DateTime? _nextFullUsbAt;
   int? _previousUsbPages;
   int? _lastUsbStatusCode;
+  String? _lastStatusSignature;
 
   @override
   PrinterHealth build() {
@@ -41,6 +43,7 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
         _lastRefreshAck = null;
         _previousUsbPages = null;
         _lastUsbStatusCode = null;
+        _lastStatusSignature = null;
         _nextFullUsbAt = null;
       }
     });
@@ -116,11 +119,46 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
     try {
       final health = await _monitor.getHealth();
       // Heartbeat uses toJson() which omits community / secrets.
+      _logStatusIfChanged(health);
       state = health;
       return true;
     } catch (error) {
       AppLogger.error('PRINTER health refresh failed', error);
+      Diag.printerError(
+        'printer.health_refresh_failed',
+        'Printer health refresh failed',
+        {'error': error.toString()},
+      );
       return false;
+    }
+  }
+
+  void _logStatusIfChanged(PrinterHealth health) {
+    final signature = [
+      health.state,
+      health.online,
+      health.noPaper,
+      health.jammed,
+      health.lastErrorCode,
+      health.hrPrinterStatus,
+    ].join('|');
+    if (signature == _lastStatusSignature) return;
+    _lastStatusSignature = signature;
+    final levelError = health.isPhysicalFatal || health.noPaper || health.jammed;
+    final meta = <String, dynamic>{
+      'state': health.state,
+      'online': health.online,
+      'noPaper': health.noPaper,
+      'jammed': health.jammed,
+      if (health.lastErrorCode != null) 'lastErrorCode': health.lastErrorCode,
+      if (health.hrPrinterStatus != null)
+        'hrPrinterStatus': health.hrPrinterStatus,
+      if (health.printerName != null) 'printerName': health.printerName,
+    };
+    if (levelError) {
+      Diag.printerWarn('printer.status_changed', health.userMessage, meta);
+    } else {
+      Diag.printerInfo('printer.status_changed', 'Printer status updated', meta);
     }
   }
 

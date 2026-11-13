@@ -35,6 +35,7 @@ import { registerSocietyPhonesModule } from './modules/society_phones/index.js';
 import { registerEmergencyContactsModule } from './modules/emergency_contacts/index.js';
 import { registerLocalServicesModule } from './modules/local_services/index.js';
 import { registerServiceAnalyticsModule } from './modules/service_analytics/index.js';
+import { registerDiagnosticLogsModule } from './modules/diagnostic_logs/index.js';
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -114,6 +115,7 @@ export function createApp(deps: AppDeps): Express {
   registerWeatherModule(v1, deps);
   registerSurveillanceModule(v1, deps);
   registerServiceAnalyticsModule(v1, deps);
+  registerDiagnosticLogsModule(v1, deps);
 
   // Device-authenticated PDF content for print jobs
   v1.get(

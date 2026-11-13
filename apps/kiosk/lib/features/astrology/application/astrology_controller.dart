@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_paid_print.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_print_mixin.dart';
@@ -209,6 +210,11 @@ class AstrologyController extends Notifier<AstrologyUiState> {
       subject: subject,
       print: const ReportPrintSnapshot(),
     );
+    Diag.astrologyInfo(
+      'astrology.palm.submit_start',
+      'Palm reading submit started',
+      {'feature': 'palm', 'birthTimeUnknown': birthTimeUnknown},
+    );
 
     try {
       final reading = await _repository.createReading(
@@ -227,6 +233,11 @@ class AstrologyController extends Notifier<AstrologyUiState> {
       if (!ref.mounted) {
         return;
       }
+      Diag.astrologyInfo(
+        'astrology.palm.submit_ok',
+        'Palm reading ready',
+        {'feature': 'palm'},
+      );
       state = state.copyWith(
         phase: AstrologyPhase.result,
         reading: reading,
@@ -236,9 +247,15 @@ class AstrologyController extends Notifier<AstrologyUiState> {
       if (!ref.mounted) {
         return;
       }
+      final message = userFacingError(error);
+      Diag.astrologyError(
+        'astrology.palm.submit_failed',
+        message,
+        {'feature': 'palm'},
+      );
       state = state.copyWith(
         phase: AstrologyPhase.form,
-        error: userFacingError(error),
+        error: message,
       );
     }
   }

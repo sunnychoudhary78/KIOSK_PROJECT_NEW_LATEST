@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/hardware/serial/print_tray_commands.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_provider.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/services/print_spooler.dart';
 import 'package:skp_kiosk/services/printer/print_job_status_reporter.dart';
 import 'package:skp_kiosk/services/printer/print_reconcile_result.dart';
@@ -73,6 +74,10 @@ class PrintCoordinator {
       AppLogger.info('PRINTER tray $line');
     } catch (error) {
       AppLogger.error('PRINTER tray serial failed: $line', error);
+      Diag.printerError('printer.tray_serial_failed', 'Tray serial command failed', {
+        'line': line,
+        'error': error.toString(),
+      });
     }
   }
 
@@ -121,6 +126,11 @@ class PrintCoordinator {
       );
     } catch (error) {
       AppLogger.error('PRINTER spooler clear failed', error);
+      Diag.printerError(
+        'printer.spooler_clear_failed',
+        'Spooler clear failed',
+        {'error': error.toString()},
+      );
     }
   }
 
@@ -211,6 +221,11 @@ class PrintCoordinator {
       return snapshot.pagesTotal;
     } catch (error) {
       AppLogger.error('PRINTER usb page read failed', error);
+      Diag.printerError(
+        'printer.usb_page_read_failed',
+        'USB page counter read failed',
+        {'error': error.toString()},
+      );
       return null;
     }
   }
@@ -295,6 +310,11 @@ class PrintCoordinator {
       }
     } catch (error) {
       AppLogger.error('PRINTER spooler job capture failed', error);
+      Diag.printerWarn(
+        'printer.spooler_job_capture_failed',
+        'Could not capture spooler job id',
+        {'error': error.toString()},
+      );
     }
   }
 
@@ -626,6 +646,19 @@ class PrintCoordinator {
             : (health.jammed
                 ? 'jam'
                 : (health.lastErrorCode ?? health.state));
+        Diag.printerError(
+          'printer.print_failed',
+          health.userMessage,
+          {
+            'jobId': jobId,
+            'detail': detail,
+            'pagesReported': pagesReported,
+            'state': health.state,
+            'noPaper': health.noPaper,
+            'jammed': health.jammed,
+            if (health.lastErrorCode != null) 'lastErrorCode': health.lastErrorCode,
+          },
+        );
         final spoolerJobId = _activeSpoolerJobId?.toString();
         await _clearActiveSpoolerWork();
         if (pagesReported > 0) {
@@ -676,6 +709,11 @@ class PrintCoordinator {
       AppLogger.info(
         'PRINTER reconcile job=$jobId not verified detail=$unavailableDetail',
       );
+      Diag.printerWarn(
+        'printer.reconcile_unverified',
+        'Print completion could not be confirmed',
+        {'jobId': jobId, 'detail': unavailableDetail},
+      );
       final spoolerJobId = _activeSpoolerJobId?.toString();
       await _clearActiveSpoolerWork();
       await reportStatus(
@@ -702,6 +740,16 @@ class PrintCoordinator {
 
     AppLogger.info(
       'PRINTER reconcile job=$jobId not verified delta=$pagesReported expected=$expected detail=timeout',
+    );
+    Diag.printerWarn(
+      'printer.reconcile_timeout',
+      'Print reconcile timed out',
+      {
+        'jobId': jobId,
+        'pagesReported': pagesReported,
+        'pagesExpected': expected,
+        'detail': timeoutDetail,
+      },
     );
     final spoolerJobId = _activeSpoolerJobId?.toString();
     await _clearActiveSpoolerWork();

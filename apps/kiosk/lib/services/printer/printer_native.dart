@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/services/printer/printer_health.dart';
 import 'package:skp_kiosk/services/printer/usb_snapshot.dart';
 
@@ -89,9 +90,18 @@ class MethodChannelPrinterNative implements PrinterNative {
       return PrinterHealth.unknown;
     } on MissingPluginException {
       AppLogger.error('PRINTER native plugin missing for getHealth');
+      Diag.printerError(
+        'printer.native_plugin_missing',
+        'Native printer plugin missing for getHealth',
+      );
       return PrinterHealth.unknown;
     } catch (error) {
       AppLogger.error('PRINTER getHealth failed', error);
+      Diag.printerError(
+        'printer.get_health_failed',
+        'getHealth failed',
+        {'error': error.toString()},
+      );
       return PrinterHealth.unknown;
     }
   }
@@ -167,9 +177,18 @@ class MethodChannelPrinterNative implements PrinterNative {
       return UsbSnapshot.failed('usb_helper_failed');
     } on MissingPluginException {
       AppLogger.error('PRINTER native plugin missing for getUsbSnapshot');
+      Diag.printerError(
+        'printer.native_plugin_missing',
+        'Native printer plugin missing for getUsbSnapshot',
+      );
       return UsbSnapshot.failed('helper_missing');
     } catch (error) {
       AppLogger.error('PRINTER getUsbSnapshot failed', error);
+      Diag.printerError(
+        'printer.usb_snapshot_failed',
+        'getUsbSnapshot failed',
+        {'error': error.toString()},
+      );
       return UsbSnapshot.failed('usb_helper_failed');
     }
   }

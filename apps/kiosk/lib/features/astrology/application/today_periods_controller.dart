@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_paid_print.dart';
@@ -124,6 +125,11 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
       subject: subject,
       print: const ReportPrintSnapshot(),
     );
+    Diag.astrologyInfo(
+      'astrology.today.submit_start',
+      'Today & Periods submit started',
+      {'feature': 'today', 'birthTimeUnknown': birthTimeUnknown},
+    );
 
     try {
       final result = await _repository.createToday(
@@ -140,12 +146,22 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
       );
       if (!ref.mounted) return;
       if (result.dasha.label.trim().isEmpty) {
+        Diag.astrologyError(
+          'astrology.today.submit_failed',
+          'Empty dasha from today periods',
+          {'feature': 'today'},
+        );
         state = state.copyWith(
           phase: TodayPeriodsPhase.form,
           error: 'Could not load today’s periods. Try again.',
         );
         return;
       }
+      Diag.astrologyInfo(
+        'astrology.today.submit_ok',
+        'Today & Periods ready',
+        {'feature': 'today'},
+      );
       state = state.copyWith(
         phase: TodayPeriodsPhase.result,
         result: result,
@@ -153,9 +169,15 @@ class TodayPeriodsController extends Notifier<TodayPeriodsUiState> {
       );
     } catch (error) {
       if (!ref.mounted) return;
+      final message = userFacingError(error);
+      Diag.astrologyError(
+        'astrology.today.submit_failed',
+        message,
+        {'feature': 'today'},
+      );
       state = state.copyWith(
         phase: TodayPeriodsPhase.form,
-        error: userFacingError(error),
+        error: message,
       );
     }
   }

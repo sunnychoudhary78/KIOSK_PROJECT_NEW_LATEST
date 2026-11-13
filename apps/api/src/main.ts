@@ -9,6 +9,7 @@ import { createAstrologyLlmClient } from './infrastructure/external/openai.clien
 import { createObjectStorageClient } from './infrastructure/storage/s3.client.js';
 import { AuditService } from './modules/audit/audit.service.js';
 import { PlatformSettingsService } from './modules/platform_settings/platform_settings.service.js';
+import { DiagnosticLogsService } from './modules/diagnostic_logs/diagnostic_logs.service.js';
 import { createApp } from './app.js';
 import type { AppDeps } from './types/deps.js';
 
@@ -71,8 +72,24 @@ async function main() {
     logger.info({ port: config.port, env: config.env }, 'SKP API listening');
   });
 
+  const diagnosticLogs = new DiagnosticLogsService(prisma);
+  const runPurge = async () => {
+    try {
+      const deleted = await diagnosticLogs.purgeOlderThan();
+      if (deleted > 0) {
+        logger.info({ deleted }, '[Diagnostics] purged expired device logs');
+      }
+    } catch (error) {
+      logger.error({ err: error }, '[Diagnostics] purge failed');
+    }
+  };
+  void runPurge();
+  const purgeTimer = setInterval(() => void runPurge(), 60 * 60 * 1000);
+  purgeTimer.unref?.();
+
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down');
+    clearInterval(purgeTimer);
     server.close(async () => {
       await prisma.$disconnect();
       process.exit(0);

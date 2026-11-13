@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_paid_print.dart';
@@ -118,9 +119,19 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
       bride: bride,
       print: const ReportPrintSnapshot(),
     );
+    Diag.astrologyInfo(
+      'astrology.match.submit_start',
+      'Match kundali submit started',
+      {'feature': 'match'},
+    );
     try {
       final result = await _repository.createMatch(groom: groom, bride: bride);
       if (!ref.mounted) return;
+      Diag.astrologyInfo(
+        'astrology.match.submit_ok',
+        'Match kundali ready',
+        {'feature': 'match'},
+      );
       state = state.copyWith(
         phase: MatchKundaliPhase.result,
         result: result,
@@ -128,9 +139,15 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
       );
     } catch (error) {
       if (!ref.mounted) return;
+      final message = userFacingError(error);
+      Diag.astrologyError(
+        'astrology.match.submit_failed',
+        message,
+        {'feature': 'match'},
+      );
       state = state.copyWith(
         phase: MatchKundaliPhase.bride,
-        error: userFacingError(error),
+        error: message,
       );
     }
   }

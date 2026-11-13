@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
+import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
 import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
@@ -218,6 +219,14 @@ class ReportPrintSupport {
       );
     } catch (error) {
       final message = userFacingError(error);
+      Diag.printerError(
+        'printer.prepare_failed',
+        message,
+        {
+          'path': createJobPath,
+          if (error is ApiException) 'code': error.code,
+        },
+      );
       // Stay in an active print phase so the shell shows a failure UI instead of
       // silently bouncing back to the feature result screen.
       return ReportPrintSnapshot(
@@ -305,6 +314,11 @@ class ReportPrintSupport {
         );
       }
       if (outcome.reconcileDetail == 'paper_out') {
+        Diag.printerError(
+          'printer.paper_out',
+          outcome.userMessage,
+          {'jobId': jobId, 'detail': 'paper_out'},
+        );
         return current.copyWith(
           phase: ReportPrintPhase.previewing,
           paperOut: true,
@@ -312,6 +326,16 @@ class ReportPrintSupport {
           clearMessage: true,
         );
       }
+      Diag.printerError(
+        'printer.confirm_failed',
+        outcome.userMessage,
+        {
+          'jobId': jobId,
+          if (outcome.reconcileDetail != null)
+            'detail': outcome.reconcileDetail,
+          'failures': failures + 1,
+        },
+      );
       return current.copyWith(
         phase: ReportPrintPhase.previewing,
         printFailures: failures + 1,
@@ -319,10 +343,16 @@ class ReportPrintSupport {
         clearMessage: true,
       );
     } catch (error) {
+      final message = userFacingError(error);
+      Diag.printerError(
+        'printer.confirm_failed',
+        message,
+        {'jobId': jobId, 'failures': failures + 1},
+      );
       return current.copyWith(
         phase: ReportPrintPhase.previewing,
         printFailures: failures + 1,
-        error: userFacingError(error),
+        error: message,
         clearMessage: true,
       );
     }

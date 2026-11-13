@@ -270,9 +270,29 @@ model Device {
   surveillanceSegments SurveillanceSegment[]
   quickPrintSessions QuickPrintSession[]
   serviceNavigationEvents ServiceNavigationEvent[]
+  diagnosticLogs     DeviceDiagnosticLog[]
   supportQueries     SupportQuery[]
 
   @@map("devices")
+}
+
+model DeviceDiagnosticLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  deviceId      String   @map("device_id") @db.Uuid
+  occurredAt    DateTime @default(now()) @map("occurred_at")
+  level         String   @db.VarChar(16)
+  category      String   @db.VarChar(40)
+  event         String   @db.VarChar(120)
+  message       String   @db.VarChar(500)
+  correlationId String?  @map("correlation_id") @db.VarChar(64)
+  metadata      Json?
+
+  device Device @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, occurredAt])
+  @@index([deviceId, category, occurredAt])
+  @@index([occurredAt])
+  @@map("device_diagnostic_logs")
 }
 
 model ServiceNavigationEvent {

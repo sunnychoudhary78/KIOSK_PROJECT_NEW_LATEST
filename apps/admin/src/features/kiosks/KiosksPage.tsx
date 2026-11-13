@@ -4,6 +4,7 @@ import {
   CloudUpload,
   PauseCircle,
   Pencil,
+  ScrollText,
   Settings,
   Video,
   VideoOff,
@@ -40,6 +41,17 @@ import {
   resolveRecordingDisplay,
   type SurveillanceHealth,
 } from '../surveillance/surveillanceStatus';
+
+type DiagnosticLogItem = {
+  id: string;
+  occurredAt: string;
+  level: string;
+  category: string;
+  event: string;
+  message: string;
+  correlationId: string | null;
+  metadata: unknown;
+};
 
 type Device = {
   id: string;
@@ -540,6 +552,17 @@ export function KiosksPage() {
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
+  const [logsDevice, setLogsDevice] = useState<Device | null>(null);
+  const [logsHours, setLogsHours] = useState<24 | 168>(24);
+  const [logsLevelMode, setLogsLevelMode] = useState<'problems' | 'all'>('problems');
+  const [logsCategory, setLogsCategory] = useState<string>('');
+  const [logsItems, setLogsItems] = useState<DiagnosticLogItem[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsLoadingMore, setLogsLoadingMore] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const [logsHasMore, setLogsHasMore] = useState(false);
+  const [logsNextBefore, setLogsNextBefore] = useState<string | null>(null);
+  const [logsNextBeforeId, setLogsNextBeforeId] = useState<string | null>(null);
   const printerRefreshGeneration = useRef(0);
   const canEnablePrinting =
     roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
@@ -784,6 +807,80 @@ export function KiosksPage() {
     setUsageRows([]);
     setUsageError(null);
     void loadUsage(device, 30);
+  }
+
+  async function loadLogs(
+    device: Device,
+    opts: {
+      hours: 24 | 168;
+      levelMode: 'problems' | 'all';
+      category: string;
+      append?: boolean;
+      before?: string | null;
+      beforeId?: string | null;
+    },
+  ) {
+    const appending = opts.append === true;
+    if (appending) {
+      setLogsLoadingMore(true);
+    } else {
+      setLogsLoading(true);
+      setLogsError(null);
+    }
+    try {
+      const to = new Date();
+      const from = new Date(to.getTime() - opts.hours * 60 * 60 * 1000);
+      const params = new URLSearchParams({
+        from: from.toISOString(),
+        to: to.toISOString(),
+        limit: '100',
+      });
+      if (opts.levelMode === 'problems') {
+        params.set('levels', 'error,warn');
+      }
+      if (opts.category) {
+        params.set('category', opts.category);
+      }
+      if (opts.before) {
+        params.set('before', opts.before);
+      }
+      if (opts.beforeId) {
+        params.set('beforeId', opts.beforeId);
+      }
+      const result = await apiRequest<{
+        items: DiagnosticLogItem[];
+        hasMore: boolean;
+        nextBefore: string | null;
+        nextBeforeId: string | null;
+      }>(`/devices/${device.id}/diagnostic-logs?${params.toString()}`, { token });
+      setLogsItems((prev) =>
+        appending ? [...prev, ...(result.items ?? [])] : (result.items ?? []),
+      );
+      setLogsHasMore(Boolean(result.hasMore));
+      setLogsNextBefore(result.nextBefore ?? null);
+      setLogsNextBeforeId(result.nextBeforeId ?? null);
+    } catch (err) {
+      if (!appending) {
+        setLogsItems([]);
+      }
+      setLogsError(err instanceof Error ? err.message : 'Failed to load logs');
+    } finally {
+      setLogsLoading(false);
+      setLogsLoadingMore(false);
+    }
+  }
+
+  function openLogs(device: Device) {
+    setLogsDevice(device);
+    setLogsHours(24);
+    setLogsLevelMode('problems');
+    setLogsCategory('');
+    setLogsItems([]);
+    setLogsError(null);
+    setLogsHasMore(false);
+    setLogsNextBefore(null);
+    setLogsNextBeforeId(null);
+    void loadLogs(device, { hours: 24, levelMode: 'problems', category: '' });
   }
 
   function openSettings(device: Device) {
@@ -1136,6 +1233,18 @@ export function KiosksPage() {
                         <span className="inline-flex items-center gap-1.5">
                           <BarChart3 className="h-4 w-4" />
                           Usage
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 px-2"
+                        disabled={submitting}
+                        onClick={() => openLogs(device)}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <ScrollText className="h-4 w-4" />
+                          Logs
                         </span>
                       </Button>
                       {device.surveillanceEnabled ? (
@@ -1557,6 +1666,185 @@ export function KiosksPage() {
             onClearOpen={() => void clearOpenJobs()}
           />
         ) : null}
+      </Modal>
+
+      <Modal
+        open={logsDevice != null}
+        title={logsDevice ? `Device logs · ${logsDevice.name}` : 'Device logs'}
+        className="max-w-4xl"
+        onClose={() => {
+          if (!logsLoading && !logsLoadingMore) {
+            setLogsDevice(null);
+          }
+        }}
+        footer={
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={logsLoading || logsLoadingMore}
+            onClick={() => setLogsDevice(null)}
+          >
+            Close
+          </Button>
+        }
+      >
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Range</span>
+          <Button
+            type="button"
+            variant={logsHours === 24 ? 'primary' : 'secondary'}
+            className="h-8 px-3"
+            disabled={logsLoading || !logsDevice}
+            onClick={() => {
+              if (!logsDevice) return;
+              setLogsHours(24);
+              void loadLogs(logsDevice, {
+                hours: 24,
+                levelMode: logsLevelMode,
+                category: logsCategory,
+              });
+            }}
+          >
+            Last 24h
+          </Button>
+          <Button
+            type="button"
+            variant={logsHours === 168 ? 'primary' : 'secondary'}
+            className="h-8 px-3"
+            disabled={logsLoading || !logsDevice}
+            onClick={() => {
+              if (!logsDevice) return;
+              setLogsHours(168);
+              void loadLogs(logsDevice, {
+                hours: 168,
+                levelMode: logsLevelMode,
+                category: logsCategory,
+              });
+            }}
+          >
+            Last 7 days
+          </Button>
+          <span className="ml-2 text-sm text-muted-foreground">Level</span>
+          <Button
+            type="button"
+            variant={logsLevelMode === 'problems' ? 'primary' : 'secondary'}
+            className="h-8 px-3"
+            disabled={logsLoading || !logsDevice}
+            onClick={() => {
+              if (!logsDevice) return;
+              setLogsLevelMode('problems');
+              void loadLogs(logsDevice, {
+                hours: logsHours,
+                levelMode: 'problems',
+                category: logsCategory,
+              });
+            }}
+          >
+            Errors + warnings
+          </Button>
+          <Button
+            type="button"
+            variant={logsLevelMode === 'all' ? 'primary' : 'secondary'}
+            className="h-8 px-3"
+            disabled={logsLoading || !logsDevice}
+            onClick={() => {
+              if (!logsDevice) return;
+              setLogsLevelMode('all');
+              void loadLogs(logsDevice, {
+                hours: logsHours,
+                levelMode: 'all',
+                category: logsCategory,
+              });
+            }}
+          >
+            All levels
+          </Button>
+          <span className="ml-2 text-sm text-muted-foreground">Category</span>
+          <select
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            value={logsCategory}
+            disabled={logsLoading || !logsDevice}
+            onChange={(e) => {
+              if (!logsDevice) return;
+              const next = e.target.value;
+              setLogsCategory(next);
+              void loadLogs(logsDevice, {
+                hours: logsHours,
+                levelMode: logsLevelMode,
+                category: next,
+              });
+            }}
+          >
+            <option value="">All</option>
+            <option value="printer">Printer</option>
+            <option value="astrology">Astrology</option>
+            <option value="well_being">Well-being</option>
+            <option value="shutter">Shutter</option>
+            <option value="cabinet_light">Cabinet light</option>
+            <option value="charging">Charging</option>
+            <option value="serial">Serial</option>
+            <option value="app">App</option>
+          </select>
+        </div>
+        {logsError ? <p className="error mb-3">{logsError}</p> : null}
+        {logsLoading ? (
+          <p className="text-muted-foreground">Loading logs…</p>
+        ) : logsItems.length === 0 ? (
+          <EmptyState
+            title="No diagnostic logs yet"
+            description="Errors and warnings from this kiosk appear here (kept for 7 days)."
+          />
+        ) : (
+          <div className="space-y-3">
+            <div className="overflow-x-auto">
+              <table className="table w-full">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Level</th>
+                    <th>Category</th>
+                    <th>Event</th>
+                    <th>Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logsItems.map((row) => (
+                    <tr key={row.id}>
+                      <td className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                        {new Date(row.occurredAt).toLocaleString()}
+                      </td>
+                      <td className="text-xs font-medium uppercase">{row.level}</td>
+                      <td className="text-xs">{row.category}</td>
+                      <td className="text-xs font-mono">{row.event}</td>
+                      <td className="text-sm">{row.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {logsHasMore ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-8 px-3"
+                disabled={logsLoadingMore || !logsDevice}
+                onClick={() => {
+                  if (!logsDevice) return;
+                  void loadLogs(logsDevice, {
+                    hours: logsHours,
+                    levelMode: logsLevelMode,
+                    category: logsCategory,
+                    append: true,
+                    before: logsNextBefore,
+                    beforeId: logsNextBeforeId,
+                  });
+                }}
+              >
+                {logsLoadingMore ? 'Loading…' : 'Load more'}
+              </Button>
+            ) : null}
+          </div>
+        )}
       </Modal>
 
       <Modal

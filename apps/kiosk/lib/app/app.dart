@@ -8,6 +8,7 @@ import 'package:skp_kiosk/features/session/application/kiosk_session_controller.
 import 'package:skp_kiosk/features/session/presentation/kiosk_activity_scope.dart';
 import 'package:skp_kiosk/features/session/presentation/kiosk_session_route_observer.dart';
 import 'package:skp_kiosk/features/session/presentation/session_timeout_overlay.dart';
+import 'package:skp_kiosk/core/logging/diagnostic_log_uploader.dart';
 import 'package:skp_kiosk/features/cabinet_light/application/cabinet_light_controller.dart';
 import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
 import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
@@ -31,6 +32,7 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
     ref.read(surveillanceControllerProvider);
     ref.read(printerHealthControllerProvider);
     ref.read(cabinetLightControllerProvider);
+    ref.read(diagnosticLogUploaderProvider);
     _routeObserver = KioskSessionRouteObserver(
       onHomeChanged: (onHome) {
         ref.read(kioskSessionControllerProvider.notifier).setOnHome(onHome);
