@@ -65,7 +65,7 @@ class AstrologyUiState {
 
 class AstrologyController extends Notifier<AstrologyUiState> {
   static const autoCaptureHold = Duration(milliseconds: 800);
-  static const _stillsToCapture = 3
+  static const _stillsToCapture = 3;
   final PalmQualityChecker _checker = const PalmQualityChecker();
   DateTime? _goodSince;
   int _goodStreak = 0;
