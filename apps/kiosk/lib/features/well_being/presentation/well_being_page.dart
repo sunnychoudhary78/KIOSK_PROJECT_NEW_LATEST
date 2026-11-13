@@ -64,9 +64,8 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
       ref.read(kioskSessionHoldProvider.notifier).set(
             printing: phase == ReportPrintPhase.printing ||
                 phase == ReportPrintPhase.awaitingPayment ||
-                phase == ReportPrintPhase.choosingPayMethod ||
+                phase == ReportPrintPhase.choosingPrintOptions ||
                 phase == ReportPrintPhase.enteringPhone ||
-                phase == ReportPrintPhase.choosingColorMode ||
                 phase == ReportPrintPhase.preparingPreview ||
                 phase == ReportPrintPhase.previewing,
           );
@@ -83,76 +82,28 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
       );
     }
 
-    if (print.phase == ReportPrintPhase.choosingColorMode) {
+    if (print.phase == ReportPrintPhase.choosingPrintOptions) {
       return VisitorSessionPopScope(
         child: KioskShell(
           title: 'Well Being',
           onHome: _endSession,
-          stepLabel: 'Print mode',
+          stepLabel: 'Print options',
           footerLeading: KioskGhostButton(
             label: 'Back',
             icon: Icons.arrow_back,
             onPressed: controller.backFromPrintFlow,
           ),
-          body: KioskPrintChoiceBody(
-            headline: 'Black & white or color?',
-            subtitle: 'Choose how this health report should print.',
+          body: KioskPrintOptionsBody(
+            colorMode: print.colorMode == 'color' ? 'color' : 'bw',
+            bwChargeRupees: print.bwChargeRupees,
+            colorChargeRupees: print.colorChargeRupees,
+            documentHint: 'Choose how this health report should print.',
             error: print.error,
-            left: KioskPrintChoiceCard(
-              icon: Icons.filter_b_and_w,
-              title: 'Black & white',
-              accent: KioskPrintChoiceAccents.bw,
-              subtitle: print.bwChargeRupees <= 0
-                  ? 'Free on this kiosk'
-                  : '₹${print.bwChargeRupees} per page',
-              onPressed: () => controller.chooseColorMode('bw'),
-            ),
-            right: KioskPrintChoiceCard(
-              icon: Icons.palette_outlined,
-              title: 'Color',
-              accent: KioskPrintChoiceAccents.color,
-              subtitle: print.colorChargeRupees <= 0
-                  ? 'Free on this kiosk'
-                  : '₹${print.colorChargeRupees} per page',
-              onPressed: () => controller.chooseColorMode('color'),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (print.phase == ReportPrintPhase.choosingPayMethod) {
-      final rupees = print.selectedModeChargeRupees;
-      final modeLabel = print.colorMode == 'color' ? 'color' : 'B&W';
-      return VisitorSessionPopScope(
-        child: KioskShell(
-          title: 'Well Being',
-          onHome: _endSession,
-          stepLabel: 'Print',
-          footerLeading: KioskGhostButton(
-            label: 'Back',
-            icon: Icons.arrow_back,
-            onPressed: controller.backFromPrintFlow,
-          ),
-          body: KioskPrintChoiceBody(
-            headline: 'How would you like to print?',
-            subtitle:
-                '$modeLabel print is ₹$rupees per page. Society members can use free $modeLabel pages when available.',
-            error: print.error,
-            left: KioskPrintChoiceCard(
-              icon: Icons.phone_android,
-              title: 'Use phone number',
-              accent: KioskPrintChoiceAccents.phone,
-              subtitle: 'Check your society free $modeLabel quota first.',
-              onPressed: print.phoneBusy ? null : controller.choosePhoneQuota,
-            ),
-            right: KioskPrintChoiceCard(
-              icon: Icons.qr_code_2,
-              title: 'Pay without phone',
-              accent: KioskPrintChoiceAccents.pay,
-              subtitle: 'Scan UPI and pay ₹$rupees per page.',
-              onPressed: print.phoneBusy ? null : controller.choosePayDirect,
-            ),
+            busy: print.phoneBusy,
+            onColorModeChanged: controller.setColorMode,
+            onChoosePhone: controller.choosePhoneQuota,
+            onChoosePay: controller.choosePayDirect,
+            onContinueFree: controller.continueFreePrint,
           ),
         ),
       );

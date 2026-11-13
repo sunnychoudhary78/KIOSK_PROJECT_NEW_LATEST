@@ -58,9 +58,8 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
       ref.read(kioskSessionHoldProvider.notifier).set(
             printing: next.phase == DigilockerPhase.printing ||
                 next.phase == DigilockerPhase.awaitingPayment ||
-                next.phase == DigilockerPhase.choosingPayMethod ||
-                next.phase == DigilockerPhase.enteringPhone ||
-                next.phase == DigilockerPhase.choosingColorMode,
+                next.phase == DigilockerPhase.choosingPrintOptions ||
+                next.phase == DigilockerPhase.enteringPhone,
             awaitingConsent: next.phase == DigilockerPhase.awaitingConsent,
           );
     });
@@ -81,80 +80,31 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
       );
     }
 
-    if (state.phase == DigilockerPhase.choosingColorMode) {
+    if (state.phase == DigilockerPhase.choosingPrintOptions) {
       return VisitorSessionPopScope(
         endSessionOnPop: false,
         child: KioskShell(
           title: 'DigiLocker Print',
           onHome: _endSessionAndGoHome,
-          stepLabel: 'Print mode',
+          stepLabel: 'Print options',
           footerLeading: KioskGhostButton(
             label: 'Back',
             icon: Icons.arrow_back,
             onPressed: controller.backFromPrintFlow,
           ),
-          body: KioskPrintChoiceBody(
-            headline: 'Black & white or color?',
-            subtitle: state.pendingDocumentTitle == null
-                ? 'Choose how this document should print.'
-                : 'Choose how “${state.pendingDocumentTitle}” should print.',
+          body: KioskPrintOptionsBody(
+            colorMode: state.colorMode ?? 'bw',
+            bwChargeRupees: state.bwChargeRupees,
+            colorChargeRupees: state.colorChargeRupees,
+            documentHint: state.pendingDocumentTitle == null
+                ? null
+                : 'Printing “${state.pendingDocumentTitle}”.',
             error: state.error,
-            left: KioskPrintChoiceCard(
-              icon: Icons.filter_b_and_w,
-              title: 'Black & white',
-              accent: KioskPrintChoiceAccents.bw,
-              subtitle: state.bwChargeRupees <= 0
-                  ? 'Free on this kiosk'
-                  : '₹${state.bwChargeRupees} per page',
-              onPressed: () => controller.chooseColorMode('bw'),
-            ),
-            right: KioskPrintChoiceCard(
-              icon: Icons.palette_outlined,
-              title: 'Color',
-              accent: KioskPrintChoiceAccents.color,
-              subtitle: state.colorChargeRupees <= 0
-                  ? 'Free on this kiosk'
-                  : '₹${state.colorChargeRupees} per page',
-              onPressed: () => controller.chooseColorMode('color'),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (state.phase == DigilockerPhase.choosingPayMethod) {
-      final rupees = state.selectedModeChargeRupees;
-      final modeLabel = state.colorMode == 'color' ? 'color' : 'B&W';
-      return VisitorSessionPopScope(
-        endSessionOnPop: false,
-        child: KioskShell(
-          title: 'DigiLocker Print',
-          onHome: _endSessionAndGoHome,
-          stepLabel: 'Print',
-          footerLeading: KioskGhostButton(
-            label: 'Back',
-            icon: Icons.arrow_back,
-            onPressed: controller.backFromPrintFlow,
-          ),
-          body: KioskPrintChoiceBody(
-            headline: 'How would you like to print?',
-            subtitle:
-                '$modeLabel print is ₹$rupees per page. Society members can use free $modeLabel pages when available.',
-            error: state.error,
-            left: KioskPrintChoiceCard(
-              icon: Icons.phone_android,
-              title: 'Use phone number',
-              accent: KioskPrintChoiceAccents.phone,
-              subtitle: 'Check your society free $modeLabel quota first.',
-              onPressed: state.phoneBusy ? null : controller.choosePhoneQuota,
-            ),
-            right: KioskPrintChoiceCard(
-              icon: Icons.qr_code_2,
-              title: 'Pay without phone',
-              accent: KioskPrintChoiceAccents.pay,
-              subtitle: 'Scan UPI and pay ₹$rupees per page.',
-              onPressed: state.phoneBusy ? null : controller.choosePayDirect,
-            ),
+            busy: state.phoneBusy,
+            onColorModeChanged: controller.setColorMode,
+            onChoosePhone: controller.choosePhoneQuota,
+            onChoosePay: controller.choosePayDirect,
+            onContinueFree: controller.continueFreePrint,
           ),
         ),
       );

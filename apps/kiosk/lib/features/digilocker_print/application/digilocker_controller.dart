@@ -21,8 +21,7 @@ enum DigilockerPhase {
   awaitingConsent,
   loadingDocs,
   ready,
-  choosingColorMode,
-  choosingPayMethod,
+  choosingPrintOptions,
   enteringPhone,
   preparingPreview,
   awaitingPayment,
@@ -487,7 +486,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     }
   }
 
-  /// Starts color-mode / pay flow for a document (replaces immediate preview).
+  /// Starts combined print-options flow for a document.
   Future<void> beginPrintFlow(String documentId) async {
     final sessionId = state.sessionId;
     if (sessionId == null || state.phase != DigilockerPhase.ready) {
@@ -496,10 +495,11 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     final matched = state.documents.where((d) => d.id == documentId);
     final documentTitle = matched.isEmpty ? null : matched.first.name;
     state = state.copyWith(
-      phase: DigilockerPhase.choosingColorMode,
+      phase: DigilockerPhase.choosingPrintOptions,
       pendingDocumentId: documentId,
       pendingDocumentTitle: documentTitle,
-      clearColorMode: true,
+      colorMode: 'bw',
+      printColorMode: 'bw',
       clearError: true,
       clearMessage: true,
       clearPhoneNotice: true,
@@ -527,26 +527,26 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     }
   }
 
-  Future<void> chooseColorMode(String mode) async {
-    if (state.phase != DigilockerPhase.choosingColorMode) return;
+  void setColorMode(String mode) {
+    if (state.phase != DigilockerPhase.choosingPrintOptions) return;
     if (mode != 'bw' && mode != 'color') return;
-    final charge =
-        mode == 'color' ? state.colorChargeRupees : state.bwChargeRupees;
     state = state.copyWith(
       colorMode: mode,
       printColorMode: mode,
       clearError: true,
       clearPhoneNotice: true,
     );
-    if (charge <= 0) {
-      await _runPreparePrint();
-      return;
-    }
-    state = state.copyWith(phase: DigilockerPhase.choosingPayMethod);
+  }
+
+  Future<void> continueFreePrint() async {
+    if (state.phase != DigilockerPhase.choosingPrintOptions) return;
+    if (state.selectedModeChargeRupees > 0) return;
+    await _runPreparePrint();
   }
 
   Future<void> choosePhoneQuota() async {
-    if (state.phase != DigilockerPhase.choosingPayMethod) return;
+    if (state.phase != DigilockerPhase.choosingPrintOptions) return;
+    if (state.selectedModeChargeRupees <= 0) return;
     state = state.copyWith(
       phase: DigilockerPhase.enteringPhone,
       otpSent: false,
@@ -557,7 +557,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
   }
 
   Future<void> choosePayDirect() async {
-    if (state.phase != DigilockerPhase.choosingPayMethod &&
+    if (state.phase != DigilockerPhase.choosingPrintOptions &&
         state.phase != DigilockerPhase.enteringPhone) {
       return;
     }
@@ -806,7 +806,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     final phase = state.phase;
     if (phase == DigilockerPhase.enteringPhone) {
       state = state.copyWith(
-        phase: DigilockerPhase.choosingPayMethod,
+        phase: DigilockerPhase.choosingPrintOptions,
         otpSent: false,
         otpDigits: '',
         phoneBusy: false,
@@ -815,16 +815,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       );
       return;
     }
-    if (phase == DigilockerPhase.choosingPayMethod) {
-      state = state.copyWith(
-        phase: DigilockerPhase.choosingColorMode,
-        clearColorMode: true,
-        clearError: true,
-        clearPhoneNotice: true,
-      );
-      return;
-    }
-    if (phase == DigilockerPhase.choosingColorMode ||
+    if (phase == DigilockerPhase.choosingPrintOptions ||
         phase == DigilockerPhase.awaitingPayment) {
       _stopPaymentPoll();
       backToDocuments();

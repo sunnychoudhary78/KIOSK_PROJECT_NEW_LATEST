@@ -7,6 +7,7 @@ export 'kiosk_keyboard.dart';
 export 'kiosk_numeric_keypad.dart';
 export 'kiosk_phone_otp_entry.dart';
 export 'kiosk_print_choice.dart';
+export 'kiosk_print_options.dart';
 export 'kiosk_pdf_preview.dart';
 export 'kiosk_print_result.dart';
 export 'kiosk_printing_progress.dart';

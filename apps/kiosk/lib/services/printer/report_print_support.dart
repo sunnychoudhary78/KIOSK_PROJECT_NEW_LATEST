@@ -12,6 +12,7 @@ import 'package:skp_kiosk/services/printer/print_status_body.dart';
 enum ReportPrintPhase {
   idle,
   choosingColorMode,
+  choosingPrintOptions,
   choosingPayMethod,
   enteringPhone,
   preparingPreview,

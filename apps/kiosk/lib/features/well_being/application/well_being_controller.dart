@@ -287,7 +287,10 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       final color = (options['colorChargeRupees'] as num?)?.toInt() ?? 0;
       state = state.copyWith(
         print: state.print.copyWith(
-          phase: ReportPrintPhase.choosingColorMode,
+          phase: ReportPrintPhase.choosingPrintOptions,
+          colorMode: 'bw',
+          chargeRupees: bw,
+          amountPaise: bw * 100,
           bwChargeRupees: bw,
           colorChargeRupees: color,
           clearError: true,
@@ -308,8 +311,8 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     }
   }
 
-  Future<void> chooseColorMode(String mode) async {
-    if (state.print.phase != ReportPrintPhase.choosingColorMode) return;
+  void setColorMode(String mode) {
+    if (state.print.phase != ReportPrintPhase.choosingPrintOptions) return;
     if (mode != 'bw' && mode != 'color') return;
     final charge = mode == 'color'
         ? state.print.colorChargeRupees
@@ -323,17 +326,17 @@ class WellBeingController extends Notifier<WellBeingUiState> {
         clearPhoneNotice: true,
       ),
     );
-    if (charge <= 0) {
-      await _runPreparePrint();
-      return;
-    }
-    state = state.copyWith(
-      print: state.print.copyWith(phase: ReportPrintPhase.choosingPayMethod),
-    );
+  }
+
+  Future<void> continueFreePrint() async {
+    if (state.print.phase != ReportPrintPhase.choosingPrintOptions) return;
+    if (state.print.selectedModeChargeRupees > 0) return;
+    await _runPreparePrint();
   }
 
   Future<void> choosePhoneQuota() async {
-    if (state.print.phase != ReportPrintPhase.choosingPayMethod) return;
+    if (state.print.phase != ReportPrintPhase.choosingPrintOptions) return;
+    if (state.print.selectedModeChargeRupees <= 0) return;
     state = state.copyWith(
       print: state.print.copyWith(
         phase: ReportPrintPhase.enteringPhone,
@@ -346,7 +349,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   }
 
   Future<void> choosePayDirect() async {
-    if (state.print.phase != ReportPrintPhase.choosingPayMethod &&
+    if (state.print.phase != ReportPrintPhase.choosingPrintOptions &&
         state.print.phase != ReportPrintPhase.enteringPhone) {
       return;
     }
@@ -570,19 +573,9 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     if (phase == ReportPrintPhase.enteringPhone) {
       state = state.copyWith(
         print: state.print.copyWith(
-          phase: ReportPrintPhase.choosingPayMethod,
+          phase: ReportPrintPhase.choosingPrintOptions,
           otpSent: false,
           otpDigits: '',
-          clearError: true,
-          clearPhoneNotice: true,
-        ),
-      );
-      return;
-    }
-    if (phase == ReportPrintPhase.choosingPayMethod) {
-      state = state.copyWith(
-        print: state.print.copyWith(
-          phase: ReportPrintPhase.choosingColorMode,
           clearError: true,
           clearPhoneNotice: true,
         ),

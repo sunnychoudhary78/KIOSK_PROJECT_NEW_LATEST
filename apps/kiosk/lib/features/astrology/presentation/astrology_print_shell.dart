@@ -345,6 +345,7 @@ void holdSessionForAstrologyPrint(WidgetRef ref, ReportPrintSnapshot print) {
         printing: print.phase == ReportPrintPhase.printing ||
             print.phase == ReportPrintPhase.awaitingPayment ||
             print.phase == ReportPrintPhase.choosingPayMethod ||
+            print.phase == ReportPrintPhase.choosingPrintOptions ||
             print.phase == ReportPrintPhase.enteringPhone ||
             print.phase == ReportPrintPhase.choosingColorMode,
       );
