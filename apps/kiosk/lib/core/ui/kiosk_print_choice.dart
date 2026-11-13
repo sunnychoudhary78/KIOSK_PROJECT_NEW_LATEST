@@ -207,7 +207,7 @@ class _KioskPrintChoiceCardState extends State<KioskPrintChoiceCard> {
                       painter: _PrintChoiceWavePainter(color: wave),
                     ),
                     Padding(
-                      padding: const EdgeInsets.all(28),
+                      padding: const EdgeInsets.all(22),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -238,49 +238,59 @@ class _KioskPrintChoiceCardState extends State<KioskPrintChoiceCard> {
                             ),
                             child: Icon(widget.icon, size: 34, color: Colors.white),
                           ),
-                          const Spacer(),
-                          Text(
-                            widget.title,
-                            style: TextStyle(
-                              fontFamily: 'PlusJakartaSans',
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.4,
-                              height: 1.15,
-                              color: titleColor,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.subtitle,
-                            style: TextStyle(
-                              fontFamily: 'PlusJakartaSans',
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              height: 1.35,
-                              color: subtitleColor,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: arrowBg,
-                                border: Border.all(
-                                  color: accent.withValues(
-                                    alpha: isDark ? 0.6 : 0.35,
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.bottomLeft,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.title,
+                                    style: TextStyle(
+                                      fontFamily: 'PlusJakartaSans',
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.4,
+                                      height: 1.15,
+                                      color: titleColor,
+                                    ),
                                   ),
-                                  width: 1.4,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 19,
-                                color: accent,
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    widget.subtitle,
+                                    style: TextStyle(
+                                      fontFamily: 'PlusJakartaSans',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.35,
+                                      color: subtitleColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Container(
+                                      width: 42,
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: arrowBg,
+                                        border: Border.all(
+                                          color: accent.withValues(
+                                            alpha: isDark ? 0.6 : 0.35,
+                                          ),
+                                          width: 1.4,
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.arrow_forward_rounded,
+                                        size: 19,
+                                        color: accent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),

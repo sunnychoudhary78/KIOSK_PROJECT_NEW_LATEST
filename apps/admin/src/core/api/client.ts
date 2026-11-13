@@ -279,6 +279,58 @@ function sendFormDataXhr<T>(
   });
 }
 
+type PutToUrlOptions = {
+  url: string;
+  file: Blob;
+  contentType: string;
+  onProgress?: (progress: UploadProgress) => void;
+};
+
+/** PUT a file to a presigned URL (R2/S3). No Authorization header. */
+export function putFileToPresignedUrl(options: PutToUrlOptions): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', options.url);
+    xhr.setRequestHeader('Content-Type', options.contentType);
+
+    xhr.upload.onprogress = (event) => {
+      if (!options.onProgress) return;
+      if (event.lengthComputable && event.total > 0) {
+        options.onProgress({
+          loaded: event.loaded,
+          total: event.total,
+          percent: Math.min(100, Math.round((event.loaded / event.total) * 100)),
+        });
+      } else {
+        options.onProgress({ loaded: event.loaded, total: 0, percent: null });
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      reject(
+        new ApiError(
+          'upload_failed',
+          `Storage upload failed (${xhr.status} ${xhr.statusText || 'error'})`,
+        ),
+      );
+    };
+
+    xhr.onerror = () => {
+      reject(new ApiError('request_failed', 'Network error during storage upload'));
+    };
+
+    xhr.onabort = () => {
+      reject(new ApiError('request_failed', 'Storage upload aborted'));
+    };
+
+    xhr.send(options.file);
+  });
+}
+
 /** Multipart upload with progress. Prefer this over apiRequest for large FormData bodies. */
 export async function apiUploadFormData<T>(
   path: string,

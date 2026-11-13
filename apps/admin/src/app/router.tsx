@@ -17,6 +17,7 @@ import { AuditLogsPage } from '../features/audit-logs/AuditLogsPage';
 import { RecordingsPage } from '../features/surveillance/RecordingsPage';
 import { UsersPage } from '../features/users/UsersPage';
 import { PlatformSettingsPage } from '../features/platform-settings/PlatformSettingsPage';
+import { KioskReleasesPage } from '../features/kiosk-releases/KioskReleasesPage';
 import { AdvertisersPage } from '../features/ads/AdvertisersPage';
 import { AdvertiserDetailPage } from '../features/ads/AdvertiserDetailPage';
 import { CampaignsPage } from '../features/ads/CampaignsPage';
@@ -33,6 +34,7 @@ export function AppRouter() {
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
             <Route path="kiosks" element={<KiosksPage />} />
+            <Route path="kiosk-updates" element={<KioskReleasesPage />} />
             <Route path="advertisers" element={<AdvertisersPage />} />
             <Route path="advertisers/:id" element={<AdvertiserDetailPage />} />
             <Route path="campaigns" element={<CampaignsPage />} />

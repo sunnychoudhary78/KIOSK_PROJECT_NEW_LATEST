@@ -19,6 +19,7 @@ import {
   Settings,
   Lightbulb,
   Wrench,
+  Package,
   LogOut,
   Menu,
   Monitor,
@@ -46,6 +47,7 @@ const NAV = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/kiosks', label: 'Kiosks', icon: MonitorSmartphone },
+      { to: '/kiosk-updates', label: 'Kiosk updates', icon: Package },
     ],
   },
   {
@@ -79,6 +81,7 @@ const NAV = [
 const PAGE_TITLES: Array<{ prefix: string; title: string }> = [
   { prefix: '/advertisers', title: 'Advertisers' },
   { prefix: '/campaigns', title: 'Campaigns' },
+  { prefix: '/kiosk-updates', title: 'Kiosk updates' },
   { prefix: '/kiosks', title: 'Kiosks' },
   { prefix: '/find-services', title: 'Find services' },
   { prefix: '/cabinet-light', title: 'Cabinet light' },

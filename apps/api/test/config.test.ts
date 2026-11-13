@@ -62,5 +62,6 @@ describe('loadConfig', () => {
       putTtlSeconds: 3600,
       getTtlSeconds: 900,
     });
+    expect(config.kioskUpdateKey).toBe('');
   });
 });

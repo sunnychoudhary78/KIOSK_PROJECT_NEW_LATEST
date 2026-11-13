@@ -50,6 +50,8 @@ const envSchema = z.object({
   SKP_OBJECT_STORAGE_SECRET_KEY: z.string().optional().default(''),
   SKP_OBJECT_STORAGE_PUT_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   SKP_OBJECT_STORAGE_GET_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  /** Shared secret for GET /kiosk-updates/current (X-Update-Key). Empty disables the poll. */
+  SKP_KIOSK_UPDATE_KEY: z.string().optional().default(''),
 });
 
 export type AppConfig = {
@@ -122,6 +124,8 @@ export type AppConfig = {
     putTtlSeconds: number;
     getTtlSeconds: number;
   };
+  /** Shared secret for fleet updater poll; empty means misconfigured. */
+  kioskUpdateKey: string;
 };
 
 let cached: Readonly<AppConfig> | undefined;
@@ -216,6 +220,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
       putTtlSeconds: data.SKP_OBJECT_STORAGE_PUT_TTL_SECONDS,
       getTtlSeconds: data.SKP_OBJECT_STORAGE_GET_TTL_SECONDS,
     },
+    kioskUpdateKey: data.SKP_KIOSK_UPDATE_KEY.trim(),
   };
 
   cached = Object.freeze(config);

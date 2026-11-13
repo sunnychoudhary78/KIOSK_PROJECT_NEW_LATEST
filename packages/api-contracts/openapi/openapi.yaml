@@ -29,6 +29,7 @@ tags:
   - name: WellBeing
   - name: Ads
   - name: Analytics
+  - name: KioskReleases
 paths:
   /health:
     get:
@@ -43,6 +44,158 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+
+  /kiosk-updates/current:
+    get:
+      tags: [KioskReleases]
+      summary: Poll the globally active kiosk Windows build for fleet updaters
+      operationId: getCurrentKioskUpdate
+      security:
+        - updateKeyAuth: []
+      responses:
+        '200':
+          description: Active release metadata and a short-lived download URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KioskUpdateCurrentResponse'
+        '401':
+          description: Missing or invalid X-Update-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No active release
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Update key or object storage not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /kiosk-releases:
+    get:
+      tags: [KioskReleases]
+      summary: List kiosk Windows app releases
+      operationId: listKioskReleases
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Releases newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KioskReleaseListResponse'
+    post:
+      tags: [KioskReleases]
+      summary: Create a pending release and return a presigned PUT URL
+      operationId: createKioskRelease
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateKioskReleaseRequest'
+      responses:
+        '201':
+          description: Pending release created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateKioskReleaseResponse'
+        '409':
+          description: Version already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Object storage not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /kiosk-releases/{releaseId}/complete:
+    post:
+      tags: [KioskReleases]
+      summary: Mark a release uploaded after verifying the R2 object
+      operationId: completeKioskRelease
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/KioskReleaseId'
+      responses:
+        '200':
+          description: Release marked uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KioskReleaseResponse'
+        '409':
+          description: Upload incomplete or size mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /kiosk-releases/{releaseId}/activate:
+    post:
+      tags: [KioskReleases]
+      summary: Make a completed release the global active build
+      operationId: activateKioskRelease
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/KioskReleaseId'
+      responses:
+        '200':
+          description: Release activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KioskReleaseResponse'
+        '409':
+          description: Release not ready to activate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /kiosk-releases/{releaseId}:
+    delete:
+      tags: [KioskReleases]
+      summary: Delete a non-active release and its R2 object
+      operationId: deleteKioskRelease
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/KioskReleaseId'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        '409':
+          description: Cannot delete the active release
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 
   /auth/citizen/otp-request:
     post:
@@ -2530,10 +2683,22 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    updateKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Update-Key
+      description: Shared secret from SKP_KIOSK_UPDATE_KEY for fleet updater poll
 
   parameters:
     DeviceId:
       name: deviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    KioskReleaseId:
+      name: releaseId
       in: path
       required: true
       schema:
@@ -3138,6 +3303,123 @@ components:
           type: string
           format: uri
           description: Short-lived R2/S3 presigned GET URL for the MP4
+        expiresAt:
+          type: string
+          format: date-time
+
+    KioskAppRelease:
+      type: object
+      required:
+        - id
+        - version
+        - objectKey
+        - contentType
+        - byteSize
+        - sha256
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: string
+          maxLength: 64
+        objectKey:
+          type: string
+        contentType:
+          type: string
+        byteSize:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        status:
+          type: string
+          enum: [pending_upload, uploaded, active]
+        createdByAdminId:
+          type: string
+          format: uuid
+          nullable: true
+        uploadedAt:
+          type: string
+          format: date-time
+          nullable: true
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    KioskReleaseListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KioskAppRelease'
+
+    CreateKioskReleaseRequest:
+      type: object
+      required: [version, byteSize, sha256]
+      properties:
+        version:
+          type: string
+          maxLength: 64
+        contentType:
+          type: string
+          enum: [application/zip, application/x-zip-compressed]
+          default: application/zip
+        byteSize:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+
+    CreateKioskReleaseResponse:
+      type: object
+      required: [release, uploadUrl, expiresAt]
+      properties:
+        release:
+          $ref: '#/components/schemas/KioskAppRelease'
+        uploadUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+
+    KioskReleaseResponse:
+      type: object
+      required: [release]
+      properties:
+        release:
+          $ref: '#/components/schemas/KioskAppRelease'
+
+    KioskUpdateCurrentResponse:
+      type: object
+      required: [version, downloadUrl, sha256, byteSize, expiresAt]
+      properties:
+        version:
+          type: string
+        downloadUrl:
+          type: string
+          format: uri
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        byteSize:
+          type: integer
+          format: int64
         expiresAt:
           type: string
           format: date-time

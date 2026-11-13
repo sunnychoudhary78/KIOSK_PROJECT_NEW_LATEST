@@ -36,6 +36,7 @@ import { registerEmergencyContactsModule } from './modules/emergency_contacts/in
 import { registerLocalServicesModule } from './modules/local_services/index.js';
 import { registerServiceAnalyticsModule } from './modules/service_analytics/index.js';
 import { registerDiagnosticLogsModule } from './modules/diagnostic_logs/index.js';
+import { registerKioskReleasesModule } from './modules/kiosk_releases/index.js';
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -116,6 +117,7 @@ export function createApp(deps: AppDeps): Express {
   registerSurveillanceModule(v1, deps);
   registerServiceAnalyticsModule(v1, deps);
   registerDiagnosticLogsModule(v1, deps);
+  registerKioskReleasesModule(v1, deps);
 
   // Device-authenticated PDF content for print jobs
   v1.get(

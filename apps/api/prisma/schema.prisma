@@ -829,3 +829,29 @@ model SurveillanceSegment {
   @@index([deviceId, recordedOn, startedAt])
   @@map("surveillance_segments")
 }
+
+enum KioskAppReleaseStatus {
+  pending_upload
+  uploaded
+  active
+}
+
+/// Global Flutter Windows kiosk build published for fleet remote-update agents.
+model KioskAppRelease {
+  id                String                @id @default(uuid()) @db.Uuid
+  version           String                @unique @db.VarChar(64)
+  objectKey         String                @map("object_key")
+  contentType       String                @default("application/zip") @map("content_type")
+  byteSize          BigInt                @map("byte_size")
+  sha256            String                @db.VarChar(64)
+  status            KioskAppReleaseStatus @default(pending_upload)
+  createdByAdminId  String?               @map("created_by_admin_id") @db.Uuid
+  uploadedAt        DateTime?             @map("uploaded_at")
+  activatedAt       DateTime?             @map("activated_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("kiosk_app_releases")
+}
