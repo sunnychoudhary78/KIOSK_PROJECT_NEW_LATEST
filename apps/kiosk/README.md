@@ -70,6 +70,8 @@ Admin **Recordings** plays clips with short-lived presigned GET URLs. Configure 
 
 Without GET CORS, the clip list still works but the browser video player fails.
 
+Cloud clips are retained **7 calendar days** (by UTC `recordedOn`). The API hourly purge deletes expired objects from R2 and the matching `surveillance_segments` rows. Local files on the kiosk are still removed right after a successful upload.
+
 ## Getting Started
 
 ```powershell
