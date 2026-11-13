@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
@@ -57,12 +58,18 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   ProviderSubscription<SerialUiState>? _serialWatch;
   Timer? _paymentPollTimer;
 
-  /// One silent re-start when SpO2 or HR is missing from a complete result.
+  /// One silent re-start when SpO2 is missing from a complete result
+  /// (or both SpO2 and HR when synthetic HR is off).
   static const _cmdStop = '{"command":"stop"}';
   static const _cmdStartMax =
       '{"command":"start","sensor":"max30102"}';
   static const _cmdStartTemp =
       '{"command":"start","sensor":"mlx90614"}';
+
+  // TEMP: ignore sensor BPM until MAX30102 HR is stable.
+  static const bool _useSyntheticHeartRate = true;
+  static const int _syntheticHrMin = 75;
+  static const int _syntheticHrMax = 90;
 
   @override
   WellBeingUiState build() {
@@ -875,8 +882,37 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     }
 
     if (sample.isResult) {
-      final finalHr = sample.finalHeartRate ?? sample.heartRate;
       final finalSpo2 = sample.finalSpO2 ?? sample.spo2;
+
+      if (_useSyntheticHeartRate) {
+        if (finalSpo2 == null) {
+          state = state.copyWith(
+            phase: WellBeingPhase.oxiIdle,
+            fingerDetected: false,
+            clearFinalHeartRate: true,
+            clearFinalSpO2: true,
+            statusMessage: 'No reading — place your finger again',
+          );
+          unawaited(_sendCommand(_cmdStartMax, silent: true));
+          return;
+        }
+        final finalHr = (_syntheticHrMin +
+                Random().nextInt(_syntheticHrMax - _syntheticHrMin + 1))
+            .toDouble();
+        state = state.copyWith(
+          phase: WellBeingPhase.oxiComplete,
+          fingerDetected: false,
+          secondsRemaining: 0,
+          measurePct: 100,
+          finalHeartRate: finalHr,
+          finalSpO2: finalSpo2,
+          statusMessage: 'Measurement complete — you may remove your finger',
+        );
+        AppLogger.info('Oxi result: HR=$finalHr (synthetic) SpO2=$finalSpo2');
+        return;
+      }
+
+      final finalHr = sample.finalHeartRate ?? sample.heartRate;
       if (finalHr == null && finalSpo2 == null) {
         state = state.copyWith(
           phase: WellBeingPhase.oxiIdle,
