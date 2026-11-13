@@ -13,7 +13,6 @@ import 'package:skp_kiosk/features/well_being/application/well_being_controller.
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
-import 'package:skp_kiosk/features/well_being/presentation/widgets/service_under_maintenance_view.dart';
 import 'package:skp_kiosk/features/well_being/presentation/widgets/well_being_marks.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
@@ -26,8 +25,6 @@ class WellBeingPage extends ConsumerStatefulWidget {
 }
 
 class _WellBeingPageState extends ConsumerState<WellBeingPage> {
-  String? _maintenanceServiceName;
-
   @override
   void initState() {
     super.initState();
@@ -354,26 +351,24 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
       );
     }
 
-    final showBack = (_maintenanceServiceName != null || state.phase != WellBeingPhase.choose) &&
+    final showBack = state.phase != WellBeingPhase.choose &&
         state.connectionStatus != SerialConnectionStatus.connecting;
     final complete = state.phase == WellBeingPhase.oxiComplete ||
         state.phase == WellBeingPhase.tempComplete;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final currentStep = _maintenanceServiceName != null
-        ? 2
-        : switch (state.phase) {
-            WellBeingPhase.choose => 1,
-            WellBeingPhase.oxiIdle ||
-            WellBeingPhase.oxiMeasuring ||
-            WellBeingPhase.oxiCancelled ||
-            WellBeingPhase.tempIdle ||
-            WellBeingPhase.tempMeasuring =>
-              2,
-            WellBeingPhase.oxiComplete ||
-            WellBeingPhase.tempComplete =>
-              3,
-          };
+    final currentStep = switch (state.phase) {
+      WellBeingPhase.choose => 1,
+      WellBeingPhase.oxiIdle ||
+      WellBeingPhase.oxiMeasuring ||
+      WellBeingPhase.oxiCancelled ||
+      WellBeingPhase.tempIdle ||
+      WellBeingPhase.tempMeasuring =>
+        2,
+      WellBeingPhase.oxiComplete ||
+      WellBeingPhase.tempComplete =>
+        3,
+    };
 
     return VisitorSessionPopScope(
       child: KioskShell(
@@ -441,9 +436,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: _maintenanceServiceName != null
-                  ? () => setState(() => _maintenanceServiceName = null)
-                  : (showBack ? () => controller.returnToHub() : _endSession),
+              onTap: showBack ? () => controller.returnToHub() : _endSession,
               borderRadius: BorderRadius.circular(22),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -494,8 +487,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_maintenanceServiceName == null &&
-                  state.phase != WellBeingPhase.choose &&
+              if (state.phase != WellBeingPhase.choose &&
                   (state.connectionStatus == SerialConnectionStatus.error ||
                       state.connectionStatus == SerialConnectionStatus.disconnected))
                 Padding(
@@ -514,31 +506,13 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 280),
-                  child: _maintenanceServiceName != null
-                      ? ServiceUnderMaintenanceView(
-                          key: ValueKey('maintenance_$_maintenanceServiceName'),
-                          serviceName: _maintenanceServiceName,
-                          onBack: () {
-                            setState(() {
-                              _maintenanceServiceName = null;
-                            });
-                          },
-                        )
-                      : switch (state.phase) {
-                          WellBeingPhase.choose => _ChooseView(
-                              key: const ValueKey('choose'),
-                              connected: state.isConnected,
-                              onOxygen: () {
-                                setState(() {
-                                  _maintenanceServiceName = 'Blood Oxygen';
-                                });
-                              },
-                              onTemperature: () {
-                                setState(() {
-                                  _maintenanceServiceName = 'Temperature';
-                                });
-                              },
-                            ),
+                  child: switch (state.phase) {
+                    WellBeingPhase.choose => _ChooseView(
+                        key: const ValueKey('choose'),
+                        connected: state.isConnected,
+                        onOxygen: () => controller.startOxygen(),
+                        onTemperature: () => controller.startTemperature(),
+                      ),
                     WellBeingPhase.oxiIdle => _OxiIdleView(
                         key: const ValueKey('oxiIdle'),
                         connected: state.isConnected,
