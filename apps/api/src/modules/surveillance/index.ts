@@ -10,6 +10,12 @@ import { listSegmentsQuerySchema, uploadUrlBodySchema } from './surveillance.sch
 import type { ListSegmentsQuery } from './surveillance.schemas.js';
 import { SurveillanceService } from './surveillance.service.js';
 
+export {
+  SURVEILLANCE_PURGE_BATCH_SIZE,
+  SURVEILLANCE_RETENTION_DAYS,
+} from './surveillance.constants.js';
+export { SurveillanceService } from './surveillance.service.js';
+
 export function registerSurveillanceModule(router: Router, deps: AppDeps): void {
   const service = new SurveillanceService(deps.db, deps.objectStorage, deps.auditService);
 

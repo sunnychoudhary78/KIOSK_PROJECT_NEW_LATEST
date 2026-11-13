@@ -3,9 +3,29 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { ObjectStorageClient } from '../../infrastructure/storage/s3.client.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { AppError } from '../../shared/errors.js';
-import { MIN_SURVEILLANCE_SEGMENT_BYTES, PENDING_UPLOAD_STALE_MS } from './surveillance.constants.js';
+import {
+  MIN_SURVEILLANCE_SEGMENT_BYTES,
+  PENDING_UPLOAD_STALE_MS,
+  SURVEILLANCE_PURGE_BATCH_SIZE,
+  SURVEILLANCE_RETENTION_DAYS,
+} from './surveillance.constants.js';
 import type { ListSegmentsQuery, UploadUrlBody } from './surveillance.schemas.js';
 import { formatRecordedOn, parseSegmentStart, recordedOnDate } from './surveillance.time.js';
+
+/** UTC midnight of (today UTC − days). Segments with recordedOn before this are expired. */
+export function surveillanceRetentionCutoff(days: number, now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days));
+}
+
+function isMissingObjectError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const name = 'name' in error ? String(error.name) : '';
+  const status =
+    '$metadata' in error
+      ? (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
+      : undefined;
+  return name === 'NotFound' || name === 'NoSuchKey' || status === 404;
+}
 
 function assertSameDevice(deviceId: string, principalDeviceId: string): void {
   if (deviceId !== principalDeviceId) {
@@ -323,5 +343,59 @@ export class SurveillanceService {
       url: signed.url,
       expiresAt: signed.expiresAt.toISOString(),
     };
+  }
+
+  /**
+   * Deletes expired surveillance segments from R2 (when configured) then DB.
+   * Retention is by UTC `recordedOn` calendar day.
+   */
+  async purgeOlderThan(
+    days = SURVEILLANCE_RETENTION_DAYS,
+  ): Promise<{ deleted: number; failed: number }> {
+    const cutoff = surveillanceRetentionCutoff(days);
+    const storageConfigured = this.storage.isConfigured();
+    let deleted = 0;
+    let failed = 0;
+
+    for (;;) {
+      const batch = await this.db.surveillanceSegment.findMany({
+        where: { recordedOn: { lt: cutoff } },
+        select: { id: true, objectKey: true },
+        orderBy: { recordedOn: 'asc' },
+        take: SURVEILLANCE_PURGE_BATCH_SIZE,
+      });
+      if (batch.length === 0) break;
+
+      const succeededIds: string[] = [];
+      for (const row of batch) {
+        if (!storageConfigured) {
+          succeededIds.push(row.id);
+          continue;
+        }
+        try {
+          await this.storage.deleteObject(row.objectKey);
+          succeededIds.push(row.id);
+        } catch (error) {
+          if (isMissingObjectError(error)) {
+            succeededIds.push(row.id);
+            continue;
+          }
+          failed += 1;
+        }
+      }
+
+      if (succeededIds.length > 0) {
+        const result = await this.db.surveillanceSegment.deleteMany({
+          where: { id: { in: succeededIds } },
+        });
+        deleted += result.count;
+      }
+
+      if (batch.length < SURVEILLANCE_PURGE_BATCH_SIZE) break;
+      // Avoid tight loop if an entire batch failed R2 deletes.
+      if (succeededIds.length === 0) break;
+    }
+
+    return { deleted, failed };
   }
 }

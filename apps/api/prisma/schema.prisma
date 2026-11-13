@@ -827,6 +827,7 @@ model SurveillanceSegment {
   @@unique([deviceId, objectKey])
   @@index([deviceId, status])
   @@index([deviceId, recordedOn, startedAt])
+  @@index([recordedOn])
   @@map("surveillance_segments")
 }
 

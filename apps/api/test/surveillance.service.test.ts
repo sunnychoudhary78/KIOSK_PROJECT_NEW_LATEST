@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SurveillanceSegmentStatus } from '@prisma/client';
-import { SurveillanceService } from '../src/modules/surveillance/surveillance.service.js';
+import {
+  SurveillanceService,
+  surveillanceRetentionCutoff,
+} from '../src/modules/surveillance/surveillance.service.js';
 import { AppError } from '../src/shared/errors.js';
 import type { DbClient } from '../src/infrastructure/database/prisma.js';
 import type { ObjectStorageClient } from '../src/infrastructure/storage/s3.client.js';
 import type { AuditService } from '../src/modules/audit/audit.service.js';
+import { SURVEILLANCE_RETENTION_DAYS } from '../src/modules/surveillance/surveillance.constants.js';
 
 const deviceId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const otherDevice = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -389,5 +393,124 @@ describe('SurveillanceService.createPlaybackUrl', () => {
       code: 'not_found',
       statusCode: 404,
     });
+  });
+});
+
+describe('SurveillanceService.purgeOlderThan', () => {
+  const oldId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+  const oldKey = 'surveillance/t/d/2026-01-01/old.mp4';
+
+  it('computes UTC cutoff as today minus retention days', () => {
+    const now = new Date('2026-11-13T15:30:00.000Z');
+    expect(surveillanceRetentionCutoff(SURVEILLANCE_RETENTION_DAYS, now)).toEqual(
+      new Date('2026-11-06T00:00:00.000Z'),
+    );
+  });
+
+  it('deletes R2 object then DB row for expired segments', async () => {
+    const findMany = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: oldId, objectKey: oldKey }])
+      .mockResolvedValueOnce([]);
+    const deleteMany = vi.fn(async () => ({ count: 1 }));
+    const storage = storageMock();
+    const service = new SurveillanceService(
+      {
+        surveillanceSegment: { findMany, deleteMany },
+      } as unknown as DbClient,
+      storage,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    const result = await service.purgeOlderThan();
+    expect(result).toEqual({ deleted: 1, failed: 0 });
+    expect(storage.deleteObject).toHaveBeenCalledWith(oldKey);
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [oldId] } },
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { recordedOn: { lt: expect.any(Date) } },
+      }),
+    );
+  });
+
+  it('keeps the DB row when R2 delete fails', async () => {
+    const deleteMany = vi.fn(async () => ({ count: 0 }));
+    const service = new SurveillanceService(
+      {
+        surveillanceSegment: {
+          findMany: vi.fn(async () => [{ id: oldId, objectKey: oldKey }]),
+          deleteMany,
+        },
+      } as unknown as DbClient,
+      storageMock({
+        deleteObject: vi.fn(async () => {
+          throw new Error('r2 unavailable');
+        }),
+      }),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    const result = await service.purgeOlderThan();
+    expect(result).toEqual({ deleted: 0, failed: 1 });
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('removes the DB row when the object is already missing', async () => {
+    const deleteMany = vi.fn(async () => ({ count: 1 }));
+    const notFound = Object.assign(new Error('missing'), {
+      name: 'NoSuchKey',
+      $metadata: { httpStatusCode: 404 },
+    });
+    const service = new SurveillanceService(
+      {
+        surveillanceSegment: {
+          findMany: vi
+            .fn()
+            .mockResolvedValueOnce([{ id: oldId, objectKey: oldKey }])
+            .mockResolvedValueOnce([]),
+          deleteMany,
+        },
+      } as unknown as DbClient,
+      storageMock({
+        deleteObject: vi.fn(async () => {
+          throw notFound;
+        }),
+      }),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    const result = await service.purgeOlderThan();
+    expect(result).toEqual({ deleted: 1, failed: 0 });
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [oldId] } },
+    });
+  });
+
+  it('deletes DB rows only when object storage is not configured', async () => {
+    const deleteMany = vi.fn(async () => ({ count: 1 }));
+    const deleteObject = vi.fn(async () => undefined);
+    const service = new SurveillanceService(
+      {
+        surveillanceSegment: {
+          findMany: vi
+            .fn()
+            .mockResolvedValueOnce([{ id: oldId, objectKey: oldKey }])
+            .mockResolvedValueOnce([]),
+          deleteMany,
+        },
+      } as unknown as DbClient,
+      storageMock({
+        isConfigured: () => false,
+        deleteObject,
+      }),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    const result = await service.purgeOlderThan();
+    expect(result).toEqual({ deleted: 1, failed: 0 });
+    expect(deleteObject).not.toHaveBeenCalled();
+    expect(deleteMany).toHaveBeenCalled();
   });
 });

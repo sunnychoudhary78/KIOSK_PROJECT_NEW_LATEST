@@ -10,6 +10,7 @@ import { createObjectStorageClient } from './infrastructure/storage/s3.client.js
 import { AuditService } from './modules/audit/audit.service.js';
 import { PlatformSettingsService } from './modules/platform_settings/platform_settings.service.js';
 import { DiagnosticLogsService } from './modules/diagnostic_logs/diagnostic_logs.service.js';
+import { SurveillanceService } from './modules/surveillance/surveillance.service.js';
 import { createApp } from './app.js';
 import type { AppDeps } from './types/deps.js';
 
@@ -73,6 +74,7 @@ async function main() {
   });
 
   const diagnosticLogs = new DiagnosticLogsService(prisma);
+  const surveillance = new SurveillanceService(prisma, deps.objectStorage, auditService);
   const runPurge = async () => {
     try {
       const deleted = await diagnosticLogs.purgeOlderThan();
@@ -81,6 +83,23 @@ async function main() {
       }
     } catch (error) {
       logger.error({ err: error }, '[Diagnostics] purge failed');
+    }
+    try {
+      const result = await surveillance.purgeOlderThan();
+      if (result.deleted > 0 || result.failed > 0) {
+        logger.info(
+          { deleted: result.deleted, failed: result.failed },
+          '[Surveillance] purged expired recordings',
+        );
+      }
+      if (!deps.objectStorage.isConfigured() && result.deleted > 0) {
+        logger.warn(
+          { deleted: result.deleted },
+          '[Surveillance] purged DB rows without object storage (R2 not configured)',
+        );
+      }
+    } catch (error) {
+      logger.error({ err: error }, '[Surveillance] purge failed');
     }
   };
   void runPurge();
