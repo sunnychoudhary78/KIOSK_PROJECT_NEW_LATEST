@@ -64,6 +64,11 @@ class OtpPrintUiState {
 
   bool get hasUnprintedDocuments => redeemResult?.hasUnprinted ?? false;
 
+  int get unprintedCount =>
+      documents.where((d) => !d.printed).length;
+
+  String get listPrintLabel => unprintedCount > 1 ? 'Print all' : 'Print';
+
   OtpPrintUiState copyWith({
     OtpPrintPhase? phase,
     OtpRedeemResult? redeemResult,
@@ -149,7 +154,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       state = OtpPrintUiState(
         phase: OtpPrintPhase.documents,
         redeemResult: result,
-        message: 'Select a document to preview',
+        message: 'Preview a document or tap Print',
       );
     } catch (error) {
       state = state.copyWith(
@@ -198,7 +203,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
         clearPreviewDoc: true,
         clearPreviewBytes: true,
         error: userFacingError(error),
-        message: 'Select a document to preview',
+        message: 'Preview a document or tap Print',
       );
     }
   }
@@ -218,7 +223,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       printFailures: 0,
       message: hasPrinted
           ? 'Select another document or Cancel'
-          : 'Select a document to preview',
+          : 'Preview a document or tap Print',
     );
   }
 
@@ -238,6 +243,89 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
     );
   }
 
+  /// Print all unprinted documents from the list (no preview).
+  Future<void> printUnprintedFromList() async {
+    final result = state.redeemResult;
+    if (result == null || state.phase != OtpPrintPhase.documents) {
+      return;
+    }
+    if (_coordinator.isShutterBusy || _printingPaused()) {
+      return;
+    }
+    final queue = result.documents.where((d) => !d.printed).toList();
+    if (queue.isEmpty) {
+      return;
+    }
+
+    var current = result;
+    String? lastJobId;
+    var lastSuccess = false;
+    String? lastMessage;
+
+    for (var i = 0; i < queue.length; i++) {
+      if (!ref.mounted) return;
+      final doc = queue[i];
+      final progress = queue.length == 1
+          ? 'Printing…'
+          : 'Printing ${i + 1} of ${queue.length}…';
+      state = state.copyWith(
+        phase: OtpPrintPhase.printing,
+        previewDoc: doc,
+        clearPreviewBytes: true,
+        clearError: true,
+        message: progress,
+        printFailures: 0,
+        paperOut: false,
+      );
+
+      late final Uint8List bytes;
+      try {
+        bytes = await _repository.downloadDocument(doc.contentPath);
+      } catch (error) {
+        state = state.copyWith(
+          phase: OtpPrintPhase.documents,
+          redeemResult: current,
+          clearPreviewDoc: true,
+          clearPreviewBytes: true,
+          error: userFacingError(error),
+          message: current.documents.any((d) => d.printed)
+              ? 'Select another document or Cancel'
+              : 'Preview a document or tap Print',
+        );
+        return;
+      }
+
+      state = state.copyWith(previewBytes: bytes, message: progress);
+      final step = await _printOneDocument(
+        result: current,
+        doc: doc,
+        bytes: bytes,
+        progressMessage: progress,
+      );
+      if (step == null) {
+        return; // failure path already set previewing/retry state
+      }
+      current = step.updated;
+      lastJobId = step.jobId;
+      lastSuccess = step.success;
+      lastMessage = step.message;
+    }
+
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      phase: OtpPrintPhase.printResult,
+      redeemResult: current,
+      printed: lastSuccess,
+      lastPrintedDocumentId: queue.isEmpty ? null : queue.last.id,
+      activePrintJobId: lastJobId,
+      message: lastMessage,
+      clearError: true,
+      clearPreviewDoc: true,
+      clearPreviewBytes: true,
+      printFailures: 0,
+    );
+  }
+
   Future<void> confirmPrint() async {
     final result = state.redeemResult;
     final doc = state.previewDoc;
@@ -252,6 +340,37 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       message: 'Printing…',
     );
 
+    final step = await _printOneDocument(
+      result: result,
+      doc: doc,
+      bytes: bytes,
+      progressMessage: 'Printing…',
+    );
+    if (step == null) {
+      return;
+    }
+    state = state.copyWith(
+      phase: OtpPrintPhase.printResult,
+      redeemResult: step.updated,
+      printed: step.success,
+      lastPrintedDocumentId: doc.id,
+      activePrintJobId: step.jobId,
+      message: step.message,
+      clearError: true,
+      clearPreviewDoc: true,
+      clearPreviewBytes: true,
+      printFailures: 0,
+    );
+  }
+
+  /// Returns null when failure state was already applied (stay on preview/retry).
+  Future<({OtpRedeemResult updated, String jobId, bool success, String? message})?>
+      _printOneDocument({
+    required OtpRedeemResult result,
+    required OtpDocumentRef doc,
+    required Uint8List bytes,
+    required String progressMessage,
+  }) async {
     try {
       final created = await _repository.createDocumentPrintJob(
         challengeId: result.challengeId,
@@ -259,7 +378,13 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       );
       final printJob = created['printJob'] as Map<String, dynamic>? ?? created;
       final jobId = printJob['id'] as String;
-      state = state.copyWith(activePrintJobId: jobId);
+      state = state.copyWith(
+        activePrintJobId: jobId,
+        previewDoc: doc,
+        previewBytes: bytes,
+        phase: OtpPrintPhase.printing,
+        message: progressMessage,
+      );
 
       final outcome = await _coordinator.printAndReconcile(
         jobId: jobId,
@@ -279,22 +404,19 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
         },
       );
       if (outcome.isSuccess || outcome.isUncertain) {
-        final updated = result.withDocumentPrinted(doc.id, printJobId: jobId);
-        state = state.copyWith(
-          phase: OtpPrintPhase.printResult,
-          redeemResult: updated,
-          printed: outcome.isSuccess,
-          lastPrintedDocumentId: doc.id,
-          activePrintJobId: jobId,
+        return (
+          updated: result.withDocumentPrinted(doc.id, printJobId: jobId),
+          jobId: jobId,
+          success: outcome.isSuccess,
           message: outcome.userMessage,
-          clearError: true,
-          clearPreviewDoc: true,
-          clearPreviewBytes: true,
-          printFailures: 0,
         );
-      } else if (outcome.reconcileDetail == 'paper_out') {
+      }
+      if (outcome.reconcileDetail == 'paper_out') {
         state = state.copyWith(
           phase: OtpPrintPhase.previewing,
+          previewDoc: doc,
+          previewBytes: bytes,
+          redeemResult: result,
           paperOut: true,
           error: outcome.userMessage,
           clearMessage: true,
@@ -302,17 +424,25 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
       } else {
         state = state.copyWith(
           phase: OtpPrintPhase.previewing,
+          previewDoc: doc,
+          previewBytes: bytes,
+          redeemResult: result,
           printFailures: state.printFailures + 1,
           error: outcome.userMessage,
           clearMessage: true,
         );
       }
+      return null;
     } catch (error) {
       state = state.copyWith(
         phase: OtpPrintPhase.previewing,
+        previewDoc: doc,
+        previewBytes: bytes,
+        redeemResult: result,
         error: userFacingError(error),
         clearMessage: true,
       );
+      return null;
     }
   }
 
@@ -369,7 +499,7 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
     state = OtpPrintUiState(
       phase: OtpPrintPhase.documents,
       redeemResult: result,
-      message: 'Select a document to preview',
+      message: 'Preview a document or tap Print',
     );
   }
 }

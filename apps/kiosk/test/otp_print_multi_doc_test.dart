@@ -82,6 +82,7 @@ void main() {
     expect(state.hasUnprintedDocuments, isTrue);
     expect(find.text('Cancel'), findsOneWidget);
     expect(find.text('New OTP'), findsOneWidget);
+    expect(find.text('Print'), findsOneWidget);
     expect(find.text('Finish'), findsNothing);
     expect(find.text('Printed'), findsWidgets);
     expect(find.text('Preview'), findsOneWidget);

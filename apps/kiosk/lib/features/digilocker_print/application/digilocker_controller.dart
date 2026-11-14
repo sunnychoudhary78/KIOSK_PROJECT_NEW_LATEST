@@ -68,6 +68,9 @@ class DigilockerUiState {
     this.sessionId,
     this.authorizationUrl,
     this.documents = const [],
+    this.printedDocumentIds = const {},
+    this.printQueue = const [],
+    this.skipPreview = false,
     this.message,
     this.error,
     this.previewTitle,
@@ -99,6 +102,12 @@ class DigilockerUiState {
   final String? sessionId;
   final String? authorizationUrl;
   final List<DigilockerDocument> documents;
+  /// Local-only: docs printed this visit (API has no printed flag).
+  final Set<String> printedDocumentIds;
+  /// Remaining doc ids for list Print / Print all (includes current).
+  final List<String> printQueue;
+  /// When true, skip preview UI and auto-confirm after prepare/payment.
+  final bool skipPreview;
   final String? message;
   final String? error;
   final String? previewTitle;
@@ -136,6 +145,15 @@ class DigilockerUiState {
       phase == DigilockerPhase.printing ||
       phoneBusy;
 
+  bool isDocPrinted(String id) => printedDocumentIds.contains(id);
+
+  int get unprintedCount =>
+      documents.where((d) => !printedDocumentIds.contains(d.id)).length;
+
+  bool get hasUnprintedDocuments => unprintedCount > 0;
+
+  String get listPrintLabel => unprintedCount > 1 ? 'Print all' : 'Print';
+
   DigilockerUiState copyWith({
     DigilockerPhase? phase,
     String? sessionId,
@@ -143,6 +161,10 @@ class DigilockerUiState {
     String? authorizationUrl,
     bool clearAuthorizationUrl = false,
     List<DigilockerDocument>? documents,
+    Set<String>? printedDocumentIds,
+    List<String>? printQueue,
+    bool clearPrintQueue = false,
+    bool? skipPreview,
     String? message,
     bool clearMessage = false,
     String? error,
@@ -188,6 +210,9 @@ class DigilockerUiState {
           ? null
           : (authorizationUrl ?? this.authorizationUrl),
       documents: documents ?? this.documents,
+      printedDocumentIds: printedDocumentIds ?? this.printedDocumentIds,
+      printQueue: clearPrintQueue ? const [] : (printQueue ?? this.printQueue),
+      skipPreview: skipPreview ?? this.skipPreview,
       message: clearMessage ? null : (message ?? this.message),
       error: clearError ? null : (error ?? this.error),
       previewTitle:
@@ -475,7 +500,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         documents: documents,
         message: documents.isEmpty
             ? 'No DigiLocker documents were shared. End session and try again, or check DigiLocker consent.'
-            : 'Choose any document to print.',
+            : 'Preview a document or tap Print',
       );
     } catch (error) {
       state = DigilockerUiState(
@@ -487,9 +512,42 @@ class DigilockerController extends Notifier<DigilockerUiState> {
   }
 
   /// Starts combined print-options flow for a document.
-  Future<void> beginPrintFlow(String documentId) async {
+  /// List footer Print / Print all — options gate once, then auto-print queue.
+  Future<void> printUnprintedFromList() async {
+    if (state.phase != DigilockerPhase.ready) {
+      return;
+    }
+    if (_coordinator.isShutterBusy) {
+      return;
+    }
+    final queue = state.documents
+        .where((d) => !state.printedDocumentIds.contains(d.id))
+        .map((d) => d.id)
+        .toList();
+    if (queue.isEmpty) {
+      return;
+    }
+    state = state.copyWith(
+      skipPreview: true,
+      printQueue: queue,
+      clearError: true,
+    );
+    await beginPrintFlow(queue.first, fromListQueue: true);
+  }
+
+  Future<void> beginPrintFlow(
+    String documentId, {
+    bool fromListQueue = false,
+  }) async {
     final sessionId = state.sessionId;
     if (sessionId == null || state.phase != DigilockerPhase.ready) {
+      return;
+    }
+    if (state.isDocPrinted(documentId) && !fromListQueue) {
+      state = state.copyWith(
+        error: 'That document was already printed',
+        message: 'Select another document or Cancel',
+      );
       return;
     }
     final matched = state.documents.where((d) => d.id == documentId);
@@ -500,6 +558,8 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       pendingDocumentTitle: documentTitle,
       colorMode: 'bw',
       printColorMode: 'bw',
+      skipPreview: fromListQueue ? true : false,
+      printQueue: fromListQueue ? state.printQueue : const [],
       clearError: true,
       clearMessage: true,
       clearPhoneNotice: true,
@@ -660,7 +720,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       state = state.copyWith(
         clearPhoneNotice: true,
         clearError: true,
-        clearPendingPhoneProofToken: true,
+        pendingPhoneProofToken: token,
       );
       await _runPreparePrint(phoneProofToken: token);
       return;
@@ -718,12 +778,19 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       await File(filePath).writeAsBytes(bytes, flush: true);
 
       if (!ref.mounted) return;
+      final skipPreview = state.skipPreview;
+      final printQueue = state.printQueue;
+      final printedIds = state.printedDocumentIds;
+      final phoneProof = state.pendingPhoneProofToken;
       state = DigilockerUiState(
         phase: paymentRequired
             ? DigilockerPhase.awaitingPayment
             : DigilockerPhase.previewing,
         sessionId: sessionId,
         documents: documents,
+        printedDocumentIds: printedIds,
+        printQueue: printQueue,
+        skipPreview: skipPreview,
         pendingDocumentId: documentId,
         pendingDocumentTitle: documentTitle,
         colorMode: colorMode,
@@ -739,9 +806,12 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         amountPaise: amountPaise,
         qrImageUrl: qrImageUrl,
         phoneNotice: paymentRequired ? notice : null,
+        pendingPhoneProofToken: phoneProof,
       );
       if (paymentRequired) {
         _startPaymentPoll();
+      } else if (skipPreview) {
+        await confirmPrint();
       }
     } catch (error) {
       if (!ref.mounted) return;
@@ -749,6 +819,9 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         phase: DigilockerPhase.printResult,
         sessionId: sessionId,
         documents: documents,
+        printedDocumentIds: state.printedDocumentIds,
+        printQueue: state.printQueue,
+        skipPreview: state.skipPreview,
         pendingDocumentId: documentId,
         pendingDocumentTitle: documentTitle,
         colorMode: colorMode,
@@ -785,6 +858,9 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           clearError: true,
           clearMessage: true,
         );
+        if (state.skipPreview) {
+          unawaited(confirmPrint());
+        }
         return;
       }
       if (status == 'EXPIRED' || status == 'CANCELLED') {
@@ -865,10 +941,53 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         },
       );
       if (outcome.isSuccess || outcome.isUncertain) {
+        final docId = state.pendingDocumentId;
+        final printed = {
+          ...state.printedDocumentIds,
+          if (docId != null) docId,
+        };
+        final remaining = state.printQueue
+            .where((id) => id != docId && !printed.contains(id))
+            .toList();
+        final skipPreview = state.skipPreview;
+        final colorModeKept = state.colorMode;
+        final phoneProof = state.pendingPhoneProofToken;
+        final bw = state.bwChargeRupees;
+        final color = state.colorChargeRupees;
+
+        if (skipPreview && remaining.isNotEmpty && colorModeKept != null) {
+          final nextId = remaining.first;
+          final nextMatch = documents.where((d) => d.id == nextId);
+          final nextTitle =
+              nextMatch.isEmpty ? null : nextMatch.first.name;
+          unawaited(_deletePreviewFile(filePath));
+          state = DigilockerUiState(
+            phase: DigilockerPhase.preparingPreview,
+            sessionId: sessionId,
+            documents: documents,
+            printedDocumentIds: printed,
+            printQueue: remaining,
+            skipPreview: true,
+            pendingDocumentId: nextId,
+            pendingDocumentTitle: nextTitle,
+            colorMode: colorModeKept,
+            printColorMode: colorModeKept,
+            bwChargeRupees: bw,
+            colorChargeRupees: color,
+            pendingPhoneProofToken: phoneProof,
+            message: remaining.length == 1
+                ? 'Printing…'
+                : 'Printing next document…',
+          );
+          await _runPreparePrint(phoneProofToken: phoneProof);
+          return;
+        }
+
         state = DigilockerUiState(
           phase: DigilockerPhase.printResult,
           sessionId: sessionId,
           documents: documents,
+          printedDocumentIds: printed,
           message: outcome.userMessage,
           printConfirmed: outcome.isSuccess,
         );
@@ -877,6 +996,11 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           phase: DigilockerPhase.previewing,
           sessionId: sessionId,
           documents: documents,
+          printedDocumentIds: state.printedDocumentIds,
+          printQueue: state.printQueue,
+          skipPreview: false,
+          pendingDocumentId: state.pendingDocumentId,
+          pendingDocumentTitle: state.pendingDocumentTitle,
           previewTitle: title,
           previewBytes: bytes,
           previewFilePath: filePath,
@@ -891,6 +1015,11 @@ class DigilockerController extends Notifier<DigilockerUiState> {
           phase: DigilockerPhase.previewing,
           sessionId: sessionId,
           documents: documents,
+          printedDocumentIds: state.printedDocumentIds,
+          printQueue: state.printQueue,
+          skipPreview: false,
+          pendingDocumentId: state.pendingDocumentId,
+          pendingDocumentTitle: state.pendingDocumentTitle,
           previewTitle: title,
           previewBytes: bytes,
           previewFilePath: filePath,
@@ -906,6 +1035,11 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         phase: DigilockerPhase.previewing,
         sessionId: sessionId,
         documents: documents,
+        printedDocumentIds: state.printedDocumentIds,
+        printQueue: state.printQueue,
+        skipPreview: false,
+        pendingDocumentId: state.pendingDocumentId,
+        pendingDocumentTitle: state.pendingDocumentTitle,
         previewTitle: title,
         previewBytes: bytes,
         previewFilePath: filePath,
@@ -966,11 +1100,29 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       return;
     }
     unawaited(_deletePreviewFile(state.previewFilePath));
+    final hasPrinted = state.printedDocumentIds.isNotEmpty;
     state = DigilockerUiState(
       phase: DigilockerPhase.ready,
       sessionId: sessionId,
       documents: state.documents,
-      message: 'Choose any document to print.',
+      printedDocumentIds: state.printedDocumentIds,
+      message: hasPrinted
+          ? 'Select another document or Cancel'
+          : 'Preview a document or tap Print',
+    );
+  }
+
+  void continueToDocuments() {
+    final sessionId = state.sessionId;
+    if (sessionId == null) {
+      return;
+    }
+    state = DigilockerUiState(
+      phase: DigilockerPhase.ready,
+      sessionId: sessionId,
+      documents: state.documents,
+      printedDocumentIds: state.printedDocumentIds,
+      message: 'Select another document or Cancel',
     );
   }
 
@@ -981,6 +1133,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       phase: DigilockerPhase.done,
       sessionId: sessionId,
       documents: state.documents,
+      printedDocumentIds: state.printedDocumentIds,
       message: title == null ? 'Done' : 'Previewed $title (not printed)',
     );
   }

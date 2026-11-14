@@ -11,6 +11,7 @@ import 'package:skp_kiosk/features/quick_print/application/quick_print_controlle
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 class QuickPrintPage extends ConsumerStatefulWidget {
   const QuickPrintPage({super.key});
@@ -109,8 +110,15 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
             );
       step = 'Preview';
     } else if (listing) {
-      leading = null;
-      trailing = KioskGhostButton(label: 'Cancel', onPressed: _endSession);
+      final canListPrint = state.hasUnprintedDocuments &&
+          !state.loading &&
+          !ref.read(printCoordinatorProvider).isShutterBusy;
+      leading = KioskGhostButton(label: 'Cancel', onPressed: _endSession);
+      trailing = KioskPrimaryButton(
+        label: state.listPrintLabel,
+        icon: Icons.print,
+        onPressed: canListPrint ? controller.printUnprintedFromList : null,
+      );
       step = 'Documents';
     }
 

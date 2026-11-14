@@ -10,6 +10,7 @@ import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.da
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 class OtpPrintPage extends ConsumerStatefulWidget {
   const OtpPrintPage({super.key});
@@ -120,16 +121,30 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             );
       step = 'Preview';
     } else if (listing) {
-      leading = KioskGhostButton(
-        label: 'New OTP',
-        onPressed: () {
-          _clear();
-          controller.reset();
-        },
+      final canListPrint = state.hasUnprintedDocuments &&
+          !state.loading &&
+          !ref.read(printCoordinatorProvider).isShutterBusy;
+      leading = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          KioskGhostButton(
+            label: 'New OTP',
+            onPressed: () {
+              _clear();
+              controller.reset();
+            },
+          ),
+          const SizedBox(width: 12),
+          KioskGhostButton(
+            label: 'Cancel',
+            onPressed: _endSession,
+          ),
+        ],
       );
-      trailing = KioskGhostButton(
-        label: 'Cancel',
-        onPressed: _endSession,
+      trailing = KioskPrimaryButton(
+        label: state.listPrintLabel,
+        icon: Icons.print,
+        onPressed: canListPrint ? controller.printUnprintedFromList : null,
       );
       step = 'Documents';
     }
