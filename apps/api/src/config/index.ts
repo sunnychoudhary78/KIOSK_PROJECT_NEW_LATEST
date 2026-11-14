@@ -26,6 +26,10 @@ const envSchema = z.object({
   SKP_DIGILOCKER_USER_PATH: z.string().default('/public/oauth2/1/user'),
   SKP_DIGILOCKER_EAADHAAR_PATH: z.string().default('/public/oauth2/3/xml/eaadhaar'),
   SKP_DIGILOCKER_SCOPE: z.string().default('openid'),
+  /** Mandatory DigiLocker authorize declaration: why documents are accessed (≤50 chars). */
+  SKP_DIGILOCKER_PURPOSE: z.string().trim().min(1).max(50).default('Document printing at kiosk'),
+  /** Mandatory DigiLocker authorize declaration: requesting product/brand name (≤50 chars). */
+  SKP_DIGILOCKER_SERVICE_NAME: z.string().trim().min(1).max(50).default('Athena Smart Kiosk'),
   SKP_SMS_PROVIDER: z.enum(['noop', 'msg91']).default('noop'),
   SKP_MSG91_AUTH_KEY: z.string().default(''),
   SKP_MSG91_SENDER_ID: z.string().default(''),
@@ -89,6 +93,8 @@ export type AppConfig = {
     userPath: string;
     eaadhaarPath: string;
     scope: string;
+    purpose: string;
+    serviceName: string;
   };
   smsProvider: z.infer<typeof envSchema>['SKP_SMS_PROVIDER'];
   msg91: {
@@ -185,6 +191,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
       userPath: data.SKP_DIGILOCKER_USER_PATH,
       eaadhaarPath: data.SKP_DIGILOCKER_EAADHAAR_PATH,
       scope: data.SKP_DIGILOCKER_SCOPE,
+      purpose: data.SKP_DIGILOCKER_PURPOSE,
+      serviceName: data.SKP_DIGILOCKER_SERVICE_NAME,
     },
     smsProvider: data.SKP_SMS_PROVIDER,
     msg91: {

@@ -148,6 +148,9 @@ export function createDigiLockerClient(config: AppConfig, logger?: Logger): Digi
     url.searchParams.set('code_challenge', input.codeChallenge);
     url.searchParams.set('code_challenge_method', 'S256');
     url.searchParams.set('scope', input.scope ?? digi.scope);
+    // Mandatory DigiLocker Requestor declarations (blocked at gateway without these after 23 Nov 2026).
+    url.searchParams.set('purpose', digi.purpose);
+    url.searchParams.set('service_name', digi.serviceName);
     return url.toString();
   }
 
