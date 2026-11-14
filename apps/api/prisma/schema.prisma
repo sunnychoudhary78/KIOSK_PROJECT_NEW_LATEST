@@ -570,9 +570,12 @@ model OtpDocument {
   pageCount   Int      @default(1) @map("page_count")
   byteSize    Int      @map("byte_size")
   sortOrder   Int      @default(0) @map("sort_order")
+  /// Per-document print job (lazy, created when the kiosk confirms Print).
+  printJobId  String?  @unique @map("print_job_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
   challenge OtpChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  printJob  PrintJob?    @relation(fields: [printJobId], references: [id], onDelete: SetNull)
 
   @@index([challengeId])
   @@map("otp_documents")
@@ -614,9 +617,12 @@ model QuickPrintDocument {
   pageCount   Int      @default(1) @map("page_count")
   byteSize    Int      @map("byte_size")
   sortOrder   Int      @default(0) @map("sort_order")
+  /// Per-document print job (lazy, created when the kiosk confirms Print).
+  printJobId  String?  @unique @map("print_job_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
-  session QuickPrintSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session  QuickPrintSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  printJob PrintJob?         @relation(fields: [printJobId], references: [id], onDelete: SetNull)
 
   @@index([sessionId])
   @@map("quick_print_documents")
@@ -676,7 +682,9 @@ model PrintJob {
   device            Device?            @relation(fields: [deviceId], references: [id])
   digiLockerSession DigiLockerSession? @relation(fields: [digiLockerSessionId], references: [id])
   otpChallenge      OtpChallenge?
+  otpDocument       OtpDocument?
   quickPrintSession QuickPrintSession?
+  quickPrintDocument QuickPrintDocument?
   payment           Payment?
   freePageLedgerEntries PhoneFreePageLedger[]
   supportQuery      SupportQuery?

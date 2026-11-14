@@ -127,9 +127,10 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           controller.reset();
         },
       );
-      trailing = state.phase == OtpPrintPhase.done
-          ? KioskPrimaryButton(label: 'Done', onPressed: _endSession)
-          : null;
+      trailing = KioskGhostButton(
+        label: 'Cancel',
+        onPressed: _endSession,
+      );
       step = 'Documents';
     }
 
@@ -159,8 +160,13 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           OtpPrintPhase.printResult => KioskPrintResult(
               confirmed: state.printed,
               detail: state.message,
-              autoReturn: state.printed ? const Duration(seconds: 20) : null,
+              autoReturn: state.printed && !state.hasUnprintedDocuments
+                  ? const Duration(seconds: 20)
+                  : null,
               onHome: _endSession,
+              onContinue: state.printed && state.hasUnprintedDocuments
+                  ? controller.continueToDocuments
+                  : null,
               onNotReceived: state.printed ? controller.reportPagesMissing : null,
             ),
           OtpPrintPhase.documents || OtpPrintPhase.done => _DocumentList(
@@ -175,9 +181,12 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
                     child: KioskDocCard(
                       title: doc.fileName,
                       subtitle:
-                          '${doc.pageCount} page(s) · ${state.redeemResult?.printColorLabel ?? 'B/W'}',
-                      actionLabel: 'Preview',
-                      onAction: state.loading ? null : () => controller.preparePreview(doc),
+                          '${doc.pageCount} page(s) · ${state.redeemResult?.printColorLabel ?? 'B/W'}'
+                          '${doc.printed ? ' · Printed' : ''}',
+                      actionLabel: doc.printed ? 'Printed' : 'Preview',
+                      onAction: state.loading || doc.printed
+                          ? null
+                          : () => controller.preparePreview(doc),
                     ),
                   ),
               ],

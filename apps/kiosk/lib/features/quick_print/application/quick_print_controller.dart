@@ -37,6 +37,7 @@ class QuickPrintUiState {
     this.error,
     this.previewDoc,
     this.previewBytes,
+    this.activePrintJobId,
     this.printed = false,
     this.printFailures = 0,
     this.paperOut = false,
@@ -49,6 +50,7 @@ class QuickPrintUiState {
   final String? error;
   final QuickPrintDocumentRef? previewDoc;
   final Uint8List? previewBytes;
+  final String? activePrintJobId;
   final bool printed;
   final int printFailures;
   final bool paperOut;
@@ -60,6 +62,8 @@ class QuickPrintUiState {
       phase == QuickPrintPhase.printing;
 
   List<QuickPrintDocumentRef> get documents => claim?.documents ?? const [];
+
+  bool get hasUnprintedDocuments => claim?.hasUnprinted ?? false;
 
   QuickPrintUiState copyWith({
     QuickPrintPhase? phase,
@@ -75,6 +79,8 @@ class QuickPrintUiState {
     bool clearPreviewDoc = false,
     Uint8List? previewBytes,
     bool clearPreviewBytes = false,
+    String? activePrintJobId,
+    bool clearActivePrintJobId = false,
     bool? printed,
     int? printFailures,
     bool? paperOut,
@@ -87,6 +93,9 @@ class QuickPrintUiState {
       error: clearError ? null : (error ?? this.error),
       previewDoc: clearPreviewDoc ? null : (previewDoc ?? this.previewDoc),
       previewBytes: clearPreviewBytes ? null : (previewBytes ?? this.previewBytes),
+      activePrintJobId: clearActivePrintJobId
+          ? null
+          : (activePrintJobId ?? this.activePrintJobId),
       printed: printed ?? this.printed,
       printFailures: printFailures ?? this.printFailures,
       paperOut: paperOut ?? this.paperOut,
@@ -211,11 +220,20 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
   Future<void> preparePreview(QuickPrintDocumentRef document) async {
     final claim = state.claim;
     if (claim == null) return;
+    if (document.printed) {
+      state = state.copyWith(
+        phase: QuickPrintPhase.documents,
+        message: 'Select another document or Cancel',
+        error: 'That document was already printed',
+      );
+      return;
+    }
     state = state.copyWith(
       phase: QuickPrintPhase.preparingPreview,
       previewDoc: document,
       clearPreviewBytes: true,
       clearError: true,
+      clearActivePrintJobId: true,
       message: 'Preparing document preview…',
     );
     try {
@@ -242,12 +260,30 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
     if (state.claim == null) {
       return;
     }
+    final hasPrinted = state.claim!.documents.any((d) => d.printed);
     state = state.copyWith(
       phase: QuickPrintPhase.documents,
       clearPreviewDoc: true,
       clearPreviewBytes: true,
       clearError: true,
-      message: 'Select a document to preview',
+      printFailures: 0,
+      message: hasPrinted
+          ? 'Select another document or Cancel'
+          : 'Select a document to preview',
+    );
+  }
+
+  void continueToDocuments() {
+    if (state.claim == null) {
+      return;
+    }
+    state = state.copyWith(
+      phase: QuickPrintPhase.documents,
+      clearPreviewDoc: true,
+      clearPreviewBytes: true,
+      clearError: true,
+      printFailures: 0,
+      message: 'Select another document or Cancel',
     );
   }
 
@@ -264,8 +300,16 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
       message: 'Printing…',
     );
     try {
+      final created = await _repository.createDocumentPrintJob(
+        sessionId: claim.sessionId,
+        documentId: doc.id,
+      );
+      final printJob = created['printJob'] as Map<String, dynamic>? ?? created;
+      final jobId = printJob['id'] as String;
+      state = state.copyWith(activePrintJobId: jobId);
+
       final outcome = await _coordinator.printAndReconcile(
-        jobId: claim.printJobId,
+        jobId: jobId,
         title: doc.fileName,
         pdfBytes: bytes,
         pagesExpected: doc.pageCount,
@@ -282,13 +326,17 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
         },
       );
       if (outcome.isSuccess || outcome.isUncertain) {
+        final updated = claim.withDocumentPrinted(doc.id, printJobId: jobId);
         state = state.copyWith(
           phase: QuickPrintPhase.printResult,
+          claim: updated,
           printed: outcome.isSuccess,
+          activePrintJobId: jobId,
           message: outcome.userMessage,
           clearError: true,
           clearPreviewDoc: true,
           clearPreviewBytes: true,
+          printFailures: 0,
         );
       } else if (outcome.reconcileDetail == 'paper_out') {
         state = state.copyWith(
@@ -317,7 +365,7 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
 
   Future<void> abandonRetry() async {
     if (state.printFailures != 1 || state.paperOut) return;
-    final jobId = state.claim?.printJobId;
+    final jobId = state.activePrintJobId;
     final error = state.error;
     state = state.copyWith(printFailures: 2);
     try {
@@ -335,7 +383,7 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
   }
 
   Future<void> tellStaff() async {
-    final jobId = state.claim?.printJobId;
+    final jobId = state.activePrintJobId;
     if (jobId == null || jobId.isEmpty) return;
     await PrintJobSupport(ref.read(apiClientProvider)).send(
       jobId: jobId,
@@ -345,20 +393,11 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
   }
 
   Future<void> reportPagesMissing() async {
-    final jobId = state.claim?.printJobId;
+    final jobId = state.activePrintJobId;
     if (jobId == null || jobId.isEmpty) return;
     await PrintJobSupport(ref.read(apiClientProvider)).send(
       jobId: jobId,
       message: 'Visitor says the pages were not received.',
-    );
-  }
-
-  void markDoneWithoutPrint() {
-    state = state.copyWith(
-      phase: QuickPrintPhase.done,
-      clearPreviewDoc: true,
-      clearPreviewBytes: true,
-      message: state.printed ? 'Finished' : 'Done without printing.',
     );
   }
 

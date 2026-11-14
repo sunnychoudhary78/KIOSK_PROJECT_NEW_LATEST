@@ -253,7 +253,8 @@ class _PendingShutter {
     if (raw is! Map) return null;
     final action = raw['action']?.toString();
     final requestedAt = raw['requestedAt']?.toString();
-    if ((action != 'open' && action != 'close') ||
+    if (action == null ||
+        (action != 'open' && action != 'close') ||
         requestedAt == null ||
         requestedAt.isEmpty) {
       return null;

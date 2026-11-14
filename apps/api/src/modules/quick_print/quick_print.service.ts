@@ -5,9 +5,10 @@ import {
   PaymentStatus,
   PrintColorMode,
   PrintJobSource,
+  PrintJobStatus,
   QuickPrintSessionStatus,
 } from '@prisma/client';
-import type { Payment, QuickPrintDocument, QuickPrintSession } from '@prisma/client';
+import type { Payment, PrintJob, QuickPrintDocument, QuickPrintSession } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { SmsClient } from '../../infrastructure/external/sms.client.js';
@@ -55,8 +56,12 @@ const deviceQuoteSelect = {
   freeDisabledToLocal: true,
 } as const;
 
+type QuickPrintDocumentWithJob = QuickPrintDocument & {
+  printJob?: Pick<PrintJob, 'id' | 'status'> | null;
+};
+
 type SessionWithRelations = QuickPrintSession & {
-  documents: QuickPrintDocument[];
+  documents: QuickPrintDocumentWithJob[];
   payment?: Payment | null;
   device?: {
     id: string;
@@ -71,6 +76,20 @@ type SessionWithRelations = QuickPrintSession & {
   } | null;
   printJob?: { id: string; status: string } | null;
 };
+
+function mapQuickDocumentForKiosk(sessionId: string, doc: QuickPrintDocumentWithJob) {
+  const status = doc.printJob?.status ?? null;
+  return {
+    id: doc.id,
+    fileName: doc.fileName,
+    pageCount: doc.pageCount,
+    byteSize: doc.byteSize,
+    contentPath: `/quick-print/sessions/${sessionId}/documents/${doc.id}/content`,
+    printJobId: doc.printJobId ?? doc.printJob?.id ?? null,
+    printJobStatus: status,
+    printed: status === PrintJobStatus.completed,
+  };
+}
 
 const phoneOtpCooldownUntil = new Map<string, number>();
 
@@ -616,33 +635,11 @@ export class QuickPrintService {
       throw new AppError('otp_empty', 'No documents linked to this session', 400);
     }
 
-    const printJob = await this.printing.createJob(
-      {
-        source: PrintJobSource.quick_print,
-        title: session.documentLabel || 'Quick Print',
-        pageCount: session.pageCount,
-        freePagesGranted: session.freePagesGranted,
-        printColorMode: session.printColorMode,
-        deviceId,
-        payloadUrl: `/v1/quick-print/sessions/${session.id}/documents`,
-        idempotencyKey: `quick-print-claim-${session.id}`,
-      },
-      'device',
-      deviceId,
-      correlationId,
-    );
-
+    // Per-document print jobs are created lazily when the visitor confirms Print.
     if (session.status !== QuickPrintSessionStatus.consumed) {
       await this.db.quickPrintSession.update({
         where: { id: session.id },
-        data: {
-          status: QuickPrintSessionStatus.consumed,
-          printJobId: printJob.id,
-        },
-      });
-      await this.quota.attachPrintJob({
-        printJobId: printJob.id,
-        quickPrintSessionId: session.id,
+        data: { status: QuickPrintSessionStatus.consumed },
       });
       await this.audit.record({
         action: 'quick_print.claimed',
@@ -651,22 +648,123 @@ export class QuickPrintService {
         resourceType: 'quick_print_session',
         resourceId: session.id,
         correlationId,
-        metadata: { printJobId: printJob.id, printColorMode: session.printColorMode },
+        metadata: {
+          printColorMode: session.printColorMode,
+          documentCount: session.documents.length,
+        },
       });
     }
 
+    const docs = await this.db.quickPrintDocument.findMany({
+      where: { sessionId: session.id },
+      orderBy: { sortOrder: 'asc' },
+      include: { printJob: { select: { id: true, status: true } } },
+    });
+
     return {
       sessionId: session.id,
-      printJob,
+      title: session.documentLabel || 'Quick Print',
       printColorMode: session.printColorMode === PrintColorMode.color ? 'color' : 'bw',
-      documents: session.documents.map((doc) => ({
-        id: doc.id,
-        fileName: doc.fileName,
-        pageCount: doc.pageCount,
-        byteSize: doc.byteSize,
-        contentPath: `/quick-print/sessions/${session.id}/documents/${doc.id}/content`,
-      })),
+      documents: docs.map((doc) => mapQuickDocumentForKiosk(session.id, doc)),
     };
+  }
+
+  async createDocumentPrintJob(
+    deviceId: string,
+    sessionId: string,
+    documentId: string,
+    correlationId?: string,
+  ) {
+    await this.services.assertEnabled(deviceId, 'quick_print');
+
+    const session = await this.db.quickPrintSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        documents: {
+          include: { printJob: { select: { id: true, status: true } } },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (
+      !session ||
+      session.deviceId !== deviceId ||
+      (session.status !== QuickPrintSessionStatus.ready &&
+        session.status !== QuickPrintSessionStatus.consumed)
+    ) {
+      throw new AppError('not_found', 'Print session not available for this device', 404);
+    }
+
+    const doc = session.documents.find((d) => d.id === documentId);
+    if (!doc) {
+      throw new AppError('not_found', 'Document not found', 404);
+    }
+
+    if (doc.printJob?.status === PrintJobStatus.completed) {
+      throw new AppError('already_printed', 'This document was already printed', 409);
+    }
+
+    if (doc.printJobId && doc.printJob) {
+      return {
+        documentId: doc.id,
+        printJob: await this.printing.get(doc.printJobId),
+      };
+    }
+
+    await assertPrintingAvailable(this.db, deviceId);
+
+    const anyPriorJob = session.documents.some((d) => d.printJobId != null);
+    const freePagesGranted = anyPriorJob ? 0 : session.freePagesGranted;
+
+    if (session.status !== QuickPrintSessionStatus.consumed) {
+      await this.db.quickPrintSession.update({
+        where: { id: session.id },
+        data: { status: QuickPrintSessionStatus.consumed },
+      });
+    }
+
+    const printJob = await this.printing.createJob(
+      {
+        source: PrintJobSource.quick_print,
+        title: doc.fileName,
+        pageCount: doc.pageCount,
+        pagesExpected: doc.pageCount,
+        freePagesGranted,
+        printColorMode: session.printColorMode,
+        deviceId,
+        payloadUrl: `/v1/quick-print/sessions/${session.id}/documents/${doc.id}/content`,
+        payloadPath: doc.storagePath,
+        idempotencyKey: `quick-print-doc-${doc.id}`,
+      },
+      'device',
+      deviceId,
+      correlationId,
+    );
+
+    await this.db.quickPrintDocument.update({
+      where: { id: doc.id },
+      data: { printJobId: printJob.id },
+    });
+
+    if (!anyPriorJob) {
+      await this.quota.attachPrintJob({
+        printJobId: printJob.id,
+        quickPrintSessionId: session.id,
+      });
+    }
+
+    await this.audit.record({
+      action: 'quick_print.document_print_job',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'quick_print_document',
+      resourceId: doc.id,
+      correlationId,
+      metadata: { printJobId: printJob.id, sessionId: session.id, freePagesGranted },
+    });
+
+    return { documentId: doc.id, printJob };
   }
 
   async getDocumentContent(deviceId: string, sessionId: string, documentId: string) {

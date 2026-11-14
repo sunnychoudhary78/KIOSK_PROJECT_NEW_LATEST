@@ -132,6 +132,29 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
     },
   );
 
+  router.post(
+    '/otp-challenges/:challengeId/documents/:documentId/print-jobs',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const challengeId = requireParam(req.params.challengeId, 'challengeId');
+        const documentId = requireParam(req.params.documentId, 'documentId');
+        const result = await service.createDocumentPrintJob(
+          req.principal.deviceId,
+          challengeId,
+          documentId,
+          req.correlationId,
+        );
+        res.status(201).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.get(
     '/otp-challenges/:challengeId/documents/:documentId/content',
     ...requireDevice(deps),
