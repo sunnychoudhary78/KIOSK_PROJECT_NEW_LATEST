@@ -226,6 +226,8 @@ model Device {
   longitude        Float?
   address              String?
   lastHeartbeatAt      DateTime?    @map("last_heartbeat_at")
+  /// App version last reported by the kiosk (pubspec version, before +build).
+  reportedAppVersion   String?      @map("reported_app_version") @db.VarChar(64)
   surveillanceEnabled  Boolean      @default(false) @map("surveillance_enabled")
   /// Latest surveillance health snapshot from the kiosk heartbeat.
   surveillanceHealth   Json?        @map("surveillance_health")

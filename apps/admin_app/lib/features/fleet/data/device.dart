@@ -43,6 +43,8 @@ class KioskDevice {
     this.longitude,
     this.address,
     this.lastHeartbeatAt,
+    this.reportedAppVersion,
+    this.activeAppVersion,
     this.surveillanceHealth,
     this.printerHealth,
     this.printerHealthAt,
@@ -62,6 +64,8 @@ class KioskDevice {
   final double? longitude;
   final String? address;
   final DateTime? lastHeartbeatAt;
+  final String? reportedAppVersion;
+  final String? activeAppVersion;
   final bool surveillanceEnabled;
   final SurveillanceHealth? surveillanceHealth;
   final PrinterHealth? printerHealth;
@@ -97,6 +101,8 @@ class KioskDevice {
       longitude: (json['longitude'] as num?)?.toDouble(),
       address: json['address'] as String?,
       lastHeartbeatAt: DateTime.tryParse(json['lastHeartbeatAt'] as String? ?? ''),
+      reportedAppVersion: json['reportedAppVersion'] as String?,
+      activeAppVersion: json['activeAppVersion'] as String?,
       surveillanceEnabled: json['surveillanceEnabled'] == true,
       surveillanceHealth: json['surveillanceHealth'] is Map
           ? SurveillanceHealth.fromJson(

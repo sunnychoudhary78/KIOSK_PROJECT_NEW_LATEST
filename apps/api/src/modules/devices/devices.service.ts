@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { DeviceStatus } from '@prisma/client';
+import { DeviceStatus, KioskAppReleaseStatus } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import {
@@ -47,36 +47,40 @@ function ackMatchesRefresh(stored: Date | null | undefined, ack: string | undefi
   return Number.isFinite(parsed) && stored.getTime() === parsed;
 }
 
-function mapDevice(device: {
-  id: string;
-  name: string;
-  deviceKey: string;
-  status: DeviceStatus;
-  latitude: number | null;
-  longitude: number | null;
-  address: string | null;
-  lastHeartbeatAt: Date | null;
-  surveillanceEnabled: boolean;
-  surveillanceHealth?: unknown;
-  surveillanceHealthAt?: Date | null;
-  printerHealth?: unknown;
-  printerHealthAt?: Date | null;
-  printerRefreshRequestedAt?: Date | null;
-  printingPausedReason?: string | null;
-  maxPagesPerSession?: number;
-  freePagesPerSession?: number;
-  extraPageChargeRupees?: number;
-  freeColorPagesPerSession?: number;
-  extraColorPageChargeRupees?: number;
-  kundaliColorPrintChargeRupees?: number;
-  freeDisabledFromLocal?: string | null;
-  freeDisabledToLocal?: string | null;
-  bannerHorizontalEnabled?: boolean;
-  bannerVerticalEnabled?: boolean;
-  trayPages?: number | null;
-  trayBaselinePages?: number | null;
-  site: { name: string };
-}) {
+function mapDevice(
+  device: {
+    id: string;
+    name: string;
+    deviceKey: string;
+    status: DeviceStatus;
+    latitude: number | null;
+    longitude: number | null;
+    address: string | null;
+    lastHeartbeatAt: Date | null;
+    reportedAppVersion?: string | null;
+    surveillanceEnabled: boolean;
+    surveillanceHealth?: unknown;
+    surveillanceHealthAt?: Date | null;
+    printerHealth?: unknown;
+    printerHealthAt?: Date | null;
+    printerRefreshRequestedAt?: Date | null;
+    printingPausedReason?: string | null;
+    maxPagesPerSession?: number;
+    freePagesPerSession?: number;
+    extraPageChargeRupees?: number;
+    freeColorPagesPerSession?: number;
+    extraColorPageChargeRupees?: number;
+    kundaliColorPrintChargeRupees?: number;
+    freeDisabledFromLocal?: string | null;
+    freeDisabledToLocal?: string | null;
+    bannerHorizontalEnabled?: boolean;
+    bannerVerticalEnabled?: boolean;
+    trayPages?: number | null;
+    trayBaselinePages?: number | null;
+    site: { name: string };
+  },
+  activeAppVersion: string | null = null,
+) {
   return {
     id: device.id,
     name: device.name,
@@ -87,6 +91,8 @@ function mapDevice(device: {
     longitude: device.longitude,
     address: device.address,
     lastHeartbeatAt: device.lastHeartbeatAt?.toISOString() ?? null,
+    reportedAppVersion: device.reportedAppVersion ?? null,
+    activeAppVersion,
     surveillanceEnabled: device.surveillanceEnabled,
     surveillanceHealth: mapSurveillanceHealth(device.surveillanceHealth),
     surveillanceHealthAt: device.surveillanceHealthAt?.toISOString() ?? null,
@@ -107,9 +113,30 @@ function mapDevice(device: {
   };
 }
 
-async function mapDeviceWithTray(db: DbClient, device: Parameters<typeof mapDevice>[0]) {
-  const base = mapDevice(device);
-  const cap = await getTrayCapacity(db, device.id);
+async function getActiveAppVersion(db: DbClient): Promise<string | null> {
+  const releaseDb = db.kioskAppRelease;
+  if (!releaseDb?.findFirst) {
+    return null;
+  }
+  const active = await releaseDb.findFirst({
+    where: { status: KioskAppReleaseStatus.active },
+    select: { version: true },
+  });
+  return active?.version ?? null;
+}
+
+async function mapDeviceWithTray(
+  db: DbClient,
+  device: Parameters<typeof mapDevice>[0],
+  activeAppVersion?: string | null,
+) {
+  const [cap, active] = await Promise.all([
+    getTrayCapacity(db, device.id),
+    activeAppVersion !== undefined
+      ? Promise.resolve(activeAppVersion)
+      : getActiveAppVersion(db),
+  ]);
+  const base = mapDevice(device, active);
   return {
     ...base,
     trayReserved: cap.reserved,
@@ -124,12 +151,15 @@ export class DevicesService {
   ) {}
 
   async list() {
-    const devices = await this.db.device.findMany({
-      include: { site: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [devices, activeAppVersion] = await Promise.all([
+      this.db.device.findMany({
+        include: { site: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      getActiveAppVersion(this.db),
+    ]);
     const items = await Promise.all(
-      devices.map((device) => mapDeviceWithTray(this.db, device)),
+      devices.map((device) => mapDeviceWithTray(this.db, device, activeAppVersion)),
     );
     return { items };
   }
@@ -639,6 +669,7 @@ export class DevicesService {
       where: { id: deviceId },
       data: {
         lastHeartbeatAt: now,
+        ...(body.appVersion ? { reportedAppVersion: body.appVersion } : {}),
         ...(latchPaperOut ? { printingPausedReason: PRINTING_PAUSED_PAPER_OUT } : {}),
         ...(body.surveillance
           ? {

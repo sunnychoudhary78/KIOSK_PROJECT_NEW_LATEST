@@ -2833,6 +2833,16 @@ components:
           type: string
           format: date-time
           nullable: true
+        reportedAppVersion:
+          type: string
+          nullable: true
+          description: App version last reported by the kiosk (Flutter pubspec version before +build)
+          maxLength: 64
+        activeAppVersion:
+          type: string
+          nullable: true
+          description: Currently activated global kiosk release version, if any
+          maxLength: 64
         surveillanceEnabled:
           type: boolean
           description: When true, the kiosk records local surveillance segments
@@ -3155,6 +3165,12 @@ components:
           type: string
           format: date-time
           description: Echo of printerRefreshRequestedAt. Present only on the post that answers that request.
+        appVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[0-9A-Za-z][0-9A-Za-z._+-]*$'
+          description: Flutter pubspec version (before +build), e.g. 0.1.0
 
     ReportServiceEventsRequest:
       type: object

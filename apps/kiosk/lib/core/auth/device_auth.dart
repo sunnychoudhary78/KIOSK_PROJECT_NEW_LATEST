@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:skp_kiosk/core/auth/jwt_utils.dart';
 import 'package:skp_kiosk/core/network/api_client.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
@@ -62,6 +63,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
   DeviceCredentials? _credentials;
   Timer? _loop;
   bool _tickInFlight = false;
+  String? _cachedAppVersion;
 
   @override
   DeviceAuthState build() {
@@ -149,7 +151,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
         try {
           final beat = await _api.post(
             '/devices/$deviceId/heartbeat',
-            body: _surveillanceHeartbeatBody(),
+            body: await _heartbeatBody(),
           );
           if (beat.containsKey('surveillanceEnabled')) {
             surveillanceEnabled = beat['surveillanceEnabled'] == true;
@@ -235,7 +237,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
       try {
         final beat = await _api.post(
           '/devices/$deviceId/heartbeat',
-          body: _surveillanceHeartbeatBody(),
+          body: await _heartbeatBody(),
         );
         _applyHeartbeat(beat);
       } catch (error) {
@@ -262,7 +264,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
     try {
       final beat = await _api.post(
         '/devices/$deviceId/heartbeat',
-        body: _surveillanceHeartbeatBody(),
+        body: await _heartbeatBody(),
       );
       _applyHeartbeat(beat);
       return true;
@@ -306,7 +308,7 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
     }
     _tickInFlight = true;
     try {
-      final body = _surveillanceHeartbeatBody();
+      final body = await _heartbeatBody();
       body['printerRefreshAck'] = requestedAt;
       final beat = await _api.post(
         '/devices/$deviceId/heartbeat',
@@ -355,6 +357,31 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
   }
 
   String _messageFor(Object error) => userFacingError(error);
+
+  Future<String?> _resolveAppVersion() async {
+    if (_cachedAppVersion != null) {
+      return _cachedAppVersion;
+    }
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final version = info.version.trim();
+      if (version.isNotEmpty) {
+        _cachedAppVersion = version;
+      }
+    } catch (_) {
+      // omit appVersion when package info is unavailable
+    }
+    return _cachedAppVersion;
+  }
+
+  Future<Map<String, dynamic>> _heartbeatBody() async {
+    final body = _surveillanceHeartbeatBody();
+    final version = await _resolveAppVersion();
+    if (version != null && version.isNotEmpty) {
+      body['appVersion'] = version;
+    }
+    return body;
+  }
 
   Map<String, dynamic> _surveillanceHeartbeatBody() {
     final body = <String, dynamic>{};

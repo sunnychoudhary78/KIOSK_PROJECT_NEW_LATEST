@@ -65,6 +65,8 @@ type Device = {
   longitude: number | null;
   address: string | null;
   lastHeartbeatAt: string | null;
+  reportedAppVersion?: string | null;
+  activeAppVersion?: string | null;
   surveillanceEnabled: boolean;
   surveillanceHealth?: SurveillanceHealth | null;
   surveillanceHealthAt?: string | null;
@@ -1156,6 +1158,7 @@ export function KiosksPage() {
                 <th>Status</th>
                 <th>Device key</th>
                 <th>Last heartbeat</th>
+                <th>Version</th>
                 <th>Printer</th>
                 <th>Recording</th>
                 <th>Actions</th>
@@ -1185,6 +1188,16 @@ export function KiosksPage() {
                     {device.lastHeartbeatAt
                       ? new Date(device.lastHeartbeatAt).toLocaleString()
                       : '—'}
+                  </td>
+                  <td className="whitespace-nowrap">
+                    <div className="font-medium">{device.reportedAppVersion ?? '—'}</div>
+                    {device.reportedAppVersion && device.activeAppVersion ? (
+                      <div className="text-xs text-muted-foreground">
+                        {device.reportedAppVersion === device.activeAppVersion
+                          ? 'up to date'
+                          : `behind · live ${device.activeAppVersion}`}
+                      </div>
+                    ) : null}
                   </td>
                   <td>
                     <PrinterSummaryCell

@@ -177,6 +177,14 @@ export const deviceHeartbeatBodySchema = z
     surveillance: surveillanceHealthSchema.optional(),
     printer: printerHealthSchema.optional(),
     printerRefreshAck: z.string().datetime().optional(),
+    /** Flutter pubspec version (before +build), e.g. 0.1.0 */
+    appVersion: z
+      .string()
+      .trim()
+      .min(1)
+      .max(64)
+      .regex(/^[0-9A-Za-z][0-9A-Za-z._+-]*$/)
+      .optional(),
   })
   .default({});
 
