@@ -1,7 +1,15 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, EmptyState, Input, PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  PageHeader,
+  Panel,
+  StatusBadge,
+  Toolbar,
+} from '../../core/ui/primitives';
 
 type UsageItem = {
   phone: string;
@@ -68,6 +76,7 @@ export function FreePrintUsagePage() {
   const [detail, setDetail] = useState<UsageDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [audienceFilter, setAudienceFilter] = useState<'all' | 'society' | 'public'>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,29 +125,49 @@ export function FreePrintUsagePage() {
     ? `${periodLabel(data.period)} period · ${data.periodKey} · B/W ${data.limits.freeBwPages} · Color ${data.limits.freeColorPages}`
     : 'Phones that used free pages in the current quota period';
 
+  const visible = useMemo(() => {
+    const items = data?.items ?? [];
+    return items.filter((item) => {
+      if (audienceFilter === 'society' && !item.society) return false;
+      if (audienceFilter === 'public' && item.society) return false;
+      return true;
+    });
+  }, [data, audienceFilter]);
+
   return (
     <div>
       <PageHeader title="Free print usage" subtitle={subtitle} />
       <Panel>
-        <form
-          className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setSearch(query.trim());
-            setExpandedPhone(null);
-            setDetail(null);
+        <Toolbar
+          search={query}
+          onSearchChange={(value) => {
+            setQuery(value);
           }}
+          searchPlaceholder="Search by phone digits"
+          actions={
+            <Button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                setSearch(query.trim());
+                setExpandedPhone(null);
+                setDetail(null);
+              }}
+            >
+              {loading ? 'Loading…' : 'Search'}
+            </Button>
+          }
         >
-          <Input
-            placeholder="Search by phone digits"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="sm:max-w-xs"
+          <FilterChips
+            options={[
+              { value: 'all', label: 'All phones' },
+              { value: 'society', label: 'Society' },
+              { value: 'public', label: 'Public' },
+            ]}
+            value={audienceFilter}
+            onChange={(value) => setAudienceFilter(value as typeof audienceFilter)}
           />
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Loading…' : 'Search'}
-          </Button>
-        </form>
+        </Toolbar>
 
         {error ? <p className="error">{error}</p> : null}
 
@@ -149,7 +178,11 @@ export function FreePrintUsagePage() {
           />
         ) : null}
 
-        {data && data.items.length > 0 ? (
+        {!loading && !error && (data?.items.length ?? 0) > 0 && visible.length === 0 ? (
+          <EmptyState title="No matches" description="Adjust the audience filter or search." />
+        ) : null}
+
+        {visible.length > 0 ? (
           <table className="table">
             <thead>
               <tr>
@@ -163,7 +196,7 @@ export function FreePrintUsagePage() {
               </tr>
             </thead>
             <tbody>
-              {data.items.map((item) => (
+              {visible.map((item) => (
                 <Fragment key={item.phone}>
                   <tr>
                     <td>

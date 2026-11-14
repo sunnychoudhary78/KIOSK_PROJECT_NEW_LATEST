@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { apiRequest, putFileToPresignedUrl } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, EmptyState, Input, PageHeader, Panel } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  Input,
+  PageHeader,
+  Panel,
+  Toolbar,
+} from '../../core/ui/primitives';
 
 type ReleaseStatus = 'pending_upload' | 'uploaded' | 'active';
 
@@ -64,6 +72,8 @@ export function KioskReleasesPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ReleaseStatus>('all');
 
   const loadList = useCallback(async () => {
     if (!token) return;
@@ -88,6 +98,16 @@ export function KioskReleasesPage() {
     () => list?.items.find((item) => item.status === 'active') ?? null,
     [list],
   );
+
+  const filtered = useMemo(() => {
+    const items = list?.items ?? [];
+    const q = search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (statusFilter !== 'all' && item.status !== statusFilter) return false;
+      if (!q) return true;
+      return [item.version, item.status, item.sha256].join(' ').toLowerCase().includes(q);
+    });
+  }, [list, search, statusFilter]);
 
   async function onUpload(event: FormEvent) {
     event.preventDefault();
@@ -257,40 +277,62 @@ export function KioskReleasesPage() {
             <EmptyState title="No releases" description="Upload the first Windows build zip." />
           ) : null}
           {list && list.items.length > 0 ? (
-            <ul className="divide-y">
-              {list.items.map((item) => (
-                <li key={item.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{item.version}</p>
-                    <p className="text-muted-foreground">
-                      {statusLabel(item.status)} · {formatBytes(item.byteSize)} ·{' '}
-                      {new Date(item.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {item.status === 'uploaded' ? (
-                      <Button
-                        type="button"
-                        disabled={busyId === item.id}
-                        onClick={() => void activate(item.id)}
-                      >
-                        Activate
-                      </Button>
-                    ) : null}
-                    {item.status !== 'active' ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={busyId === item.id}
-                        onClick={() => void remove(item.id)}
-                      >
-                        Delete
-                      </Button>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              <Toolbar
+                search={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Search version"
+              >
+                <FilterChips
+                  options={[
+                    { value: 'all', label: 'All' },
+                    { value: 'active', label: 'Active' },
+                    { value: 'uploaded', label: 'Uploaded' },
+                    { value: 'pending_upload', label: 'Pending' },
+                  ]}
+                  value={statusFilter}
+                  onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+                />
+              </Toolbar>
+              {filtered.length === 0 ? (
+                <EmptyState title="No matches" description="Adjust status filter or search." />
+              ) : (
+                <ul className="divide-y">
+                  {filtered.map((item) => (
+                    <li key={item.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">{item.version}</p>
+                        <p className="text-muted-foreground">
+                          {statusLabel(item.status)} · {formatBytes(item.byteSize)} ·{' '}
+                          {new Date(item.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {item.status === 'uploaded' ? (
+                          <Button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => void activate(item.id)}
+                          >
+                            Activate
+                          </Button>
+                        ) : null}
+                        {item.status !== 'active' ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={busyId === item.id}
+                            onClick={() => void remove(item.id)}
+                          >
+                            Delete
+                          </Button>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           ) : null}
         </Panel>
       </div>

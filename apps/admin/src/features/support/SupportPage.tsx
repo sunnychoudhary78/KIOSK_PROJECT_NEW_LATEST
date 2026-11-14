@@ -87,6 +87,7 @@ export function SupportPage() {
   const [status, setStatus] = useState<'open' | 'resolved' | 'all'>('open');
   const [source, setSource] = useState<'all' | 'payment' | 'print' | 'kiosk'>('all');
   const [kiosk, setKiosk] = useState('all');
+  const [search, setSearch] = useState('');
   const canResolve = roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const isKiosk = selected?.source === 'kiosk';
@@ -95,7 +96,24 @@ export function SupportPage() {
     new Set(items.map((item) => item.kioskName).filter((name): name is string => Boolean(name))),
   ).sort();
   const kioskFilter = kiosks.includes(kiosk) ? kiosk : 'all';
-  const visible = kioskFilter === 'all' ? items : items.filter((item) => item.kioskName === kioskFilter);
+  const visible = items.filter((item) => {
+    if (kioskFilter !== 'all' && item.kioskName !== kioskFilter) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [
+      item.message,
+      item.phone,
+      item.kioskName ?? '',
+      item.category ?? '',
+      item.paymentReference ?? '',
+      item.razorpayOrderId ?? '',
+      item.failureReason ?? '',
+      sourceLabel(item.source),
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(q);
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -187,7 +205,7 @@ export function SupportPage() {
         subtitle="Payment notes, print notes, and kiosk concerns"
       />
       <Panel>
-        <Toolbar>
+        <Toolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search phone, message, order">
           <Select
             aria-label="Status"
             className="max-w-40"

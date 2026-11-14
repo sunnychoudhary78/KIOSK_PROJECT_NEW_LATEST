@@ -4,35 +4,38 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.975 0.006 247);
-  --foreground: oklch(0.22 0.02 255);
+  /* Slate + blue — clean admin look */
+  --background: oklch(0.985 0.004 250);
+  --foreground: oklch(0.24 0.02 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 255);
+  --card-foreground: oklch(0.24 0.02 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.02 255);
-  --primary: oklch(0.445 0.085 175);
-  --primary-foreground: oklch(0.985 0.005 175);
-  --secondary: oklch(0.955 0.008 247);
-  --secondary-foreground: oklch(0.28 0.02 255);
-  --muted: oklch(0.955 0.008 247);
-  --muted-foreground: oklch(0.5 0.02 255);
-  --accent: oklch(0.95 0.02 175);
-  --accent-foreground: oklch(0.32 0.06 175);
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.9 0.01 247);
-  --input: oklch(0.9 0.01 247);
-  --ring: oklch(0.445 0.085 175);
-  --sidebar: oklch(0.2 0.02 240);
-  --sidebar-foreground: oklch(0.93 0.01 240);
-  --sidebar-accent: oklch(0.28 0.025 240);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.3 0.02 240);
-  --sidebar-primary: oklch(0.72 0.1 175);
-  --sidebar-ring: oklch(0.72 0.1 175);
-  --warning: oklch(0.95 0.05 85);
+  --popover-foreground: oklch(0.24 0.02 260);
+  --primary: oklch(0.5 0.14 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0.01 250);
+  --secondary-foreground: oklch(0.3 0.03 260);
+  --muted: oklch(0.96 0.008 250);
+  --muted-foreground: oklch(0.5 0.02 260);
+  --accent: oklch(0.95 0.025 255);
+  --accent-foreground: oklch(0.32 0.06 255);
+  --destructive: oklch(0.55 0.19 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.9 0.01 250);
+  --input: oklch(0.88 0.012 250);
+  --ring: oklch(0.72 0.08 255);
+  --sidebar: oklch(0.23 0.03 260);
+  --sidebar-foreground: oklch(0.86 0.015 250);
+  --sidebar-accent: oklch(0.3 0.04 260);
+  --sidebar-accent-foreground: oklch(0.98 0.005 250);
+  --sidebar-border: oklch(0.32 0.03 260);
+  --sidebar-primary: oklch(0.68 0.14 255);
+  --sidebar-ring: oklch(0.72 0.08 255);
+  --warning: oklch(0.96 0.06 85);
   --warning-foreground: oklch(0.42 0.1 55);
-  --radius: 0.75rem;
+  --success: oklch(0.94 0.05 155);
+  --success-foreground: oklch(0.35 0.08 155);
+  --radius: 0.5rem;
 }
 
 @theme inline {
@@ -64,37 +67,66 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Inter", "Segoe UI", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+
+  *:focus {
+    outline: none;
+  }
+
+  *:focus-visible {
+    outline: none;
   }
 
   html,
   body,
   #root {
-    min-height: 100%;
+    height: 100%;
+    overflow: hidden;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    overscroll-behavior: none;
   }
 
   a {
     color: inherit;
     text-decoration: none;
   }
+
+  input,
+  textarea,
+  select {
+    @apply shadow-none;
+  }
+
+  input:focus,
+  input:focus-visible,
+  textarea:focus,
+  textarea:focus-visible,
+  select:focus,
+  select:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    border-color: var(--primary);
+  }
 }
 
 @layer components {
   .input {
-    @apply flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-none outline-none ring-0 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0;
   }
 
   .stack {
@@ -115,7 +147,7 @@
 
   .notice,
   .success {
-    @apply text-sm text-primary;
+    @apply text-sm text-foreground;
   }
 
   .muted {
@@ -131,19 +163,23 @@
   }
 
   .table th {
-    @apply h-10 px-3 text-left align-middle text-xs font-medium uppercase tracking-wide text-muted-foreground;
+    @apply h-9 px-2.5 text-left align-middle text-[11px] font-medium tracking-wide text-muted-foreground;
   }
 
   .table td {
-    @apply px-3 py-3 align-middle;
+    @apply px-2.5 py-2.5 align-middle;
   }
 
   .table tbody tr {
-    @apply border-b border-border last:border-0;
+    @apply border-b border-border/80 last:border-0;
+  }
+
+  .table tbody tr:hover {
+    @apply bg-accent/40;
   }
 
   .table-clickable tbody tr {
-    @apply cursor-pointer transition-colors hover:bg-muted/70;
+    @apply cursor-pointer transition-colors hover:bg-accent/60;
   }
 
   .row-actions {
@@ -151,7 +187,7 @@
   }
 
   .warning {
-    @apply m-0 rounded-lg border border-amber-200 bg-warning px-3 py-2.5 text-sm text-warning-foreground;
+    @apply m-0 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground;
   }
 
   .credentials-panel {
@@ -159,7 +195,7 @@
   }
 
   .credentials-panel h2 {
-    @apply m-0 text-lg font-semibold;
+    @apply m-0 text-base font-medium;
   }
 
   .credential-row {
@@ -175,11 +211,11 @@
   }
 
   .stat-card {
-    @apply rounded-xl border border-border bg-card p-4 shadow-sm;
+    @apply rounded-md border border-border bg-card p-4 shadow-none;
   }
 
   .stat-card strong {
-    @apply block text-2xl font-semibold tracking-tight;
+    @apply block text-xl font-semibold tracking-tight;
   }
 
   .stat-card span {
@@ -187,7 +223,7 @@
   }
 
   .check-list {
-    @apply grid max-h-56 gap-2 overflow-auto rounded-lg border border-border bg-card p-3;
+    @apply grid max-h-56 gap-2 overflow-auto rounded-md border border-border bg-card p-3;
   }
 
   .check-list label {
@@ -199,11 +235,11 @@
   }
 
   .creative-card {
-    @apply rounded-xl border border-border bg-card p-4 shadow-sm;
+    @apply rounded-md border border-border bg-card p-3;
   }
 
   .creative-card h4 {
-    @apply mb-1 text-sm font-semibold;
+    @apply mb-1 text-sm font-medium;
   }
 
   .wizard-nav {
@@ -219,7 +255,7 @@
   }
 
   .form-grid h3 {
-    @apply mt-3 mb-0 text-base font-semibold;
+    @apply mt-3 mb-0 text-base font-medium;
   }
 
   .form-grid textarea.input {
@@ -231,11 +267,11 @@
   }
 
   .settings-stack {
-    @apply flex flex-col gap-5;
+    @apply flex flex-col gap-4;
   }
 
   .settings-status {
-    @apply mb-4 text-sm leading-relaxed;
+    @apply mb-4 text-sm leading-relaxed text-muted-foreground;
   }
 
   .settings-status code,
@@ -252,14 +288,59 @@
   }
 
   .settings-preview {
-    @apply mt-4 rounded-xl border border-border bg-accent/50 px-4 py-3 text-sm leading-relaxed;
+    @apply mt-4 rounded-md border border-border bg-muted/40 px-4 py-3 text-sm leading-relaxed;
   }
 
   .settings-preview-message {
-    @apply mt-2 font-semibold;
+    @apply mt-2 font-medium;
   }
 
   .settings-actions {
     @apply flex justify-start;
   }
+}
+
+/* Thin, soft scrollbars app-wide (Firefox + Chromium/WebKit). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--foreground) 22%, transparent);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--foreground) 38%, transparent);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Sidebar stays fully scrollbar-free. */
+.skp-sidebar,
+.skp-sidebar * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.skp-sidebar::-webkit-scrollbar,
+.skp-sidebar *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+  background: transparent;
 }

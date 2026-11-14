@@ -1,18 +1,28 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import {
   Button,
   EmptyState,
+  FilterChips,
   Input,
   Modal,
   PageHeader,
   Panel,
   StatusBadge,
+  Toolbar,
 } from '../../core/ui/primitives';
 import { CreativeUploadModal } from './CreativeUploadModal';
 import { formatDate, type Advertiser, type Campaign, type Creative } from './types';
+
+const CAMPAIGN_STATUS_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'active', label: 'Active' },
+  { value: 'paused', label: 'Paused' },
+  { value: 'ended', label: 'Ended' },
+];
 
 export function AdvertiserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +31,10 @@ export function AdvertiserDetailPage() {
   const [advertiser, setAdvertiser] = useState<Advertiser | null>(null);
   const [creatives, setCreatives] = useState<Creative[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [creativeSearch, setCreativeSearch] = useState('');
+  const [creativeTypeFilter, setCreativeTypeFilter] = useState('all');
+  const [campaignSearch, setCampaignSearch] = useState('');
+  const [campaignStatusFilter, setCampaignStatusFilter] = useState('all');
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -93,6 +107,32 @@ export function AdvertiserDetailPage() {
     }
   }
 
+  const creativeTypes = useMemo(() => {
+    const values = Array.from(new Set(creatives.map((item) => item.type))).sort();
+    return [
+      { value: 'all', label: 'All types' },
+      ...values.map((type) => ({ value: type, label: type.replace(/_/g, ' ') })),
+    ];
+  }, [creatives]);
+
+  const filteredCreatives = useMemo(() => {
+    const q = creativeSearch.trim().toLowerCase();
+    return creatives.filter((item) => {
+      if (creativeTypeFilter !== 'all' && item.type !== creativeTypeFilter) return false;
+      if (!q) return true;
+      return [item.title, item.type, item.mimeType ?? ''].join(' ').toLowerCase().includes(q);
+    });
+  }, [creatives, creativeSearch, creativeTypeFilter]);
+
+  const filteredCampaigns = useMemo(() => {
+    const q = campaignSearch.trim().toLowerCase();
+    return campaigns.filter((item) => {
+      if (campaignStatusFilter !== 'all' && item.status !== campaignStatusFilter) return false;
+      if (!q) return true;
+      return item.name.toLowerCase().includes(q);
+    });
+  }, [campaigns, campaignSearch, campaignStatusFilter]);
+
   if (!advertiser) {
     return (
       <div>
@@ -163,24 +203,41 @@ export function AdvertiserDetailPage() {
             }
           />
         ) : (
-          <div className="creative-grid">
-            {creatives.map((c) => {
-              const assetCount = c.assets?.length ?? 0;
-              return (
-                <div key={c.id} className="creative-card">
-                  <h4>{c.title}</h4>
-                  <p className="muted">
-                    <StatusBadge status={c.type} />
-                  </p>
-                  <p className="muted">
-                    {c.type === 'carousel'
-                      ? `${assetCount} photos`
-                      : (c.mimeType ?? 'media')}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+          <>
+            <Toolbar
+              search={creativeSearch}
+              onSearchChange={setCreativeSearch}
+              searchPlaceholder="Search creatives"
+            >
+              <FilterChips
+                options={creativeTypes}
+                value={creativeTypeFilter}
+                onChange={setCreativeTypeFilter}
+              />
+            </Toolbar>
+            {filteredCreatives.length === 0 ? (
+              <EmptyState title="No matches" description="Adjust creative filters or search." />
+            ) : (
+              <div className="creative-grid">
+                {filteredCreatives.map((c) => {
+                  const assetCount = c.assets?.length ?? 0;
+                  return (
+                    <div key={c.id} className="creative-card">
+                      <h4>{c.title}</h4>
+                      <p className="muted">
+                        <StatusBadge status={c.type} />
+                      </p>
+                      <p className="muted">
+                        {c.type === 'carousel'
+                          ? `${assetCount} photos`
+                          : (c.mimeType ?? 'media')}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </Panel>
 
@@ -199,26 +256,43 @@ export function AdvertiserDetailPage() {
             }
           />
         ) : (
-          <table className="table table-clickable">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Events</th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaigns.map((c) => (
-                <tr key={c.id} onClick={() => navigate(`/campaigns/${c.id}`)}>
-                  <td>{c.name}</td>
-                  <td>
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td>{c.eventCount ?? 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            <Toolbar
+              search={campaignSearch}
+              onSearchChange={setCampaignSearch}
+              searchPlaceholder="Search campaigns"
+            >
+              <FilterChips
+                options={CAMPAIGN_STATUS_FILTERS}
+                value={campaignStatusFilter}
+                onChange={setCampaignStatusFilter}
+              />
+            </Toolbar>
+            {filteredCampaigns.length === 0 ? (
+              <EmptyState title="No matches" description="Adjust campaign filters or search." />
+            ) : (
+              <table className="table table-clickable">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Events</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCampaigns.map((c) => (
+                    <tr key={c.id} onClick={() => navigate(`/campaigns/${c.id}`)}>
+                      <td>{c.name}</td>
+                      <td>
+                        <StatusBadge status={c.status} />
+                      </td>
+                      <td>{c.eventCount ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
         )}
       </Panel>
 

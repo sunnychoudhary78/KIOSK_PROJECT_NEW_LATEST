@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Monitor } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../core/auth/auth-context';
 import { Button } from '../../core/ui/primitives';
 import { ApiError } from '../../core/errors/api-error';
@@ -13,8 +13,8 @@ import { Label } from '@/components/ui/label';
 export function LoginPage() {
   const auth = useAuth();
   const [searchParams] = useSearchParams();
-  const [email, setEmail] = useState('admin@smartkiosk.local');
-  const [password, setPassword] = useState('Admin@12345');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -39,36 +39,29 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen lg:grid-cols-2">
-      <section className="relative hidden overflow-hidden bg-sidebar px-12 py-16 text-sidebar-foreground lg:flex lg:flex-col lg:justify-between">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(45,180,150,0.28),transparent_42%)]" />
-        <div className="relative flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-primary text-sidebar">
-            <Monitor className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="font-semibold">{config.appName}</p>
-            <p className="text-sm text-sidebar-foreground/60">Operator console</p>
-          </div>
+    <main className="grid h-full min-h-full overflow-y-auto lg:grid-cols-[1fr_1.1fr]">
+      <section className="hidden border-r border-border bg-muted/30 px-12 py-16 lg:flex lg:flex-col lg:justify-between">
+        <div>
+          <p className="text-sm font-medium">{config.appName}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Admin</p>
         </div>
-        <div className="relative max-w-md space-y-4">
-          <p className="text-3xl font-semibold tracking-tight">Run kiosks, ads, and civic services from one desk.</p>
-          <p className="text-sm leading-relaxed text-sidebar-foreground/65">
-            Monitor devices, print jobs, DigiLocker sessions, and campaigns without leaving the admin
-            console.
+        <div className="max-w-sm space-y-3">
+          <p className="text-2xl font-medium tracking-tight">Operate the kiosk fleet from one place.</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Devices, print jobs, ads, and support — without the noise.
           </p>
         </div>
-        <p className="relative text-xs text-sidebar-foreground/40">ATHENA</p>
+        <p className="text-xs text-muted-foreground">Local console</p>
       </section>
 
       <section className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <p className="text-lg font-semibold">{config.appName}</p>
-            <p className="text-sm text-muted-foreground">Operator console</p>
+            <p className="text-base font-medium">{config.appName}</p>
+            <p className="text-sm text-muted-foreground">Admin</p>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Use your admin or operator account.</p>
+          <h1 className="text-xl font-medium tracking-tight">Sign in</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Admin or operator account</p>
 
           <form className="mt-8 space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
@@ -96,7 +89,7 @@ export function LoginPage() {
                 />
                 <button
                   type="button"
-                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-0"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   aria-pressed={showPassword}
                   onClick={() => setShowPassword((current) => !current)}

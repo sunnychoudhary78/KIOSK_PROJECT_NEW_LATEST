@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { EmptyState, Input, PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
-import { cn } from '@/lib/utils';
+import {
+  EmptyState,
+  FilterChips,
+  PageHeader,
+  Panel,
+  StatusBadge,
+  Toolbar,
+} from '../../core/ui/primitives';
 
 type CatalogKind = 'all' | 'fuel' | 'cng' | 'ev';
 
@@ -105,36 +111,20 @@ export function FuelStationsPage() {
     <div>
       <PageHeader title="Fuel stations" subtitle={subtitle} />
       <Panel>
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
-            {KIND_CHIPS.map((chip) => {
-              const selected = kind === chip.kind;
-              const count = counts[chip.kind];
-              return (
-                <button
-                  key={chip.kind}
-                  type="button"
-                  onClick={() => setKind(chip.kind)}
-                  className={cn(
-                    'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-                    selected
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-background text-muted-foreground hover:bg-muted',
-                  )}
-                >
-                  {chip.label} ({count})
-                </button>
-              );
-            })}
-          </div>
-          <div className="w-full md:max-w-xs">
-            <Input
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              placeholder="Search name or address"
-            />
-          </div>
-        </div>
+        <Toolbar
+          search={q}
+          onSearchChange={setQ}
+          searchPlaceholder="Search name or address"
+        >
+          <FilterChips
+            options={KIND_CHIPS.map((chip) => ({
+              value: chip.kind,
+              label: `${chip.label} (${counts[chip.kind]})`,
+            }))}
+            value={kind}
+            onChange={(value) => setKind(value as CatalogKind)}
+          />
+        </Toolbar>
 
         {error ? <p className="error mb-3">{error}</p> : null}
 

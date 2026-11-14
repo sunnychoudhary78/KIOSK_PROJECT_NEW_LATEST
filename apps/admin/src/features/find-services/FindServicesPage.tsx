@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, EmptyState, Input, PageHeader, Panel } from '../../core/ui/primitives';
+import { Button, EmptyState, Input, PageHeader, Panel, Toolbar } from '../../core/ui/primitives';
 
 type LocalContact = {
   id: string;
@@ -37,6 +37,8 @@ export function FindServicesPage() {
   const [savingContact, setSavingContact] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
   const [removingContactId, setRemovingContactId] = useState<string | null>(null);
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [contactSearch, setContactSearch] = useState('');
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -61,6 +63,24 @@ export function FindServicesPage() {
   }, [loadList]);
 
   const selected = list?.categories.find((item) => item.id === selectedId) ?? null;
+
+  const filteredServices = useMemo(() => {
+    const categories = list?.categories ?? [];
+    const q = serviceSearch.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((item) =>
+      [item.name, item.slug, String(item.contacts.length)].join(' ').toLowerCase().includes(q),
+    );
+  }, [list, serviceSearch]);
+
+  const filteredContacts = useMemo(() => {
+    const contacts = selected?.contacts ?? [];
+    const q = contactSearch.trim().toLowerCase();
+    if (!q) return contacts;
+    return contacts.filter((item) =>
+      [item.name, item.phone].join(' ').toLowerCase().includes(q),
+    );
+  }, [selected, contactSearch]);
 
   async function addService(event: FormEvent) {
     event.preventDefault();
@@ -177,43 +197,54 @@ export function FindServicesPage() {
             <EmptyState title="No services" description="Add a trade above." />
           ) : null}
           {list && list.categories.length > 0 ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Service</th>
-                  <th>Numbers</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {list.categories.map((item) => (
-                  <tr key={item.id} className={item.id === selectedId ? 'bg-muted/40' : undefined}>
-                    <td className="font-medium">{item.name}</td>
-                    <td>{item.contacts.length}</td>
-                    <td className="whitespace-nowrap">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => {
-                          setSelectedId(item.id);
-                          setContactError(null);
-                        }}
-                      >
-                        Numbers
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => void removeService(item)}
-                        disabled={removingId === item.id}
-                      >
-                        {removingId === item.id ? 'Removing…' : 'Remove'}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              <Toolbar
+                search={serviceSearch}
+                onSearchChange={setServiceSearch}
+                searchPlaceholder="Search services"
+              />
+              {filteredServices.length === 0 ? (
+                <EmptyState title="No matches" description="Try a different service search." />
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Service</th>
+                      <th>Numbers</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredServices.map((item) => (
+                      <tr key={item.id} className={item.id === selectedId ? 'bg-muted/40' : undefined}>
+                        <td className="font-medium">{item.name}</td>
+                        <td>{item.contacts.length}</td>
+                        <td className="whitespace-nowrap">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedId(item.id);
+                              setContactError(null);
+                            }}
+                          >
+                            Numbers
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => void removeService(item)}
+                            disabled={removingId === item.id}
+                          >
+                            {removingId === item.id ? 'Removing…' : 'Remove'}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
           ) : null}
         </Panel>
 
@@ -258,33 +289,44 @@ export function FindServicesPage() {
                   />
                 </div>
               ) : (
-                <table className="table mt-4">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Phone</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selected.contacts.map((contact) => (
-                      <tr key={contact.id}>
-                        <td className="font-medium">{contact.name}</td>
-                        <td className="font-mono text-sm">{contact.phone}</td>
-                        <td>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => void removeContact(contact)}
-                            disabled={removingContactId === contact.id}
-                          >
-                            {removingContactId === contact.id ? 'Removing…' : 'Remove'}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="mt-4">
+                  <Toolbar
+                    search={contactSearch}
+                    onSearchChange={setContactSearch}
+                    searchPlaceholder="Search numbers"
+                  />
+                  {filteredContacts.length === 0 ? (
+                    <EmptyState title="No matches" description="Try a different number search." />
+                  ) : (
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Phone</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredContacts.map((contact) => (
+                          <tr key={contact.id}>
+                            <td className="font-medium">{contact.name}</td>
+                            <td className="font-mono text-sm">{contact.phone}</td>
+                            <td>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => void removeContact(contact)}
+                                disabled={removingContactId === contact.id}
+                              >
+                                {removingContactId === contact.id ? 'Removing…' : 'Remove'}
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </>
           ) : (

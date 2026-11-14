@@ -9,16 +9,24 @@ import {
   Modal,
   PageHeader,
   Panel,
+  FilterChips,
   StatusBadge,
   Toolbar,
 } from '../../core/ui/primitives';
 import { formatDate, type Advertiser } from './types';
+
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+];
 
 export function AdvertisersPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState<Advertiser[]>([]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
@@ -41,15 +49,16 @@ export function AdvertisersPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) {
-      return items;
-    }
-    return items.filter(
-      (item) =>
+    return items.filter((item) => {
+      if (statusFilter === 'active' && !item.isActive) return false;
+      if (statusFilter === 'inactive' && item.isActive) return false;
+      if (!q) return true;
+      return (
         item.name.toLowerCase().includes(q) ||
-        (item.contactEmail ?? '').toLowerCase().includes(q),
-    );
-  }, [items, search]);
+        (item.contactEmail ?? '').toLowerCase().includes(q)
+      );
+    });
+  }, [items, search, statusFilter]);
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();
@@ -113,7 +122,13 @@ export function AdvertisersPage() {
               New advertiser
             </Button>
           }
-        />
+        >
+          <FilterChips
+            options={STATUS_FILTERS}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+        </Toolbar>
 
         {filtered.length === 0 ? (
           <EmptyState

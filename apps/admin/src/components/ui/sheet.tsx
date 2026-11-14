@@ -12,7 +12,7 @@ function SheetOverlay({ className, ...props }: React.ComponentProps<typeof Sheet
   return (
     <SheetPrimitive.Overlay
       className={cn(
-        'fixed inset-0 z-50 bg-black/45 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         className,
       )}
       {...props}
@@ -40,7 +40,7 @@ function SheetContent({
         )}
         {...props}
       >
-        <SheetPrimitive.Close className="absolute top-4 right-4 rounded-sm text-sidebar-foreground/70 hover:text-sidebar-foreground">
+        <SheetPrimitive.Close className="absolute top-3 right-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>

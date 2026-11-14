@@ -1,7 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, EmptyState, Input, PageHeader, Panel, Select } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  Input,
+  PageHeader,
+  Panel,
+  Select,
+  Toolbar,
+} from '../../core/ui/primitives';
 import {
   resolveRecordingDisplay,
   type SurveillanceHealth,
@@ -72,6 +81,8 @@ export function RecordingsPage() {
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [playingLabel, setPlayingLabel] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | Segment['status']>('all');
+  const [search, setSearch] = useState('');
 
   const selected = devices.find((device) => device.id === deviceId) ?? null;
   const healthDisplay = selected ? resolveRecordingDisplay(selected) : null;
@@ -139,6 +150,18 @@ export function RecordingsPage() {
   const pendingCount = items.filter((item) => item.status === 'pending_upload').length;
   const failedCount = items.filter((item) => item.status === 'failed').length;
 
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((segment) => {
+      if (statusFilter !== 'all' && segment.status !== statusFilter) return false;
+      if (!q) return true;
+      return [segment.filename, segment.status, segment.lastUploadError ?? '']
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [items, statusFilter, search]);
+
   return (
     <div>
       <PageHeader
@@ -195,49 +218,71 @@ export function RecordingsPage() {
         ) : (
           <>
             {!loading && items.length > 0 ? (
-              <p className="muted mb-3 text-sm">
-                {uploadedCount} uploaded · {pendingCount} pending · {failedCount} failed
-              </p>
+              <>
+                <p className="muted mb-3 text-sm">
+                  {uploadedCount} uploaded · {pendingCount} pending · {failedCount} failed
+                </p>
+                <Toolbar
+                  search={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Search filename"
+                >
+                  <FilterChips
+                    options={[
+                      { value: 'all', label: 'All' },
+                      { value: 'uploaded', label: 'Uploaded' },
+                      { value: 'pending_upload', label: 'Pending' },
+                      { value: 'failed', label: 'Failed' },
+                    ]}
+                    value={statusFilter}
+                    onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+                  />
+                </Toolbar>
+              </>
             ) : null}
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Started</th>
-                  <th>Filename</th>
-                  <th>Size</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((segment) => (
-                  <tr key={segment.id}>
-                    <td>{new Date(segment.startedAt).toLocaleString()}</td>
-                    <td>{segment.filename}</td>
-                    <td>{formatBytes(segment.byteSize)}</td>
-                    <td>
-                      <div className="flex flex-col gap-1">
-                        {statusBadge(segment.status)}
-                        {segment.lastUploadError ? (
-                          <span className="text-xs text-muted-foreground">
-                            {segment.lastUploadError}
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>
-                      {segment.status === 'uploaded' ? (
-                        <Button type="button" onClick={() => void onPlay(segment)}>
-                          {playingId === segment.id ? 'Playing' : 'Play'}
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
+            {!loading && items.length > 0 && visible.length === 0 ? (
+              <EmptyState title="No matches" description="Adjust status filter or search." />
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Started</th>
+                    <th>Filename</th>
+                    <th>Size</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {visible.map((segment) => (
+                    <tr key={segment.id}>
+                      <td>{new Date(segment.startedAt).toLocaleString()}</td>
+                      <td>{segment.filename}</td>
+                      <td>{formatBytes(segment.byteSize)}</td>
+                      <td>
+                        <div className="flex flex-col gap-1">
+                          {statusBadge(segment.status)}
+                          {segment.lastUploadError ? (
+                            <span className="text-xs text-muted-foreground">
+                              {segment.lastUploadError}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>
+                        {segment.status === 'uploaded' ? (
+                          <Button type="button" onClick={() => void onPlay(segment)}>
+                            {playingId === segment.id ? 'Playing' : 'Play'}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </>
         )}
 

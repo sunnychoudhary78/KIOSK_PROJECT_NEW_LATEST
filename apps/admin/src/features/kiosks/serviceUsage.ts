@@ -146,8 +146,104 @@ export function buildUsageRows(items: ServiceAnalyticsItem[]): UsageRow[] {
   return rows;
 }
 
+export type UsageRangePreset = 'today' | '7' | '30' | 'custom';
+
+export const USAGE_RANGE_FILTERS: Array<{ value: UsageRangePreset; label: string }> = [
+  { value: 'today', label: 'Today' },
+  { value: '7', label: '7 days' },
+  { value: '30', label: '30 days' },
+  { value: 'custom', label: 'Custom' },
+];
+
+export const USAGE_SERVICE_FILTERS = [
+  { value: 'all', label: 'All services' },
+  ...HOME_ORDER.map((key) => ({ value: key, label: LABELS[key] ?? labelForEventKey(key) })),
+];
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+/** Local `YYYY-MM-DDTHH:mm` for `<input type="datetime-local">`. */
+export function toDatetimeLocalValue(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+export function fromDatetimeLocalValue(value: string): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function rangeIso(days: 7 | 30): { from: string; to: string } {
   const to = new Date();
   const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
   return { from: from.toISOString(), to: to.toISOString() };
+}
+
+export function rangeForPreset(preset: Exclude<UsageRangePreset, 'custom'>): {
+  fromIso: string;
+  toIso: string;
+  fromLocal: string;
+  toLocal: string;
+} {
+  const to = new Date();
+  const from = new Date(to);
+  if (preset === 'today') {
+    from.setHours(0, 0, 0, 0);
+  } else {
+    const days = preset === '7' ? 7 : 30;
+    from.setTime(to.getTime() - days * 24 * 60 * 60 * 1000);
+  }
+  return {
+    fromIso: from.toISOString(),
+    toIso: to.toISOString(),
+    fromLocal: toDatetimeLocalValue(from),
+    toLocal: toDatetimeLocalValue(to),
+  };
+}
+
+export function filterUsageRows(
+  rows: UsageRow[],
+  opts: { service: string; search: string; hideZero: boolean },
+): UsageRow[] {
+  let next = rows;
+
+  if (opts.service !== 'all') {
+    const parentIdx = next.findIndex((row) => row.key === opts.service);
+    if (parentIdx < 0) {
+      next = [];
+    } else {
+      const kept: UsageRow[] = [next[parentIdx]!];
+      for (let i = parentIdx + 1; i < next.length; i += 1) {
+        if (next[i]!.depth === 0) break;
+        kept.push(next[i]!);
+      }
+      next = kept;
+    }
+  }
+
+  if (opts.hideZero) {
+    next = next.filter((row) => row.count > 0);
+  }
+
+  const q = opts.search.trim().toLowerCase();
+  if (q) {
+    next = next.filter(
+      (row) => row.label.toLowerCase().includes(q) || row.key.toLowerCase().includes(q),
+    );
+  }
+
+  return next;
+}
+
+export function usageSummary(rows: UsageRow[]) {
+  const parents = rows.filter((row) => row.depth === 0);
+  const totalClicks = rows.reduce((sum, row) => sum + row.count, 0);
+  const active = rows.filter((row) => row.count > 0).length;
+  const top = parents.reduce<UsageRow | null>(
+    (best, row) => (!best || row.count > best.count ? row : best),
+    null,
+  );
+  return { totalClicks, active, top };
 }

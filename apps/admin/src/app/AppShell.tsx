@@ -22,7 +22,8 @@ import {
   Package,
   LogOut,
   Menu,
-  Monitor,
+  PanelLeft,
+  PanelLeftClose,
 } from 'lucide-react';
 import { apiRequest } from '../core/api/client';
 import { useAuth } from '../core/auth/auth-context';
@@ -37,7 +38,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
@@ -120,10 +120,13 @@ function SidebarNav({
   openSupportCount: number;
 }) {
   return (
-    <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-4">
+    <nav
+      className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-3 py-3"
+      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+    >
       {NAV.map((section) => (
         <div key={section.label}>
-          <p className="mb-2 px-2 text-[11px] font-semibold tracking-[0.12em] text-sidebar-foreground/45 uppercase">
+          <p className="mb-1.5 text-[10px] font-medium tracking-[0.14em] text-sidebar-foreground/50 uppercase">
             {section.label}
           </p>
           <div className="flex flex-col gap-0.5">
@@ -135,17 +138,17 @@ function SidebarNav({
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
+                    'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors',
                     isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
+                      ? 'bg-sidebar-accent font-medium text-sidebar-primary'
+                      : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
                   )
                 }
               >
-                <item.icon className="h-4 w-4 shrink-0 opacity-80" />
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                <item.icon className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+                <span className="min-w-0 flex-1 truncate leading-none">{item.label}</span>
                 {item.to === '/support' && openSupportCount > 0 ? (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[11px] font-semibold text-sidebar">
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-medium text-sidebar">
                     {openSupportCount}
                   </span>
                 ) : null}
@@ -160,14 +163,10 @@ function SidebarNav({
 
 function Brand() {
   return (
-    <div className="flex items-center gap-2.5 px-5 py-5">
-      <div className="grid h-9 w-9 place-items-center rounded-lg bg-sidebar-primary text-sidebar">
-        <Monitor className="h-4 w-4" />
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-sidebar-foreground">{config.appName}</p>
-        <p className="text-xs text-sidebar-foreground/50">Operator console</p>
-      </div>
+    <div className="shrink-0 px-3 py-4">
+      <div className="mb-2 h-1.5 w-8 rounded-full bg-sidebar-primary" />
+      <p className="truncate text-sm font-medium text-sidebar-accent-foreground">{config.appName}</p>
+      <p className="text-xs text-sidebar-foreground/70">Admin</p>
     </div>
   );
 }
@@ -180,19 +179,36 @@ function SidebarBody({
   openSupportCount: number;
 }) {
   return (
-    <>
+    <div className="flex h-full min-h-0 flex-col">
       <Brand />
-      <Separator className="bg-sidebar-border" />
+      <div className="mx-3 shrink-0 border-t border-sidebar-border" />
       <SidebarNav onNavigate={onNavigate} openSupportCount={openSupportCount} />
-    </>
+    </div>
   );
 }
+
+const SIDEBAR_STORAGE_KEY = 'skp-sidebar-open';
 
 export function AppShell() {
   const auth = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_STORAGE_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  });
   const [openSupportCount, setOpenSupportCount] = useState(0);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarOpen ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [sidebarOpen]);
 
   useEffect(() => {
     if (!auth.token) return;
@@ -220,23 +236,31 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground lg:flex">
-        <SidebarBody openSupportCount={openSupportCount} />
+    <div className="flex h-dvh max-h-dvh overflow-hidden bg-background">
+      <aside
+        className={cn(
+          'skp-sidebar hidden h-full shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex',
+          sidebarOpen ? 'w-48' : 'pointer-events-none w-0 border-r-0',
+        )}
+        aria-hidden={!sidebarOpen}
+      >
+        <div className="flex h-full w-48 min-w-48 flex-col">
+          <SidebarBody openSupportCount={openSupportCount} />
+        </div>
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent className="p-0">
+        <SheetContent className="skp-sidebar w-56 overflow-hidden p-0">
           <SidebarBody openSupportCount={openSupportCount} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border bg-background/90 px-4 backdrop-blur lg:px-8">
-          <div className="flex items-center gap-3">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="z-20 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/80 px-3 lg:px-6">
+          <div className="flex items-center gap-2">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="icon"
               className="lg:hidden"
               onClick={() => setMobileOpen(true)}
@@ -244,19 +268,28 @@ export function AppShell() {
               <Menu className="h-4 w-4" />
               <span className="sr-only">Open navigation</span>
             </Button>
-            <div>
-              <p className="text-sm font-semibold">{pageTitle(location.pathname)}</p>
-              <p className="hidden text-xs text-muted-foreground sm:block">ATHENA</p>
-            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="hidden lg:inline-flex"
+              onClick={() => setSidebarOpen((open) => !open)}
+              aria-pressed={sidebarOpen}
+              title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            >
+              {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+              <span className="sr-only">{sidebarOpen ? 'Close sidebar' : 'Open sidebar'}</span>
+            </Button>
+            <p className="text-sm text-muted-foreground">{pageTitle(location.pathname)}</p>
           </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-auto gap-2 px-2 py-1.5">
-                <Avatar>
-                  <AvatarFallback>{initials(auth.email)}</AvatarFallback>
+              <Button variant="ghost" className="h-8 gap-2 px-1.5">
+                <Avatar className="h-7 w-7">
+                  <AvatarFallback className="text-[10px]">{initials(auth.email)}</AvatarFallback>
                 </Avatar>
-                <span className="hidden max-w-48 truncate text-left text-sm font-medium sm:block">
+                <span className="hidden max-w-40 truncate text-left text-sm sm:block">
                   {auth.email ?? 'Admin'}
                 </span>
               </Button>
@@ -272,7 +305,7 @@ export function AppShell() {
           </DropdownMenu>
         </header>
 
-        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-5 lg:px-6 lg:py-6">
           <Outlet />
         </main>
       </div>

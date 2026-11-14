@@ -1,7 +1,16 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, EmptyState, Input, PageHeader, Panel, Select } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  Input,
+  PageHeader,
+  Panel,
+  Select,
+  Toolbar,
+} from '../../core/ui/primitives';
 
 const ICON_OPTIONS = [
   'sos',
@@ -49,6 +58,8 @@ export function EmergencyContactsPage() {
   const [list, setList] = useState<EmergencyList | null>(null);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [iconFilter, setIconFilter] = useState('all');
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -73,6 +84,26 @@ export function EmergencyContactsPage() {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  const iconOptions = useMemo(() => {
+    const values = Array.from(
+      new Set((list?.items ?? []).map((item) => item.icon).filter(Boolean)),
+    ).sort();
+    return [
+      { value: 'all', label: 'All icons' },
+      ...values.map((icon) => ({ value: icon, label: icon })),
+    ];
+  }, [list]);
+
+  const filtered = useMemo(() => {
+    const items = list?.items ?? [];
+    const q = search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (iconFilter !== 'all' && item.icon !== iconFilter) return false;
+      if (!q) return true;
+      return [item.name, item.phone, item.icon].join(' ').toLowerCase().includes(q);
+    });
+  }, [list, search, iconFilter]);
 
   function startEdit(item: EmergencyContact) {
     setEditingId(item.id);
@@ -227,45 +258,62 @@ export function EmergencyContactsPage() {
           <EmptyState title="No contacts" description="Add a helpline above." />
         ) : null}
         {list && list.items.length > 0 ? (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Icon</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {list.items.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.sortOrder}</td>
-                  <td className="font-medium">{item.name}</td>
-                  <td className="font-mono text-sm">{item.phone}</td>
-                  <td>{item.icon}</td>
-                  <td className="whitespace-nowrap">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => startEdit(item)}
-                      disabled={removingId === item.id}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => void removeContact(item)}
-                      disabled={removingId === item.id}
-                    >
-                      {removingId === item.id ? 'Removing…' : 'Remove'}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            <Toolbar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search name or phone"
+            >
+              <FilterChips
+                options={iconOptions}
+                value={iconFilter}
+                onChange={setIconFilter}
+              />
+            </Toolbar>
+            {filtered.length === 0 ? (
+              <EmptyState title="No matches" description="Adjust filters or search." />
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Icon</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.sortOrder}</td>
+                      <td className="font-medium">{item.name}</td>
+                      <td className="font-mono text-sm">{item.phone}</td>
+                      <td>{item.icon}</td>
+                      <td className="whitespace-nowrap">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => startEdit(item)}
+                          disabled={removingId === item.id}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => void removeContact(item)}
+                          disabled={removingId === item.id}
+                        >
+                          {removingId === item.id ? 'Removing…' : 'Remove'}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
         ) : null}
       </Panel>
     </div>

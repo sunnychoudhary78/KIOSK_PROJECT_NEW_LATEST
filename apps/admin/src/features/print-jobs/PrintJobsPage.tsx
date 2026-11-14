@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, EmptyState, PageHeader, Panel, StatusBadge } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  PageHeader,
+  Panel,
+  Select,
+  StatusBadge,
+  Toolbar,
+} from '../../core/ui/primitives';
 
 type PrintJob = {
   id: string;
@@ -17,6 +26,20 @@ type PrintJob = {
 };
 
 const OPEN = new Set(['created', 'ready', 'printing']);
+
+const STATUS_FILTERS = [
+  { value: 'open', label: 'Open' },
+  { value: 'all', label: 'All' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'failed', label: 'Failed' },
+];
+
+const SOURCE_FILTERS = [
+  { value: 'all', label: 'All sources' },
+  { value: 'otp_print', label: 'OTP Print' },
+  { value: 'digilocker_print', label: 'DigiLocker' },
+  { value: 'quick_print', label: 'Quick Print' },
+];
 
 function roleFromToken(token: string | null) {
   if (!token) return null;
@@ -35,7 +58,11 @@ export function PrintJobsPage() {
   const canClose = roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
   const [items, setItems] = useState<PrintJob[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [openOnly, setOpenOnly] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('open');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [colorFilter, setColorFilter] = useState('all');
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -52,10 +79,39 @@ export function PrintJobsPage() {
     void load();
   }, [load]);
 
-  const visible = useMemo(
-    () => (openOnly ? items.filter((job) => OPEN.has(job.status)) : items),
-    [items, openOnly],
-  );
+  const sources = useMemo(() => {
+    const known = new Set(SOURCE_FILTERS.map((item) => item.value).filter((value) => value !== 'all'));
+    const extras = Array.from(new Set(items.map((job) => job.source))).filter((source) => !known.has(source));
+    return [
+      ...SOURCE_FILTERS,
+      ...extras.map((source) => ({
+        value: source,
+        label: source.replace(/_/g, ' '),
+      })),
+    ];
+  }, [items]);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((job) => {
+      if (statusFilter === 'open' && !OPEN.has(job.status)) return false;
+      if (statusFilter !== 'all' && statusFilter !== 'open' && job.status !== statusFilter) return false;
+      if (sourceFilter !== 'all' && job.source !== sourceFilter) return false;
+      if (colorFilter !== 'all' && (job.printColorMode ?? 'bw') !== colorFilter) return false;
+      if (reviewOnly && !job.needsAdminReview) return false;
+      if (!q) return true;
+      const haystack = [
+        job.title,
+        job.source,
+        job.status,
+        job.deviceId ?? '',
+        job.reconcileDetail ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [items, search, statusFilter, sourceFilter, colorFilter, reviewOnly]);
 
   async function markFailed(jobId: string) {
     if (!canClose || closingId) return;
@@ -74,27 +130,56 @@ export function PrintJobsPage() {
     <div>
       <PageHeader title="Print jobs" subtitle="OTP, Quick Print, and DigiLocker activity" />
       <Panel>
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Toolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search title, source, device"
+          actions={
+            <Button type="button" variant="secondary" onClick={() => void load()}>
+              Refresh
+            </Button>
+          }
+        >
+          <FilterChips options={STATUS_FILTERS} value={statusFilter} onChange={setStatusFilter} />
+          <Select
+            aria-label="Filter by source"
+            className="max-w-40"
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+          >
+            {sources.map((source) => (
+              <option key={source.value} value={source.value}>
+                {source.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label="Filter by color"
+            className="max-w-28"
+            value={colorFilter}
+            onChange={(event) => setColorFilter(event.target.value)}
+          >
+            <option value="all">All colors</option>
+            <option value="bw">B/W</option>
+            <option value="color">Color</option>
+          </Select>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <input
               type="checkbox"
-              checked={openOnly}
-              onChange={(e) => setOpenOnly(e.target.checked)}
+              checked={reviewOnly}
+              onChange={(event) => setReviewOnly(event.target.checked)}
             />
-            Open jobs only (created / ready / printing)
+            Needs review
           </label>
-          <Button type="button" variant="secondary" onClick={() => void load()}>
-            Refresh
-          </Button>
-        </div>
+        </Toolbar>
         {error ? <p className="error">{error}</p> : null}
         {visible.length === 0 && !error ? (
           <EmptyState
-            title={openOnly ? 'No open print jobs' : 'No print jobs yet'}
+            title={items.length === 0 ? 'No print jobs yet' : 'No matches'}
             description={
-              openOnly
-                ? 'Stuck tray reservations would appear here as open jobs.'
-                : 'OTP, Quick Print, and DigiLocker jobs will appear here when a kiosk queues them.'
+              items.length === 0
+                ? 'OTP, Quick Print, and DigiLocker jobs will appear here when a kiosk queues them.'
+                : 'Adjust filters or search.'
             }
           />
         ) : (

@@ -1,5 +1,4 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
-import { Inbox } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button as UiButton } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,12 +22,12 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
+    <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 space-y-1">
+        <h1 className="text-xl font-medium tracking-tight">{title}</h1>
+        {subtitle ? <p className="max-w-2xl text-sm leading-5 text-muted-foreground">{subtitle}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pt-0.5">{actions}</div> : null}
     </header>
   );
 }
@@ -45,14 +44,14 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <Card className={cn('mb-5 last:mb-0', className)}>
+    <Card className={cn('mb-4 last:mb-0', className)}>
       {title || actions ? (
-        <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
           {title ? <CardTitle>{title}</CardTitle> : <span />}
           {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
         </CardHeader>
       ) : null}
-      <CardContent className={title || actions ? undefined : 'pt-6'}>{children}</CardContent>
+      <CardContent className={title || actions ? undefined : 'pt-4'}>{children}</CardContent>
     </Card>
   );
 }
@@ -82,7 +81,7 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
   return (
     <select
       className={cn(
-        'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-8 w-auto min-w-[8.5rem] rounded-md border border-input bg-card px-2.5 py-1 text-sm shadow-none outline-none ring-0 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
       {...props}
@@ -119,20 +118,24 @@ export function Toolbar({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+    <div className="mb-4 flex flex-col gap-2.5 border-b border-border/70 pb-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         {onSearchChange ? (
           <Input
             value={search ?? ''}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
             aria-label="Search"
-            className="max-w-xs"
+            className="h-8 w-full sm:max-w-xs"
           />
-        ) : null}
-        {children}
+        ) : (
+          <span />
+        )}
+        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      {children ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">{children}</div>
+      ) : null}
     </div>
   );
 }
@@ -147,20 +150,28 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-muted">
-        <Inbox className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <h3 className="text-base font-semibold">{title}</h3>
-      {description ? <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p> : null}
-      {action ? <div className="mt-4">{action}</div> : null}
+    <div className="flex flex-col items-start justify-center px-1 py-8">
+      <h3 className="text-sm font-medium">{title}</h3>
+      {description ? <p className="mt-1 max-w-lg text-sm text-muted-foreground">{description}</p> : null}
+      {action ? <div className="mt-3">{action}</div> : null}
     </div>
   );
+}
+
+function splitModalTitle(title: string): { heading: string; subtitle?: string } {
+  const sep = ' · ';
+  const idx = title.indexOf(sep);
+  if (idx <= 0) return { heading: title };
+  return {
+    heading: title.slice(0, idx).trim(),
+    subtitle: title.slice(idx + sep.length).trim() || undefined,
+  };
 }
 
 export function Modal({
   open,
   title,
+  description,
   onClose,
   children,
   footer,
@@ -168,23 +179,29 @@ export function Modal({
 }: {
   open: boolean;
   title: string;
+  description?: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
 }) {
+  const { heading, subtitle } = splitModalTitle(title);
+
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent
         className={cn(
-          'flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden',
+          'flex max-h-[min(92vh,56rem)] flex-col overflow-hidden sm:max-h-[min(90vh,56rem)]',
           className,
         )}
       >
-        <DialogHeader className="shrink-0 pr-6">
-          <DialogTitle>{title}</DialogTitle>
+        <DialogHeader className="shrink-0">
+          <DialogTitle>{heading}</DialogTitle>
+          {subtitle || description ? (
+            <p className="text-sm text-muted-foreground">{description ?? subtitle}</p>
+          ) : null}
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer ? <DialogFooter className="shrink-0">{footer}</DialogFooter> : null}
       </DialogContent>
     </Dialog>
@@ -232,16 +249,16 @@ export function FilterChips({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           className={cn(
-            'rounded-full border px-3 py-1 text-sm transition-colors',
+            'rounded-md border px-2 py-1 text-xs transition-colors',
             value === opt.value
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-border bg-background text-muted-foreground hover:bg-muted',
+              ? 'border-primary/25 bg-primary text-primary-foreground'
+              : 'border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
           )}
           onClick={() => onChange(opt.value)}
         >

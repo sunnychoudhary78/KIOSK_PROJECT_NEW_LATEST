@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   BarChart3,
   CloudUpload,
+  MoreHorizontal,
   PauseCircle,
   Pencil,
   ScrollText,
@@ -15,12 +16,23 @@ import { useAuth } from '../../core/auth/auth-context';
 import {
   Button,
   EmptyState,
+  FilterChips,
   Input,
   Modal,
   PageHeader,
   Panel,
+  Select,
   StatusBadge,
+  Toolbar,
 } from '../../core/ui/primitives';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button as UiButton } from '@/components/ui/button';
 import {
   hasPrinterDuplex,
   hasPrinterParts,
@@ -33,8 +45,14 @@ import {
 } from './printerMaintenance';
 import {
   buildUsageRows,
-  rangeIso,
+  filterUsageRows,
+  fromDatetimeLocalValue,
+  rangeForPreset,
+  usageSummary,
+  USAGE_RANGE_FILTERS,
+  USAGE_SERVICE_FILTERS,
   type ServiceAnalyticsItem,
+  type UsageRangePreset,
   type UsageRow,
 } from './serviceUsage';
 import {
@@ -85,10 +103,6 @@ type Device = {
   trayAvailable?: number | null;
 };
 
-function latestReportPaperOut(health: PrinterHealthView | null | undefined) {
-  return health?.state === 'paper_out' || health?.noPaper === true;
-}
-
 function roleFromToken(token: string | null) {
   if (!token) return null;
   const part = token.split('.')[1];
@@ -113,12 +127,6 @@ function pagesLeftBand(pagesLeft: number | null): 'muted' | 'low' | 'very-low' {
   if (pagesLeft < 50) return 'very-low';
   return 'low';
 }
-
-const PAGES_LEFT_NUMBER: Record<ReturnType<typeof pagesLeftBand>, string> = {
-  muted: 'text-muted-foreground',
-  low: 'font-medium text-orange-700',
-  'very-low': 'font-medium text-red-700',
-};
 
 const PAGES_LEFT_FIGURE: Record<ReturnType<typeof pagesLeftBand>, string> = {
   muted: 'text-foreground',
@@ -149,19 +157,15 @@ function PrinterSummaryCell({
   const pagesLeft = device.pagesLeft == null ? '—' : String(device.pagesLeft);
   const available = device.trayAvailable == null ? null : String(device.trayAvailable);
   return (
-    <div className="flex items-center gap-3 whitespace-nowrap text-sm">
-      <span className={PRINTER_ROW_TONE[summary.tone]}>{summary.label}</span>
-      <span className="text-muted-foreground">
-        Pages left <span className={PAGES_LEFT_NUMBER[pagesLeftBand(device.pagesLeft ?? null)]}>{pagesLeft}</span>
-        {available != null ? (
-          <>
-            {' '}
-            · Available{' '}
-            <span className={PAGES_LEFT_NUMBER[pagesLeftBand(device.trayAvailable ?? null)]}>{available}</span>
-          </>
-        ) : null}
-      </span>
-      <Button type="button" variant="secondary" className="h-8 px-2" onClick={onDetails}>
+    <div className="flex min-w-0 items-center gap-2 text-sm">
+      <div className="min-w-0">
+        <p className={PRINTER_ROW_TONE[summary.tone]}>{summary.label}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          Left {pagesLeft}
+          {available != null ? ` · Avail ${available}` : ''}
+        </p>
+      </div>
+      <Button type="button" variant="secondary" className="h-7 shrink-0 px-2 text-xs" onClick={onDetails}>
         Details
       </Button>
     </div>
@@ -521,9 +525,26 @@ function formatLocation(device: Device): string {
   return '—';
 }
 
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'provisioning', label: 'Provisioning' },
+  { value: 'inactive', label: 'Inactive' },
+];
+
+const RECORDING_FILTERS = [
+  { value: 'all', label: 'All recording' },
+  { value: 'on', label: 'Recording on' },
+  { value: 'off', label: 'Recording off' },
+];
+
 export function KiosksPage() {
   const { token } = useAuth();
   const [items, setItems] = useState<Device[]>([]);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [siteFilter, setSiteFilter] = useState('all');
+  const [recordingFilter, setRecordingFilter] = useState('all');
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -548,10 +569,15 @@ export function KiosksPage() {
   const [traySaving, setTraySaving] = useState(false);
   const [clearOpenSaving, setClearOpenSaving] = useState(false);
   const [usageDevice, setUsageDevice] = useState<Device | null>(null);
-  const [usageDays, setUsageDays] = useState<7 | 30>(30);
+  const [usageRangePreset, setUsageRangePreset] = useState<UsageRangePreset>('30');
+  const [usageFromLocal, setUsageFromLocal] = useState(() => rangeForPreset('30').fromLocal);
+  const [usageToLocal, setUsageToLocal] = useState(() => rangeForPreset('30').toLocal);
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
+  const [usageSearch, setUsageSearch] = useState('');
+  const [usageServiceFilter, setUsageServiceFilter] = useState('all');
+  const [usageHideZero, setUsageHideZero] = useState(false);
   const [logsDevice, setLogsDevice] = useState<Device | null>(null);
   const [logsHours, setLogsHours] = useState<24 | 168>(24);
   const [logsLevelMode, setLogsLevelMode] = useState<'problems' | 'all'>('problems');
@@ -781,15 +807,14 @@ export function KiosksPage() {
     }
   }
 
-  async function loadUsage(device: Device, days: 7 | 30) {
+  async function loadUsage(device: Device, fromIso: string, toIso: string) {
     setUsageLoading(true);
     setUsageError(null);
     try {
-      const { from, to } = rangeIso(days);
       const result = await apiRequest<{
         items: ServiceAnalyticsItem[];
       }>(
-        `/devices/${device.id}/service-analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        `/devices/${device.id}/service-analytics?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
         { token },
       );
       setUsageRows(buildUsageRows(result.items ?? []));
@@ -801,12 +826,49 @@ export function KiosksPage() {
     }
   }
 
+  function applyUsageRange(
+    device: Device,
+    preset: UsageRangePreset,
+    fromLocal = usageFromLocal,
+    toLocal = usageToLocal,
+  ) {
+    if (preset !== 'custom') {
+      const range = rangeForPreset(preset);
+      setUsageRangePreset(preset);
+      setUsageFromLocal(range.fromLocal);
+      setUsageToLocal(range.toLocal);
+      void loadUsage(device, range.fromIso, range.toIso);
+      return;
+    }
+
+    const from = fromDatetimeLocalValue(fromLocal);
+    const to = fromDatetimeLocalValue(toLocal);
+    if (!from || !to) {
+      setUsageError('Choose a valid from and to date/time');
+      return;
+    }
+    if (from.getTime() > to.getTime()) {
+      setUsageError('From must be before to');
+      return;
+    }
+    setUsageRangePreset('custom');
+    setUsageFromLocal(fromLocal);
+    setUsageToLocal(toLocal);
+    void loadUsage(device, from.toISOString(), to.toISOString());
+  }
+
   function openUsage(device: Device) {
+    const range = rangeForPreset('30');
     setUsageDevice(device);
-    setUsageDays(30);
+    setUsageRangePreset('30');
+    setUsageFromLocal(range.fromLocal);
+    setUsageToLocal(range.toLocal);
     setUsageRows([]);
     setUsageError(null);
-    void loadUsage(device, 30);
+    setUsageSearch('');
+    setUsageServiceFilter('all');
+    setUsageHideZero(false);
+    void loadUsage(device, range.fromIso, range.toIso);
   }
 
   async function loadLogs(
@@ -1055,6 +1117,48 @@ export function KiosksPage() {
     ? items.find((device) => device.id === printerDeviceId) ?? null
     : null;
 
+  const sites = useMemo(
+    () => Array.from(new Set(items.map((device) => device.siteName).filter(Boolean))).sort(),
+    [items],
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((device) => {
+      if (statusFilter !== 'all' && device.status !== statusFilter) return false;
+      if (siteFilter !== 'all' && device.siteName !== siteFilter) return false;
+      if (recordingFilter === 'on' && !device.surveillanceEnabled) return false;
+      if (recordingFilter === 'off' && device.surveillanceEnabled) return false;
+      if (!q) return true;
+      const haystack = [
+        device.name,
+        device.siteName,
+        device.deviceKey,
+        device.address ?? '',
+        formatLocation(device),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [items, search, statusFilter, siteFilter, recordingFilter]);
+
+  const filteredUsageRows = useMemo(
+    () =>
+      filterUsageRows(usageRows, {
+        service: usageServiceFilter,
+        search: usageSearch,
+        hideZero: usageHideZero,
+      }),
+    [usageRows, usageServiceFilter, usageSearch, usageHideZero],
+  );
+
+  const usageStats = useMemo(() => usageSummary(usageRows), [usageRows]);
+  const usageMaxCount = useMemo(
+    () => filteredUsageRows.reduce((max, row) => Math.max(max, row.count), 0),
+    [filteredUsageRows],
+  );
+
   return (
     <div>
       <PageHeader
@@ -1119,45 +1223,96 @@ export function KiosksPage() {
             }
           />
         ) : (
+          <>
+          <Toolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search name, site, key, location"
+          >
+            <FilterChips
+              options={STATUS_FILTERS}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
+            <Select
+              aria-label="Filter by site"
+              value={siteFilter}
+              onChange={(event) => setSiteFilter(event.target.value)}
+            >
+              <option value="all">All sites</option>
+              {sites.map((site) => (
+                <option key={site} value={site}>
+                  {site}
+                </option>
+              ))}
+            </Select>
+            <Select
+              aria-label="Filter by recording"
+              value={recordingFilter}
+              onChange={(event) => setRecordingFilter(event.target.value)}
+            >
+              {RECORDING_FILTERS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Toolbar>
+          {filtered.length === 0 ? (
+            <EmptyState
+              title="No matches"
+              description="Adjust filters or search to find a kiosk."
+            />
+          ) : (
           <div className="overflow-x-auto">
-          <table className="table w-max min-w-full border-separate border-spacing-0 [&_th]:whitespace-nowrap">
+          <table className="table w-full min-w-[64rem]">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Site</th>
-                <th>Location</th>
-                <th>Status</th>
-                <th>Device key</th>
-                <th>Last heartbeat</th>
-                <th>Printer</th>
-                <th>Recording</th>
-                <th>Actions</th>
+                <th className="w-[12%]">Name</th>
+                <th className="w-[10%]">Site</th>
+                <th className="w-[14%]">Location</th>
+                <th className="w-[9%]">Status</th>
+                <th className="w-[12%]">Device key</th>
+                <th className="w-[12%]">Last heartbeat</th>
+                <th className="w-[14%]">Printer</th>
+                <th className="w-[10%]">Recording</th>
+                <th className="w-[7%]">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((device) => {
+              {filtered.map((device) => {
                 const location = formatLocation(device);
                 return (
                 <tr key={device.id}>
-                  <td className="whitespace-nowrap font-medium">{device.name}</td>
-                  <td className="whitespace-nowrap">{device.siteName}</td>
-                  <td className="max-w-[12rem]">
-                    <span className="block truncate" title={location}>
+                  <td className="font-medium">
+                    <span className="block truncate" title={device.name}>
+                      {device.name}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="block truncate" title={device.siteName}>
+                      {device.siteName}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="block truncate text-muted-foreground" title={location}>
                       {location}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap">
+                  <td>
                     <StatusBadge status={device.status} />
                   </td>
                   <td>
-                    <code className="block max-w-[10rem] truncate" title={device.deviceKey}>
+                    <code className="block truncate text-xs text-muted-foreground" title={device.deviceKey}>
                       {device.deviceKey}
                     </code>
                   </td>
-                  <td className="whitespace-nowrap text-muted-foreground">
-                    {device.lastHeartbeatAt
-                      ? new Date(device.lastHeartbeatAt).toLocaleString()
-                      : '—'}
+                  <td className="text-muted-foreground">
+                    <span className="block truncate">
+                      {device.lastHeartbeatAt
+                        ? new Date(device.lastHeartbeatAt).toLocaleString()
+                        : '—'}
+                    </span>
                   </td>
                   <td>
                     <PrinterSummaryCell
@@ -1170,17 +1325,16 @@ export function KiosksPage() {
                       }}
                     />
                   </td>
-                  <td className="whitespace-nowrap">
+                  <td>
                     <RecordingStatusCell device={device} />
                   </td>
                   <td>
-                    <div className="flex flex-col gap-2">
-                    <div className="flex flex-nowrap gap-2">
+                    <div className="flex items-center gap-1">
                       {device.status === 'inactive' ? (
                         <Button
                           type="button"
                           variant="secondary"
-                          className="h-8 px-2"
+                          className="h-7 px-2 text-xs"
                           disabled={submitting}
                           onClick={() => void onSetStatus(device, 'active')}
                         >
@@ -1190,111 +1344,71 @@ export function KiosksPage() {
                         <Button
                           type="button"
                           variant="danger"
-                          className="h-8 px-2"
+                          className="h-7 px-2 text-xs"
                           disabled={submitting}
                           onClick={() => void onSetStatus(device, 'inactive')}
                         >
                           Stop
                         </Button>
                       )}
-                      {canEnablePrinting ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-8 px-2"
-                          disabled={submitting}
-                          onClick={() => openEdit(device)}
-                        >
-                          <span className="inline-flex items-center gap-1.5">
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </span>
-                        </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-8 px-2"
-                        disabled={submitting}
-                        onClick={() => openSettings(device)}
-                      >
-                        <span className="inline-flex items-center gap-1.5">
-                          <Settings className="h-4 w-4" />
-                          Settings
-                        </span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-8 px-2"
-                        disabled={submitting}
-                        onClick={() => openUsage(device)}
-                      >
-                        <span className="inline-flex items-center gap-1.5">
-                          <BarChart3 className="h-4 w-4" />
-                          Usage
-                        </span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-8 px-2"
-                        disabled={submitting}
-                        onClick={() => openLogs(device)}
-                      >
-                        <span className="inline-flex items-center gap-1.5">
-                          <ScrollText className="h-4 w-4" />
-                          Logs
-                        </span>
-                      </Button>
-                      {device.surveillanceEnabled ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-8 px-2"
-                          disabled={submitting || device.status === 'inactive'}
-                          onClick={() => void onSetSurveillance(device, false)}
-                        >
-                          Stop surveillance
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-8 px-2"
-                          disabled={submitting || device.status === 'inactive'}
-                          onClick={() => void onSetSurveillance(device, true)}
-                        >
-                          Start surveillance
-                        </Button>
-                      )}
-                    </div>
-                      {device.printingPausedReason ? (
-                        <div>
-                          <p className="text-sm font-medium text-red-700">Printing paused</p>
-                          {latestReportPaperOut(device.printerHealth) ? (
-                            <p className="text-xs text-muted-foreground">
-                              The latest report still says out of paper.
-                            </p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              The latest report says paper is back.
-                            </p>
-                          )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <UiButton
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            disabled={submitting}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">More actions</span>
+                          </UiButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
                           {canEnablePrinting ? (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="h-8 px-2"
-                              disabled={submitting}
-                              onClick={() => void onEnablePrinting(device)}
-                            >
-                              Enable printing
-                            </Button>
+                            <DropdownMenuItem onClick={() => openEdit(device)}>
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
                           ) : null}
-                        </div>
-                      ) : null}
+                          <DropdownMenuItem onClick={() => openSettings(device)}>
+                            <Settings className="h-4 w-4" />
+                            Settings
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openUsage(device)}>
+                            <BarChart3 className="h-4 w-4" />
+                            Usage
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openLogs(device)}>
+                            <ScrollText className="h-4 w-4" />
+                            Logs
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            disabled={device.status === 'inactive'}
+                            onClick={() => void onSetSurveillance(device, !device.surveillanceEnabled)}
+                          >
+                            {device.surveillanceEnabled ? (
+                              <VideoOff className="h-4 w-4" />
+                            ) : (
+                              <Video className="h-4 w-4" />
+                            )}
+                            {device.surveillanceEnabled ? 'Stop recording' : 'Start recording'}
+                          </DropdownMenuItem>
+                          {device.printingPausedReason && canEnablePrinting ? (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => void onEnablePrinting(device)}>
+                                Enable printing
+                              </DropdownMenuItem>
+                            </>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
+                    {device.printingPausedReason ? (
+                      <p className="mt-1 text-[11px] text-red-700">Printing paused</p>
+                    ) : null}
                   </td>
                 </tr>
                 );
@@ -1302,6 +1416,8 @@ export function KiosksPage() {
             </tbody>
           </table>
           </div>
+          )}
+          </>
         )}
       </Panel>
 
@@ -1850,7 +1966,7 @@ export function KiosksPage() {
       <Modal
         open={usageDevice != null}
         title={usageDevice ? `Service usage · ${usageDevice.name}` : 'Service usage'}
-        className="max-w-2xl"
+        className="max-w-3xl"
         onClose={() => {
           if (!usageLoading) {
             setUsageDevice(null);
@@ -1867,61 +1983,177 @@ export function KiosksPage() {
           </Button>
         }
       >
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Range</span>
-          <Button
-            type="button"
-            variant={usageDays === 7 ? 'primary' : 'secondary'}
-            className="h-8 px-3"
-            disabled={usageLoading || !usageDevice}
-            onClick={() => {
-              if (!usageDevice) return;
-              setUsageDays(7);
-              void loadUsage(usageDevice, 7);
-            }}
-          >
-            Last 7 days
-          </Button>
-          <Button
-            type="button"
-            variant={usageDays === 30 ? 'primary' : 'secondary'}
-            className="h-8 px-3"
-            disabled={usageLoading || !usageDevice}
-            onClick={() => {
-              if (!usageDevice) return;
-              setUsageDays(30);
-              void loadUsage(usageDevice, 30);
-            }}
-          >
-            Last 30 days
-          </Button>
+        <div className="mb-3 space-y-3 border-b border-border/70 pb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              value={usageSearch}
+              onChange={(e) => setUsageSearch(e.target.value)}
+              placeholder="Search service or option"
+              aria-label="Search usage"
+              className="h-8 w-full sm:max-w-xs"
+            />
+            <Select
+              aria-label="Filter by service"
+              value={usageServiceFilter}
+              onChange={(e) => setUsageServiceFilter(e.target.value)}
+              className="sm:min-w-[10rem]"
+            >
+              {USAGE_SERVICE_FILTERS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            <FilterChips
+              options={[
+                { value: 'all', label: 'Show all' },
+                { value: 'active', label: 'With clicks' },
+              ]}
+              value={usageHideZero ? 'active' : 'all'}
+              onChange={(value) => setUsageHideZero(value === 'active')}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <FilterChips
+              options={USAGE_RANGE_FILTERS}
+              value={usageRangePreset}
+              onChange={(value) => {
+                if (!usageDevice || usageLoading) return;
+                const preset = value as UsageRangePreset;
+                if (preset === 'custom') {
+                  setUsageRangePreset('custom');
+                  return;
+                }
+                applyUsageRange(usageDevice, preset);
+              }}
+            />
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+              <label className="min-w-0 flex-1 space-y-1 text-xs text-muted-foreground">
+                From
+                <Input
+                  type="datetime-local"
+                  value={usageFromLocal}
+                  disabled={usageLoading}
+                  onChange={(e) => {
+                    setUsageFromLocal(e.target.value);
+                    setUsageRangePreset('custom');
+                  }}
+                  className="h-8"
+                />
+              </label>
+              <label className="min-w-0 flex-1 space-y-1 text-xs text-muted-foreground">
+                To
+                <Input
+                  type="datetime-local"
+                  value={usageToLocal}
+                  disabled={usageLoading}
+                  onChange={(e) => {
+                    setUsageToLocal(e.target.value);
+                    setUsageRangePreset('custom');
+                  }}
+                  className="h-8"
+                />
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-8 px-3"
+                disabled={usageLoading || !usageDevice}
+                onClick={() => {
+                  if (!usageDevice) return;
+                  applyUsageRange(usageDevice, 'custom', usageFromLocal, usageToLocal);
+                }}
+              >
+                {usageLoading ? 'Loading…' : 'Apply'}
+              </Button>
+            </div>
+          </div>
         </div>
+
         {usageError ? <p className="error mb-3">{usageError}</p> : null}
+
+        {!usageLoading && usageRows.length > 0 ? (
+          <div className="mb-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 rounded-md border border-primary/10 bg-accent/50 px-3 py-2 text-sm">
+            <div>
+              <span className="text-muted-foreground">Total </span>
+              <span className="font-medium tabular-nums">{usageStats.totalClicks}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Active </span>
+              <span className="font-medium tabular-nums">
+                {usageStats.active}
+                <span className="font-normal text-muted-foreground">/{usageRows.length}</span>
+              </span>
+            </div>
+            <div className="min-w-0 truncate">
+              <span className="text-muted-foreground">Top </span>
+              <span className="font-medium">
+                {usageStats.top && usageStats.top.count > 0
+                  ? `${usageStats.top.label} (${usageStats.top.count})`
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         {usageLoading ? (
-          <p className="text-muted-foreground">Loading usage…</p>
+          <p className="py-6 text-sm text-muted-foreground">Loading usage…</p>
         ) : usageRows.length === 0 ? (
           <EmptyState
             title="No service clicks yet"
             description="Counts appear after visitors open services on this kiosk."
           />
+        ) : filteredUsageRows.length === 0 ? (
+          <EmptyState
+            title="No matches"
+            description="Adjust search, service, date range, or show all rows."
+          />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-md border border-border">
             <table className="table w-full">
               <thead>
                 <tr>
                   <th>Service / option</th>
-                  <th className="text-right">Clicks</th>
+                  <th className="w-[42%]">Share</th>
+                  <th className="w-24 text-right">Clicks</th>
                 </tr>
               </thead>
               <tbody>
-                {usageRows.map((row) => (
-                  <tr key={row.key}>
-                    <td className={row.depth === 1 ? 'pl-8 text-muted-foreground' : 'font-medium'}>
-                      {row.label}
-                    </td>
-                    <td className="text-right tabular-nums">{row.count}</td>
-                  </tr>
-                ))}
+                {filteredUsageRows.map((row) => {
+                  const share = usageMaxCount > 0 ? (row.count / usageMaxCount) * 100 : 0;
+                  const pctOfTotal =
+                    usageStats.totalClicks > 0
+                      ? Math.round((row.count / usageStats.totalClicks) * 100)
+                      : 0;
+                  return (
+                    <tr key={row.key} className={row.depth === 0 ? 'bg-muted/20' : undefined}>
+                      <td
+                        className={
+                          row.depth === 1
+                            ? 'border-l-2 border-border pl-7 text-sm text-muted-foreground'
+                            : 'text-sm font-medium'
+                        }
+                      >
+                        {row.label}
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={`h-full rounded-full ${row.depth === 0 ? 'bg-primary' : 'bg-primary/45'}`}
+                              style={{ width: `${share}%` }}
+                            />
+                          </div>
+                          <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                            {row.count > 0 ? `${pctOfTotal}%` : ''}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="text-right text-sm tabular-nums font-medium">{row.count}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
