@@ -26,12 +26,15 @@ Flash `SPPC_ESP32_Controllermeow.ino`, then verify with the kiosk app on UAT.
 
 ## Print tray (shutter + roller)
 
+- [ ] Flash `new.ino` (or current field firmware)
 - [ ] Any print feature (OTP / DigiLocker / Quick / Well Being / Astrology)
-- [ ] After job is sent: ESP receives `{"print":"start"}` (shutter opens, roller runs after delay)
-- [ ] After USB-verified success: `{"print":"done"}` (roller stops, shutter closes)
-- [ ] Cancel or fail mid-print: `{"print":"stop"}` closes tray
+- [ ] After job is sent: ESP receives `{"print":"start"}` (shutter opens after ~3s)
+- [ ] After USB-verified success: `{"print":"done"}` (shutter closes after ~5s)
+- [ ] Admin Kiosks → Open shutter / Close shutter: applies on next kiosk poll (~20s) via `{"shutter":"open"|"close"}` when idle
+- [ ] Admin shutter while printing: deferred until print finishes (or expires after 2 min)
 
 ## Notes
 
 - Print continues even if the ESP serial port is disconnected (tray commands are skipped with a log).
 - Charging / vitals / print tray should not run as concurrent user sessions on one controller.
+- Admin never uses `print:*` for manual shutter; print path never uses `shutter:*`.

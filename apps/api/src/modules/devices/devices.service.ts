@@ -10,15 +10,18 @@ import {
 import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type {
+  AckDeviceShutterInput,
   DeviceHeartbeatBody,
   NearbyDevicesQuery,
   PrinterHealthInput,
   RegisterDeviceInput,
+  RequestDeviceShutterInput,
   SetDevicePrintLimitsInput,
   SetPrinterTrayInput,
   SurveillanceHealthInput,
   UpdateDeviceInput,
 } from './devices.schemas.js';
+import { SHUTTER_COMMAND_TTL_MS } from './devices.schemas.js';
 import { applyTrayLoad, pagesLeft, usbPagesTotal } from './printer_tray.js';
 import { getTrayCapacity } from '../printing/tray_capacity.js';
 import { isWithinLocalTimeWindow } from '../print_quota/print_quota.time.js';
@@ -505,6 +508,111 @@ export class DevicesService {
       throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
     }
     return { requestedAt: device.printerRefreshRequestedAt?.toISOString() ?? null };
+  }
+
+  async requestShutterCommand(
+    deviceId: string,
+    input: RequestDeviceShutterInput,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    const requestedAt = new Date();
+    await this.db.device.update({
+      where: { id: deviceId },
+      data: {
+        shutterCommand: input.action,
+        shutterCommandRequestedAt: requestedAt,
+      },
+    });
+    await this.audit.record({
+      action: 'device.shutter_command',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: { action: input.action, requestedAt: requestedAt.toISOString() },
+    });
+    return {
+      action: input.action,
+      requestedAt: requestedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Pending shutter for this device, or null if none.
+   * Expired commands stay until the kiosk acks so Device logs can record TTL expiry.
+   */
+  async getPendingShutterCommand(deviceId: string, principalDeviceId: string) {
+    if (deviceId !== principalDeviceId) {
+      throw new AppError('forbidden', 'Device can only read its own shutter command', 403);
+    }
+    const device = await this.db.device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    if (device.status === DeviceStatus.inactive) {
+      throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
+    }
+
+    const action = device.shutterCommand;
+    const requestedAt = device.shutterCommandRequestedAt;
+    if ((action !== 'open' && action !== 'close') || !requestedAt) {
+      if (action != null || requestedAt != null) {
+        await this.db.device.update({
+          where: { id: deviceId },
+          data: { shutterCommand: null, shutterCommandRequestedAt: null },
+        });
+      }
+      return null;
+    }
+
+    const expired = Date.now() - requestedAt.getTime() > SHUTTER_COMMAND_TTL_MS;
+    return {
+      action: action as 'open' | 'close',
+      requestedAt: requestedAt.toISOString(),
+      expired,
+    };
+  }
+
+  async ackShutterCommand(
+    deviceId: string,
+    principalDeviceId: string,
+    input: AckDeviceShutterInput,
+  ) {
+    if (deviceId !== principalDeviceId) {
+      throw new AppError('forbidden', 'Device can only ack its own shutter command', 403);
+    }
+    const device = await this.db.device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    if (device.status === DeviceStatus.inactive) {
+      throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
+    }
+
+    if (!ackMatchesRefresh(device.shutterCommandRequestedAt, input.requestedAt)) {
+      return {
+        cleared: false,
+        action: device.shutterCommand ?? null,
+        requestedAt: device.shutterCommandRequestedAt?.toISOString() ?? null,
+      };
+    }
+
+    await this.db.device.update({
+      where: { id: deviceId },
+      data: { shutterCommand: null, shutterCommandRequestedAt: null },
+    });
+    return {
+      cleared: true,
+      action: device.shutterCommand ?? null,
+      requestedAt: device.shutterCommandRequestedAt?.toISOString() ?? null,
+      result: input.result,
+    };
   }
 
   async heartbeat(

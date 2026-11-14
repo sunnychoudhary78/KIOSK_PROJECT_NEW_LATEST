@@ -9,6 +9,8 @@ import {
   Video,
   VideoOff,
   AlertTriangle,
+  DoorOpen,
+  DoorClosed,
 } from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
@@ -756,6 +758,31 @@ export function KiosksPage() {
     }
   }
 
+  async function onShutter(device: Device, action: 'open' | 'close') {
+    const ok = window.confirm(
+      `${action === 'open' ? 'Open' : 'Close'} shutter on “${device.name}”?\n\n` +
+        'Applies on the next kiosk poll (~20s). Blocked while a print job is running.',
+    );
+    if (!ok) {
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await apiRequest(`/devices/${device.id}/shutter`, {
+        method: 'POST',
+        token,
+        body: { action },
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : `Could not request shutter ${action}`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function onSetSurveillance(device: Device, enabled: boolean) {
     if (enabled) {
       const ok = window.confirm(
@@ -1245,6 +1272,32 @@ export function KiosksPage() {
                         <span className="inline-flex items-center gap-1.5">
                           <ScrollText className="h-4 w-4" />
                           Logs
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 px-2"
+                        disabled={submitting || device.status === 'inactive'}
+                        title="Open shutter (next kiosk poll ~20s; blocked during print)"
+                        onClick={() => void onShutter(device, 'open')}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <DoorOpen className="h-4 w-4" />
+                          Open shutter
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 px-2"
+                        disabled={submitting || device.status === 'inactive'}
+                        title="Close shutter (next kiosk poll ~20s; blocked during print)"
+                        onClick={() => void onShutter(device, 'close')}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <DoorClosed className="h-4 w-4" />
+                          Close shutter
                         </span>
                       </Button>
                       {device.surveillanceEnabled ? (

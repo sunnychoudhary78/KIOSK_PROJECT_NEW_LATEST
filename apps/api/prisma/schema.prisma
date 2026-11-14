@@ -235,6 +235,9 @@ model Device {
   printerHealthAt      DateTime?    @map("printer_health_at")
   /// Set when an admin asks the kiosk to post its current SNMP snapshot now.
   printerRefreshRequestedAt DateTime? @map("printer_refresh_requested_at")
+  /// Pending admin shutter override: open | close. Cleared when the kiosk acks.
+  shutterCommand            String?   @map("shutter_command") @db.VarChar(8)
+  shutterCommandRequestedAt DateTime? @map("shutter_command_requested_at")
   /// Set when the printer reports paper-out. Cleared only by an admin.
   printingPausedReason String? @map("printing_paused_reason") @db.VarChar(32)
   /// Pages credited at the last tray load. Null until an admin records paper.

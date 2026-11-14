@@ -1,17 +1,19 @@
 import type { NextFunction, Request, Response, Router } from 'express';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired } from '../../shared/auth.js';
-import { assertActiveDevice } from '../../shared/device-guard.js';
+import { assertActiveDevice, requireDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { isMsg91Configured } from '../../infrastructure/external/sms.client.js';
+import { DevicesService } from '../devices/devices.service.js';
 import { SMS_CONFIG_KEY } from './platform_settings.defaults.js';
 import { updatePlatformSettingSchema } from './platform_settings.schemas.js';
 import { PlatformSettingsService } from './platform_settings.service.js';
 
 export function registerPlatformSettingsModule(router: Router, deps: AppDeps): void {
   const service = new PlatformSettingsService(deps.db, deps.auditService);
+  const devices = new DevicesService(deps.db, deps.auditService);
 
   router.get(
     '/cabinet-light',
@@ -20,6 +22,26 @@ export function registerPlatformSettingsModule(router: Router, deps: AppDeps): v
     async (_req: Request, res: Response, next: NextFunction) => {
       try {
         res.json(await service.getCabinetLightConfig());
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/hardware-control',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const deviceId = req.principal.deviceId;
+        const [cabinetLight, shutter] = await Promise.all([
+          service.getCabinetLightConfig(),
+          devices.getPendingShutterCommand(deviceId, deviceId),
+        ]);
+        res.json({ cabinetLight, shutter });
       } catch (error) {
         next(error);
       }

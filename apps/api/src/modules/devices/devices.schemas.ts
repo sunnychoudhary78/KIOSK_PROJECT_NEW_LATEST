@@ -182,6 +182,22 @@ export const deviceHeartbeatBodySchema = z
 
 export type DeviceHeartbeatBody = z.infer<typeof deviceHeartbeatBodySchema>;
 
+export const requestDeviceShutterSchema = z.object({
+  action: z.enum(['open', 'close']),
+});
+
+export type RequestDeviceShutterInput = z.infer<typeof requestDeviceShutterSchema>;
+
+export const ackDeviceShutterSchema = z.object({
+  requestedAt: z.string().datetime(),
+  result: z.enum(['applied', 'failed', 'expired']),
+});
+
+export type AckDeviceShutterInput = z.infer<typeof ackDeviceShutterSchema>;
+
+/** Pending admin shutter commands expire after this window. */
+export const SHUTTER_COMMAND_TTL_MS = 2 * 60 * 1000;
+
 const localTimeHmm = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:mm in 24-hour format')
