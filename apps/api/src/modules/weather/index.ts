@@ -26,4 +26,39 @@ export function registerWeatherModule(router: Router, deps: AppDeps): void {
       }
     },
   );
+
+  router.get(
+    '/weather/air-quality',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        res.json(await service.airQualityForDevice(req.principal.deviceId));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/weather/air-quality/history',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const rawHours = req.query.hours;
+        const hours =
+          typeof rawHours === 'string' && rawHours.trim()
+            ? Number(rawHours)
+            : undefined;
+        res.json(await service.airQualityHistoryForDevice(req.principal.deviceId, hours));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 }
