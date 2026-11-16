@@ -8,7 +8,8 @@ import {
   Panel,
   StatusBadge,
 } from '../../core/ui/primitives';
-import { formatDate, type Campaign } from './types';
+import { AdPreviewModal } from './AdPreviewModal';
+import { formatDate, type Campaign, type Creative } from './types';
 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +17,7 @@ export function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<{ creative: Creative; slot: string } | null>(null);
 
   async function load() {
     if (!id) {
@@ -157,18 +159,36 @@ export function CampaignDetailPage() {
                 <th>Slot</th>
                 <th>Title</th>
                 <th>Type</th>
+                <th />
               </tr>
             </thead>
             <tbody>
-              {(campaign.creatives ?? []).map((link) => (
-                <tr key={`${link.slot}-${link.creative.id}`}>
-                  <td>
-                    <StatusBadge status={link.slot} />
-                  </td>
-                  <td>{link.creative.title}</td>
-                  <td>{link.creative.type}</td>
-                </tr>
-              ))}
+              {(campaign.creatives ?? []).map((link) => {
+                const canPreview =
+                  Boolean(link.creative.mediaUrl) || (link.creative.assets?.length ?? 0) > 0;
+                return (
+                  <tr key={`${link.slot}-${link.creative.id}`}>
+                    <td>
+                      <StatusBadge status={link.slot} />
+                    </td>
+                    <td>{link.creative.title}</td>
+                    <td>{link.creative.type}</td>
+                    <td className="text-right">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 px-3"
+                        disabled={!canPreview}
+                        onClick={() =>
+                          setPreview({ creative: link.creative, slot: link.slot })
+                        }
+                      >
+                        Preview
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -193,6 +213,13 @@ export function CampaignDetailPage() {
           </ul>
         )}
       </Panel>
+
+      <AdPreviewModal
+        open={preview != null}
+        creative={preview?.creative ?? null}
+        slot={preview?.slot}
+        onClose={() => setPreview(null)}
+      />
     </div>
   );
 }

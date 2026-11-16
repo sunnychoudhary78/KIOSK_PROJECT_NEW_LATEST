@@ -10,6 +10,7 @@ import {
   Select,
   Stepper,
 } from '../../core/ui/primitives';
+import { AdPreviewModal } from './AdPreviewModal';
 import { CreativeUploadModal } from './CreativeUploadModal';
 import type { Advertiser, Creative, Device, Site } from './types';
 
@@ -51,6 +52,7 @@ export function CampaignWizardPage() {
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [startNow, setStartNow] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [preview, setPreview] = useState<{ creative: Creative; slot: string } | null>(null);
 
   useEffect(() => {
     void Promise.all([
@@ -263,57 +265,108 @@ export function CampaignWizardPage() {
             </div>
             <label>
               Idle media
-              <Select
-                value={idleCreativeId}
-                onChange={(e) => setIdleCreativeId(e.target.value)}
-              >
-                <option value="">— none —</option>
-                {advertiserCreatives
-                  .filter(
-                    (c) => c.type === 'video' || c.type === 'image' || c.type === 'carousel',
-                  )
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title} ({c.type}
-                      {c.type === 'carousel' && c.assets?.length
-                        ? `, ${c.assets.length} photos`
-                        : ''}
-                      )
-                    </option>
-                  ))}
-              </Select>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={idleCreativeId}
+                  onChange={(e) => setIdleCreativeId(e.target.value)}
+                  className="min-w-[14rem] flex-1"
+                >
+                  <option value="">— none —</option>
+                  {advertiserCreatives
+                    .filter(
+                      (c) => c.type === 'video' || c.type === 'image' || c.type === 'carousel',
+                    )
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title} ({c.type}
+                        {c.type === 'carousel' && c.assets?.length
+                          ? `, ${c.assets.length} photos`
+                          : ''}
+                        )
+                      </option>
+                    ))}
+                </Select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-8 px-3"
+                  disabled={!idleCreative}
+                  onClick={() =>
+                    idleCreative
+                      ? setPreview({ creative: idleCreative, slot: 'idle_video' })
+                      : undefined
+                  }
+                >
+                  Preview
+                </Button>
+              </div>
             </label>
             <label>
               Horizontal banner (top / bottom)
-              <Select
-                value={bannerCreativeId}
-                onChange={(e) => setBannerCreativeId(e.target.value)}
-              >
-                <option value="">— none —</option>
-                {advertiserCreatives
-                  .filter((c) => c.type === 'banner')
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title} (horizontal)
-                    </option>
-                  ))}
-              </Select>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={bannerCreativeId}
+                  onChange={(e) => setBannerCreativeId(e.target.value)}
+                  className="min-w-[14rem] flex-1"
+                >
+                  <option value="">— none —</option>
+                  {advertiserCreatives
+                    .filter((c) => c.type === 'banner')
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title} (horizontal)
+                      </option>
+                    ))}
+                </Select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-8 px-3"
+                  disabled={!bannerCreative}
+                  onClick={() =>
+                    bannerCreative
+                      ? setPreview({ creative: bannerCreative, slot: 'home_banner' })
+                      : undefined
+                  }
+                >
+                  Preview
+                </Button>
+              </div>
             </label>
             <label>
               Vertical banner (left / right)
-              <Select
-                value={sideBannerCreativeId}
-                onChange={(e) => setSideBannerCreativeId(e.target.value)}
-              >
-                <option value="">— none —</option>
-                {advertiserCreatives
-                  .filter((c) => c.type === 'banner_vertical')
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title} (vertical)
-                    </option>
-                  ))}
-              </Select>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={sideBannerCreativeId}
+                  onChange={(e) => setSideBannerCreativeId(e.target.value)}
+                  className="min-w-[14rem] flex-1"
+                >
+                  <option value="">— none —</option>
+                  {advertiserCreatives
+                    .filter((c) => c.type === 'banner_vertical')
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title} (vertical)
+                      </option>
+                    ))}
+                </Select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-8 px-3"
+                  disabled={!sideBannerCreative}
+                  onClick={() =>
+                    sideBannerCreative
+                      ? setPreview({
+                          creative: sideBannerCreative,
+                          slot: 'home_banner_vertical',
+                        })
+                      : undefined
+                  }
+                >
+                  Preview
+                </Button>
+              </div>
             </label>
           </div>
         ) : null}
@@ -438,6 +491,13 @@ export function CampaignWizardPage() {
             setUploadOpen(false);
             setError(null);
           }}
+        />
+
+        <AdPreviewModal
+          open={preview != null}
+          creative={preview?.creative ?? null}
+          slot={preview?.slot}
+          onClose={() => setPreview(null)}
         />
 
         <div className="wizard-nav">

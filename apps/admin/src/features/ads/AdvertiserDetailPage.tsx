@@ -13,6 +13,7 @@ import {
   StatusBadge,
   Toolbar,
 } from '../../core/ui/primitives';
+import { AdPreviewModal } from './AdPreviewModal';
 import { CreativeUploadModal } from './CreativeUploadModal';
 import { formatDate, type Advertiser, type Campaign, type Creative } from './types';
 
@@ -38,6 +39,7 @@ export function AdvertiserDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [previewCreative, setPreviewCreative] = useState<Creative | null>(null);
   const [name, setName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -221,6 +223,7 @@ export function AdvertiserDetailPage() {
               <div className="creative-grid">
                 {filteredCreatives.map((c) => {
                   const assetCount = c.assets?.length ?? 0;
+                  const canPreview = Boolean(c.mediaUrl) || (c.assets?.length ?? 0) > 0;
                   return (
                     <div key={c.id} className="creative-card">
                       <h4>{c.title}</h4>
@@ -232,6 +235,17 @@ export function AdvertiserDetailPage() {
                           ? `${assetCount} photos`
                           : (c.mimeType ?? 'media')}
                       </p>
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 px-3"
+                          disabled={!canPreview}
+                          onClick={() => setPreviewCreative(c)}
+                        >
+                          Preview
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -335,6 +349,12 @@ export function AdvertiserDetailPage() {
           setUploadOpen(false);
           void load();
         }}
+      />
+
+      <AdPreviewModal
+        open={previewCreative != null}
+        creative={previewCreative}
+        onClose={() => setPreviewCreative(null)}
       />
     </div>
   );

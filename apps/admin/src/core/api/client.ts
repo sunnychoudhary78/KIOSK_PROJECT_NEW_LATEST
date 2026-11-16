@@ -170,6 +170,34 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return parseSuccess<T>(response);
 }
 
+/** Authenticated binary fetch (ads media, etc.). */
+export async function apiRequestBlob(
+  path: string,
+  options: Omit<RequestOptions, 'body' | 'formData'> = {},
+): Promise<Blob> {
+  let token = options.token ? (getAccessToken() ?? options.token) : null;
+  if (token && accessTokenExpiresWithin(token, refreshSkewSeconds)) {
+    token = await refreshOrExpire();
+  }
+
+  let response = await send(path, { method: options.method ?? 'GET' }, token);
+  if (!response.ok && response.status === 401 && options.token) {
+    const error = await parseError(response);
+    if (error.code === 'unauthorized') {
+      token = await refreshOrExpire();
+      response = await send(path, { method: options.method ?? 'GET' }, token);
+    } else {
+      throw error;
+    }
+  }
+
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+
+  return response.blob();
+}
+
 export type UploadProgress = {
   loaded: number;
   total: number;
