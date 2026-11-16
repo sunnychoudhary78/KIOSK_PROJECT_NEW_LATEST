@@ -172,10 +172,70 @@ export const printerHealthSchema = z.object({
 
 export type PrinterHealthInput = z.infer<typeof printerHealthSchema>;
 
+export const hardwareSerialStatuses = [
+  'disconnected',
+  'connecting',
+  'connected',
+  'reconnecting',
+  'error',
+] as const;
+
+export const hardwareComponentStatuses = [
+  'ok',
+  'warn',
+  'error',
+  'unknown',
+  'offline',
+] as const;
+
+export const hardwareHealthSchema = z.object({
+  serial: z
+    .object({
+      status: z.enum(hardwareSerialStatuses),
+      portName: z.string().max(80).nullable().optional(),
+      lastError: z.string().max(200).nullable().optional(),
+    })
+    .optional(),
+  shutter: z
+    .object({
+      status: z.enum(hardwareComponentStatuses).optional(),
+      pendingCommand: z.enum(['open', 'close']).nullable().optional(),
+      lastAck: z.enum(['applied', 'failed', 'expired']).nullable().optional(),
+      lastError: z.string().max(200).nullable().optional(),
+    })
+    .optional(),
+  cabinetLight: z
+    .object({
+      status: z.enum(hardwareComponentStatuses).optional(),
+      on: z.boolean().nullable().optional(),
+      lastError: z.string().max(200).nullable().optional(),
+    })
+    .optional(),
+  charging: z
+    .object({
+      status: z.enum(hardwareComponentStatuses).optional(),
+      sensorOk: z.boolean().nullable().optional(),
+      phase: z.string().max(40).nullable().optional(),
+      lastError: z.string().max(200).nullable().optional(),
+    })
+    .optional(),
+  sensors: z
+    .object({
+      status: z.enum(hardwareComponentStatuses).optional(),
+      max30102: z.enum(hardwareComponentStatuses).optional(),
+      mlx90614: z.enum(hardwareComponentStatuses).optional(),
+      lastError: z.string().max(200).nullable().optional(),
+    })
+    .optional(),
+});
+
+export type HardwareHealthInput = z.infer<typeof hardwareHealthSchema>;
+
 export const deviceHeartbeatBodySchema = z
   .object({
     surveillance: surveillanceHealthSchema.optional(),
     printer: printerHealthSchema.optional(),
+    hardware: hardwareHealthSchema.optional(),
     printerRefreshAck: z.string().datetime().optional(),
     /** Flutter pubspec version (before +build), e.g. 0.1.0 */
     appVersion: z

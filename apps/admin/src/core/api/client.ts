@@ -120,11 +120,13 @@ async function parseError(response: Response): Promise<ApiError> {
 }
 
 async function send(path: string, options: RequestOptions, token: string | null): Promise<Response> {
+  const method = options.method ?? (options.body || options.formData ? 'POST' : 'GET');
   const headers: Record<string, string> = {
     'X-Correlation-Id': crypto.randomUUID(),
   };
 
-  if (!options.formData) {
+  // Only set JSON content-type when sending a JSON body (never on media GETs).
+  if (!options.formData && options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -133,7 +135,7 @@ async function send(path: string, options: RequestOptions, token: string | null)
   }
 
   return fetch(`${config.apiBaseUrl}${path}`, {
-    method: options.method ?? (options.body || options.formData ? 'POST' : 'GET'),
+    method,
     headers,
     body: options.formData ? options.formData : options.body ? JSON.stringify(options.body) : undefined,
   });

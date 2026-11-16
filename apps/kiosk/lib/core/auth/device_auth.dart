@@ -16,6 +16,9 @@ Map<String, dynamic> Function()? surveillanceHeartbeatBodyBuilder;
 /// Set by [PrinterHealthController] for printer SNMP/spooler health on heartbeat.
 Map<String, dynamic> Function()? printerHeartbeatBodyBuilder;
 
+/// Set by [SerialController] (and related HW) for controller/sensor health.
+Map<String, dynamic> Function()? hardwareHeartbeatBodyBuilder;
+
 final deviceCredentialStoreProvider = Provider<DeviceCredentialStore>((ref) {
   return DeviceCredentialStore();
 });
@@ -407,6 +410,14 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
         body['printer'] = printerBuilder();
       } catch (_) {
         // omit printer on builder failure
+      }
+    }
+    final hardwareBuilder = hardwareHeartbeatBodyBuilder;
+    if (hardwareBuilder != null) {
+      try {
+        body['hardware'] = hardwareBuilder();
+      } catch (_) {
+        // omit hardware on builder failure
       }
     }
     return body;

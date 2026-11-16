@@ -34,7 +34,18 @@ export function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Live snapshot of ads and campaign delivery" />
+      <PageHeader
+        title="Dashboard"
+        subtitle="Live snapshot of ads delivery and a shortcut to fleet hardware health"
+        actions={
+          <Link
+            to="/fleet-health"
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Open fleet health
+          </Link>
+        }
+      />
 
       {error ? <p className="error">{error}</p> : null}
 

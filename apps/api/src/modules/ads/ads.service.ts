@@ -463,7 +463,36 @@ export class AdsService {
   }
 
   async updateCampaign(id: string, input: UpdateCampaignInput) {
-    await this.requireCampaign(id);
+    const campaign = await this.requireCampaign(id);
+    const now = new Date();
+    const nextStartsAt =
+      input.startsAt === undefined
+        ? campaign.startsAt
+        : input.startsAt
+          ? new Date(input.startsAt)
+          : null;
+    const nextEndsAt =
+      input.endsAt === undefined ? campaign.endsAt : input.endsAt ? new Date(input.endsAt) : null;
+
+    if (nextStartsAt && nextEndsAt && nextStartsAt.getTime() > nextEndsAt.getTime()) {
+      throw new AppError('validation_error', 'startsAt must be before endsAt', 400);
+    }
+
+    // Keep live/scheduled campaigns consistent with the new window.
+    let nextStatus: AdCampaignStatus | undefined;
+    if (
+      campaign.status === AdCampaignStatus.active ||
+      campaign.status === AdCampaignStatus.scheduled
+    ) {
+      if (nextEndsAt && nextEndsAt.getTime() < now.getTime()) {
+        nextStatus = AdCampaignStatus.ended;
+      } else if (nextStartsAt && nextStartsAt.getTime() > now.getTime()) {
+        nextStatus = AdCampaignStatus.scheduled;
+      } else if (campaign.status === AdCampaignStatus.scheduled) {
+        nextStatus = AdCampaignStatus.active;
+      }
+    }
+
     const row = await this.db.adCampaign.update({
       where: { id },
       data: {
@@ -477,6 +506,7 @@ export class AdsService {
         endsAt:
           input.endsAt === undefined ? undefined : input.endsAt ? new Date(input.endsAt) : null,
         priority: input.priority,
+        ...(nextStatus ? { status: nextStatus } : {}),
       },
       include: {
         advertiser: true,
@@ -576,7 +606,20 @@ export class AdsService {
     correlationId?: string,
   ) {
     const campaign = await this.requireCampaign(id);
+    const current = campaign.status;
+    const now = new Date();
+
+    const data: {
+      status: AdCampaignStatus;
+      endsAt?: Date | null;
+    } = { status };
+
     if (status === AdCampaignStatus.active) {
+      // Start / resume / reactivate from draft, paused, scheduled, or ended
+      if (current === AdCampaignStatus.active) {
+        return this.getCampaign(id);
+      }
+
       const creatives = await this.db.adCampaignCreative.count({ where: { campaignId: id } });
       const targets = await this.db.adCampaignTarget.count({ where: { campaignId: id } });
       if (creatives === 0) {
@@ -585,10 +628,38 @@ export class AdsService {
       if (targets === 0) {
         throw new AppError('validation_error', 'Set targeting before starting', 400);
       }
+
+      // Expired end date blocks kiosk playlist delivery — clear on reactivate.
+      if (campaign.endsAt && campaign.endsAt.getTime() < now.getTime()) {
+        data.endsAt = null;
+      }
+
+      if (campaign.startsAt && campaign.startsAt.getTime() > now.getTime()) {
+        data.status = AdCampaignStatus.scheduled;
+      } else {
+        data.status = AdCampaignStatus.active;
+      }
+    } else if (status === AdCampaignStatus.paused) {
+      if (current !== AdCampaignStatus.active && current !== AdCampaignStatus.scheduled) {
+        throw new AppError(
+          'validation_error',
+          `Cannot pause a campaign in status ${current}`,
+          400,
+        );
+      }
+      data.status = AdCampaignStatus.paused;
+    } else if (status === AdCampaignStatus.ended) {
+      if (current === AdCampaignStatus.ended) {
+        return this.getCampaign(id);
+      }
+      data.status = AdCampaignStatus.ended;
+    } else {
+      throw new AppError('validation_error', `Unsupported campaign status ${status}`, 400);
     }
+
     const row = await this.db.adCampaign.update({
       where: { id },
-      data: { status },
+      data,
       include: {
         advertiser: true,
         creatives: { include: { creative: true } },
@@ -596,12 +667,17 @@ export class AdsService {
       },
     });
     await this.audit.record({
-      action: `ads.campaign_${status}`,
+      action: `ads.campaign_${data.status}`,
       principalType: 'admin',
       principalId,
       resourceType: 'ad_campaign',
       resourceId: campaign.id,
       correlationId,
+      metadata: {
+        from: current,
+        requested: status,
+        clearedExpiredEndsAt: data.endsAt === null,
+      },
     });
     return this.mapCampaign(row);
   }

@@ -12,6 +12,7 @@ import type { AuditService } from '../audit/audit.service.js';
 import type {
   AckDeviceShutterInput,
   DeviceHeartbeatBody,
+  HardwareHealthInput,
   NearbyDevicesQuery,
   PrinterHealthInput,
   RegisterDeviceInput,
@@ -41,6 +42,13 @@ function mapPrinterHealth(value: unknown): PrinterHealthInput | null {
   return value as PrinterHealthInput;
 }
 
+function mapHardwareHealth(value: unknown): HardwareHealthInput | null {
+  if (value == null || typeof value !== 'object') {
+    return null;
+  }
+  return value as HardwareHealthInput;
+}
+
 function ackMatchesRefresh(stored: Date | null | undefined, ack: string | undefined): boolean {
   if (!stored || !ack) return false;
   const parsed = Date.parse(ack);
@@ -63,7 +71,11 @@ function mapDevice(
     surveillanceHealthAt?: Date | null;
     printerHealth?: unknown;
     printerHealthAt?: Date | null;
+    hardwareHealth?: unknown;
+    hardwareHealthAt?: Date | null;
     printerRefreshRequestedAt?: Date | null;
+    shutterCommand?: string | null;
+    shutterCommandRequestedAt?: Date | null;
     printingPausedReason?: string | null;
     maxPagesPerSession?: number;
     freePagesPerSession?: number;
@@ -98,6 +110,10 @@ function mapDevice(
     surveillanceHealthAt: device.surveillanceHealthAt?.toISOString() ?? null,
     printerHealth: mapPrinterHealth(device.printerHealth),
     printerHealthAt: device.printerHealthAt?.toISOString() ?? null,
+    hardwareHealth: mapHardwareHealth(device.hardwareHealth),
+    hardwareHealthAt: device.hardwareHealthAt?.toISOString() ?? null,
+    shutterCommand: device.shutterCommand ?? null,
+    shutterCommandRequestedAt: device.shutterCommandRequestedAt?.toISOString() ?? null,
     printerRefreshRequestedAt: device.printerRefreshRequestedAt?.toISOString() ?? null,
     printingPausedReason: device.printingPausedReason ?? null,
     trayPages: device.trayPages ?? null,
@@ -681,6 +697,12 @@ export class DevicesService {
           ? {
               printerHealth: body.printer,
               printerHealthAt: now,
+            }
+          : {}),
+        ...(body.hardware
+          ? {
+              hardwareHealth: body.hardware,
+              hardwareHealthAt: now,
             }
           : {}),
         ...(body.printer &&

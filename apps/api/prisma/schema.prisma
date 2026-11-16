@@ -235,6 +235,9 @@ model Device {
   /// Latest printer health snapshot from the kiosk heartbeat (SNMP + spooler).
   printerHealth        Json?        @map("printer_health")
   printerHealthAt      DateTime?    @map("printer_health_at")
+  /// Latest hardware snapshot (serial/controller, shutter, sensors, charging).
+  hardwareHealth       Json?        @map("hardware_health")
+  hardwareHealthAt     DateTime?    @map("hardware_health_at")
   /// Set when an admin asks the kiosk to post its current SNMP snapshot now.
   printerRefreshRequestedAt DateTime? @map("printer_refresh_requested_at")
   /// Pending admin shutter override: open | close. Cleared when the kiosk acks.
