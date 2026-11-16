@@ -65,6 +65,15 @@ function makeService(db: unknown) {
 function txPassthrough(db: Record<string, unknown>) {
   const client: Record<string, unknown> = {
     ...db,
+    device: db.device ?? {
+      findUnique: vi.fn().mockResolvedValue({
+        ...deviceRow(),
+        printingPausedReason: null,
+        trayPages: null,
+        trayBaselinePages: null,
+        printerHealth: null,
+      }),
+    },
     societyPhone: db.societyPhone ?? {
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
@@ -74,6 +83,9 @@ function txPassthrough(db: Record<string, unknown>) {
       findUnique: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ id: 'ledger-1' }),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    printJob: db.printJob ?? {
+      aggregate: vi.fn().mockResolvedValue({ _sum: { pagesExpected: 0 } }),
     },
   };
   client.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(client));
@@ -422,7 +434,8 @@ describe('QuickPrintService', () => {
     });
   });
 
-  it('claims a ready session and creates a print job', async () => {
+  it('claims a ready session without creating a print job', async () => {
+    const docId = '33333333-3333-3333-3333-333333333333';
     const session = {
       id: sessionId,
       deviceId,
@@ -440,7 +453,7 @@ describe('QuickPrintService', () => {
       updatedAt: new Date(),
       documents: [
         {
-          id: '33333333-3333-3333-3333-333333333333',
+          id: docId,
           sessionId,
           fileName: 'a.pdf',
           storagePath: '/tmp/a.pdf',
@@ -448,7 +461,9 @@ describe('QuickPrintService', () => {
           pageCount: 1,
           byteSize: 10,
           sortOrder: 0,
+          printJobId: null,
           createdAt: new Date(),
+          printJob: null,
         },
       ],
       payment: null,
@@ -456,11 +471,7 @@ describe('QuickPrintService', () => {
     };
 
     const printing = {
-      createJob: vi.fn().mockResolvedValue({
-        id: '55555555-5555-5555-5555-555555555555',
-        status: 'ready',
-        source: PrintJobSource.quick_print,
-      }),
+      createJob: vi.fn(),
     };
 
     const db = txPassthrough({
@@ -468,6 +479,9 @@ describe('QuickPrintService', () => {
       quickPrintSession: {
         findUnique: vi.fn().mockResolvedValue(session),
         update: vi.fn().mockResolvedValue({ ...session, status: QuickPrintSessionStatus.consumed }),
+      },
+      quickPrintDocument: {
+        findMany: vi.fn().mockResolvedValue(session.documents),
       },
     });
 
@@ -483,13 +497,156 @@ describe('QuickPrintService', () => {
     );
 
     const result = await service.claim(deviceId, sessionId);
-    expect(result.printJob.id).toBe('55555555-5555-5555-5555-555555555555');
-    expect(printing.createJob).toHaveBeenCalledWith(
-      expect.objectContaining({ freePagesGranted: 1 }),
+    expect(printing.createJob).not.toHaveBeenCalled();
+    expect(result.sessionId).toBe(sessionId);
+    expect(result.documents).toHaveLength(1);
+    expect(result.documents[0]).toMatchObject({
+      id: docId,
+      printed: false,
+      printJobId: null,
+    });
+  });
+
+  it('creates per-document jobs, attaches ledger once, and rejects reprint', async () => {
+    const docA = '33333333-3333-3333-3333-333333333333';
+    const docB = '44444444-4444-4444-4444-444444444444';
+    const docs = [
+      {
+        id: docA,
+        sessionId,
+        fileName: 'a.pdf',
+        storagePath: '/tmp/a.pdf',
+        contentType: 'application/pdf',
+        pageCount: 2,
+        byteSize: 10,
+        sortOrder: 0,
+        printJobId: null as string | null,
+        createdAt: new Date(),
+        printJob: null as { id: string; status: string } | null,
+      },
+      {
+        id: docB,
+        sessionId,
+        fileName: 'b.pdf',
+        storagePath: '/tmp/b.pdf',
+        contentType: 'application/pdf',
+        pageCount: 3,
+        byteSize: 12,
+        sortOrder: 1,
+        printJobId: null as string | null,
+        createdAt: new Date(),
+        printJob: null as { id: string; status: string } | null,
+      },
+    ];
+    const session = {
+      id: sessionId,
+      deviceId,
+      tokenHash: 'hash',
+      status: QuickPrintSessionStatus.consumed,
+      documentLabel: '2 documents',
+      pageCount: 5,
+      freePagesGranted: 5,
+      printColorMode: 'bw',
+      verifiedPhone: '+919876543210',
+      phoneVerifiedAt: new Date(),
+      expiresAt: new Date(Date.now() + 600_000),
+      printJobId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      documents: docs,
+      payment: null,
+      device: deviceRow(),
+    };
+
+    const printing = {
+      createJob: vi.fn(async (input: { title: string; freePagesGranted?: number }) => ({
+        id: `job-${(printing.createJob as ReturnType<typeof vi.fn>).mock.calls.length}`,
+        title: input.title,
+        freePagesGranted: input.freePagesGranted ?? 0,
+        status: 'ready',
+        source: PrintJobSource.quick_print,
+      })),
+      get: vi.fn(async (id: string) => ({ id, status: 'ready' })),
+    };
+
+    const ledgerUpdateMany = vi.fn(async () => ({ count: 1 }));
+    const docUpdate = vi.fn(async ({ where, data }: { where: { id: string }; data: { printJobId: string } }) => {
+      const doc = docs.find((d) => d.id === where.id)!;
+      doc.printJobId = data.printJobId;
+      doc.printJob = { id: data.printJobId, status: 'ready' };
+      return doc;
+    });
+
+    const db = txPassthrough({
+      platformSetting: { findUnique: vi.fn().mockResolvedValue(null) },
+      quickPrintSession: {
+        findUnique: vi.fn(async () => session),
+        update: vi.fn(),
+      },
+      quickPrintDocument: { update: docUpdate },
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceRow(),
+          printingPausedReason: null,
+        })),
+      },
+    });
+    // txPassthrough installs a default ledger mock; replace so we can assert attach.
+    db.phoneFreePageLedger = {
+      findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'ledger-1' }),
+      updateMany: ledgerUpdateMany,
+    };
+
+    const service = new QuickPrintService(
+      db as unknown as DbClient,
+      makeConfig(),
+      { record: vi.fn() } as unknown as AuditService,
+      printing as unknown as PrintingService,
+      { assertEnabled: vi.fn() } as unknown as ServicesCatalogService,
+      {} as RazorpayClient,
+      {} as PaymentsService,
+      sms,
+    );
+
+    const first = await service.createDocumentPrintJob(deviceId, sessionId, docA);
+    expect(first.printJob.id).toBe('job-1');
+    expect(printing.createJob).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: 'a.pdf',
+        freePagesGranted: 5,
+        idempotencyKey: `quick-print-doc-${docA}`,
+      }),
       'device',
       deviceId,
       undefined,
     );
+    expect(ledgerUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { quickPrintSessionId: sessionId, printJobId: null },
+        data: { printJobId: 'job-1' },
+      }),
+    );
+
+    const second = await service.createDocumentPrintJob(deviceId, sessionId, docB);
+    expect(second.printJob.id).toBe('job-2');
+    expect(printing.createJob).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: 'b.pdf',
+        freePagesGranted: 0,
+      }),
+      'device',
+      deviceId,
+      undefined,
+    );
+    expect(ledgerUpdateMany).toHaveBeenCalledTimes(1);
+
+    docs[0]!.printJob = { id: 'job-1', status: 'completed' };
+    await expect(service.createDocumentPrintJob(deviceId, sessionId, docA)).rejects.toMatchObject({
+      code: 'already_printed',
+      statusCode: 409,
+    });
   });
 
   it('cancels an open session', async () => {

@@ -10,6 +10,7 @@ import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.da
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 class OtpPrintPage extends ConsumerStatefulWidget {
   const OtpPrintPage({super.key});
@@ -120,16 +121,31 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             );
       step = 'Preview';
     } else if (listing) {
-      leading = KioskGhostButton(
-        label: 'New OTP',
-        onPressed: () {
-          _clear();
-          controller.reset();
-        },
+      final canListPrint = state.hasUnprintedDocuments &&
+          !state.loading &&
+          !ref.read(printCoordinatorProvider).isShutterBusy;
+      leading = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          KioskGhostButton(
+            label: 'New OTP',
+            onPressed: () {
+              _clear();
+              controller.reset();
+            },
+          ),
+          const SizedBox(width: 12),
+          KioskGhostButton(
+            label: 'Cancel',
+            onPressed: _endSession,
+          ),
+        ],
       );
-      trailing = state.phase == OtpPrintPhase.done
-          ? KioskPrimaryButton(label: 'Done', onPressed: _endSession)
-          : null;
+      trailing = KioskPrimaryButton(
+        label: state.listPrintLabel,
+        icon: Icons.print,
+        onPressed: canListPrint ? controller.printUnprintedFromList : null,
+      );
       step = 'Documents';
     }
 
@@ -159,8 +175,13 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
           OtpPrintPhase.printResult => KioskPrintResult(
               confirmed: state.printed,
               detail: state.message,
-              autoReturn: state.printed ? const Duration(seconds: 20) : null,
+              autoReturn: state.printed && !state.hasUnprintedDocuments
+                  ? const Duration(seconds: 20)
+                  : null,
               onHome: _endSession,
+              onContinue: state.printed && state.hasUnprintedDocuments
+                  ? controller.continueToDocuments
+                  : null,
               onNotReceived: state.printed ? controller.reportPagesMissing : null,
             ),
           OtpPrintPhase.documents || OtpPrintPhase.done => _DocumentList(
@@ -175,9 +196,12 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
                     child: KioskDocCard(
                       title: doc.fileName,
                       subtitle:
-                          '${doc.pageCount} page(s) · ${state.redeemResult?.printColorLabel ?? 'B/W'}',
-                      actionLabel: 'Preview',
-                      onAction: state.loading ? null : () => controller.preparePreview(doc),
+                          '${doc.pageCount} page(s) · ${state.redeemResult?.printColorLabel ?? 'B/W'}'
+                          '${doc.printed ? ' · Printed' : ''}',
+                      actionLabel: doc.printed ? 'Printed' : 'Preview',
+                      onAction: state.loading || doc.printed
+                          ? null
+                          : () => controller.preparePreview(doc),
                     ),
                   ),
               ],

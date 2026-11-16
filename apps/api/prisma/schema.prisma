@@ -226,6 +226,8 @@ model Device {
   longitude        Float?
   address              String?
   lastHeartbeatAt      DateTime?    @map("last_heartbeat_at")
+  /// App version last reported by the kiosk (pubspec version, before +build).
+  reportedAppVersion   String?      @map("reported_app_version") @db.VarChar(64)
   surveillanceEnabled  Boolean      @default(false) @map("surveillance_enabled")
   /// Latest surveillance health snapshot from the kiosk heartbeat.
   surveillanceHealth   Json?        @map("surveillance_health")
@@ -235,6 +237,9 @@ model Device {
   printerHealthAt      DateTime?    @map("printer_health_at")
   /// Set when an admin asks the kiosk to post its current SNMP snapshot now.
   printerRefreshRequestedAt DateTime? @map("printer_refresh_requested_at")
+  /// Pending admin shutter override: open | close. Cleared when the kiosk acks.
+  shutterCommand            String?   @map("shutter_command") @db.VarChar(8)
+  shutterCommandRequestedAt DateTime? @map("shutter_command_requested_at")
   /// Set when the printer reports paper-out. Cleared only by an admin.
   printingPausedReason String? @map("printing_paused_reason") @db.VarChar(32)
   /// Pages credited at the last tray load. Null until an admin records paper.
@@ -567,9 +572,12 @@ model OtpDocument {
   pageCount   Int      @default(1) @map("page_count")
   byteSize    Int      @map("byte_size")
   sortOrder   Int      @default(0) @map("sort_order")
+  /// Per-document print job (lazy, created when the kiosk confirms Print).
+  printJobId  String?  @unique @map("print_job_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
   challenge OtpChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  printJob  PrintJob?    @relation(fields: [printJobId], references: [id], onDelete: SetNull)
 
   @@index([challengeId])
   @@map("otp_documents")
@@ -611,9 +619,12 @@ model QuickPrintDocument {
   pageCount   Int      @default(1) @map("page_count")
   byteSize    Int      @map("byte_size")
   sortOrder   Int      @default(0) @map("sort_order")
+  /// Per-document print job (lazy, created when the kiosk confirms Print).
+  printJobId  String?  @unique @map("print_job_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
-  session QuickPrintSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session  QuickPrintSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  printJob PrintJob?         @relation(fields: [printJobId], references: [id], onDelete: SetNull)
 
   @@index([sessionId])
   @@map("quick_print_documents")
@@ -673,7 +684,9 @@ model PrintJob {
   device            Device?            @relation(fields: [deviceId], references: [id])
   digiLockerSession DigiLockerSession? @relation(fields: [digiLockerSessionId], references: [id])
   otpChallenge      OtpChallenge?
+  otpDocument       OtpDocument?
   quickPrintSession QuickPrintSession?
+  quickPrintDocument QuickPrintDocument?
   payment           Payment?
   freePageLedgerEntries PhoneFreePageLedger[]
   supportQuery      SupportQuery?

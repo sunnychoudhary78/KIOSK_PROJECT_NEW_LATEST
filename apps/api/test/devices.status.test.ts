@@ -19,8 +19,21 @@ function deviceRow(status: DeviceStatus) {
     longitude: 77.2,
     address: null,
     lastHeartbeatAt: null,
+    reportedAppVersion: null as string | null,
     surveillanceEnabled: false,
     site: { name: 'HQ' },
+  };
+}
+
+/** Enough for mapDeviceWithTray → getTrayCapacity / getActiveAppVersion. */
+function deviceDtoDbExtras() {
+  return {
+    printJob: {
+      aggregate: vi.fn(async () => ({ _sum: { pagesExpected: 0 } })),
+    },
+    kioskAppRelease: {
+      findFirst: vi.fn(async () => null),
+    },
   };
 }
 
@@ -35,6 +48,7 @@ describe('DevicesService.setStatus', () => {
           ...data,
         })),
       },
+      ...deviceDtoDbExtras(),
     };
     const audit = { record: vi.fn(async () => undefined) };
     const service = new DevicesService(
@@ -62,6 +76,7 @@ describe('DevicesService.setStatus', () => {
           ...data,
         })),
       },
+      ...deviceDtoDbExtras(),
     };
     const audit = { record: vi.fn(async () => undefined) };
     const service = new DevicesService(
@@ -87,6 +102,7 @@ describe('DevicesService.setSurveillance', () => {
           ...data,
         })),
       },
+      ...deviceDtoDbExtras(),
     };
     const audit = { record: vi.fn(async () => undefined) };
     const service = new DevicesService(
@@ -114,6 +130,7 @@ describe('DevicesService.setSurveillance', () => {
           ...data,
         })),
       },
+      ...deviceDtoDbExtras(),
     };
     const audit = { record: vi.fn(async () => undefined) };
     const service = new DevicesService(
@@ -169,6 +186,57 @@ describe('DevicesService.heartbeat', () => {
       data: { lastHeartbeatAt: expect.any(Date) },
     });
     expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it('persists appVersion when provided', async () => {
+    const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...deviceRow(DeviceStatus.active),
+      ...data,
+    }));
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => deviceRow(DeviceStatus.active)),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    await service.heartbeat(deviceId, deviceId, { appVersion: '0.1.0' });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: deviceId },
+      data: {
+        lastHeartbeatAt: expect.any(Date),
+        reportedAppVersion: '0.1.0',
+      },
+    });
+  });
+
+  it('does not clear reportedAppVersion when appVersion is omitted', async () => {
+    const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...deviceRow(DeviceStatus.active),
+      ...data,
+    }));
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceRow(DeviceStatus.active),
+          reportedAppVersion: '0.1.0',
+        })),
+        update,
+      },
+    };
+    const service = new DevicesService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+    await service.heartbeat(deviceId, deviceId);
+    expect(update).toHaveBeenCalledWith({
+      where: { id: deviceId },
+      data: { lastHeartbeatAt: expect.any(Date) },
+    });
+    expect(update.mock.calls[0][0].data).not.toHaveProperty('reportedAppVersion');
   });
 
   it('returns the surveillance flag', async () => {
@@ -473,6 +541,7 @@ describe('DevicesService.enablePrinting', () => {
         findUnique: vi.fn(async () => row),
         update: vi.fn(async () => ({ ...row, printingPausedReason: null })),
       },
+      ...deviceDtoDbExtras(),
     };
     const audit = { record: vi.fn(async () => undefined) };
     const service = new DevicesService(
@@ -508,6 +577,21 @@ describe('DevicesService.nearby', () => {
         }),
       }),
     );
+  });
+});
+
+describe('deviceHeartbeatBodySchema appVersion', () => {
+  it('accepts a valid appVersion', () => {
+    const parsed = deviceHeartbeatBodySchema.safeParse({ appVersion: '0.1.0' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.appVersion).toBe('0.1.0');
+    }
+  });
+
+  it('rejects an empty appVersion', () => {
+    const parsed = deviceHeartbeatBodySchema.safeParse({ appVersion: '' });
+    expect(parsed.success).toBe(false);
   });
 });
 

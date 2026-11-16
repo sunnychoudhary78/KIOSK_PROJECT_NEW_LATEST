@@ -7,6 +7,7 @@ import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_auth
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 class DigilockerPrintPage extends ConsumerStatefulWidget {
   const DigilockerPrintPage({super.key});
@@ -251,10 +252,17 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
             );
       step = 'Preview';
     } else if (listing) {
+      final canListPrint = state.hasUnprintedDocuments &&
+          !state.loading &&
+          !ref.read(printCoordinatorProvider).isShutterBusy;
       leading = KioskGhostButton(
-        label: 'Back',
-        icon: Icons.arrow_back,
-        onPressed: _goBack,
+        label: 'Cancel',
+        onPressed: _endSessionAndGoHome,
+      );
+      trailing = KioskPrimaryButton(
+        label: state.listPrintLabel,
+        icon: Icons.print,
+        onPressed: canListPrint ? controller.printUnprintedFromList : null,
       );
       step = 'Documents';
     } else if (state.phase == DigilockerPhase.awaitingConsent) {
@@ -302,8 +310,13 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
           DigilockerPhase.printResult => KioskPrintResult(
               confirmed: state.printConfirmed,
               detail: state.message,
-              autoReturn: state.printConfirmed ? const Duration(seconds: 20) : null,
+              autoReturn: state.printConfirmed && !state.hasUnprintedDocuments
+                  ? const Duration(seconds: 20)
+                  : null,
               onHome: _endSessionAndGoHome,
+              onContinue: state.printConfirmed && state.hasUnprintedDocuments
+                  ? controller.continueToDocuments
+                  : null,
               onNotReceived: state.printConfirmed ? controller.reportPagesMissing : null,
             ),
           _ => Padding(
@@ -335,11 +348,14 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
                             separatorBuilder: (_, _) => const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final doc = state.documents[index];
+                              final printed = state.isDocPrinted(doc.id);
                               return KioskDocCard(
                                 title: doc.name,
-                                subtitle: doc.subtitle.isEmpty ? doc.issuer : doc.subtitle,
-                                actionLabel: 'Print',
-                                onAction: state.loading
+                                subtitle:
+                                    '${doc.subtitle.isEmpty ? doc.issuer : doc.subtitle}'
+                                    '${printed ? ' · Printed' : ''}',
+                                actionLabel: printed ? 'Printed' : 'Preview',
+                                onAction: state.loading || printed
                                     ? null
                                     : () => controller.beginPrintFlow(doc.id),
                               );

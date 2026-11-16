@@ -1,8 +1,15 @@
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { DeviceStatus, OtpChallengeStatus, PaymentStatus, PrintColorMode, PrintJobSource } from '@prisma/client';
-import type { OtpChallenge, OtpDocument, Payment } from '@prisma/client';
+import {
+  DeviceStatus,
+  OtpChallengeStatus,
+  PaymentStatus,
+  PrintColorMode,
+  PrintJobSource,
+  PrintJobStatus,
+} from '@prisma/client';
+import type { OtpChallenge, OtpDocument, Payment, PrintJob } from '@prisma/client';
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import type { SmsClient } from '../../infrastructure/external/sms.client.js';
@@ -25,8 +32,12 @@ import type { RedeemOtpInput, UploadedPdf } from './otp_print.schemas.js';
 
 const OTP_UPLOAD_DIR = join(process.cwd(), 'uploads', 'otp-print');
 
+type OtpDocumentWithJob = OtpDocument & {
+  printJob?: Pick<PrintJob, 'id' | 'status'> | null;
+};
+
 type ChallengeWithDocs = OtpChallenge & {
-  documents: OtpDocument[];
+  documents: OtpDocumentWithJob[];
   payment?: Payment | null;
   printJob?: { id: string; status: string } | null;
   device?: {
@@ -41,6 +52,20 @@ type ChallengeWithDocs = OtpChallenge & {
     freeDisabledToLocal?: string | null;
   } | null;
 };
+
+function mapOtpDocumentForKiosk(challengeId: string, d: OtpDocumentWithJob) {
+  const status = d.printJob?.status ?? null;
+  return {
+    id: d.id,
+    fileName: d.fileName,
+    pageCount: d.pageCount,
+    byteSize: d.byteSize,
+    contentPath: `/otp-challenges/${challengeId}/documents/${d.id}/content`,
+    printJobId: d.printJobId ?? d.printJob?.id ?? null,
+    printJobStatus: status,
+    printed: status === PrintJobStatus.completed,
+  };
+}
 
 const deviceQuoteSelect = {
   id: true,
@@ -606,34 +631,14 @@ export class OtpPrintService {
       throw new AppError('printing_paused', 'Printing is paused because the printer is out of paper', 403);
     }
 
-    const printJob = await this.printing.createJob(
-      {
-        source: PrintJobSource.otp_print,
-        title: challenge.documentLabel,
-        pageCount: challenge.pageCount,
-        freePagesGranted: challenge.freePagesGranted,
-        printColorMode: challenge.printColorMode,
-        deviceId,
-        payloadUrl: `/v1/otp-challenges/${challenge.id}/documents`,
-        idempotencyKey: input.idempotencyKey ?? `otp-redeem-${challenge.id}`,
-      },
-      'device',
-      deviceId,
-      correlationId,
-    );
-
+    // Per-document print jobs are created lazily when the visitor confirms Print.
     await this.db.otpChallenge.update({
       where: { id: challenge.id },
       data: {
         status: OtpChallengeStatus.redeemed,
         redeemedAt: new Date(),
         deviceId,
-        printJobId: printJob.id,
       },
-    });
-    await this.quota.attachPrintJob({
-      printJobId: printJob.id,
-      otpChallengeId: challenge.id,
     });
 
     await this.audit.record({
@@ -643,20 +648,117 @@ export class OtpPrintService {
       resourceType: 'otp_challenge',
       resourceId: challenge.id,
       correlationId,
-      metadata: { printJobId: printJob.id, printColorMode: challenge.printColorMode },
+      metadata: { printColorMode: challenge.printColorMode, documentCount: challenge.documents.length },
+    });
+
+    const docs = await this.db.otpDocument.findMany({
+      where: { challengeId: challenge.id },
+      orderBy: { sortOrder: 'asc' },
+      include: { printJob: { select: { id: true, status: true } } },
     });
 
     return {
       challengeId: challenge.id,
-      printJob,
-      documents: challenge.documents.map((d) => ({
-        id: d.id,
-        fileName: d.fileName,
-        pageCount: d.pageCount,
-        byteSize: d.byteSize,
-        contentPath: `/otp-challenges/${challenge.id}/documents/${d.id}/content`,
-      })),
+      title: challenge.documentLabel,
+      printColorMode: challenge.printColorMode === PrintColorMode.color ? 'color' : 'bw',
+      documents: docs.map((d) => mapOtpDocumentForKiosk(challenge.id, d)),
     };
+  }
+
+  /**
+   * Create (or return) a print job for one OTP document.
+   * First job for the challenge attaches the free-page ledger; later jobs get freePagesGranted 0.
+   */
+  async createDocumentPrintJob(
+    deviceId: string,
+    challengeId: string,
+    documentId: string,
+    correlationId?: string,
+  ) {
+    await this.services.assertEnabled(deviceId, 'otp_print');
+
+    const challenge = await this.db.otpChallenge.findUnique({
+      where: { id: challengeId },
+      include: {
+        documents: {
+          include: { printJob: { select: { id: true, status: true } } },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!challenge || challenge.deviceId !== deviceId || challenge.status !== OtpChallengeStatus.redeemed) {
+      throw new AppError('not_found', 'OTP session not available for this device', 404);
+    }
+
+    const doc = challenge.documents.find((d) => d.id === documentId);
+    if (!doc) {
+      throw new AppError('not_found', 'Document not found', 404);
+    }
+
+    if (doc.printJob?.status === PrintJobStatus.completed) {
+      throw new AppError('already_printed', 'This document was already printed', 409);
+    }
+
+    if (doc.printJobId && doc.printJob) {
+      return {
+        documentId: doc.id,
+        printJob: await this.printing.get(doc.printJobId),
+      };
+    }
+
+    const kiosk = await this.db.device.findUnique({
+      where: { id: deviceId },
+      select: { printingPausedReason: true },
+    });
+    if (kiosk?.printingPausedReason) {
+      throw new AppError('printing_paused', 'Printing is paused because the printer is out of paper', 403);
+    }
+
+    const anyPriorJob = challenge.documents.some((d) => d.printJobId != null);
+    const freePagesGranted = anyPriorJob ? 0 : challenge.freePagesGranted;
+
+    const printJob = await this.printing.createJob(
+      {
+        source: PrintJobSource.otp_print,
+        title: doc.fileName,
+        pageCount: doc.pageCount,
+        pagesExpected: doc.pageCount,
+        freePagesGranted,
+        printColorMode: challenge.printColorMode,
+        deviceId,
+        payloadUrl: `/v1/otp-challenges/${challenge.id}/documents/${doc.id}/content`,
+        payloadPath: doc.storagePath,
+        idempotencyKey: `otp-doc-${doc.id}`,
+      },
+      'device',
+      deviceId,
+      correlationId,
+    );
+
+    await this.db.otpDocument.update({
+      where: { id: doc.id },
+      data: { printJobId: printJob.id },
+    });
+
+    if (!anyPriorJob) {
+      await this.quota.attachPrintJob({
+        printJobId: printJob.id,
+        otpChallengeId: challenge.id,
+      });
+    }
+
+    await this.audit.record({
+      action: 'otp.document_print_job',
+      principalType: 'device',
+      principalId: deviceId,
+      resourceType: 'otp_document',
+      resourceId: doc.id,
+      correlationId,
+      metadata: { printJobId: printJob.id, challengeId: challenge.id, freePagesGranted },
+    });
+
+    return { documentId: doc.id, printJob };
   }
 
   async getDocumentContent(deviceId: string, challengeId: string, documentId: string) {

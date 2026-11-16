@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { DeviceStatus } from '@prisma/client';
+import { DeviceStatus, KioskAppReleaseStatus } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import {
@@ -10,15 +10,18 @@ import {
 import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type {
+  AckDeviceShutterInput,
   DeviceHeartbeatBody,
   NearbyDevicesQuery,
   PrinterHealthInput,
   RegisterDeviceInput,
+  RequestDeviceShutterInput,
   SetDevicePrintLimitsInput,
   SetPrinterTrayInput,
   SurveillanceHealthInput,
   UpdateDeviceInput,
 } from './devices.schemas.js';
+import { SHUTTER_COMMAND_TTL_MS } from './devices.schemas.js';
 import { applyTrayLoad, pagesLeft, usbPagesTotal } from './printer_tray.js';
 import { getTrayCapacity } from '../printing/tray_capacity.js';
 import { isWithinLocalTimeWindow } from '../print_quota/print_quota.time.js';
@@ -44,36 +47,40 @@ function ackMatchesRefresh(stored: Date | null | undefined, ack: string | undefi
   return Number.isFinite(parsed) && stored.getTime() === parsed;
 }
 
-function mapDevice(device: {
-  id: string;
-  name: string;
-  deviceKey: string;
-  status: DeviceStatus;
-  latitude: number | null;
-  longitude: number | null;
-  address: string | null;
-  lastHeartbeatAt: Date | null;
-  surveillanceEnabled: boolean;
-  surveillanceHealth?: unknown;
-  surveillanceHealthAt?: Date | null;
-  printerHealth?: unknown;
-  printerHealthAt?: Date | null;
-  printerRefreshRequestedAt?: Date | null;
-  printingPausedReason?: string | null;
-  maxPagesPerSession?: number;
-  freePagesPerSession?: number;
-  extraPageChargeRupees?: number;
-  freeColorPagesPerSession?: number;
-  extraColorPageChargeRupees?: number;
-  kundaliColorPrintChargeRupees?: number;
-  freeDisabledFromLocal?: string | null;
-  freeDisabledToLocal?: string | null;
-  bannerHorizontalEnabled?: boolean;
-  bannerVerticalEnabled?: boolean;
-  trayPages?: number | null;
-  trayBaselinePages?: number | null;
-  site: { name: string };
-}) {
+function mapDevice(
+  device: {
+    id: string;
+    name: string;
+    deviceKey: string;
+    status: DeviceStatus;
+    latitude: number | null;
+    longitude: number | null;
+    address: string | null;
+    lastHeartbeatAt: Date | null;
+    reportedAppVersion?: string | null;
+    surveillanceEnabled: boolean;
+    surveillanceHealth?: unknown;
+    surveillanceHealthAt?: Date | null;
+    printerHealth?: unknown;
+    printerHealthAt?: Date | null;
+    printerRefreshRequestedAt?: Date | null;
+    printingPausedReason?: string | null;
+    maxPagesPerSession?: number;
+    freePagesPerSession?: number;
+    extraPageChargeRupees?: number;
+    freeColorPagesPerSession?: number;
+    extraColorPageChargeRupees?: number;
+    kundaliColorPrintChargeRupees?: number;
+    freeDisabledFromLocal?: string | null;
+    freeDisabledToLocal?: string | null;
+    bannerHorizontalEnabled?: boolean;
+    bannerVerticalEnabled?: boolean;
+    trayPages?: number | null;
+    trayBaselinePages?: number | null;
+    site: { name: string };
+  },
+  activeAppVersion: string | null = null,
+) {
   return {
     id: device.id,
     name: device.name,
@@ -84,6 +91,8 @@ function mapDevice(device: {
     longitude: device.longitude,
     address: device.address,
     lastHeartbeatAt: device.lastHeartbeatAt?.toISOString() ?? null,
+    reportedAppVersion: device.reportedAppVersion ?? null,
+    activeAppVersion,
     surveillanceEnabled: device.surveillanceEnabled,
     surveillanceHealth: mapSurveillanceHealth(device.surveillanceHealth),
     surveillanceHealthAt: device.surveillanceHealthAt?.toISOString() ?? null,
@@ -104,9 +113,30 @@ function mapDevice(device: {
   };
 }
 
-async function mapDeviceWithTray(db: DbClient, device: Parameters<typeof mapDevice>[0]) {
-  const base = mapDevice(device);
-  const cap = await getTrayCapacity(db, device.id);
+async function getActiveAppVersion(db: DbClient): Promise<string | null> {
+  const releaseDb = db.kioskAppRelease;
+  if (!releaseDb?.findFirst) {
+    return null;
+  }
+  const active = await releaseDb.findFirst({
+    where: { status: KioskAppReleaseStatus.active },
+    select: { version: true },
+  });
+  return active?.version ?? null;
+}
+
+async function mapDeviceWithTray(
+  db: DbClient,
+  device: Parameters<typeof mapDevice>[0],
+  activeAppVersion?: string | null,
+) {
+  const [cap, active] = await Promise.all([
+    getTrayCapacity(db, device.id),
+    activeAppVersion !== undefined
+      ? Promise.resolve(activeAppVersion)
+      : getActiveAppVersion(db),
+  ]);
+  const base = mapDevice(device, active);
   return {
     ...base,
     trayReserved: cap.reserved,
@@ -121,12 +151,15 @@ export class DevicesService {
   ) {}
 
   async list() {
-    const devices = await this.db.device.findMany({
-      include: { site: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [devices, activeAppVersion] = await Promise.all([
+      this.db.device.findMany({
+        include: { site: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      getActiveAppVersion(this.db),
+    ]);
     const items = await Promise.all(
-      devices.map((device) => mapDeviceWithTray(this.db, device)),
+      devices.map((device) => mapDeviceWithTray(this.db, device, activeAppVersion)),
     );
     return { items };
   }
@@ -507,6 +540,111 @@ export class DevicesService {
     return { requestedAt: device.printerRefreshRequestedAt?.toISOString() ?? null };
   }
 
+  async requestShutterCommand(
+    deviceId: string,
+    input: RequestDeviceShutterInput,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    const requestedAt = new Date();
+    await this.db.device.update({
+      where: { id: deviceId },
+      data: {
+        shutterCommand: input.action,
+        shutterCommandRequestedAt: requestedAt,
+      },
+    });
+    await this.audit.record({
+      action: 'device.shutter_command',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: { action: input.action, requestedAt: requestedAt.toISOString() },
+    });
+    return {
+      action: input.action,
+      requestedAt: requestedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Pending shutter for this device, or null if none.
+   * Expired commands stay until the kiosk acks so Device logs can record TTL expiry.
+   */
+  async getPendingShutterCommand(deviceId: string, principalDeviceId: string) {
+    if (deviceId !== principalDeviceId) {
+      throw new AppError('forbidden', 'Device can only read its own shutter command', 403);
+    }
+    const device = await this.db.device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    if (device.status === DeviceStatus.inactive) {
+      throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
+    }
+
+    const action = device.shutterCommand;
+    const requestedAt = device.shutterCommandRequestedAt;
+    if ((action !== 'open' && action !== 'close') || !requestedAt) {
+      if (action != null || requestedAt != null) {
+        await this.db.device.update({
+          where: { id: deviceId },
+          data: { shutterCommand: null, shutterCommandRequestedAt: null },
+        });
+      }
+      return null;
+    }
+
+    const expired = Date.now() - requestedAt.getTime() > SHUTTER_COMMAND_TTL_MS;
+    return {
+      action: action as 'open' | 'close',
+      requestedAt: requestedAt.toISOString(),
+      expired,
+    };
+  }
+
+  async ackShutterCommand(
+    deviceId: string,
+    principalDeviceId: string,
+    input: AckDeviceShutterInput,
+  ) {
+    if (deviceId !== principalDeviceId) {
+      throw new AppError('forbidden', 'Device can only ack its own shutter command', 403);
+    }
+    const device = await this.db.device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    if (device.status === DeviceStatus.inactive) {
+      throw new AppError('device_inactive', 'This kiosk has been stopped', 403);
+    }
+
+    if (!ackMatchesRefresh(device.shutterCommandRequestedAt, input.requestedAt)) {
+      return {
+        cleared: false,
+        action: device.shutterCommand ?? null,
+        requestedAt: device.shutterCommandRequestedAt?.toISOString() ?? null,
+      };
+    }
+
+    await this.db.device.update({
+      where: { id: deviceId },
+      data: { shutterCommand: null, shutterCommandRequestedAt: null },
+    });
+    return {
+      cleared: true,
+      action: device.shutterCommand ?? null,
+      requestedAt: device.shutterCommandRequestedAt?.toISOString() ?? null,
+      result: input.result,
+    };
+  }
+
   async heartbeat(
     deviceId: string,
     principalDeviceId: string,
@@ -531,6 +669,7 @@ export class DevicesService {
       where: { id: deviceId },
       data: {
         lastHeartbeatAt: now,
+        ...(body.appVersion ? { reportedAppVersion: body.appVersion } : {}),
         ...(latchPaperOut ? { printingPausedReason: PRINTING_PAUSED_PAPER_OUT } : {}),
         ...(body.surveillance
           ? {

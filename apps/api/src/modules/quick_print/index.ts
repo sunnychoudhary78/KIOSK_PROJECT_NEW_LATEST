@@ -131,6 +131,29 @@ export function registerQuickPrintModule(router: Router, deps: AppDeps): void {
     },
   );
 
+  router.post(
+    '/quick-print/sessions/:sessionId/documents/:documentId/print-jobs',
+    ...requireDevice(deps),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const sessionId = requireParam(req.params.sessionId, 'sessionId');
+        const documentId = requireParam(req.params.documentId, 'documentId');
+        const result = await service.createDocumentPrintJob(
+          req.principal.deviceId,
+          sessionId,
+          documentId,
+          req.correlationId,
+        );
+        res.status(201).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.get(
     '/quick-print/sessions/:sessionId/documents/:documentId/content',
     ...requireDevice(deps),

@@ -104,11 +104,22 @@ describe('OtpPrintService kiosk binding', () => {
     };
 
     const db: Record<string, unknown> = {
-      device: { findUnique: vi.fn(async () => deviceProps()) },
+      device: {
+        findUnique: vi.fn(async () => ({
+          ...deviceProps(),
+          trayPages: null,
+          trayBaselinePages: null,
+          printerHealth: null,
+          printingPausedReason: null,
+        })),
+      },
       user: { findUnique: vi.fn(async () => ({ id: userId, phone: '+919999999999' })) },
       platformSetting: { findUnique: vi.fn(async () => null) },
       societyPhone: { findUnique: vi.fn(async () => null) },
       otpChallenge: { create: vi.fn(async () => created) },
+      printJob: {
+        aggregate: vi.fn(async () => ({ _sum: { pagesExpected: 0 } })),
+      },
       phoneFreePageLedger: {
         findMany: vi.fn(async () => []),
         findUnique: vi.fn(async () => null),

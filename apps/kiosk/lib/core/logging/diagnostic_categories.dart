@@ -4,6 +4,7 @@ import 'package:skp_kiosk/core/logging/app_logger.dart';
 abstract final class Diag {
   static const printer = 'printer';
   static const astrology = 'astrology';
+  static const shutter = 'shutter';
 
   static void printerInfo(
     String event,
@@ -65,6 +66,45 @@ abstract final class Diag {
       AppLogger.log(
         level: 'error',
         category: astrology,
+        event: event,
+        message: message,
+        metadata: metadata,
+      );
+
+  static void shutterInfo(
+    String event,
+    String message, [
+    Map<String, dynamic>? metadata,
+  ]) =>
+      AppLogger.log(
+        level: 'info',
+        category: shutter,
+        event: event,
+        message: message,
+        metadata: metadata,
+      );
+
+  static void shutterWarn(
+    String event,
+    String message, [
+    Map<String, dynamic>? metadata,
+  ]) =>
+      AppLogger.log(
+        level: 'warn',
+        category: shutter,
+        event: event,
+        message: message,
+        metadata: metadata,
+      );
+
+  static void shutterError(
+    String event,
+    String message, [
+    Map<String, dynamic>? metadata,
+  ]) =>
+      AppLogger.log(
+        level: 'error',
+        category: shutter,
         event: event,
         message: message,
         metadata: metadata,

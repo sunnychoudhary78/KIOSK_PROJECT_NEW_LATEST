@@ -17,7 +17,6 @@ class OtpPrintRepository {
         'idempotencyKey': 'kiosk-redeem-$code-${DateTime.now().millisecondsSinceEpoch}',
       },
     );
-    final printJob = result['printJob'] as Map<String, dynamic>;
     final docs = (result['documents'] as List<dynamic>? ?? [])
         .map(
           (raw) => OtpDocumentRef(
@@ -25,16 +24,25 @@ class OtpPrintRepository {
             fileName: raw['fileName'] as String,
             pageCount: raw['pageCount'] as int? ?? 1,
             contentPath: raw['contentPath'] as String,
+            printJobId: raw['printJobId'] as String?,
+            printed: raw['printed'] == true,
           ),
         )
         .toList();
     return OtpRedeemResult(
       challengeId: result['challengeId'] as String,
-      printJobId: printJob['id'] as String,
-      title: printJob['title'] as String,
-      payloadUrl: printJob['payloadUrl'] as String?,
-      printColorMode: printJob['printColorMode'] == 'color' ? 'color' : 'bw',
+      title: result['title'] as String? ?? 'Your documents',
+      printColorMode: result['printColorMode'] == 'color' ? 'color' : 'bw',
       documents: docs,
+    );
+  }
+
+  Future<Map<String, dynamic>> createDocumentPrintJob({
+    required String challengeId,
+    required String documentId,
+  }) {
+    return _api.post(
+      '/otp-challenges/$challengeId/documents/$documentId/print-jobs',
     );
   }
 

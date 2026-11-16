@@ -66,15 +66,36 @@ class PrintCoordinator {
 
   bool get isLocked => _locked;
 
+  /// True after print:start until verified print:done (or reset).
+  bool get isTraySequenceActive => _traySequenceActive;
+
+  /// Admin shutter open/close must not run while a print job owns the tray.
+  bool get isShutterBusy => _locked || _traySequenceActive;
+
   Future<void> _sendTray(String line) async {
     final send = _sendSerialLine;
     if (send == null) return;
+    final isStart = line.contains('"start"');
+    final isDone = line.contains('"done"');
     try {
       await send(line);
       AppLogger.info('PRINTER tray $line');
+      if (isStart) {
+        Diag.shutterInfo('shutter.print_start_sent', 'Print tray start sent', {
+          'line': line,
+        });
+      } else if (isDone) {
+        Diag.shutterInfo('shutter.print_done_sent', 'Print tray done sent', {
+          'line': line,
+        });
+      }
     } catch (error) {
       AppLogger.error('PRINTER tray serial failed: $line', error);
       Diag.printerError('printer.tray_serial_failed', 'Tray serial command failed', {
+        'line': line,
+        'error': error.toString(),
+      });
+      Diag.shutterError('shutter.tray_serial_failed', 'Tray serial command failed', {
         'line': line,
         'error': error.toString(),
       });
@@ -87,6 +108,7 @@ class PrintCoordinator {
   }
 
   /// Close the shutter. Call only after the USB page count verifies the job.
+  /// Firmware waits PRINT_END_DELAY_MS (5s on new.ino) before closing.
   Future<void> _trayDone() async {
     if (!_traySequenceActive) return;
     await _sendTray(PrintTrayCommands.done());

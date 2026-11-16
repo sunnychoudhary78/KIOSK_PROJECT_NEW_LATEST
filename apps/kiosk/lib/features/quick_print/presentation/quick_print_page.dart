@@ -11,6 +11,7 @@ import 'package:skp_kiosk/features/quick_print/application/quick_print_controlle
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
+import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 class QuickPrintPage extends ConsumerStatefulWidget {
   const QuickPrintPage({super.key});
@@ -109,13 +110,15 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
             );
       step = 'Preview';
     } else if (listing) {
-      leading = KioskGhostButton(label: 'Done', onPressed: _endSession);
-      trailing = state.phase == QuickPrintPhase.done
-          ? KioskPrimaryButton(label: 'Finish', onPressed: _endSession)
-          : KioskPrimaryButton(
-              label: 'Finish',
-              onPressed: controller.markDoneWithoutPrint,
-            );
+      final canListPrint = state.hasUnprintedDocuments &&
+          !state.loading &&
+          !ref.read(printCoordinatorProvider).isShutterBusy;
+      leading = KioskGhostButton(label: 'Cancel', onPressed: _endSession);
+      trailing = KioskPrimaryButton(
+        label: state.listPrintLabel,
+        icon: Icons.print,
+        onPressed: canListPrint ? controller.printUnprintedFromList : null,
+      );
       step = 'Documents';
     }
 
@@ -150,8 +153,13 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
           QuickPrintPhase.printResult => KioskPrintResult(
               confirmed: state.printed,
               detail: state.message,
-              autoReturn: state.printed ? const Duration(seconds: 20) : null,
+              autoReturn: state.printed && !state.hasUnprintedDocuments
+                  ? const Duration(seconds: 20)
+                  : null,
               onHome: _endSession,
+              onContinue: state.printed && state.hasUnprintedDocuments
+                  ? controller.continueToDocuments
+                  : null,
               onNotReceived: state.printed ? controller.reportPagesMissing : null,
             ),
           QuickPrintPhase.documents || QuickPrintPhase.done => Padding(
@@ -181,9 +189,10 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
                             child: KioskDocCard(
                               title: doc.fileName,
                               subtitle:
-                                  '${doc.pageCount} page(s) · ${state.claim?.printColorLabel ?? 'B/W'}',
-                              actionLabel: 'Preview',
-                              onAction: state.loading
+                                  '${doc.pageCount} page(s) · ${state.claim?.printColorLabel ?? 'B/W'}'
+                                  '${doc.printed ? ' · Printed' : ''}',
+                              actionLabel: doc.printed ? 'Printed' : 'Preview',
+                              onAction: state.loading || doc.printed
                                   ? null
                                   : () => controller.preparePreview(doc),
                             ),

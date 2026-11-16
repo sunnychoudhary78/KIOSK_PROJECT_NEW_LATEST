@@ -69,6 +69,11 @@ class KioskCard extends StatelessWidget {
                         style: const TextStyle(color: AdminColors.muted),
                       ),
                       const SizedBox(height: 4),
+                      Text(
+                        _appVersionLabel(device),
+                        style: const TextStyle(color: AdminColors.muted),
+                      ),
+                      const SizedBox(height: 4),
                       ToneText(label: recording.label, tone: recording.tone),
                       if (paused != null && paused.isNotEmpty) ...[
                         const SizedBox(height: 8),
@@ -97,4 +102,19 @@ class KioskCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _appVersionLabel(KioskDevice device) {
+  final reported = device.reportedAppVersion?.trim();
+  if (reported == null || reported.isEmpty) {
+    return 'App · —';
+  }
+  final active = device.activeAppVersion?.trim();
+  if (active == null || active.isEmpty) {
+    return 'App · $reported';
+  }
+  if (reported == active) {
+    return 'App · $reported · up to date';
+  }
+  return 'App · $reported · behind (live $active)';
 }

@@ -8,9 +8,11 @@ import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { DevicesService } from './devices.service.js';
 import {
+  ackDeviceShutterSchema,
   deviceHeartbeatBodySchema,
   nearbyDevicesQuerySchema,
   registerDeviceSchema,
+  requestDeviceShutterSchema,
   setDevicePrintLimitsSchema,
   setDeviceStatusSchema,
   setDeviceSurveillanceSchema,
@@ -248,6 +250,50 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
           throw new AppError('unauthorized', 'Missing device principal', 401);
         }
         const result = await service.heartbeat(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.principal.deviceId,
+          req.body,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/devices/:deviceId/shutter',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(requestDeviceShutterSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.requestShutterCommand(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.body,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/devices/:deviceId/shutter/ack',
+    ...requireDevice(deps),
+    validateBody(ackDeviceShutterSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal?.deviceId) {
+          throw new AppError('unauthorized', 'Missing device principal', 401);
+        }
+        const result = await service.ackShutterCommand(
           requireParam(req.params.deviceId, 'deviceId'),
           req.principal.deviceId,
           req.body,

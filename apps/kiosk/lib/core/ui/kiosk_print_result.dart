@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/kiosk_buttons.dart';
 
-/// Full-screen end of a print. Home ends the visitor session immediately,
-/// and again on its own if nobody taps.
+/// Full-screen end of a print.
+///
+/// [onHome] ends the visitor session. When [onContinue] is set (more documents
+/// remain), show **Print another** and do not auto-return home.
 class KioskPrintResult extends StatefulWidget {
   const KioskPrintResult({
     super.key,
@@ -14,6 +16,9 @@ class KioskPrintResult extends StatefulWidget {
     this.detail,
     this.autoReturn = const Duration(seconds: 20),
     this.onNotReceived,
+    this.onContinue,
+    this.continueLabel = 'Print another',
+    this.doneLabel = 'Done',
   });
 
   final bool confirmed;
@@ -21,6 +26,11 @@ class KioskPrintResult extends StatefulWidget {
   final String? detail;
   final Duration? autoReturn;
   final Future<void> Function()? onNotReceived;
+
+  /// When set, visitor can return to the document list instead of leaving.
+  final VoidCallback? onContinue;
+  final String continueLabel;
+  final String doneLabel;
 
   @override
   State<KioskPrintResult> createState() => _KioskPrintResultState();
@@ -33,11 +43,14 @@ class _KioskPrintResultState extends State<KioskPrintResult> {
   var _noted = false;
   String? _noteError;
 
+  bool get _hasContinue => widget.onContinue != null;
+
   @override
   void initState() {
     super.initState();
     final wait = widget.autoReturn;
-    if (wait != null) {
+    // Only auto-home when there is nothing left to print.
+    if (wait != null && !_hasContinue) {
       _timer = Timer(wait, _goHome);
     }
   }
@@ -79,12 +92,21 @@ class _KioskPrintResultState extends State<KioskPrintResult> {
     widget.onHome();
   }
 
+  void _goContinue() {
+    if (_left) return;
+    _left = true;
+    _timer?.cancel();
+    widget.onContinue?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final title = widget.confirmed ? 'Print successful' : 'Print not confirmed';
     final line = widget.confirmed
-        ? 'Collect your pages from the printer'
+        ? (_hasContinue
+            ? 'Collect your pages, then print another document or tap Done.'
+            : 'Collect your pages from the printer')
         : (widget.detail ?? 'Staff will review this print.');
     return Padding(
       padding: SkpTokens.pagePadding,
@@ -128,7 +150,24 @@ class _KioskPrintResultState extends State<KioskPrintResult> {
               ),
             const SizedBox(height: 8),
           ],
-          KioskPrimaryButton(label: 'Home', icon: Icons.home, onPressed: _goHome),
+          if (_hasContinue) ...[
+            KioskPrimaryButton(
+              label: widget.continueLabel,
+              icon: Icons.print,
+              onPressed: _goContinue,
+            ),
+            const SizedBox(height: 12),
+            KioskGhostButton(
+              label: widget.doneLabel,
+              icon: Icons.home,
+              onPressed: _goHome,
+            ),
+          ] else
+            KioskPrimaryButton(
+              label: widget.doneLabel,
+              icon: Icons.home,
+              onPressed: _goHome,
+            ),
           const SizedBox(height: 24),
         ],
       ),

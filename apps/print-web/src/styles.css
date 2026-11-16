@@ -604,6 +604,11 @@ h1,
 
 /* —— Identity / phone OTP —— */
 
+.identity-back {
+  justify-self: start;
+  margin-bottom: -0.25rem;
+}
+
 .auth-panel {
   width: 100%;
   display: grid;

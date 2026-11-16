@@ -10,6 +10,8 @@ import {
   Video,
   VideoOff,
   AlertTriangle,
+  DoorOpen,
+  DoorClosed,
 } from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
@@ -81,6 +83,8 @@ type Device = {
   longitude: number | null;
   address: string | null;
   lastHeartbeatAt: string | null;
+  reportedAppVersion?: string | null;
+  activeAppVersion?: string | null;
   surveillanceEnabled: boolean;
   surveillanceHealth?: SurveillanceHealth | null;
   surveillanceHealthAt?: string | null;
@@ -782,6 +786,31 @@ export function KiosksPage() {
     }
   }
 
+  async function onShutter(device: Device, action: 'open' | 'close') {
+    const ok = window.confirm(
+      `${action === 'open' ? 'Open' : 'Close'} shutter on “${device.name}”?\n\n` +
+        'Applies on the next kiosk poll (~20s). Blocked while a print job is running.',
+    );
+    if (!ok) {
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await apiRequest(`/devices/${device.id}/shutter`, {
+        method: 'POST',
+        token,
+        body: { action },
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : `Could not request shutter ${action}`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function onSetSurveillance(device: Device, enabled: boolean) {
     if (enabled) {
       const ok = window.confirm(
@@ -1265,18 +1294,19 @@ export function KiosksPage() {
             />
           ) : (
           <div className="overflow-x-auto">
-          <table className="table w-full min-w-[64rem]">
+          <table className="table w-full min-w-[72rem]">
             <thead>
               <tr>
-                <th className="w-[12%]">Name</th>
-                <th className="w-[10%]">Site</th>
-                <th className="w-[14%]">Location</th>
-                <th className="w-[9%]">Status</th>
-                <th className="w-[12%]">Device key</th>
-                <th className="w-[12%]">Last heartbeat</th>
-                <th className="w-[14%]">Printer</th>
-                <th className="w-[10%]">Recording</th>
-                <th className="w-[7%]">Actions</th>
+                <th className="w-[11%]">Name</th>
+                <th className="w-[9%]">Site</th>
+                <th className="w-[12%]">Location</th>
+                <th className="w-[8%]">Status</th>
+                <th className="w-[11%]">Device key</th>
+                <th className="w-[11%]">Last heartbeat</th>
+                <th className="w-[9%]">Version</th>
+                <th className="w-[12%]">Printer</th>
+                <th className="w-[9%]">Recording</th>
+                <th className="w-[8%]">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1313,6 +1343,16 @@ export function KiosksPage() {
                         ? new Date(device.lastHeartbeatAt).toLocaleString()
                         : '—'}
                     </span>
+                  </td>
+                  <td className="whitespace-nowrap">
+                    <div className="font-medium">{device.reportedAppVersion ?? '—'}</div>
+                    {device.reportedAppVersion && device.activeAppVersion ? (
+                      <div className="text-xs text-muted-foreground">
+                        {device.reportedAppVersion === device.activeAppVersion
+                          ? 'up to date'
+                          : `behind · live ${device.activeAppVersion}`}
+                      </div>
+                    ) : null}
                   </td>
                   <td>
                     <PrinterSummaryCell
@@ -1382,6 +1422,23 @@ export function KiosksPage() {
                           <DropdownMenuItem onClick={() => openLogs(device)}>
                             <ScrollText className="h-4 w-4" />
                             Logs
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            disabled={device.status === 'inactive'}
+                            title="Open shutter (next kiosk poll ~20s; blocked during print)"
+                            onClick={() => void onShutter(device, 'open')}
+                          >
+                            <DoorOpen className="h-4 w-4" />
+                            Open shutter
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={device.status === 'inactive'}
+                            title="Close shutter (next kiosk poll ~20s; blocked during print)"
+                            onClick={() => void onShutter(device, 'close')}
+                          >
+                            <DoorClosed className="h-4 w-4" />
+                            Close shutter
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

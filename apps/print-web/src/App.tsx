@@ -223,6 +223,8 @@ function SessionPage() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  /** Identity fork: pick cards first, then phone verify. */
+  const [identityPath, setIdentityPath] = useState<'pick' | 'verify'>('pick');
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportMessage, setSupportMessage] = useState('');
@@ -346,11 +348,21 @@ function SessionPage() {
     setOtp('');
     setDevOtp(null);
     setError(null);
+    setIdentityPath('verify');
   }
 
   function onSkipPhone() {
     setError(null);
     setStep('upload');
+  }
+
+  function goToIdentity() {
+    setIdentityPath('pick');
+    setOtpSent(false);
+    setOtp('');
+    setDevOtp(null);
+    setError(null);
+    setStep('identity');
   }
 
   const phoneDigits = digitsOnly(phone, 10);
@@ -479,7 +491,7 @@ function SessionPage() {
       >
         <span className="kiosk-line">{session.deviceName || 'This kiosk'}</span>
         <div className="choices">
-          <button className="choice choice-primary" type="button" onClick={() => setStep('identity')}>
+          <button className="choice choice-primary" type="button" onClick={goToIdentity}>
             <span className="choice-icon">
               <IconPhone />
             </span>
@@ -509,22 +521,38 @@ function SessionPage() {
   }
 
   if (step === 'identity') {
+    const freeOff = Boolean(session.freeDisabledNow);
+    const picking = !otpSent && identityPath === 'pick';
+    const verifying = !otpSent && identityPath === 'verify';
+
+    const identityTitle = otpSent
+      ? 'Enter verification code'
+      : picking
+        ? freeOff
+          ? 'How do you want to continue?'
+          : 'Use free pages?'
+        : 'Verify mobile number';
+
+    const identitySubtitle = freeOff
+      ? otpSent
+        ? `We sent a one-time code to +91 ${phoneHint(phoneDigits)}.`
+        : 'Free pages are not available at this kiosk right now. You can still print — all pages are paid.'
+      : otpSent
+        ? `We sent a one-time code to +91 ${phoneHint(phoneDigits)}.`
+        : picking
+          ? 'Verify your mobile to unlock free pages, or continue and pay for every page.'
+          : 'Enter your 10-digit mobile number to receive a one-time code.';
+
     return (
       <AppShell
-        title={otpSent ? 'Enter verification code' : 'Use free pages?'}
-        subtitle={
-          session.freeDisabledNow
-            ? 'Free pages are not available at this kiosk right now. You can still print — all pages are paid.'
-            : otpSent
-              ? `We sent a one-time code to +91 ${phoneHint(phoneDigits)}.`
-              : 'Verify your mobile number to unlock free pages, or continue and pay for every page.'
-        }
+        title={identityTitle}
+        subtitle={identitySubtitle}
         status={otpSent ? <IconLock /> : <IconPhoneLarge />}
         statusTone="ok"
         footer={
           <>
             {error ? <p className="banner error">{error}</p> : null}
-            {!otpSent ? (
+            {verifying ? (
               <button
                 className="primary"
                 type="button"
@@ -533,83 +561,185 @@ function SessionPage() {
               >
                 {busy ? 'Sending OTP…' : 'Send OTP'}
               </button>
-            ) : (
-              <button
-                className="primary"
-                type="button"
-                disabled={busy || otpDigits.length < 4}
-                onClick={() => void onVerifyOtp()}
-              >
-                {busy ? 'Verifying…' : 'Verify & continue'}
-              </button>
-            )}
-            <button className="ghost" type="button" disabled={busy} onClick={onSkipPhone}>
-              Continue without free pages
-            </button>
+            ) : null}
+            {otpSent ? (
+              <>
+                <button
+                  className="primary"
+                  type="button"
+                  disabled={busy || otpDigits.length < 4}
+                  onClick={() => void onVerifyOtp()}
+                >
+                  {busy ? 'Verifying…' : 'Verify & continue'}
+                </button>
+                <button className="secondary" type="button" disabled={busy} onClick={onSkipPhone}>
+                  Continue without free pages
+                </button>
+              </>
+            ) : null}
           </>
         }
       >
         <PrivacyNote />
-        <div className="auth-panel">
-          {!otpSent ? (
-            <label className="field">
-              <span className="field-label">Mobile number</span>
-              <div className="phone-row">
-                <span className="phone-prefix" aria-hidden="true">
-                  +91
-                </span>
-                <input
-                  className="phone-input"
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  autoFocus
-                  placeholder="98765 43210"
-                  maxLength={10}
-                  value={phoneDigits}
-                  disabled={busy}
-                  onChange={(e) => setPhone(digitsOnly(e.target.value, 10))}
-                  aria-label="10-digit mobile number"
-                />
-              </div>
-            </label>
-          ) : (
-            <>
-              <div className="otp-meta">
-                <span className="otp-sent-to">+91 {phoneHint(phoneDigits)}</span>
+        {picking ? (
+          <div className="choices">
+            {freeOff ? (
+              <>
                 <button
-                  className="link-action"
+                  className="choice choice-primary"
                   type="button"
                   disabled={busy}
-                  onClick={onChangeNumber}
+                  onClick={onSkipPhone}
                 >
-                  Change number
+                  <span className="choice-icon">
+                    <IconArrow />
+                  </span>
+                  <span className="choice-copy">
+                    <span className="choice-title">Continue to print</span>
+                    <span className="choice-sub">Skip mobile verification — pay for every page</span>
+                  </span>
+                  <span className="choice-arrow">
+                    <IconArrow />
+                  </span>
                 </button>
-              </div>
-              <label className="field">
-                <span className="field-label">One-time password</span>
-                <input
-                  className="otp-input"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  autoFocus
-                  placeholder="••••••"
-                  maxLength={6}
-                  value={otpDigits}
+                <button
+                  className="choice"
+                  type="button"
                   disabled={busy}
-                  onChange={(e) => setOtp(digitsOnly(e.target.value, 6))}
-                  aria-label="OTP code"
-                />
-              </label>
-              {devOtp ? (
-                <p className="dev-otp-note">
-                  Dev code <strong>{devOtp}</strong>
-                </p>
-              ) : null}
-            </>
-          )}
-        </div>
+                  onClick={() => {
+                    setError(null);
+                    setIdentityPath('verify');
+                  }}
+                >
+                  <span className="choice-icon">
+                    <IconPhone />
+                  </span>
+                  <span className="choice-copy">
+                    <span className="choice-title">Verify mobile anyway</span>
+                    <span className="choice-sub">Optional — free pages are off at this kiosk right now</span>
+                  </span>
+                  <span className="choice-arrow">
+                    <IconArrow />
+                  </span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="choice choice-primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setError(null);
+                    setIdentityPath('verify');
+                  }}
+                >
+                  <span className="choice-icon">
+                    <IconPhone />
+                  </span>
+                  <span className="choice-copy">
+                    <span className="choice-title">Verify mobile for free pages</span>
+                    <span className="choice-sub">Unlock free pages at this kiosk with a one-time code</span>
+                  </span>
+                  <span className="choice-arrow">
+                    <IconArrow />
+                  </span>
+                </button>
+                <button
+                  className="choice"
+                  type="button"
+                  disabled={busy}
+                  onClick={onSkipPhone}
+                >
+                  <span className="choice-icon">
+                    <IconArrow />
+                  </span>
+                  <span className="choice-copy">
+                    <span className="choice-title">Continue without free pages</span>
+                    <span className="choice-sub">Skip verification — pay for every page</span>
+                  </span>
+                  <span className="choice-arrow">
+                    <IconArrow />
+                  </span>
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="auth-panel">
+            {!otpSent ? (
+              <>
+                <button
+                  className="link-action identity-back"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setError(null);
+                    setIdentityPath('pick');
+                  }}
+                >
+                  Back to options
+                </button>
+                <label className="field">
+                  <span className="field-label">Mobile number</span>
+                  <div className="phone-row">
+                    <span className="phone-prefix" aria-hidden="true">
+                      +91
+                    </span>
+                    <input
+                      className="phone-input"
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel-national"
+                      autoFocus
+                      placeholder="98765 43210"
+                      maxLength={10}
+                      value={phoneDigits}
+                      disabled={busy}
+                      onChange={(e) => setPhone(digitsOnly(e.target.value, 10))}
+                      aria-label="10-digit mobile number"
+                    />
+                  </div>
+                </label>
+              </>
+            ) : (
+              <>
+                <div className="otp-meta">
+                  <span className="otp-sent-to">+91 {phoneHint(phoneDigits)}</span>
+                  <button
+                    className="link-action"
+                    type="button"
+                    disabled={busy}
+                    onClick={onChangeNumber}
+                  >
+                    Change number
+                  </button>
+                </div>
+                <label className="field">
+                  <span className="field-label">One-time password</span>
+                  <input
+                    className="otp-input"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    placeholder="••••••"
+                    maxLength={6}
+                    value={otpDigits}
+                    disabled={busy}
+                    onChange={(e) => setOtp(digitsOnly(e.target.value, 6))}
+                    aria-label="OTP code"
+                  />
+                </label>
+                {devOtp ? (
+                  <p className="dev-otp-note">
+                    Dev code <strong>{devOtp}</strong>
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+        )}
       </AppShell>
     );
   }

@@ -21,7 +21,6 @@ class QuickPrintRepository {
 
   Future<QuickPrintClaim> claim(String sessionId) async {
     final result = await _api.post('/quick-print/sessions/$sessionId/claim');
-    final printJob = result['printJob'] as Map<String, dynamic>;
     final docs = (result['documents'] as List<dynamic>? ?? [])
         .map(
           (raw) => QuickPrintDocumentRef(
@@ -29,15 +28,25 @@ class QuickPrintRepository {
             fileName: raw['fileName'] as String,
             pageCount: raw['pageCount'] as int? ?? 1,
             contentPath: raw['contentPath'] as String,
+            printJobId: raw['printJobId'] as String?,
+            printed: raw['printed'] == true,
           ),
         )
         .toList();
     return QuickPrintClaim(
       sessionId: result['sessionId'] as String,
-      printJobId: printJob['id'] as String,
-      title: printJob['title'] as String? ?? 'Quick Print',
+      title: result['title'] as String? ?? 'Quick Print',
       printColorMode: result['printColorMode'] == 'color' ? 'color' : 'bw',
       documents: docs,
+    );
+  }
+
+  Future<Map<String, dynamic>> createDocumentPrintJob({
+    required String sessionId,
+    required String documentId,
+  }) {
+    return _api.post(
+      '/quick-print/sessions/$sessionId/documents/$documentId/print-jobs',
     );
   }
 
