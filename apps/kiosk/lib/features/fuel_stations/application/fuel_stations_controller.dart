@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/network/service_enablement.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/fuel_stations/data/fuel_stations_repository.dart';
 import 'package:skp_kiosk/features/fuel_stations/domain/fuel_station.dart';
@@ -66,6 +67,14 @@ class FuelStationsController extends Notifier<FuelStationsState> {
       state = state.copyWith(loading: false, items: items);
     } catch (error) {
       if (request != _request) {
+        return;
+      }
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Fuel Stations')) {
+        state = state.copyWith(
+          loading: false,
+          items: const [],
+          clearError: true,
+        );
         return;
       }
       state = state.copyWith(

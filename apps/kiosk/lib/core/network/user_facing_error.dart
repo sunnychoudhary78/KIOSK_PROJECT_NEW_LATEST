@@ -45,8 +45,10 @@ const _codeMessages = <String, String>{
   'session_expired': 'This print session has expired. Start again.',
   'session_not_accepting': 'This session already has documents.',
   'session_not_ready': 'Documents are not ready yet. Wait for the phone upload.',
-  'service_disabled': 'This service is not available on this kiosk.',
-  'service_unavailable': 'This service is not available right now.',
+  // Enablement errors must open UnderMaintenancePage — never a banner.
+  // See isServiceEnablementError / openUnderMaintenance.
+  'service_disabled': 'Under maintenance',
+  'service_unavailable': 'Under maintenance',
   'sms_failed': 'Could not send the SMS. Please try again.',
   'unauthorized': 'Session expired. Please try again.',
   'validation_error': 'Please check the details and try again.',

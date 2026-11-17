@@ -7,6 +7,7 @@ import 'package:skp_kiosk/core/hardware/serial/serial_device.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_provider.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
+import 'package:skp_kiosk/core/network/service_enablement.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
 import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
@@ -306,6 +307,17 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       );
     } catch (error) {
       if (!ref.mounted) return;
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Well Being')) {
+        state = state.copyWith(
+          print: state.print.copyWith(
+            phase: ReportPrintPhase.idle,
+            clearError: true,
+            clearMessage: true,
+          ),
+          clearError: true,
+        );
+        return;
+      }
       state = state.copyWith(
         print: state.print.copyWith(
           phase: ReportPrintPhase.printResult,
@@ -407,6 +419,12 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       );
     } catch (error) {
       if (!ref.mounted) return;
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Well Being')) {
+        state = state.copyWith(
+          print: state.print.copyWith(phoneBusy: false, clearError: true),
+        );
+        return;
+      }
       state = state.copyWith(
         print: state.print.copyWith(
           phoneBusy: false,
@@ -468,6 +486,12 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       );
     } catch (error) {
       if (!ref.mounted) return null;
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Well Being')) {
+        state = state.copyWith(
+          print: state.print.copyWith(phoneBusy: false, clearError: true),
+        );
+        return null;
+      }
       state = state.copyWith(
         print: state.print.copyWith(
           phoneBusy: false,

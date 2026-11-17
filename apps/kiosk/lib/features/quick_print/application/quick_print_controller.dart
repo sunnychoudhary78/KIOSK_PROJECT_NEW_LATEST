@@ -6,6 +6,7 @@ import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
 import 'package:skp_kiosk/services/printer/print_job_support.dart';
 import 'package:skp_kiosk/core/network/api_client.dart';
+import 'package:skp_kiosk/core/network/service_enablement.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/quick_print/data/quick_print_repository.dart';
 import 'package:skp_kiosk/features/quick_print/domain/quick_print_session.dart';
@@ -149,6 +150,10 @@ class QuickPrintController extends Notifier<QuickPrintUiState> {
         unawaited(_tick());
       });
     } catch (error) {
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Print Documents')) {
+        state = const QuickPrintUiState();
+        return;
+      }
       final paused = error is ApiException && error.code == 'printing_paused';
       state = QuickPrintUiState(
         phase: QuickPrintPhase.error,

@@ -194,11 +194,15 @@ class _ServiceCatalog extends ConsumerStatefulWidget {
 }
 
 class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
-  void _openService(
+  Future<void> _openService(
     BuildContext context,
     KioskHomeService service,
     String route,
-  ) {
+  ) async {
+    await ref.read(serviceCatalogControllerProvider.notifier).refresh();
+    if (!context.mounted) {
+      return;
+    }
     final catalog = ref.read(serviceCatalogControllerProvider);
     if (!catalog.isHomeServiceEnabled(service)) {
       Navigator.of(context).push(

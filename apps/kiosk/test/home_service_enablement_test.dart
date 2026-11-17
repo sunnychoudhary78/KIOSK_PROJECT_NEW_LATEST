@@ -55,6 +55,11 @@ class _FixedCatalog extends ServiceCatalogController {
 
   @override
   void stopWatching() {}
+
+  @override
+  Future<void> refresh() async {
+    // Keep the fixed enablement map — do not hit the network.
+  }
 }
 
 const _config = AppConfig(apiBaseUrl: 'http://example.test/v1', environment: 'test');
