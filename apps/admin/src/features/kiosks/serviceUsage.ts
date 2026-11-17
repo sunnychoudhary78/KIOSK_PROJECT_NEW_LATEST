@@ -203,9 +203,68 @@ export function rangeForPreset(preset: Exclude<UsageRangePreset, 'custom'>): {
   };
 }
 
+export type UsageSort = 'default' | 'clicks_desc' | 'clicks_asc' | 'name_asc' | 'name_desc';
+
+export const USAGE_SORT_FILTERS: Array<{ value: UsageSort; label: string }> = [
+  { value: 'default', label: 'Menu order' },
+  { value: 'clicks_desc', label: 'Most clicks' },
+  { value: 'clicks_asc', label: 'Least clicks' },
+  { value: 'name_asc', label: 'Name A–Z' },
+  { value: 'name_desc', label: 'Name Z–A' },
+];
+
+function compareUsageRows(a: UsageRow, b: UsageRow, sort: UsageSort): number {
+  if (sort === 'clicks_desc') {
+    return b.count - a.count || a.label.localeCompare(b.label);
+  }
+  if (sort === 'clicks_asc') {
+    return a.count - b.count || a.label.localeCompare(b.label);
+  }
+  if (sort === 'name_asc') {
+    return a.label.localeCompare(b.label);
+  }
+  if (sort === 'name_desc') {
+    return b.label.localeCompare(a.label);
+  }
+  return 0;
+}
+
+/** Reorders filtered rows while keeping children nested under their parent. */
+export function sortUsageRows(rows: UsageRow[], sort: UsageSort): UsageRow[] {
+  if (sort === 'default' || rows.length === 0) return rows;
+
+  const groups: Array<{ parent: UsageRow; children: UsageRow[] }> = [];
+  let current: { parent: UsageRow; children: UsageRow[] } | null = null;
+
+  for (const row of rows) {
+    if (row.depth === 0) {
+      current = { parent: row, children: [] };
+      groups.push(current);
+      continue;
+    }
+    if (current) {
+      current.children.push(row);
+    } else {
+      groups.push({ parent: row, children: [] });
+    }
+  }
+
+  groups.sort((a, b) => compareUsageRows(a.parent, b.parent, sort));
+  for (const group of groups) {
+    group.children.sort((a, b) => compareUsageRows(a, b, sort));
+  }
+
+  const next: UsageRow[] = [];
+  for (const group of groups) {
+    next.push(group.parent);
+    next.push(...group.children);
+  }
+  return next;
+}
+
 export function filterUsageRows(
   rows: UsageRow[],
-  opts: { service: string; search: string; hideZero: boolean },
+  opts: { service: string; search: string; hideZero: boolean; sort?: UsageSort },
 ): UsageRow[] {
   let next = rows;
 
@@ -234,7 +293,7 @@ export function filterUsageRows(
     );
   }
 
-  return next;
+  return sortUsageRows(next, opts.sort ?? 'default');
 }
 
 export function usageSummary(rows: UsageRow[]) {

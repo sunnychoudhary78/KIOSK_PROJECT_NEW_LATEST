@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
+  Activity,
   MonitorSmartphone,
   Megaphone,
   Clapperboard,
@@ -46,6 +47,7 @@ const NAV = [
     label: 'Overview',
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/fleet-health', label: 'Fleet health', icon: Activity },
       { to: '/kiosks', label: 'Kiosks', icon: MonitorSmartphone },
       { to: '/kiosk-updates', label: 'Kiosk updates', icon: Package },
     ],
@@ -82,6 +84,8 @@ const PAGE_TITLES: Array<{ prefix: string; title: string }> = [
   { prefix: '/advertisers', title: 'Advertisers' },
   { prefix: '/campaigns', title: 'Campaigns' },
   { prefix: '/kiosk-updates', title: 'Kiosk updates' },
+  { prefix: '/fleet-health/', title: 'Kiosk health' },
+  { prefix: '/fleet-health', title: 'Fleet health' },
   { prefix: '/kiosks', title: 'Kiosks' },
   { prefix: '/find-services', title: 'Find services' },
   { prefix: '/cabinet-light', title: 'Cabinet light' },

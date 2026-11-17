@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import {
+  Activity,
   BarChart3,
   CloudUpload,
   MoreHorizontal,
@@ -53,9 +55,11 @@ import {
   usageSummary,
   USAGE_RANGE_FILTERS,
   USAGE_SERVICE_FILTERS,
+  USAGE_SORT_FILTERS,
   type ServiceAnalyticsItem,
   type UsageRangePreset,
   type UsageRow,
+  type UsageSort,
 } from './serviceUsage';
 import {
   resolveRecordingDisplay,
@@ -158,19 +162,47 @@ function PrinterSummaryCell({
   onDetails: () => void;
 }) {
   const summary = resolvePrinterRowSummary(device.printerHealth);
+  const errors = resolvePrinterErrorHistory(device.printerHealth);
+  const errorEntries =
+    errors.status === 'current' || errors.status === 'stale' ? errors.entries : [];
   const pagesLeft = device.pagesLeft == null ? '—' : String(device.pagesLeft);
   const available = device.trayAvailable == null ? null : String(device.trayAvailable);
+  const topError = errorEntries[0]?.description ?? null;
+  const hasErrors = errorEntries.length > 0;
+
   return (
-    <div className="flex min-w-0 items-center gap-2 text-sm">
-      <div className="min-w-0">
+    <div className="flex min-w-[11rem] max-w-[16rem] items-center gap-2 text-sm">
+      <button
+        type="button"
+        className="min-w-0 flex-1 rounded-md px-0.5 py-0.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        title={hasErrors ? errorEntries.map((e) => e.description).join('\n') : undefined}
+        onClick={(event) => {
+          event.stopPropagation();
+          onDetails();
+        }}
+      >
         <p className={PRINTER_ROW_TONE[summary.tone]}>{summary.label}</p>
+        {topError ? (
+          <p className="truncate text-xs text-red-700/90" title={topError}>
+            {topError}
+            {errorEntries.length > 1 ? ` · +${errorEntries.length - 1} more` : ''}
+          </p>
+        ) : null}
         <p className="truncate text-xs text-muted-foreground">
           Left {pagesLeft}
           {available != null ? ` · Avail ${available}` : ''}
         </p>
-      </div>
-      <Button type="button" variant="secondary" className="h-7 shrink-0 px-2 text-xs" onClick={onDetails}>
-        Details
+      </button>
+      <Button
+        type="button"
+        variant="secondary"
+        className="h-7 shrink-0 px-2 text-xs"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDetails();
+        }}
+      >
+        {hasErrors ? 'View' : 'Details'}
       </Button>
     </div>
   );
@@ -272,17 +304,70 @@ function PrinterDetailsBody({
   const reservedBlocking =
     trayAvailable === 0 && pagesLeft != null && pagesLeft > 0 && (trayReserved ?? 0) > 0;
 
+  const errorList =
+    errors.status === 'current' || errors.status === 'stale' ? errors.entries : [];
+  const hasErrors = errorList.length > 0;
+
   return (
     <div className="flex flex-col gap-4 pr-1">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Status</span>
         <span className={`text-sm ${statusClass}`}>{printerStatus.label}</span>
+        {hasErrors ? (
+          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+            {errorList.length === 1 ? '1 error' : `${errorList.length} errors`}
+          </span>
+        ) : null}
         {stale ? (
           <span className="text-sm font-medium text-amber-700" title={staleTitle}>
             Stale
           </span>
         ) : null}
       </div>
+
+      <section
+        className={
+          hasErrors
+            ? 'rounded-xl border border-red-200 bg-red-50/80 p-3'
+            : 'rounded-xl border border-border bg-muted/20 p-3'
+        }
+      >
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className={`text-sm font-medium ${hasErrors ? 'text-red-900' : 'text-muted-foreground'}`}>
+            Printer errors
+          </h3>
+          {hasErrors ? (
+            <span className="text-xs font-medium text-red-800">
+              {errorList.length} recorded
+            </span>
+          ) : null}
+        </div>
+        {errors.status === 'unavailable' ? (
+          <p className="text-sm text-muted-foreground">Error history unavailable from this printer.</p>
+        ) : !hasErrors ? (
+          <p className="text-sm text-muted-foreground">No recorded errors</p>
+        ) : (
+          <ol className="space-y-2">
+            {errorList.map((entry, i) => (
+              <li
+                key={`${entry.index}-${entry.description}`}
+                className="flex gap-3 rounded-lg border border-red-200/80 bg-white px-3 py-2.5 shadow-sm"
+              >
+                <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-100 text-xs font-semibold text-red-800">
+                  {i + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium leading-snug text-red-950">{entry.description}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Printer log #{entry.index}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+        {stale && hasErrors && staleTitle ? (
+          <p className="mt-2 text-xs text-amber-800">{staleTitle}</p>
+        ) : null}
+      </section>
 
       <section className="rounded-xl border border-border p-3">
         <h3 className="mb-2 text-sm font-medium">Ink</h3>
@@ -413,36 +498,18 @@ function PrinterDetailsBody({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-border bg-muted/20 p-3">
-        {hasPrinterParts(health) ? (
-          <>
-            <h3 className="mb-2 text-sm font-medium text-muted-foreground">Parts</h3>
-            {maintenance.status === 'unavailable' ? (
-              <p className="text-sm text-muted-foreground">Unavailable</p>
-            ) : (
-              <p className="text-sm">
-                Belt {maintenance.parts.belt} · Fuser {maintenance.parts.fuser}
-              </p>
-            )}
-          </>
-        ) : null}
-        <h3
-          className={`mb-2 text-sm font-medium text-muted-foreground${hasPrinterParts(health) ? ' mt-3' : ''}`}
-        >
-          Errors
-        </h3>
-        {errors.status === 'unavailable' ? (
-          <p className="text-sm text-muted-foreground">Unavailable</p>
-        ) : errors.status === 'empty' || errors.entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No recorded errors</p>
-        ) : (
-          <ul className="space-y-1 text-sm">
-            {errors.entries.map((entry) => (
-              <li key={entry.index}>{entry.description}</li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {hasPrinterParts(health) ? (
+        <section className="rounded-xl border border-border bg-muted/20 p-3">
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Parts</h3>
+          {maintenance.status === 'unavailable' ? (
+            <p className="text-sm text-muted-foreground">Unavailable</p>
+          ) : (
+            <p className="text-sm">
+              Belt {maintenance.parts.belt} · Fuser {maintenance.parts.fuser}
+            </p>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -582,6 +649,7 @@ export function KiosksPage() {
   const [usageSearch, setUsageSearch] = useState('');
   const [usageServiceFilter, setUsageServiceFilter] = useState('all');
   const [usageHideZero, setUsageHideZero] = useState(false);
+  const [usageSort, setUsageSort] = useState<UsageSort>('default');
   const [logsDevice, setLogsDevice] = useState<Device | null>(null);
   const [logsHours, setLogsHours] = useState<24 | 168>(24);
   const [logsLevelMode, setLogsLevelMode] = useState<'problems' | 'all'>('problems');
@@ -897,6 +965,7 @@ export function KiosksPage() {
     setUsageSearch('');
     setUsageServiceFilter('all');
     setUsageHideZero(false);
+    setUsageSort('default');
     void loadUsage(device, range.fromIso, range.toIso);
   }
 
@@ -1178,8 +1247,9 @@ export function KiosksPage() {
         service: usageServiceFilter,
         search: usageSearch,
         hideZero: usageHideZero,
+        sort: usageSort,
       }),
-    [usageRows, usageServiceFilter, usageSearch, usageHideZero],
+    [usageRows, usageServiceFilter, usageSearch, usageHideZero, usageSort],
   );
 
   const usageStats = useMemo(() => usageSummary(usageRows), [usageRows]);
@@ -1315,9 +1385,13 @@ export function KiosksPage() {
                 return (
                 <tr key={device.id}>
                   <td className="font-medium">
-                    <span className="block truncate" title={device.name}>
+                    <Link
+                      to={`/fleet-health/${device.id}`}
+                      className="block truncate text-foreground hover:text-primary hover:underline"
+                      title={`${device.name} · open health details`}
+                    >
                       {device.name}
-                    </span>
+                    </Link>
                   </td>
                   <td>
                     <span className="block truncate" title={device.siteName}>
@@ -1414,6 +1488,12 @@ export function KiosksPage() {
                           <DropdownMenuItem onClick={() => openSettings(device)}>
                             <Settings className="h-4 w-4" />
                             Settings
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link to={`/fleet-health/${device.id}`}>
+                              <Activity className="h-4 w-4" />
+                              Health details
+                            </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openUsage(device)}>
                             <BarChart3 className="h-4 w-4" />
@@ -1790,6 +1870,20 @@ export function KiosksPage() {
       <Modal
         open={printerDevice != null}
         title={printerDevice ? `Printer · ${printerDevice.name}` : 'Printer'}
+        description={
+          printerDevice
+            ? (() => {
+                const hist = resolvePrinterErrorHistory(printerDevice.printerHealth);
+                const count =
+                  hist.status === 'current' || hist.status === 'stale' ? hist.entries.length : 0;
+                return count > 0
+                  ? count === 1
+                    ? '1 recorded printer error — listed first below'
+                    : `${count} recorded printer errors — listed first below`
+                  : 'Ink, tray, and printer diagnostics';
+              })()
+            : undefined
+        }
         className="max-w-2xl"
         onClose={closePrinterDetails}
         footer={
@@ -2023,7 +2117,7 @@ export function KiosksPage() {
       <Modal
         open={usageDevice != null}
         title={usageDevice ? `Service usage · ${usageDevice.name}` : 'Service usage'}
-        className="max-w-3xl"
+        className="max-w-5xl"
         onClose={() => {
           if (!usageLoading) {
             setUsageDevice(null);
@@ -2056,6 +2150,18 @@ export function KiosksPage() {
               className="sm:min-w-[10rem]"
             >
               {USAGE_SERVICE_FILTERS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              aria-label="Sort usage"
+              value={usageSort}
+              onChange={(e) => setUsageSort(e.target.value as UsageSort)}
+              className="sm:min-w-[9.5rem]"
+            >
+              {USAGE_SORT_FILTERS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -2164,16 +2270,42 @@ export function KiosksPage() {
         ) : filteredUsageRows.length === 0 ? (
           <EmptyState
             title="No matches"
-            description="Adjust search, service, date range, or show all rows."
+            description="Adjust search, service, sort, date range, or show all rows."
           />
         ) : (
           <div className="overflow-x-auto rounded-md border border-border">
             <table className="table w-full">
               <thead>
                 <tr>
-                  <th>Service / option</th>
+                  <th>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 font-medium hover:text-primary"
+                      onClick={() =>
+                        setUsageSort((prev) =>
+                          prev === 'name_asc' ? 'name_desc' : 'name_asc',
+                        )
+                      }
+                    >
+                      Service / option
+                      {usageSort === 'name_asc' ? ' ↑' : usageSort === 'name_desc' ? ' ↓' : ''}
+                    </button>
+                  </th>
                   <th className="w-[42%]">Share</th>
-                  <th className="w-24 text-right">Clicks</th>
+                  <th className="w-24 text-right">
+                    <button
+                      type="button"
+                      className="inline-flex w-full items-center justify-end gap-1 font-medium hover:text-primary"
+                      onClick={() =>
+                        setUsageSort((prev) =>
+                          prev === 'clicks_desc' ? 'clicks_asc' : 'clicks_desc',
+                        )
+                      }
+                    >
+                      Clicks
+                      {usageSort === 'clicks_desc' ? ' ↓' : usageSort === 'clicks_asc' ? ' ↑' : ''}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>

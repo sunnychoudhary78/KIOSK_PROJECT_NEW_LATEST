@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_service.dart';
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
@@ -31,12 +32,56 @@ class SerialController extends Notifier<SerialUiState> {
 
   @override
   SerialUiState build() {
+    hardwareHeartbeatBodyBuilder = _hardwareHeartbeatPayload;
     ref.onDispose(() {
+      if (identical(hardwareHeartbeatBodyBuilder, _hardwareHeartbeatPayload)) {
+        hardwareHeartbeatBodyBuilder = null;
+      }
       unawaited(_incomingSub?.cancel());
       _incomingSub = null;
     });
     Future.microtask(refreshPorts);
     return const SerialUiState();
+  }
+
+  /// Fleet-health snapshot for admin (serial + dependent controller components).
+  Map<String, dynamic> _hardwareHeartbeatPayload() {
+    final connected = state.isConnected;
+    final serialStatus = state.status.name;
+    final componentStatus = switch (state.status) {
+      SerialConnectionStatus.connected => 'ok',
+      SerialConnectionStatus.error => 'error',
+      SerialConnectionStatus.connecting ||
+      SerialConnectionStatus.reconnecting =>
+        'warn',
+      SerialConnectionStatus.disconnected => 'offline',
+    };
+    return {
+      'serial': {
+        'status': serialStatus,
+        'portName': state.selectedPortName,
+        'lastError': state.lastError,
+      },
+      'shutter': {
+        'status': componentStatus,
+        'lastError': connected ? null : state.lastError,
+      },
+      'cabinetLight': {
+        'status': componentStatus,
+        'lastError': connected ? null : state.lastError,
+      },
+      'charging': {
+        'status': componentStatus,
+        'sensorOk': connected ? null : false,
+        'lastError': connected ? null : state.lastError,
+      },
+      'sensors': {
+        'status': componentStatus,
+        'max30102': connected ? 'unknown' : 'offline',
+        'mlx90614': connected ? 'unknown' : 'offline',
+        'lastError': connected ? null : state.lastError,
+      },
+    };
   }
 
   Future<void> refreshPorts() async {

@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '../core/auth/AuthProvider';
 import { LoginPage } from '../features/auth/LoginPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
+import { FleetHealthPage } from '../features/fleet-health/FleetHealthPage';
+import { FleetHealthDetailPage } from '../features/fleet-health/FleetHealthDetailPage';
 import { KiosksPage } from '../features/kiosks/KiosksPage';
 import { ServicesPage } from '../features/services/ServicesPage';
 import { FuelStationsPage } from '../features/fuel_stations/FuelStationsPage';
@@ -33,6 +35,8 @@ export function AppRouter() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
+            <Route path="fleet-health" element={<FleetHealthPage />} />
+            <Route path="fleet-health/:deviceId" element={<FleetHealthDetailPage />} />
             <Route path="kiosks" element={<KiosksPage />} />
             <Route path="kiosk-updates" element={<KioskReleasesPage />} />
             <Route path="advertisers" element={<AdvertisersPage />} />

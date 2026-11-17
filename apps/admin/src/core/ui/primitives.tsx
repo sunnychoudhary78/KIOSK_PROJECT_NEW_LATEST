@@ -91,11 +91,19 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
 
 function badgeVariant(status: string): 'success' | 'destructive' | 'warning' | 'muted' | 'secondary' {
   const value = status.toLowerCase();
-  if (['active', 'ready', 'printed', 'completed', 'paid', 'resolved', 'on'].includes(value)) return 'success';
+  if (['active', 'ready', 'printed', 'completed', 'paid', 'resolved', 'on', 'ok', 'online', 'connected'].includes(value)) {
+    return 'success';
+  }
   if (value === 'open') return 'warning';
-  if (['inactive', 'ended', 'failed', 'expired', 'not_configured'].includes(value)) return 'destructive';
-  if (['paused', 'draft', 'scheduled', 'printing'].includes(value)) return 'warning';
-  if (['off'].includes(value)) return 'muted';
+  if (
+    ['inactive', 'ended', 'failed', 'expired', 'not_configured', 'error', 'offline', 'paper_out', 'jam'].includes(
+      value,
+    )
+  ) {
+    return 'destructive';
+  }
+  if (['paused', 'draft', 'scheduled', 'printing', 'warn', 'behind'].includes(value)) return 'warning';
+  if (['off', 'unknown', 'disconnected'].includes(value)) return 'muted';
   return 'secondary';
 }
 
@@ -197,9 +205,8 @@ export function Modal({
       >
         <DialogHeader className="shrink-0">
           <DialogTitle>{heading}</DialogTitle>
-          {subtitle || description ? (
-            <p className="text-sm text-muted-foreground">{description ?? subtitle}</p>
-          ) : null}
+          {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
+          {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer ? <DialogFooter className="shrink-0">{footer}</DialogFooter> : null}

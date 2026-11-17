@@ -3,48 +3,45 @@ import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import { apiRequestBlob } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import { Button, Modal, StatusBadge } from '../../core/ui/primitives';
-import { adsMediaPath, isImageMime, isVideoMime } from './mediaUrl';
+import { ApiError } from '../../core/errors/api-error';
+import {
+  assetPreviewPath,
+  creativePreviewPath,
+  isImageMime,
+  isVideoMime,
+} from './mediaUrl';
 import type { Creative } from './types';
 
 type PreviewItem = {
   key: string;
   label: string;
-  mediaUrl: string;
-  path: string | null;
-  absolute: boolean;
+  path: string;
   mimeType: string | null;
+  mediaUrl: string | null;
 };
-
-function toPreviewItem(
-  key: string,
-  label: string,
-  mediaUrl: string | null | undefined,
-  mimeType: string | null | undefined,
-): PreviewItem | null {
-  if (!mediaUrl) return null;
-  const absolute = /^https?:\/\//i.test(mediaUrl);
-  return {
-    key,
-    label,
-    mediaUrl,
-    path: absolute ? null : adsMediaPath(mediaUrl),
-    absolute,
-    mimeType: mimeType ?? null,
-  };
-}
 
 function collectPreviewItems(creative: Creative): PreviewItem[] {
   const assets = [...(creative.assets ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
   if (assets.length > 0) {
-    return assets
-      .map((asset, index) =>
-        toPreviewItem(asset.id, `Slide ${index + 1}`, asset.mediaUrl, asset.mimeType),
-      )
-      .filter((item): item is PreviewItem => item != null);
+    return assets.map((asset, index) => ({
+      key: asset.id,
+      label: `Slide ${index + 1}`,
+      // Always hit the authenticated media route (not a bare CDN URL).
+      path: assetPreviewPath(asset.id),
+      mimeType: asset.mimeType ?? null,
+      mediaUrl: asset.mediaUrl,
+    }));
   }
 
-  const item = toPreviewItem(creative.id, creative.title, creative.mediaUrl, creative.mimeType);
-  return item ? [item] : [];
+  return [
+    {
+      key: creative.id,
+      label: creative.title,
+      path: creativePreviewPath(creative.id),
+      mimeType: creative.mimeType ?? null,
+      mediaUrl: creative.mediaUrl,
+    },
+  ];
 }
 
 function slotLabel(slot?: string | null) {
@@ -101,7 +98,7 @@ export function AdPreviewModal({
   }, [creative?.id]);
 
   useEffect(() => {
-    if (!open || !current) return;
+    if (!open || !current || !token) return;
 
     let cancelled = false;
     let createdUrl: string | null = null;
@@ -115,20 +112,17 @@ export function AdPreviewModal({
         return null;
       });
       try {
-        const blob = item.absolute
-          ? await fetch(item.mediaUrl).then(async (response) => {
-              if (!response.ok) {
-                throw new Error(`Failed to load media (${response.status})`);
-              }
-              return response.blob();
-            })
-          : await apiRequestBlob(item.path ?? item.mediaUrl, { token });
+        const blob = await apiRequestBlob(item.path, { token });
         if (cancelled) return;
         createdUrl = URL.createObjectURL(blob);
         setObjectUrl(createdUrl);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load media');
+          if (err instanceof ApiError) {
+            setError(`Failed to load media (${err.code}): ${err.message}`);
+          } else {
+            setError(err instanceof Error ? err.message : 'Failed to load media');
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -141,7 +135,7 @@ export function AdPreviewModal({
       cancelled = true;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [open, current?.key, current?.mediaUrl, current?.path, current?.absolute, token]);
+  }, [open, current?.key, current?.path, token]);
 
   // Auto-advance carousel slides when previewing photo carousels.
   useEffect(() => {
