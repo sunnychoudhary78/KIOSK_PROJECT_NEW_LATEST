@@ -68,6 +68,7 @@ class SerialController extends Notifier<SerialUiState> {
       },
       'cabinetLight': {
         'status': componentStatus,
+        'on': connected ? null : false,
         'lastError': connected ? null : state.lastError,
       },
       'charging': {

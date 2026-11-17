@@ -9,6 +9,7 @@ import 'package:skp_kiosk/features/session/presentation/kiosk_activity_scope.dar
 import 'package:skp_kiosk/features/session/presentation/kiosk_session_route_observer.dart';
 import 'package:skp_kiosk/features/session/presentation/session_timeout_overlay.dart';
 import 'package:skp_kiosk/core/logging/diagnostic_log_uploader.dart';
+import 'package:skp_kiosk/core/hardware/serial/serial_provider.dart';
 import 'package:skp_kiosk/features/cabinet_light/application/cabinet_light_controller.dart';
 import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
 import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
@@ -31,6 +32,8 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
     super.initState();
     ref.read(surveillanceControllerProvider);
     ref.read(printerHealthControllerProvider);
+    // Warm serial first so hardwareHeartbeatBodyBuilder is registered for fleet health.
+    ref.read(serialControllerProvider);
     ref.read(cabinetLightControllerProvider);
     ref.read(diagnosticLogUploaderProvider);
     _routeObserver = KioskSessionRouteObserver(

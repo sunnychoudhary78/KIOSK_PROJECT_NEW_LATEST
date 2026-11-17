@@ -417,10 +417,31 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
       try {
         body['hardware'] = hardwareBuilder();
       } catch (_) {
-        // omit hardware on builder failure
+        body['hardware'] = _fallbackHardwareHeartbeat();
       }
+    } else {
+      // Always report hardware so admin Fleet Health is not blank while serial boots.
+      body['hardware'] = _fallbackHardwareHeartbeat();
     }
     return body;
+  }
+
+  Map<String, dynamic> _fallbackHardwareHeartbeat() {
+    return {
+      'serial': {
+        'status': 'disconnected',
+        'portName': null,
+        'lastError': 'Serial controller not started',
+      },
+      'shutter': {'status': 'unknown'},
+      'cabinetLight': {'status': 'unknown', 'on': null},
+      'charging': {'status': 'unknown', 'sensorOk': null},
+      'sensors': {
+        'status': 'unknown',
+        'max30102': 'unknown',
+        'mlx90614': 'unknown',
+      },
+    };
   }
 }
 
