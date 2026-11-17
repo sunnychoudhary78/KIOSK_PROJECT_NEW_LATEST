@@ -1,0 +1,55 @@
+/// Home-screen services that can be enabled/disabled per kiosk.
+enum KioskHomeService {
+  printDocuments,
+  localServices,
+  wellBeing,
+  phoneCharging,
+  astrology,
+  fuelStations,
+}
+
+extension KioskHomeServiceX on KioskHomeService {
+  String get displayName {
+    switch (this) {
+      case KioskHomeService.printDocuments:
+        return 'Print Documents';
+      case KioskHomeService.localServices:
+        return 'Find Services';
+      case KioskHomeService.wellBeing:
+        return 'Well Being';
+      case KioskHomeService.phoneCharging:
+        return 'Phone Charging';
+      case KioskHomeService.astrology:
+        return 'Astrology';
+      case KioskHomeService.fuelStations:
+        return 'Fuel Stations';
+    }
+  }
+
+  /// Platform service codes that must all be enabled for this home tile.
+  List<String> get platformCodes {
+    switch (this) {
+      case KioskHomeService.printDocuments:
+        return const ['otp_print', 'quick_print', 'digilocker_print'];
+      case KioskHomeService.localServices:
+        return const ['local_services'];
+      case KioskHomeService.wellBeing:
+        return const ['well_being'];
+      case KioskHomeService.phoneCharging:
+        return const ['phone_charging'];
+      case KioskHomeService.astrology:
+        return const ['astrology'];
+      case KioskHomeService.fuelStations:
+        return const ['fuel_stations'];
+    }
+  }
+
+  /// True when every required platform code is enabled.
+  /// If [byCode] is null (catalog never loaded), treat as enabled.
+  bool isEnabled(Map<String, bool>? byCode) {
+    if (byCode == null) {
+      return true;
+    }
+    return platformCodes.every((code) => byCode[code] == true);
+  }
+}

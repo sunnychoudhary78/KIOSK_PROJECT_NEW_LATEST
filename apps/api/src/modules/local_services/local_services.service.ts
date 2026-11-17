@@ -1,6 +1,7 @@
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
+import type { ServicesCatalogService } from '../services/services.service.js';
 import type {
   CreateLocalServiceCategoryBody,
   CreateLocalServiceContactBody,
@@ -20,9 +21,13 @@ export class LocalServicesService {
   constructor(
     private readonly db: DbClient,
     private readonly audit: AuditService,
+    private readonly services?: ServicesCatalogService,
   ) {}
 
-  async list() {
+  async list(deviceId?: string) {
+    if (deviceId && this.services) {
+      await this.services.assertEnabled(deviceId, 'local_services');
+    }
     const categories = await this.db.localServiceCategory.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: {

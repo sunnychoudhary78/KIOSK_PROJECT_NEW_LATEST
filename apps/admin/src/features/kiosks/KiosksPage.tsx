@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity,
+  AppWindow,
   BarChart3,
   CloudUpload,
   MoreHorizontal,
@@ -65,6 +66,13 @@ import {
   resolveRecordingDisplay,
   type SurveillanceHealth,
 } from '../surveillance/surveillanceStatus';
+import {
+  HOME_SERVICE_TOGGLES,
+  enablementMapFromItems,
+  isHomeServiceEnabled,
+  type HomeServiceToggle,
+  type PlatformServiceItem,
+} from './homeServices';
 
 type DiagnosticLogItem = {
   id: string;
@@ -661,6 +669,11 @@ export function KiosksPage() {
   const [logsHasMore, setLogsHasMore] = useState(false);
   const [logsNextBefore, setLogsNextBefore] = useState<string | null>(null);
   const [logsNextBeforeId, setLogsNextBeforeId] = useState<string | null>(null);
+  const [servicesDevice, setServicesDevice] = useState<Device | null>(null);
+  const [serviceItems, setServiceItems] = useState<PlatformServiceItem[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [servicesError, setServicesError] = useState<string | null>(null);
+  const [servicesSavingId, setServicesSavingId] = useState<string | null>(null);
   const printerRefreshGeneration = useRef(0);
   const canEnablePrinting =
     roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
@@ -1047,6 +1060,69 @@ export function KiosksPage() {
     setSettingsDevice(device);
     setPrintLimits(printLimitsFromDevice(device));
     setSettingsError(null);
+  }
+
+  async function loadDeviceServices(device: Device) {
+    setServicesLoading(true);
+    setServicesError(null);
+    try {
+      const result = await apiRequest<{ items: PlatformServiceItem[] }>(
+        `/services?deviceId=${encodeURIComponent(device.id)}`,
+        { token },
+      );
+      setServiceItems(result.items ?? []);
+    } catch (err) {
+      setServiceItems([]);
+      setServicesError(err instanceof Error ? err.message : 'Failed to load services');
+    } finally {
+      setServicesLoading(false);
+    }
+  }
+
+  function openServices(device: Device) {
+    setServicesDevice(device);
+    setServiceItems([]);
+    setServicesError(null);
+    setServicesSavingId(null);
+    void loadDeviceServices(device);
+  }
+
+  async function onToggleHomeService(toggle: HomeServiceToggle, enabled: boolean) {
+    if (!servicesDevice || servicesSavingId) {
+      return;
+    }
+    setServicesSavingId(toggle.id);
+    setServicesError(null);
+    try {
+      for (const code of toggle.codes) {
+        await apiRequest(`/services/${encodeURIComponent(code)}/enablement`, {
+          method: 'PUT',
+          token,
+          body: { deviceId: servicesDevice.id, enabled },
+        });
+      }
+      setServiceItems((prev) => {
+        const next = new Map(prev.map((item) => [item.code, { ...item }]));
+        for (const code of toggle.codes) {
+          const existing = next.get(code);
+          if (existing) {
+            existing.enabled = enabled;
+          } else {
+            next.set(code, {
+              code,
+              name: code,
+              enabled,
+            });
+          }
+        }
+        return [...next.values()];
+      });
+    } catch (err) {
+      setServicesError(err instanceof Error ? err.message : 'Failed to update service');
+      await loadDeviceServices(servicesDevice);
+    } finally {
+      setServicesSavingId(null);
+    }
   }
 
   async function onSavePrintLimits(event: FormEvent) {
@@ -1489,6 +1565,12 @@ export function KiosksPage() {
                             <Settings className="h-4 w-4" />
                             Settings
                           </DropdownMenuItem>
+                          {canEnablePrinting ? (
+                            <DropdownMenuItem onClick={() => openServices(device)}>
+                              <AppWindow className="h-4 w-4" />
+                              Services
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuItem asChild>
                             <Link to={`/fleet-health/${device.id}`}>
                               <Activity className="h-4 w-4" />
@@ -1865,6 +1947,57 @@ export function KiosksPage() {
           </fieldset>
           {settingsError ? <p className="error md:col-span-2">{settingsError}</p> : null}
         </form>
+      </Modal>
+
+      <Modal
+        open={servicesDevice != null}
+        title={servicesDevice ? `Services · ${servicesDevice.name}` : 'Services'}
+        description="Turn home-screen services on or off for this kiosk. Disabled services show Under maintenance on the kiosk."
+        onClose={() => {
+          if (!servicesSavingId) {
+            setServicesDevice(null);
+          }
+        }}
+        footer={
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={Boolean(servicesSavingId)}
+            onClick={() => setServicesDevice(null)}
+          >
+            Close
+          </Button>
+        }
+      >
+        {servicesLoading ? <p className="muted">Loading services…</p> : null}
+        {!servicesLoading ? (
+          <div className="stack gap-3">
+            {HOME_SERVICE_TOGGLES.map((toggle) => {
+              const byCode = enablementMapFromItems(serviceItems);
+              const enabled = isHomeServiceEnabled(toggle, byCode);
+              const busy = servicesSavingId === toggle.id;
+              return (
+                <label
+                  key={toggle.id}
+                  className="flex items-start justify-between gap-4 rounded-xl border border-border p-4"
+                >
+                  <span className="stack gap-1">
+                    <span className="font-semibold">{toggle.label}</span>
+                    <span className="muted text-sm">{toggle.description}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={enabled}
+                    disabled={busy || Boolean(servicesSavingId)}
+                    onChange={(e) => void onToggleHomeService(toggle, e.target.checked)}
+                  />
+                </label>
+              );
+            })}
+          </div>
+        ) : null}
+        {servicesError ? <p className="error">{servicesError}</p> : null}
       </Modal>
 
       <Modal

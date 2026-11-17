@@ -730,8 +730,20 @@ paths:
       tags: [Services]
       summary: List platform services
       operationId: listServices
+      description: >
+        Without deviceId, returns the active catalog with enabled=true for every item
+        (admin/global view). With deviceId (or a device JWT), returns per-device
+        enablement flags from service_enablements; missing rows are enabled=false.
       security:
         - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: query
+          required: false
+          description: Device id for per-kiosk enablement. Device JWTs use their own device id when omitted.
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: Service catalog
@@ -3582,7 +3594,16 @@ components:
       properties:
         code:
           type: string
-          enum: [otp_print, digilocker_print, astrology, quick_print]
+          description: Platform service code stored in platform_services
+          enum:
+            - otp_print
+            - digilocker_print
+            - quick_print
+            - astrology
+            - fuel_stations
+            - local_services
+            - well_being
+            - phone_charging
         name:
           type: string
         description:

@@ -79,6 +79,21 @@ async function main() {
       name: 'Fuel stations',
       description: 'Nearby petrol, diesel, CNG, and EV stations',
     },
+    {
+      code: 'local_services',
+      name: 'Find Services',
+      description: 'Local trades and contacts shown on the kiosk Find Services screen',
+    },
+    {
+      code: 'well_being',
+      name: 'Well Being',
+      description: 'Heart rate, blood oxygen, and temperature on the kiosk',
+    },
+    {
+      code: 'phone_charging',
+      name: 'Phone Charging',
+      description: 'Phone charging session on the kiosk',
+    },
   ]) {
     await prisma.platformService.upsert({
       where: { code: service.code },
@@ -91,26 +106,36 @@ async function main() {
     });
   }
 
-  const extraServices = await prisma.platformService.findMany({
-    where: { code: { in: ['astrology', 'quick_print', 'fuel_stations'] } },
+  const homeServiceCodes = [
+    'otp_print',
+    'digilocker_print',
+    'quick_print',
+    'astrology',
+    'fuel_stations',
+    'local_services',
+    'well_being',
+    'phone_charging',
+  ];
+  const homeServices = await prisma.platformService.findMany({
+    where: { code: { in: homeServiceCodes } },
     select: { id: true, code: true },
   });
-  if (extraServices.length) {
+  if (homeServices.length) {
     const devices = await prisma.device.findMany({ select: { id: true, tenantId: true } });
     for (const device of devices) {
-      for (const extra of extraServices) {
+      for (const home of homeServices) {
         await prisma.serviceEnablement.upsert({
           where: {
             deviceId_serviceId: {
               deviceId: device.id,
-              serviceId: extra.id,
+              serviceId: home.id,
             },
           },
           update: {},
           create: {
             tenantId: device.tenantId,
             deviceId: device.id,
-            serviceId: extra.id,
+            serviceId: home.id,
             enabled: true,
           },
         });

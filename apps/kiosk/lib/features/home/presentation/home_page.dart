@@ -8,6 +8,9 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/ads/presentation/home_banner_strip.dart';
 import 'package:skp_kiosk/features/ads/presentation/idle_ad_player.dart';
+import 'package:skp_kiosk/features/home/application/service_catalog_controller.dart';
+import 'package:skp_kiosk/features/home/domain/kiosk_home_service.dart';
+import 'package:skp_kiosk/features/home/presentation/under_maintenance_page.dart';
 import 'package:skp_kiosk/features/home/presentation/widgets/kiosk_terminal_graphic.dart';
 import 'package:skp_kiosk/features/weather/application/weather_controller.dart';
 import 'package:skp_kiosk/features/weather/presentation/weather_header_strip.dart';
@@ -36,10 +39,12 @@ class _HomePageState extends ConsumerState<HomePage> {
       _adsStarted = true;
       ref.read(adsControllerProvider.notifier).startWatching();
       ref.read(weatherControllerProvider.notifier).startWatching();
+      ref.read(serviceCatalogControllerProvider.notifier).startWatching();
     } else if (!authenticated && _adsStarted) {
       _adsStarted = false;
       ref.read(adsControllerProvider.notifier).stopWatching();
       ref.read(weatherControllerProvider.notifier).stopWatching();
+      ref.read(serviceCatalogControllerProvider.notifier).stopWatching();
     }
   }
 
@@ -189,11 +194,30 @@ class _ServiceCatalog extends ConsumerStatefulWidget {
 }
 
 class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
+  void _openService(
+    BuildContext context,
+    KioskHomeService service,
+    String route,
+  ) {
+    final catalog = ref.read(serviceCatalogControllerProvider);
+    if (!catalog.isHomeServiceEnabled(service)) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => UnderMaintenancePage(serviceTitle: service.displayName),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pushNamed(route);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.athenaColors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final playlist = ref.watch(adsControllerProvider).playlist;
+    // Rebuild when enablement changes so taps use the latest map.
+    ref.watch(serviceCatalogControllerProvider);
     final showHorizontal = playlist.homeBanners.isNotEmpty;
     final showVertical = playlist.homeSideBanners.isNotEmpty;
 
@@ -206,7 +230,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFF0077B6),
         waveColor: const Color(0xFFE0F2FE),
         gradientColors: const [Color(0xFF38BDF8), Color(0xFF0284C7)],
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.print),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.printDocuments,
+          AppRoutes.print,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.handyman_rounded,
@@ -215,7 +243,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFF059669),
         waveColor: const Color(0xFFD1FAE5),
         gradientColors: const [Color(0xFF34D399), Color(0xFF059669)],
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.localServices),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.localServices,
+          AppRoutes.localServices,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.favorite_rounded,
@@ -224,7 +256,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFFE11D48),
         waveColor: const Color(0xFFFFE4E6),
         gradientColors: const [Color(0xFFFB7185), Color(0xFFE11D48)],
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.wellBeing,
+          AppRoutes.wellBeing,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.battery_charging_full_rounded,
@@ -233,7 +269,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFFD97706),
         waveColor: const Color(0xFFFEF3C7),
         gradientColors: const [Color(0xFFFBBF24), Color(0xFFD97706)],
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.charging),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.phoneCharging,
+          AppRoutes.charging,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.auto_awesome_rounded,
@@ -242,7 +282,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFF7C3AED),
         waveColor: const Color(0xFFEDE9FE),
         gradientColors: const [Color(0xFFA855F7), Color(0xFF7C3AED)],
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.astrology,
+          AppRoutes.astrology,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.local_gas_station_rounded,
@@ -251,7 +295,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFFEA580C),
         waveColor: const Color(0xFFFFEDD5),
         gradientColors: const [Color(0xFFFB923C), Color(0xFFEA580C)],
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.fuelStations),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.fuelStations,
+          AppRoutes.fuelStations,
+        ),
       ),
     ];
 
