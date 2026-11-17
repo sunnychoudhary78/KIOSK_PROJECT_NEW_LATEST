@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -8,12 +9,21 @@ import 'package:skp_kiosk/core/config/app_config.dart';
 import 'package:uuid/uuid.dart';
 
 class ApiClient {
-  ApiClient({AppConfig? config, http.Client? httpClient})
-      : _config = config ?? AppConfig.fromEnvironment(),
-        _http = httpClient ?? http.Client();
+  ApiClient({
+    AppConfig? config,
+    http.Client? httpClient,
+    Duration? requestTimeout,
+  })  : _config = config ?? AppConfig.fromEnvironment(),
+        _http = httpClient ?? http.Client(),
+        _requestTimeout = requestTimeout ?? defaultRequestTimeout;
+
+  /// Default deadline for ordinary GET/POST/PATCH so auth and service calls
+  /// cannot hang the kiosk forever on a half-open TCP connection.
+  static const Duration defaultRequestTimeout = Duration(seconds: 15);
 
   final AppConfig _config;
   final http.Client _http;
+  final Duration _requestTimeout;
   String? _accessToken;
 
   void setAccessToken(String? token) => _accessToken = token;
@@ -21,28 +31,41 @@ class ApiClient {
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,
+    Duration? timeout,
   }) async {
-    final response = await _http.post(
-      Uri.parse('${_config.apiBaseUrl}$path'),
-      headers: _headers(),
-      body: body == null ? null : jsonEncode(body),
-    );
+    final response = await _http
+        .post(
+          Uri.parse('${_config.apiBaseUrl}$path'),
+          headers: _headers(),
+          body: body == null ? null : jsonEncode(body),
+        )
+        .timeout(timeout ?? _requestTimeout);
     return _decode(response);
   }
 
-  Future<Map<String, dynamic>> get(String path) async {
-    final response = await _http.get(
-      Uri.parse('${_config.apiBaseUrl}$path'),
-      headers: _headers(),
-    );
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Duration? timeout,
+  }) async {
+    final response = await _http
+        .get(
+          Uri.parse('${_config.apiBaseUrl}$path'),
+          headers: _headers(),
+        )
+        .timeout(timeout ?? _requestTimeout);
     return _decode(response);
   }
 
-  Future<Uint8List> getBytes(String path) async {
-    final response = await _http.get(
-      Uri.parse('${_config.apiBaseUrl}${_resolvePath(path)}'),
-      headers: _headers(json: false),
-    );
+  Future<Uint8List> getBytes(
+    String path, {
+    Duration? timeout,
+  }) async {
+    final response = await _http
+        .get(
+          Uri.parse('${_config.apiBaseUrl}${_resolvePath(path)}'),
+          headers: _headers(json: false),
+        )
+        .timeout(timeout ?? _requestTimeout);
     if (response.statusCode >= 400) {
       Map<String, dynamic> payload = <String, dynamic>{};
       try {
@@ -50,7 +73,9 @@ class ApiClient {
       } catch (_) {}
       throw ApiException(
         code: payload['code']?.toString() ?? 'request_failed',
-        message: payload['message']?.toString() ?? response.reasonPhrase ?? 'Request failed',
+        message: payload['message']?.toString() ??
+            response.reasonPhrase ??
+            'Request failed',
       );
     }
     return response.bodyBytes;
@@ -59,19 +84,23 @@ class ApiClient {
   Future<Map<String, dynamic>> patch(
     String path, {
     Map<String, dynamic>? body,
+    Duration? timeout,
   }) async {
-    final response = await _http.patch(
-      Uri.parse('${_config.apiBaseUrl}$path'),
-      headers: _headers(),
-      body: body == null ? null : jsonEncode(body),
-    );
+    final response = await _http
+        .patch(
+          Uri.parse('${_config.apiBaseUrl}$path'),
+          headers: _headers(),
+          body: body == null ? null : jsonEncode(body),
+        )
+        .timeout(timeout ?? _requestTimeout);
     return _decode(response);
   }
 
   /// Avoid `/v1/v1/...` when API returns legacy paths that already include `/v1`.
   String _resolvePath(String path) {
     final base = _config.apiBaseUrl;
-    if (path.startsWith('/v1/') && (base.endsWith('/v1') || base.endsWith('/v1/'))) {
+    if (path.startsWith('/v1/') &&
+        (base.endsWith('/v1') || base.endsWith('/v1/'))) {
       return path.substring(3);
     }
     return path;
@@ -128,7 +157,9 @@ class ApiClient {
     if (response.statusCode >= 400) {
       throw ApiException(
         code: payload['code']?.toString() ?? 'request_failed',
-        message: payload['message']?.toString() ?? response.reasonPhrase ?? 'Request failed',
+        message: payload['message']?.toString() ??
+            response.reasonPhrase ??
+            'Request failed',
       );
     }
     return payload;
@@ -139,6 +170,7 @@ class ApiClient {
     required String url,
     required File file,
     String contentType = 'video/mp4',
+    Duration timeout = const Duration(seconds: 90),
   }) async {
     final length = await file.length();
     final request = http.StreamedRequest('PUT', Uri.parse(url));
@@ -150,7 +182,7 @@ class ApiClient {
       onDone: request.sink.close,
       cancelOnError: true,
     );
-    final streamed = await _http.send(request);
+    final streamed = await _http.send(request).timeout(timeout);
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode >= 400) {
       throw ApiException(

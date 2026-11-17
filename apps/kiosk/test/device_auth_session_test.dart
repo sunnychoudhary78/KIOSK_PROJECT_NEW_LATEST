@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -168,5 +170,50 @@ void main() {
     expect(auth.error, 'Invalid device credentials');
     expect(store.saved, isNull);
     expect(store.clearCount, 1);
+  });
+
+  test('hanging token request clears loading after timeout', () {
+    fakeAsync((async) {
+      final store = MemoryCredentialStore();
+      final container = ProviderContainer(
+        overrides: [
+          deviceCredentialStoreProvider.overrideWithValue(store),
+          apiClientProvider.overrideWithValue(
+            ApiClient(
+              config: config,
+              requestTimeout: const Duration(seconds: 15),
+              httpClient: MockClient(
+                (_) => Completer<http.Response>().future,
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      // Drain bootstrap (_restore) before the explicit authenticate under test.
+      container.listen(deviceAuthProvider, (_, _) {});
+      async.flushMicrotasks();
+      expect(container.read(deviceAuthProvider).loading, isFalse);
+
+      unawaited(
+        container.read(deviceAuthProvider.notifier).authenticate(
+              deviceKey: 'dk_test',
+              deviceSecret: 'ds_test',
+            ),
+      );
+      async.flushMicrotasks();
+      expect(container.read(deviceAuthProvider).loading, isTrue);
+
+      async.elapse(const Duration(seconds: 15));
+      async.flushMicrotasks();
+
+      final state = container.read(deviceAuthProvider);
+      expect(state.loading, isFalse);
+      expect(state.isAuthenticated, isFalse);
+      expect(
+        state.error,
+        "Can't reach the server. Check the connection and try again.",
+      );
+    });
   });
 }

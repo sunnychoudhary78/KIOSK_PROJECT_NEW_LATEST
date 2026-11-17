@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/app/router.dart';
+import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/match_kundali_controller.dart';
@@ -19,25 +21,55 @@ import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 typedef VisitorSessionResetFn = Future<void> Function({required bool attract});
 
+/// Per-step cleanup budgets. Exit must never wait longer than these.
+const Duration kSessionResetSpoolerTimeout = Duration(seconds: 5);
+const Duration kSessionResetDigilockerTimeout = Duration(seconds: 5);
+const Duration kSessionResetQuickPrintTimeout = Duration(seconds: 5);
+const Duration kSessionResetChargingTimeout = Duration(seconds: 8);
+const Duration kSessionResetTempWipeTimeout = Duration(seconds: 3);
+
 final visitorSessionResetProvider = Provider<VisitorSessionResetFn>((ref) {
   return ({required bool attract}) =>
       resetVisitorSession(ref, attract: attract);
 });
 
 /// Wipe visitor PII and return to the catalog. Does not touch device auth.
+///
+/// Navigation to the catalog happens first so Back/Home cannot hang on
+/// printer native calls or outbound API cancels. Cleanup is best-effort.
 Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
-  // Unlock print immediately so Home never leaves "already running",
-  // and await Windows USB-queue clear so orphans cannot resume later.
+  AppLogger.info('session_reset_start attract=$attract');
+
+  // Unlock print immediately so Home never leaves "already running".
   try {
-    final coordinator = ref.read(printCoordinatorProvider);
-    coordinator.abortAndReset();
-    await coordinator.clearPendingSpoolerWork();
+    ref.read(printCoordinatorProvider).abortAndReset();
   } catch (_) {}
 
+  // Citizen exit first — PopScope needs a frame so canPop can become true.
+  WidgetsBinding.instance.scheduleFrame();
+  await WidgetsBinding.instance.endOfFrame;
+  kioskNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+
+  imageCache.clear();
+  imageCache.clearLiveImages();
+
+  // Best-effort cleanup with hard deadlines — never block forever.
+  await bestEffortTimed(
+    'spooler_clear',
+    () async {
+      try {
+        await ref.read(printCoordinatorProvider).clearPendingSpoolerWork();
+      } catch (_) {}
+    },
+    kSessionResetSpoolerTimeout,
+  );
+
   if (ref.exists(digilockerControllerProvider)) {
-    try {
-      await ref.read(digilockerControllerProvider.notifier).endSession();
-    } catch (_) {}
+    await bestEffortTimed(
+      'digilocker_end',
+      () => ref.read(digilockerControllerProvider.notifier).endSession(),
+      kSessionResetDigilockerTimeout,
+    );
   }
   if (ref.exists(otpPrintControllerProvider)) {
     try {
@@ -45,21 +77,19 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
     } catch (_) {}
   }
   if (ref.exists(quickPrintControllerProvider)) {
-    try {
-      await ref.read(quickPrintControllerProvider.notifier).reset();
-    } catch (_) {}
+    await bestEffortTimed(
+      'quick_print_reset',
+      () => ref.read(quickPrintControllerProvider.notifier).reset(),
+      kSessionResetQuickPrintTimeout,
+    );
   }
   if (ref.exists(chargingControllerProvider)) {
-    try {
-      await ref.read(chargingControllerProvider.notifier).forceShutdown();
-    } catch (_) {}
+    await bestEffortTimed(
+      'charging_shutdown',
+      () => ref.read(chargingControllerProvider.notifier).forceShutdown(),
+      kSessionResetChargingTimeout,
+    );
   }
-
-  // Allow PopScope(canPop: false) to rebuild as canPop: true before we pop.
-  WidgetsBinding.instance.scheduleFrame();
-  await WidgetsBinding.instance.endOfFrame;
-
-  kioskNavigatorKey.currentState?.popUntil((route) => route.isFirst);
 
   ref.invalidate(digilockerControllerProvider);
   ref.invalidate(otpPrintControllerProvider);
@@ -72,12 +102,14 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
   ref.invalidate(chargingControllerProvider);
   ref.invalidate(fuelStationsControllerProvider);
 
-  imageCache.clear();
-  imageCache.clearLiveImages();
-
-  await wipeDigilockerTempDir();
+  await bestEffortTimed(
+    'wipe_digilocker_temp',
+    wipeDigilockerTempDir,
+    kSessionResetTempWipeTimeout,
+  );
 
   if (!ref.mounted) {
+    AppLogger.info('session_reset_done (unmounted)');
     return;
   }
   final ads = ref.read(adsControllerProvider.notifier);
@@ -85,6 +117,24 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
     ads.showIdleNow();
   } else {
     ads.resetIdleTimer();
+  }
+  AppLogger.info('session_reset_done attract=$attract');
+}
+
+/// Run [fn] with a hard deadline. Logs and swallows timeout/errors.
+Future<void> bestEffortTimed(
+  String name,
+  Future<void> Function() fn,
+  Duration limit,
+) async {
+  try {
+    await fn().timeout(limit);
+  } on TimeoutException {
+    AppLogger.warn(
+      'session_reset_step_timeout name=$name limitMs=${limit.inMilliseconds}',
+    );
+  } catch (error) {
+    AppLogger.warn('session_reset_step_failed name=$name error=$error');
   }
 }
 
