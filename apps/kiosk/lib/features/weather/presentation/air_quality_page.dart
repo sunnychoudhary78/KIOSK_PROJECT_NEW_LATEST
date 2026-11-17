@@ -17,8 +17,6 @@ class AirQualityPage extends ConsumerStatefulWidget {
 }
 
 class _AirQualityPageState extends ConsumerState<AirQualityPage> {
-  bool _showSensitiveAdvice = false;
-
   @override
   void initState() {
     super.initState();
@@ -45,7 +43,7 @@ class _AirQualityPageState extends ConsumerState<AirQualityPage> {
         titleIcon: Icons.air_rounded,
         onHome: _endSession,
         body: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 12, 28, 14),
+          padding: const EdgeInsets.fromLTRB(28, 8, 28, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -53,26 +51,22 @@ class _AirQualityPageState extends ConsumerState<AirQualityPage> {
                 'Your local air quality report',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: colors.textSecondary,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
               Expanded(
                 child: _AirQualityBody(
                   state: state,
                   colors: colors,
                   isDark: isDark,
-                  showSensitiveAdvice: _showSensitiveAdvice,
-                  onToggleSensitive: () {
-                    setState(() => _showSensitiveAdvice = !_showSensitiveAdvice);
-                  },
                   onRetry: () =>
                       ref.read(airQualityControllerProvider.notifier).load(),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Material(
@@ -81,10 +75,10 @@ class _AirQualityPageState extends ConsumerState<AirQualityPage> {
                     onTap: () => Navigator.of(context).maybePop(),
                     borderRadius: BorderRadius.circular(26),
                     child: Ink(
-                      height: 44,
+                      height: 40,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 22,
-                        vertical: 10,
+                        horizontal: 20,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
                         color: isDark
@@ -111,7 +105,7 @@ class _AirQualityPageState extends ConsumerState<AirQualityPage> {
                             'Back',
                             style: TextStyle(
                               fontFamily: 'PlusJakartaSans',
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: colors.textPrimary,
                             ),
@@ -135,16 +129,12 @@ class _AirQualityBody extends StatelessWidget {
     required this.state,
     required this.colors,
     required this.isDark,
-    required this.showSensitiveAdvice,
-    required this.onToggleSensitive,
     required this.onRetry,
   });
 
   final AirQualityUiState state;
   final AthenaColors colors;
   final bool isDark;
-  final bool showSensitiveAdvice;
-  final VoidCallback onToggleSensitive;
   final VoidCallback onRetry;
 
   @override
@@ -163,7 +153,7 @@ class _AirQualityBody extends StatelessWidget {
             tone: KioskBannerTone.danger,
             message: state.error!,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
             child: KioskGhostButton(label: 'Try again', onPressed: onRetry),
@@ -183,135 +173,90 @@ class _AirQualityBody extends StatelessWidget {
         detail.pollutantByCode('pm2.5') ??
         detail.pollutantByCode('pm2_5');
     final pm10 = detail.pollutantByCode('pm10');
-    final otherPollutants = detail.pollutants.where((p) {
-      final code = p.code.toLowerCase();
-      return code != 'pm25' &&
-          code != 'pm2.5' &&
-          code != 'pm2_5' &&
-          code != 'pm10';
-    }).toList();
+    final advice =
+        detail.healthRecommendations?.generalPopulation?.trim().isNotEmpty ==
+                true
+            ? detail.healthRecommendations!.generalPopulation!.trim()
+            : _fallbackAdvice(detail.aqiLabel);
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (state.error != null) ...[
-            KioskStatusBanner(
-              tone: KioskBannerTone.danger,
-              message: state.error!,
-            ),
-            const SizedBox(height: 12),
-          ],
-          _AqiHeroCard(detail: detail, colors: colors),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _PollutantCard(
-                  label: 'PM2.5',
-                  pollutant: pm25,
-                  colors: colors,
-                  isDark: isDark,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _PollutantCard(
-                  label: 'PM10',
-                  pollutant: pm10,
-                  colors: colors,
-                  isDark: isDark,
-                ),
-              ),
-            ],
-          ),
-          if (otherPollutants.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final pollutant in otherPollutants)
-                  _PollutantChip(pollutant: pollutant, colors: colors),
-              ],
-            ),
-          ],
-          const SizedBox(height: 22),
-          Text(
-            'What should you do today?',
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            detail.healthRecommendations?.generalPopulation?.trim().isNotEmpty ==
-                    true
-                ? detail.healthRecommendations!.generalPopulation!.trim()
-                : _fallbackAdvice(detail.aqiLabel),
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 17,
-              height: 1.35,
-              fontWeight: FontWeight.w500,
-              color: colors.textSecondary,
-            ),
-          ),
-          if (detail.healthRecommendations?.sensitiveGroups.isNotEmpty ==
-              true) ...[
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: onToggleSensitive,
-                child: Text(
-                  showSensitiveAdvice
-                      ? 'Hide sensitive-group advice'
-                      : 'Show sensitive-group advice',
-                  style: TextStyle(
-                    fontFamily: 'PlusJakartaSans',
-                    fontWeight: FontWeight.w700,
-                    color: colors.accentCyan,
-                  ),
-                ),
-              ),
-            ),
-            if (showSensitiveAdvice) ...[
-              const SizedBox(height: 6),
-              for (final group
-                  in detail.healthRecommendations!.sensitiveGroups) ...[
-                _SensitiveAdviceTile(
-                  label: group.$1,
-                  text: group.$2,
-                  colors: colors,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: 8),
-              ],
-            ],
-          ],
-          const SizedBox(height: 22),
-          Text(
-            'AQI history (24h)',
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _HistorySection(
-            state: state,
-            colors: colors,
-            isDark: isDark,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (state.error != null) ...[
+          KioskStatusBanner(
+            tone: KioskBannerTone.danger,
+            message: state.error!,
           ),
           const SizedBox(height: 8),
         ],
-      ),
+        Expanded(
+          flex: 5,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 5,
+                child: _AqiHeroCard(detail: detail, colors: colors),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _PollutantCard(
+                              label: 'PM2.5',
+                              pollutant: pm25,
+                              colors: colors,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _PollutantCard(
+                              label: 'PM10',
+                              pollutant: pm10,
+                              colors: colors,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: _AdviceCard(
+                        advice: advice,
+                        colors: colors,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'AQI history (24h)',
+          style: TextStyle(
+            fontFamily: 'PlusJakartaSans',
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: colors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          flex: 5,
+          child: _HistorySection(
+            state: state,
+            colors: colors,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -325,22 +270,18 @@ class _AqiHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bandColor = _bandColor(detail);
-    final advice = detail.healthRecommendations?.generalPopulation?.trim();
-    final shortAdvice = (advice != null && advice.isNotEmpty)
-        ? advice
-        : _fallbackAdvice(detail.aqiLabel);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       decoration: BoxDecoration(
         color: bandColor.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: bandColor.withValues(alpha: 0.95), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: bandColor.withValues(alpha: 0.28),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: bandColor.withValues(alpha: 0.24),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -353,25 +294,25 @@ class _AqiHeroCard extends StatelessWidget {
                 'LOCAL AQI',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.1,
+                  letterSpacing: 1.0,
                   color: Colors.white.withValues(alpha: 0.82),
                 ),
               ),
               const Spacer(),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  detail.updatedAt != null ? 'LIVE DATA' : 'AQI',
+                  detail.updatedAt != null ? 'LIVE' : 'AQI',
                   style: const TextStyle(
                     fontFamily: 'PlusJakartaSans',
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
@@ -379,23 +320,23 @@ class _AqiHeroCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const Spacer(),
           Text(
             detail.aqi?.toString() ?? '--',
             style: const TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 72,
+              fontSize: 52,
               height: 1,
               fontWeight: FontWeight.w800,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             (detail.aqiLabel ?? 'Unknown').toUpperCase(),
             style: const TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 28,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
               color: Colors.white,
             ),
@@ -403,28 +344,17 @@ class _AqiHeroCard extends StatelessWidget {
           if (detail.dominantPollutant != null) ...[
             const SizedBox(height: 4),
             Text(
-              'Dominant pollutant: ${detail.dominantPollutant}',
+              'Dominant: ${detail.dominantPollutant}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'PlusJakartaSans',
-                fontSize: 15,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Colors.white.withValues(alpha: 0.88),
               ),
             ),
           ],
-          const SizedBox(height: 10),
-          Text(
-            shortAdvice,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
-              height: 1.3,
-              fontWeight: FontWeight.w500,
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-          ),
         ],
       ),
     );
@@ -436,28 +366,26 @@ class _PollutantCard extends StatelessWidget {
     required this.label,
     required this.pollutant,
     required this.colors,
-    required this.isDark,
   });
 
   final String label;
   final AirQualityPollutant? pollutant;
   final AthenaColors colors;
-  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
     final valueText = _formatConcentration(pollutant?.concentration);
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.cardBorder, width: 1.2),
         boxShadow: [
           BoxShadow(
             color: colors.cardGlow,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -468,98 +396,71 @@ class _PollutantCard extends StatelessWidget {
             label,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
               color: colors.textSecondary,
             ),
           ),
-          const SizedBox(height: 8),
+          const Spacer(),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              valueText,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: colors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdviceCard extends StatelessWidget {
+  const _AdviceCard({required this.advice, required this.colors});
+
+  final String advice;
+  final AthenaColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.cardBorder, width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            valueText,
+            'What should you do today?',
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 28,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
               color: colors.textPrimary,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PollutantChip extends StatelessWidget {
-  const _PollutantChip({required this.pollutant, required this.colors});
-
-  final AirQualityPollutant pollutant;
-  final AthenaColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.cardBorder),
-      ),
-      child: Text(
-        '${pollutant.displayName}: ${_formatConcentration(pollutant.concentration)}',
-        style: TextStyle(
-          fontFamily: 'PlusJakartaSans',
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: colors.textPrimary,
-        ),
-      ),
-    );
-  }
-}
-
-class _SensitiveAdviceTile extends StatelessWidget {
-  const _SensitiveAdviceTile({
-    required this.label,
-    required this.text,
-    required this.colors,
-    required this.isDark,
-  });
-
-  final String label;
-  final String text;
-  final AthenaColors colors;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: colors.accentMagenta,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            text,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
-              height: 1.3,
-              color: colors.textSecondary,
+          const SizedBox(height: 6),
+          Expanded(
+            child: Text(
+              advice,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 14,
+                height: 1.3,
+                fontWeight: FontWeight.w500,
+                color: colors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -572,22 +473,19 @@ class _HistorySection extends StatelessWidget {
   const _HistorySection({
     required this.state,
     required this.colors,
-    required this.isDark,
   });
 
   final AirQualityUiState state;
   final AthenaColors colors;
-  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
     if (state.historyLoading && state.history == null) {
       return Container(
-        height: 180,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: colors.surfaceCard,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: colors.cardBorder),
         ),
         child: const KioskLoading(message: 'Loading history…'),
@@ -609,18 +507,17 @@ class _HistorySection extends StatelessWidget {
 
     if (points.isEmpty) {
       return Container(
-        height: 140,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: colors.surfaceCard,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: colors.cardBorder),
         ),
         child: Text(
           'No history available for the last 24 hours.',
           style: TextStyle(
             fontFamily: 'PlusJakartaSans',
-            fontSize: 15,
+            fontSize: 14,
             color: colors.textSecondary,
           ),
         ),
@@ -632,11 +529,10 @@ class _HistorySection extends StatelessWidget {
     final maxAqi = values.reduce(math.max);
 
     return Container(
-      height: 200,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       decoration: BoxDecoration(
         color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.cardBorder),
       ),
       child: Column(
@@ -652,24 +548,24 @@ class _HistorySection extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Row(
             children: [
               Text(
-                'Low $minAqi',
+                'Low ${minAqi.round()}',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: colors.textSecondary,
                 ),
               ),
               const Spacer(),
               Text(
-                'High $maxAqi',
+                'High ${maxAqi.round()}',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: colors.textSecondary,
                 ),
