@@ -164,6 +164,20 @@ export function FleetHealthDetailPage() {
 
       {error ? <p className="error mb-3">{error}</p> : null}
 
+      {!device.hardwareHealth ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-medium">ESP32 / shutter / light / charging / sensors not reported yet</p>
+          <p className="mt-1 text-amber-900/90">
+            Printer and camera are updating, but this kiosk has not sent a hardware heartbeat.
+            {device.reportedAppVersion &&
+            device.activeAppVersion &&
+            device.reportedAppVersion !== device.activeAppVersion
+              ? ` App is ${device.reportedAppVersion} (fleet target ${device.activeAppVersion}) — rebuild and restart the kiosk so hardware status appears.`
+              : ' Rebuild/restart the kiosk app, wait for the next heartbeat (~1 min), then refresh.'}
+          </p>
+        </div>
+      ) : null}
+
       <Panel title="Overview">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <StatusBadge status={overallTone} />
@@ -271,42 +285,47 @@ export function FleetHealthDetailPage() {
         </ComponentDetailCard>
 
         <ComponentDetailCard title="ESP32 / serial" icon={Cpu} status={row.controller}>
-          <DetailRow label="Status" value={hw?.serial?.status ?? '—'} />
-          <DetailRow label="Port" value={hw?.serial?.portName ?? '—'} />
-          <DetailRow label="Last error" value={hw?.serial?.lastError ?? '—'} />
-          <DetailRow label="Snapshot at" value={formatWhen(device.hardwareHealthAt)} />
-          <DetailRow
-            label="Note"
-            value={
-              hw?.serial
-                ? 'Shared by shutter, cabinet light, charging, and well-being sensors'
-                : 'Waiting for kiosk hardware heartbeat'
-            }
-          />
+          {hw?.serial ? (
+            <>
+              <DetailRow label="Status" value={hw.serial.status ?? '—'} />
+              <DetailRow label="Port" value={hw.serial.portName ?? '—'} />
+              <DetailRow label="Last error" value={hw.serial.lastError ?? '—'} />
+              <DetailRow label="Snapshot at" value={formatWhen(device.hardwareHealthAt)} />
+              <DetailRow
+                label="Note"
+                value="Shared by shutter, cabinet light, charging, and well-being sensors"
+              />
+            </>
+          ) : (
+            <DetailRow
+              label="Status"
+              value="Not reported — restart kiosk app after updating to a build that sends hardware heartbeats"
+            />
+          )}
         </ComponentDetailCard>
 
         <ComponentDetailCard title="Shutter" icon={DoorOpen} status={row.shutter}>
-          <DetailRow label="Status" value={hw?.shutter?.status ?? '—'} />
+          <DetailRow label="Status" value={hw?.shutter?.status ?? (device.shutterCommand ? 'pending' : 'Not reported')} />
           <DetailRow label="Pending command" value={device.shutterCommand ?? hw?.shutter?.pendingCommand ?? '—'} />
           <DetailRow label="Command requested" value={formatWhen(device.shutterCommandRequestedAt)} />
           <DetailRow label="Last error" value={hw?.shutter?.lastError ?? '—'} />
         </ComponentDetailCard>
 
         <ComponentDetailCard title="Cabinet light" icon={Lightbulb} status={row.light}>
-          <DetailRow label="Status" value={hw?.cabinetLight?.status ?? '—'} />
+          <DetailRow label="Status" value={hw?.cabinetLight?.status ?? 'Not reported'} />
           <DetailRow label="Relay on" value={formatMaybe(hw?.cabinetLight?.on)} />
           <DetailRow label="Last error" value={hw?.cabinetLight?.lastError ?? '—'} />
         </ComponentDetailCard>
 
         <ComponentDetailCard title="Charging" icon={Zap} status={row.charging}>
-          <DetailRow label="Status" value={hw?.charging?.status ?? '—'} />
+          <DetailRow label="Status" value={hw?.charging?.status ?? 'Not reported'} />
           <DetailRow label="Sensor OK" value={formatMaybe(hw?.charging?.sensorOk)} />
           <DetailRow label="Phase" value={hw?.charging?.phase ?? '—'} />
           <DetailRow label="Last error" value={hw?.charging?.lastError ?? '—'} />
         </ComponentDetailCard>
 
         <ComponentDetailCard title="Sensors" icon={Thermometer} status={row.sensors}>
-          <DetailRow label="Overall" value={hw?.sensors?.status ?? '—'} />
+          <DetailRow label="Overall" value={hw?.sensors?.status ?? 'Not reported'} />
           <DetailRow label="MAX30102 (SpO₂ / HR)" value={hw?.sensors?.max30102 ?? '—'} />
           <DetailRow label="MLX90614 (temperature)" value={hw?.sensors?.mlx90614 ?? '—'} />
           <DetailRow label="Last error" value={hw?.sensors?.lastError ?? '—'} />
