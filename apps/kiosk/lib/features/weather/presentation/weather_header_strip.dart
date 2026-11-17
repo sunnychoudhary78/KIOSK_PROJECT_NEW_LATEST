@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_kiosk/app/router.dart';
 import 'package:skp_kiosk/core/theme/athena_colors.dart';
 import 'package:skp_kiosk/features/weather/application/weather_controller.dart';
 
@@ -120,24 +121,33 @@ class WeatherHeaderStrip extends ConsumerWidget {
           ),
           const SizedBox(width: 10),
 
-          // AQI Pill Chip
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE74C3C).withValues(alpha: 0.16),
+          // AQI Pill Chip — opens dedicated air quality screen
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () =>
+                  Navigator.of(context).pushNamed(AppRoutes.airQuality),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0xFFE74C3C).withValues(alpha: 0.45),
-                width: 1,
-              ),
-            ),
-            child: Text(
-              'AQI $aqiVal',
-              style: const TextStyle(
-                fontFamily: 'PlusJakartaSans',
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFFE74C3C),
+              child: Ink(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE74C3C).withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFE74C3C).withValues(alpha: 0.45),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  'AQI $aqiVal',
+                  style: const TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFE74C3C),
+                  ),
+                ),
               ),
             ),
           ),

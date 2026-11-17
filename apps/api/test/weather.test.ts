@@ -6,7 +6,10 @@ import {
   weatherCodeFromGoogleType,
 } from '../src/modules/weather/labels.js';
 import {
+  clampHistoryHours,
   createGoogleWeatherClient,
+  parseAirQualityDetailPayload,
+  parseAirQualityHistoryPayload,
   parseAirQualityPayload,
   parseWeatherPayload,
 } from '../src/modules/weather/google_weather.client.js';
@@ -224,5 +227,210 @@ describe('google weather parsers', () => {
       } as never,
     });
     await expect(client.getWeather(28.6, 77.2)).rejects.toThrow(/API key missing/);
+  });
+});
+
+describe('air quality detail and history', () => {
+  it('clamps history hours to 1–48', () => {
+    expect(clampHistoryHours(24)).toBe(24);
+    expect(clampHistoryHours(0)).toBe(1);
+    expect(clampHistoryHours(100)).toBe(48);
+    expect(clampHistoryHours(Number.NaN)).toBe(24);
+  });
+
+  it('parses detail payload with pollutants and health recommendations', () => {
+    expect(
+      parseAirQualityDetailPayload({
+        dateTime: '2026-11-16T10:00:00Z',
+        indexes: [
+          {
+            code: 'ind_cpcb',
+            aqi: 285,
+            category: 'Poor air quality',
+            dominantPollutant: 'pm25',
+            color: { red: 0.8, green: 0.2, blue: 0.2 },
+          },
+        ],
+        pollutants: [
+          {
+            code: 'pm25',
+            displayName: 'PM2.5',
+            concentration: { value: 142.5, units: 'MICROGRAMS_PER_CUBIC_METER' },
+          },
+          {
+            code: 'pm10',
+            displayName: 'PM10',
+            concentration: { value: 210, units: 'MICROGRAMS_PER_CUBIC_METER' },
+          },
+        ],
+        healthRecommendations: {
+          generalPopulation: 'Limit prolonged outdoor exposure.',
+          elderly: 'Avoid outdoor activity.',
+          children: 'Reduce outdoor play.',
+        },
+      }),
+    ).toEqual({
+      aqi: 285,
+      aqiLabel: 'Poor',
+      dominantPollutant: 'PM2.5',
+      color: { r: 204, g: 51, b: 51 },
+      pollutants: [
+        {
+          code: 'pm25',
+          displayName: 'PM2.5',
+          concentration: { value: 142.5, units: 'MICROGRAMS_PER_CUBIC_METER' },
+        },
+        {
+          code: 'pm10',
+          displayName: 'PM10',
+          concentration: { value: 210, units: 'MICROGRAMS_PER_CUBIC_METER' },
+        },
+      ],
+      healthRecommendations: {
+        generalPopulation: 'Limit prolonged outdoor exposure.',
+        elderly: 'Avoid outdoor activity.',
+        lungDiseasePopulation: null,
+        heartDiseasePopulation: null,
+        athletes: null,
+        pregnantWomen: null,
+        children: 'Reduce outdoor play.',
+      },
+      updatedAt: '2026-11-16T10:00:00Z',
+    });
+  });
+
+  it('parses history hoursInfo into chronological points', () => {
+    expect(
+      parseAirQualityHistoryPayload({
+        hoursInfo: [
+          {
+            dateTime: '2026-11-16T11:00:00Z',
+            indexes: [{ code: 'ind_cpcb', aqi: 200, category: 'Moderate air quality' }],
+          },
+          {
+            dateTime: '2026-11-16T10:00:00Z',
+            indexes: [{ code: 'ind_cpcb', aqi: 180 }],
+          },
+        ],
+      }),
+    ).toEqual({
+      points: [
+        { dateTime: '2026-11-16T10:00:00Z', aqi: 180, aqiLabel: 'Moderate' },
+        { dateTime: '2026-11-16T11:00:00Z', aqi: 200, aqiLabel: 'Moderate' },
+      ],
+    });
+  });
+
+  it('fetches and caches air quality detail', async () => {
+    let calls = 0;
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      expect(init?.method).toBe('POST');
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        extraComputations?: string[];
+      };
+      expect(body.extraComputations).toEqual(
+        expect.arrayContaining(['LOCAL_AQI', 'HEALTH_RECOMMENDATIONS', 'POLLUTANT_CONCENTRATION']),
+      );
+      return new Response(
+        JSON.stringify({
+          dateTime: '2026-11-16T10:00:00Z',
+          indexes: [
+            {
+              code: 'ind_cpcb',
+              aqi: 120,
+              category: 'Moderate air quality',
+              dominantPollutant: 'pm10',
+            },
+          ],
+          pollutants: [{ code: 'pm10', displayName: 'PM10' }],
+          healthRecommendations: { generalPopulation: 'Sensitive groups should limit outdoor exertion.' },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+
+    const client = createGoogleWeatherClient({
+      apiKey: 'test-key',
+      logger: {
+        debug: () => undefined,
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        child: () => undefined as never,
+      } as never,
+      fetchImpl,
+      now: () => 1_000,
+      cacheTtlMs: 60_000,
+    });
+
+    const first = await client.getAirQualityDetail(28.6139, 77.209);
+    const second = await client.getAirQualityDetail(28.6139, 77.209);
+    expect(calls).toBe(1);
+    expect(first.aqi).toBe(120);
+    expect(first.aqiLabel).toBe('Moderate');
+    expect(first.dominantPollutant).toBe('PM10');
+    expect(first.healthRecommendations?.generalPopulation).toContain('Sensitive groups');
+    expect(second).toEqual(first);
+  });
+
+  it('fetches history and pages until nextPageToken is gone', async () => {
+    let calls = 0;
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      const body = JSON.parse(String(init?.body ?? '{}')) as { pageToken?: string; hours?: number };
+      expect(body.hours).toBe(24);
+      if (!body.pageToken) {
+        return new Response(
+          JSON.stringify({
+            hoursInfo: [
+              {
+                dateTime: '2026-11-16T11:00:00Z',
+                indexes: [{ code: 'ind_cpcb', aqi: 150, category: 'Moderate air quality' }],
+              },
+            ],
+            nextPageToken: 'page-2',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      expect(body.pageToken).toBe('page-2');
+      return new Response(
+        JSON.stringify({
+          hoursInfo: [
+            {
+              dateTime: '2026-11-16T10:00:00Z',
+              indexes: [{ code: 'ind_cpcb', aqi: 140, category: 'Moderate air quality' }],
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+
+    const client = createGoogleWeatherClient({
+      apiKey: 'test-key',
+      logger: {
+        debug: () => undefined,
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        child: () => undefined as never,
+      } as never,
+      fetchImpl,
+      now: () => 1_000,
+      cacheTtlMs: 60_000,
+    });
+
+    const history = await client.getAirQualityHistory(28.6139, 77.209, 24);
+    expect(calls).toBe(2);
+    expect(history.points).toEqual([
+      { dateTime: '2026-11-16T10:00:00Z', aqi: 140, aqiLabel: 'Moderate' },
+      { dateTime: '2026-11-16T11:00:00Z', aqi: 150, aqiLabel: 'Moderate' },
+    ]);
+
+    const cached = await client.getAirQualityHistory(28.6139, 77.209, 24);
+    expect(calls).toBe(2);
+    expect(cached).toEqual(history);
   });
 });

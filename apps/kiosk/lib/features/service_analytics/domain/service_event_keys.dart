@@ -12,6 +12,7 @@ abstract final class ServiceEventKeys {
   static const homeFuelStations = 'home.fuel_stations';
   static const homeEmergency = 'home.emergency';
   static const homeSupport = 'home.support';
+  static const homeAirQuality = 'home.air_quality';
   static const supportSubmit = 'support.submit';
 
   static String supportCategory(String category) =>
@@ -59,6 +60,8 @@ abstract final class ServiceEventKeys {
         return homeEmergency;
       case AppRoutes.support:
         return homeSupport;
+      case AppRoutes.airQuality:
+        return homeAirQuality;
       case AppRoutes.quickPrint:
         return printQuick;
       case AppRoutes.otpPrint:

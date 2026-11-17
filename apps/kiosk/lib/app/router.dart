@@ -17,6 +17,7 @@ import 'package:skp_kiosk/features/otp_print/presentation/otp_print_page.dart';
 import 'package:skp_kiosk/features/print/presentation/print_chooser_page.dart';
 import 'package:skp_kiosk/features/quick_print/presentation/quick_print_page.dart';
 import 'package:skp_kiosk/features/serial_debug/presentation/serial_debug_page.dart';
+import 'package:skp_kiosk/features/weather/presentation/air_quality_page.dart';
 import 'package:skp_kiosk/features/well_being/presentation/well_being_page.dart';
 
 final GlobalKey<NavigatorState> kioskNavigatorKey = GlobalKey<NavigatorState>();
@@ -39,6 +40,7 @@ class AppRoutes {
   static const localServiceContacts = '/local-services/contacts';
   static const emergency = '/emergency';
   static const support = '/support';
+  static const airQuality = '/air-quality';
   static const serialDebug = '/serial-debug';
 }
 
@@ -85,6 +87,8 @@ class AppRouter {
         return page((_) => const EmergencyPage());
       case AppRoutes.support:
         return page((_) => const SupportPage());
+      case AppRoutes.airQuality:
+        return page((_) => const AirQualityPage());
       case AppRoutes.serialDebug:
         return page((_) => const SerialDebugPage());
       case AppRoutes.home:
