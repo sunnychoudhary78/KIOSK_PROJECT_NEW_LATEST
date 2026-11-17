@@ -3,8 +3,10 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
 import {
+  ADS_CONFIG_KEY,
   CABINET_LIGHT_CONFIG_KEY,
   CITIZEN_AUTH_CONFIG_KEY,
+  DEFAULT_ADS_CONFIG,
   DEFAULT_CABINET_LIGHT_CONFIG,
   DEFAULT_CITIZEN_AUTH_CONFIG,
   DEFAULT_OTP_PRINT_CONFIG,
@@ -16,6 +18,7 @@ import {
   QUICK_PRINT_CONFIG_KEY,
   SOCIETY_FREE_QUOTA_CONFIG_KEY,
   SMS_CONFIG_KEY,
+  type AdsConfig,
   type CabinetLightConfig,
   type CitizenAuthConfig,
   type OtpPrintConfig,
@@ -23,6 +26,7 @@ import {
   type QuickPrintConfig,
 } from './platform_settings.defaults.js';
 import {
+  adsConfigSchema,
   cabinetLightConfigSchema,
   citizenAuthConfigSchema,
   otpPrintConfigSchema,
@@ -129,6 +133,18 @@ export class PlatformSettingsService {
       ...asObject(row.settingValue),
     });
     return parsed.success ? parsed.data : { ...DEFAULT_CABINET_LIGHT_CONFIG };
+  }
+
+  async getAdsConfig(): Promise<AdsConfig> {
+    const row = await this.getRaw(ADS_CONFIG_KEY);
+    if (!row) {
+      return { ...DEFAULT_ADS_CONFIG };
+    }
+    const parsed = adsConfigSchema.safeParse({
+      ...DEFAULT_ADS_CONFIG,
+      ...asObject(row.settingValue),
+    });
+    return parsed.success ? parsed.data : { ...DEFAULT_ADS_CONFIG };
   }
 
   async update(
@@ -246,6 +262,20 @@ export class PlatformSettingsService {
         throw new AppError(
           'validation_error',
           parsed.error.issues[0]?.message ?? 'Invalid cabinet_light_config',
+          400,
+        );
+      }
+      return parsed.data;
+    }
+    if (settingKey === ADS_CONFIG_KEY) {
+      const parsed = adsConfigSchema.safeParse({
+        ...DEFAULT_ADS_CONFIG,
+        ...asObject(raw),
+      });
+      if (!parsed.success) {
+        throw new AppError(
+          'validation_error',
+          parsed.error.issues[0]?.message ?? 'Invalid ads_config',
           400,
         );
       }

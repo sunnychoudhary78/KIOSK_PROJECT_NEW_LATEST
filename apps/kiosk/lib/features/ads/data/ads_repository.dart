@@ -74,12 +74,18 @@ class AdPlaylist {
     required this.homeBanners,
     this.homeSideBanners = const [],
     required this.homeCarousels,
+    this.idleTimeoutSeconds = defaultIdleTimeoutSeconds,
   });
+
+  static const int defaultIdleTimeoutSeconds = 18;
+  static const int minIdleTimeoutSeconds = 5;
+  static const int maxIdleTimeoutSeconds = 300;
 
   final List<AdPlaylistItem> idle;
   final List<AdPlaylistItem> homeBanners;
   final List<AdPlaylistItem> homeSideBanners;
   final List<AdPlaylistItem> homeCarousels;
+  final int idleTimeoutSeconds;
 
   factory AdPlaylist.fromJson(Map<String, dynamic> json) {
     List<AdPlaylistItem> mapList(String key) {
@@ -95,7 +101,29 @@ class AdPlaylist {
       homeBanners: mapList('homeBanners'),
       homeSideBanners: mapList('homeSideBanners'),
       homeCarousels: mapList('homeCarousels'),
+      idleTimeoutSeconds: _clampIdleTimeoutSeconds(json['idleTimeoutSeconds']),
     );
+  }
+
+  static int _clampIdleTimeoutSeconds(Object? raw) {
+    int? value;
+    if (raw is int) {
+      value = raw;
+    } else if (raw is num) {
+      value = raw.round();
+    } else if (raw is String) {
+      value = int.tryParse(raw);
+    }
+    if (value == null) {
+      return defaultIdleTimeoutSeconds;
+    }
+    if (value < minIdleTimeoutSeconds) {
+      return minIdleTimeoutSeconds;
+    }
+    if (value > maxIdleTimeoutSeconds) {
+      return maxIdleTimeoutSeconds;
+    }
+    return value;
   }
 }
 

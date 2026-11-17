@@ -5,6 +5,7 @@ export const CITIZEN_AUTH_CONFIG_KEY = 'citizen_auth_config';
 export const PRINT_FREE_QUOTA_CONFIG_KEY = 'print_free_quota_config';
 export const SOCIETY_FREE_QUOTA_CONFIG_KEY = 'society_free_quota_config';
 export const CABINET_LIGHT_CONFIG_KEY = 'cabinet_light_config';
+export const ADS_CONFIG_KEY = 'ads_config';
 
 export type OtpPrintConfig = {
   ttlSeconds: number;
@@ -78,4 +79,13 @@ export const DEFAULT_CABINET_LIGHT_CONFIG: CabinetLightConfig = {
   mode: 'schedule',
   onTime: '18:00',
   offTime: '06:00',
+};
+
+/** Global idle attract delay before fullscreen ads on the kiosk home screen. */
+export type AdsConfig = {
+  idleTimeoutSeconds: number;
+};
+
+export const DEFAULT_ADS_CONFIG: AdsConfig = {
+  idleTimeoutSeconds: 18,
 };

@@ -19,7 +19,7 @@ import {
 
 const PLAY_STORE_URL =
   import.meta.env.VITE_PLAY_STORE_URL ||
-  'https://play.google.com/store/apps/details?id=com.smartkiosk.skp_mobile';
+  'https://play.google.com/store/apps/details?id=com.imt.skp_mobile';
 
 type Step = 'chooser' | 'identity' | 'upload' | 'pay' | 'done' | 'error';
 

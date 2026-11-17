@@ -13,9 +13,9 @@ class _AuthedDeviceAuth extends DeviceAuthNotifier {
   }
 }
 
-AdPlaylist _idlePlaylist() {
-  return const AdPlaylist(
-    idle: [
+AdPlaylist _idlePlaylist({int idleTimeoutSeconds = 18}) {
+  return AdPlaylist(
+    idle: const [
       AdPlaylistItem(
         id: 'ad-1',
         campaignId: 'camp-1',
@@ -26,9 +26,10 @@ AdPlaylist _idlePlaylist() {
         mimeType: 'image/jpeg',
       ),
     ],
-    homeBanners: [],
-    homeSideBanners: [],
-    homeCarousels: [],
+    homeBanners: const [],
+    homeSideBanners: const [],
+    homeCarousels: const [],
+    idleTimeoutSeconds: idleTimeoutSeconds,
   );
 }
 
@@ -99,5 +100,41 @@ void main() {
       async.elapse(AdsController.idleTimeout);
       expect(container.read(adsControllerProvider).idleVisible, isTrue);
     });
+  });
+
+  test('uses playlist idleTimeoutSeconds for attract delay', () {
+    fakeAsync((async) {
+      final container = containerOf();
+      addTearDown(container.dispose);
+      container.listen(adsControllerProvider, (_, _) {});
+      container.listen(kioskSessionControllerProvider, (_, _) {});
+
+      final ads = container.read(adsControllerProvider.notifier);
+      ads.replacePlaylist(_idlePlaylist(idleTimeoutSeconds: 30));
+
+      async.elapse(const Duration(seconds: 18));
+      expect(container.read(adsControllerProvider).idleVisible, isFalse);
+
+      async.elapse(const Duration(seconds: 12));
+      expect(container.read(adsControllerProvider).idleVisible, isTrue);
+    });
+  });
+
+  test('AdPlaylist.fromJson maps idleTimeoutSeconds with defaults', () {
+    final parsed = AdPlaylist.fromJson({
+      'idle': [],
+      'homeBanners': [],
+      'homeSideBanners': [],
+      'homeCarousels': [],
+      'idleTimeoutSeconds': 45,
+    });
+    expect(parsed.idleTimeoutSeconds, 45);
+
+    final missing = AdPlaylist.fromJson({
+      'idle': [],
+      'homeBanners': [],
+      'homeCarousels': [],
+    });
+    expect(missing.idleTimeoutSeconds, AdPlaylist.defaultIdleTimeoutSeconds);
   });
 }

@@ -11,6 +11,7 @@ import {
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
+import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
 import type {
   CreateAdvertiserInput,
   CreateCampaignInput,
@@ -87,10 +88,14 @@ function normalizeAdsMediaPath(url: string | null | undefined): string | null {
 }
 
 export class AdsService {
+  private readonly settings: PlatformSettingsService;
+
   constructor(
     private readonly db: DbClient,
     private readonly audit: AuditService,
-  ) {}
+  ) {
+    this.settings = new PlatformSettingsService(db, audit);
+  }
 
   private async defaultTenantId(tenantId?: string) {
     if (tenantId) {
@@ -784,11 +789,14 @@ export class AdsService {
       }
     }
 
+    const adsConfig = await this.settings.getAdsConfig();
+
     return {
       idle,
       homeBanners: banners,
       homeSideBanners: sideBanners,
       homeCarousels: carousels,
+      idleTimeoutSeconds: adsConfig.idleTimeoutSeconds,
       fetchedAt: now.toISOString(),
     };
   }

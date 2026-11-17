@@ -189,6 +189,18 @@ async function main() {
     },
   });
 
+  await prisma.platformSetting.upsert({
+    where: { settingKey: 'ads_config' },
+    update: {},
+    create: {
+      settingKey: 'ads_config',
+      description: 'Global idle ad attract delay for all kiosks',
+      settingValue: {
+        idleTimeoutSeconds: 18,
+      },
+    },
+  });
+
   const existingAdvertiser = await prisma.advertiser.findFirst({
     where: { tenantId: tenant.id, name: 'Demo Advertiser' },
   });

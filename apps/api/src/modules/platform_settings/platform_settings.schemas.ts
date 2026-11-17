@@ -32,6 +32,10 @@ export const cabinetLightConfigSchema = z.object({
   offTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
 });
 
+export const adsConfigSchema = z.object({
+  idleTimeoutSeconds: z.number().int().min(5).max(300),
+});
+
 export const updatePlatformSettingSchema = z.object({
   settingValue: z.unknown(),
   description: z.string().max(500).optional(),
