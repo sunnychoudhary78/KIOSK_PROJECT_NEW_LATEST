@@ -28,28 +28,30 @@ function normalizeEntries(
   raw: PrinterHealthLike['errorHistory'] | undefined,
 ): PrinterErrorEntry[] {
   if (!raw || raw.available !== true || !Array.isArray(raw.entries)) return [];
-  return raw.entries
-    .map((entry) => {
-      const index = entry?.index;
-      const description = entry?.description?.trim();
-      if (
-        typeof index !== 'number' ||
-        !Number.isInteger(index) ||
-        index < 1 ||
-        index > 10 ||
-        !description
-      ) {
-        return null;
-      }
-      return {
-        index,
-        description,
-        firstSeenAt: entry.firstSeenAt,
-        lastSeenAt: entry.lastSeenAt,
-      } satisfies PrinterErrorEntry;
-    })
-    .filter((entry): entry is PrinterErrorEntry => entry != null)
-    .slice(0, 10);
+  const out: PrinterErrorEntry[] = [];
+  for (const entry of raw.entries) {
+    const index = entry?.index;
+    const description = entry?.description?.trim();
+    if (
+      typeof index !== 'number' ||
+      !Number.isInteger(index) ||
+      index < 1 ||
+      index > 10 ||
+      !description
+    ) {
+      continue;
+    }
+    const normalized: PrinterErrorEntry = { index, description };
+    if (typeof entry.firstSeenAt === 'string' && entry.firstSeenAt.length > 0) {
+      normalized.firstSeenAt = entry.firstSeenAt;
+    }
+    if (typeof entry.lastSeenAt === 'string' && entry.lastSeenAt.length > 0) {
+      normalized.lastSeenAt = entry.lastSeenAt;
+    }
+    out.push(normalized);
+    if (out.length >= 10) break;
+  }
+  return out;
 }
 
 export function printerErrorSignature(entries: PrinterErrorEntry[]): string {

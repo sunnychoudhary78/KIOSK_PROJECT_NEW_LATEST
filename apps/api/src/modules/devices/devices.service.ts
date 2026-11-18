@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { DeviceStatus, KioskAppReleaseStatus } from '@prisma/client';
+import { DeviceStatus, KioskAppReleaseStatus, Prisma } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import {
@@ -573,7 +573,7 @@ export class DevicesService {
     }
     const updated = await this.db.device.update({
       where: { id: deviceId },
-      data: { printerHealth: nextHealth },
+      data: { printerHealth: nextHealth as Prisma.InputJsonValue },
       include: { site: true },
     });
     await this.audit.record({
@@ -746,7 +746,7 @@ export class DevicesService {
                 body.printer as Record<string, unknown>,
                 now,
                 device.printerHealthAt,
-              ),
+              ) as Prisma.InputJsonValue,
               printerHealthAt: now,
             }
           : {}),
