@@ -34,6 +34,10 @@ type FreeQuotaForm = {
   freeColorPages: number;
 };
 
+type AdsForm = {
+  idleTimeoutSeconds: number;
+};
+
 type SmsStatus = {
   provider: string;
   configured: boolean;
@@ -62,10 +66,16 @@ const DEFAULT_FREE_QUOTA: FreeQuotaForm = {
   freeColorPages: 0,
 };
 
+const DEFAULT_ADS: AdsForm = {
+  idleTimeoutSeconds: 18,
+};
+
 const MIN_PRINT_TTL_SECONDS = 60;
 const MAX_PRINT_TTL_SECONDS = 86_400;
 const MIN_LOGIN_TTL_SECONDS = 60;
 const MAX_LOGIN_TTL_SECONDS = 3600;
+const MIN_IDLE_AD_SECONDS = 5;
+const MAX_IDLE_AD_SECONDS = 300;
 
 const SMS_TEMPLATE_PREVIEW =
   'Your OTP for IMMORTAL is #### Valid for {expiry}. Do not share this code.';
@@ -115,6 +125,13 @@ function clampLoginTtlSeconds(value: number): number {
   return n;
 }
 
+function clampIdleAdSeconds(value: number): number {
+  const n = Math.floor(Number(value) || 0);
+  if (n < MIN_IDLE_AD_SECONDS) return MIN_IDLE_AD_SECONDS;
+  if (n > MAX_IDLE_AD_SECONDS) return MAX_IDLE_AD_SECONDS;
+  return n;
+}
+
 export function PlatformSettingsPage() {
   const { token } = useAuth();
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +140,7 @@ export function PlatformSettingsPage() {
   const [otpPrint, setOtpPrint] = useState<OtpPrintForm>(DEFAULT_OTP_PRINT);
   const [citizenAuth, setCitizenAuth] = useState<CitizenAuthForm>(DEFAULT_CITIZEN_AUTH);
   const [freeQuota, setFreeQuota] = useState<FreeQuotaForm>(DEFAULT_FREE_QUOTA);
+  const [ads, setAds] = useState<AdsForm>(DEFAULT_ADS);
   const [smsStatus, setSmsStatus] = useState<SmsStatus | null>(null);
 
   const printDuration = ttlToParts(otpPrint.ttlSeconds);
@@ -157,6 +175,12 @@ export function PlatformSettingsPage() {
         }
         if (item.settingKey === 'print_free_quota_config') {
           setFreeQuota({ ...DEFAULT_FREE_QUOTA, ...(item.settingValue as FreeQuotaForm) });
+        }
+        if (item.settingKey === 'ads_config') {
+          const loaded = { ...DEFAULT_ADS, ...(item.settingValue as AdsForm) };
+          setAds({
+            idleTimeoutSeconds: clampIdleAdSeconds(loaded.idleTimeoutSeconds),
+          });
         }
       }
     } catch (err) {
@@ -193,10 +217,17 @@ export function PlatformSettingsPage() {
       loginTtlRaw >= MIN_LOGIN_TTL_SECONDS &&
       loginTtlRaw <= MAX_LOGIN_TTL_SECONDS;
 
+    const idleAdRaw = Number(ads.idleTimeoutSeconds);
+    const idleAdValid =
+      Number.isFinite(idleAdRaw) &&
+      idleAdRaw >= MIN_IDLE_AD_SECONDS &&
+      idleAdRaw <= MAX_IDLE_AD_SECONDS;
+
     const errors: string[] = [];
     let printSaved = false;
     let loginSaved = false;
     let quotaSaved = false;
+    let adsSaved = false;
 
     try {
       await putSetting('otp_print_config', {
@@ -247,16 +278,32 @@ export function PlatformSettingsPage() {
       );
     }
 
+    if (!idleAdValid) {
+      errors.push(
+        `Ads: Idle delay must be ${MIN_IDLE_AD_SECONDS}–${MAX_IDLE_AD_SECONDS} seconds.`,
+      );
+    } else {
+      try {
+        await putSetting('ads_config', {
+          idleTimeoutSeconds: idleAdRaw,
+        });
+        adsSaved = true;
+      } catch (err) {
+        errors.push(`Ads: ${err instanceof Error ? err.message : 'Failed to save'}`);
+      }
+    }
+
     await load();
 
     if (errors.length === 0) {
       setSuccess('Settings saved');
-    } else if (printSaved || loginSaved || quotaSaved) {
+    } else if (printSaved || loginSaved || quotaSaved || adsSaved) {
       setSuccess(
         [
           printSaved ? 'Print settings saved' : null,
           loginSaved ? 'Login settings saved' : null,
           quotaSaved ? 'Free quota saved' : null,
+          adsSaved ? 'Ads settings saved' : null,
         ]
           .filter(Boolean)
           .join('; '),
@@ -503,6 +550,27 @@ export function PlatformSettingsPage() {
             has its own per-session free cap and optional night free-disabled window. Society numbers
             use a separate limit on the <Link to="/society-phones">Society phones</Link> page.
           </p>
+        </Panel>
+
+        <Panel title="Ads">
+          <div className="settings-row">
+            <label>
+              Idle ad delay (seconds)
+              <Input
+                type="number"
+                min={MIN_IDLE_AD_SECONDS}
+                max={MAX_IDLE_AD_SECONDS}
+                value={ads.idleTimeoutSeconds}
+                onChange={(e) =>
+                  setAds({ idleTimeoutSeconds: Number(e.target.value) })
+                }
+              />
+              <span className="muted" style={{ fontSize: 12 }}>
+                How long the home screen stays idle before fullscreen ads (all
+                kiosks). Default 18 · range {MIN_IDLE_AD_SECONDS}–{MAX_IDLE_AD_SECONDS}.
+              </span>
+            </label>
+          </div>
         </Panel>
 
         <div className="settings-actions">

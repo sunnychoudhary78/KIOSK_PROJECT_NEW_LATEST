@@ -17,6 +17,7 @@ import { createPrintJobWithPdf } from '../printing/create_print_job_with_pdf.js'
 import { assertPrintingAvailable } from '../printing/printing_pause.js';
 import { countPdfPages } from '../printing/report_pdf.js';
 import { PrintingService } from '../printing/printing.service.js';
+import type { ServicesCatalogService } from '../services/services.service.js';
 import { buildHealthReportPdf } from './well_being_report_pdf.js';
 import type { WellBeingColorMode, WellBeingPrintBody } from './well_being.schemas.js';
 import {
@@ -52,13 +53,21 @@ export class WellBeingService {
     private readonly config: AppConfig,
     private readonly razorpay: RazorpayClient,
     private readonly sms: SmsClient,
+    private readonly services?: ServicesCatalogService,
   ) {
     this.printing = new PrintingService(db, audit);
     this.quota = new PrintQuotaService(db, audit);
     this.settings = new PlatformSettingsService(db, audit);
   }
 
+  private async assertServiceEnabled(deviceId: string): Promise<void> {
+    if (this.services) {
+      await this.services.assertEnabled(deviceId, 'well_being');
+    }
+  }
+
   async getPrintOptions(deviceId: string) {
+    await this.assertServiceEnabled(deviceId);
     const device = await this.db.device.findUnique({
       where: { id: deviceId },
       select: {
@@ -76,6 +85,7 @@ export class WellBeingService {
   }
 
   async requestPhoneOtp(deviceId: string, phoneRaw: string, correlationId?: string) {
+    await this.assertServiceEnabled(deviceId);
     let phone: string;
     try {
       phone = normalizePhone(phoneRaw);
@@ -132,6 +142,7 @@ export class WellBeingService {
     colorMode: WellBeingColorMode,
     correlationId?: string,
   ) {
+    await this.assertServiceEnabled(deviceId);
     let phone: string;
     try {
       phone = normalizePhone(phoneRaw);
@@ -195,6 +206,7 @@ export class WellBeingService {
   }
 
   async printReport(deviceId: string, input: WellBeingPrintBody, correlationId?: string) {
+    await this.assertServiceEnabled(deviceId);
     await assertPrintingAvailable(this.db, deviceId);
 
     const device = await this.db.device.findUnique({
@@ -383,6 +395,7 @@ export class WellBeingService {
   }
 
   async getPrintJobPayment(deviceId: string, jobId: string) {
+    await this.assertServiceEnabled(deviceId);
     const job = await this.db.printJob.findUnique({
       where: { id: jobId },
       include: { payment: true },

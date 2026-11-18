@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
+import 'package:skp_kiosk/core/network/service_enablement.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_paid_print.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_print_mixin.dart';
@@ -245,6 +246,10 @@ class AstrologyController extends Notifier<AstrologyUiState> {
       );
     } catch (error) {
       if (!ref.mounted) {
+        return;
+      }
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Astrology')) {
+        state = state.copyWith(phase: AstrologyPhase.form, clearError: true);
         return;
       }
       final message = userFacingError(error);

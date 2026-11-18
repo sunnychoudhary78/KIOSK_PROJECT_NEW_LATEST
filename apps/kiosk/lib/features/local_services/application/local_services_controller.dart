@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/network/service_enablement.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/local_services/data/local_services_repository.dart';
 import 'package:skp_kiosk/features/local_services/domain/local_service.dart';
@@ -43,6 +44,14 @@ class LocalServicesController extends Notifier<LocalServicesState> {
       final categories = await ref.read(localServicesRepositoryProvider).list();
       state = state.copyWith(loading: false, categories: categories);
     } catch (error) {
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Find Services')) {
+        state = state.copyWith(
+          loading: false,
+          categories: const [],
+          clearError: true,
+        );
+        return;
+      }
       state = state.copyWith(
         loading: false,
         categories: const [],

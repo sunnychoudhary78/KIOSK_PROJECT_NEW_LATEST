@@ -8,7 +8,9 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/ads/presentation/home_banner_strip.dart';
 import 'package:skp_kiosk/features/ads/presentation/idle_ad_player.dart';
-import 'package:skp_kiosk/features/home/application/service_status_controller.dart';
+import 'package:skp_kiosk/features/home/application/service_catalog_controller.dart';
+import 'package:skp_kiosk/features/home/domain/kiosk_home_service.dart';
+import 'package:skp_kiosk/features/home/presentation/under_maintenance_page.dart';
 import 'package:skp_kiosk/features/home/presentation/widgets/kiosk_terminal_graphic.dart';
 import 'package:skp_kiosk/features/weather/application/weather_controller.dart';
 import 'package:skp_kiosk/features/weather/presentation/weather_header_strip.dart';
@@ -37,10 +39,12 @@ class _HomePageState extends ConsumerState<HomePage> {
       _adsStarted = true;
       ref.read(adsControllerProvider.notifier).startWatching();
       ref.read(weatherControllerProvider.notifier).startWatching();
+      ref.read(serviceCatalogControllerProvider.notifier).startWatching();
     } else if (!authenticated && _adsStarted) {
       _adsStarted = false;
       ref.read(adsControllerProvider.notifier).stopWatching();
       ref.read(weatherControllerProvider.notifier).stopWatching();
+      ref.read(serviceCatalogControllerProvider.notifier).stopWatching();
     }
   }
 
@@ -190,29 +194,50 @@ class _ServiceCatalog extends ConsumerStatefulWidget {
 }
 
 class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
+  Future<void> _openService(
+    BuildContext context,
+    KioskHomeService service,
+    String route,
+  ) async {
+    await ref.read(serviceCatalogControllerProvider.notifier).refresh();
+    if (!context.mounted) {
+      return;
+    }
+    final catalog = ref.read(serviceCatalogControllerProvider);
+    if (!catalog.isHomeServiceEnabled(service)) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => UnderMaintenancePage(serviceTitle: service.displayName),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pushNamed(route);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.athenaColors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final playlist = ref.watch(adsControllerProvider).playlist;
-    final serviceStatus = ref.watch(serviceStatusControllerProvider);
+    // Rebuild when enablement/status changes so taps use the latest map.
+    final catalog = ref.watch(serviceCatalogControllerProvider);
     final showHorizontal = playlist.homeBanners.isNotEmpty;
     final showVertical = playlist.homeSideBanners.isNotEmpty;
 
-    ({String? label, bool blocked}) tileStatus(String code) {
-      final status = serviceStatus.statusFor(code);
-      if (status == ServiceOperationalStatus.available) {
+    ({String? label, bool blocked}) tileStatus(KioskHomeService service) {
+      if (catalog.isHomeServiceEnabled(service)) {
         return (label: null, blocked: false);
       }
-      return (label: serviceStatusLabel(status), blocked: true);
+      return (label: 'Under maintenance', blocked: true);
     }
 
-    final printStatus = tileStatus('print');
-    final localStatus = tileStatus('local_services');
-    final wellBeingStatus = tileStatus('well_being');
-    final chargingStatus = tileStatus('charging');
-    final astrologyStatus = tileStatus('astrology');
-    final fuelStatus = tileStatus('fuel_stations');
+    final printStatus = tileStatus(KioskHomeService.printDocuments);
+    final localStatus = tileStatus(KioskHomeService.localServices);
+    final wellBeingStatus = tileStatus(KioskHomeService.wellBeing);
+    final chargingStatus = tileStatus(KioskHomeService.phoneCharging);
+    final astrologyStatus = tileStatus(KioskHomeService.astrology);
+    final fuelStatus = tileStatus(KioskHomeService.fuelStations);
 
     // 6 Signature Service Tiles with pastel organic waves
     final tiles = [
@@ -225,7 +250,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         gradientColors: const [Color(0xFF38BDF8), Color(0xFF0284C7)],
         statusLabel: printStatus.label,
         statusBlocked: printStatus.blocked,
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.print),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.printDocuments,
+          AppRoutes.print,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.handyman_rounded,
@@ -236,7 +265,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         gradientColors: const [Color(0xFF34D399), Color(0xFF059669)],
         statusLabel: localStatus.label,
         statusBlocked: localStatus.blocked,
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.localServices),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.localServices,
+          AppRoutes.localServices,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.favorite_rounded,
@@ -247,7 +280,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         gradientColors: const [Color(0xFFFB7185), Color(0xFFE11D48)],
         statusLabel: wellBeingStatus.label,
         statusBlocked: wellBeingStatus.blocked,
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.wellBeing),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.wellBeing,
+          AppRoutes.wellBeing,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.battery_charging_full_rounded,
@@ -258,7 +295,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         gradientColors: const [Color(0xFFFBBF24), Color(0xFFD97706)],
         statusLabel: chargingStatus.label,
         statusBlocked: chargingStatus.blocked,
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.charging),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.phoneCharging,
+          AppRoutes.charging,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.auto_awesome_rounded,
@@ -269,7 +310,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         gradientColors: const [Color(0xFFA855F7), Color(0xFF7C3AED)],
         statusLabel: astrologyStatus.label,
         statusBlocked: astrologyStatus.blocked,
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrology),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.astrology,
+          AppRoutes.astrology,
+        ),
       ),
       KioskServiceTile(
         icon: Icons.local_gas_station_rounded,
@@ -280,7 +325,11 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         gradientColors: const [Color(0xFFFB923C), Color(0xFFEA580C)],
         statusLabel: fuelStatus.label,
         statusBlocked: fuelStatus.blocked,
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.fuelStations),
+        onTap: () => _openService(
+          context,
+          KioskHomeService.fuelStations,
+          AppRoutes.fuelStations,
+        ),
       ),
     ];
 

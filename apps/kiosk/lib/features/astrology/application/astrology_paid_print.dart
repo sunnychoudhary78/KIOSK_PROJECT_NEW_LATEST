@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:skp_kiosk/core/logging/diagnostic_categories.dart';
+import 'package:skp_kiosk/core/network/service_enablement.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
@@ -102,6 +103,16 @@ class AstrologyPaidPrint {
       }
     } catch (error) {
       if (!mounted()) return;
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Astrology')) {
+        applyPrint(
+          readPrint().copyWith(
+            phase: ReportPrintPhase.idle,
+            clearError: true,
+            clearMessage: true,
+          ),
+        );
+        return;
+      }
       final message = userFacingError(error);
       Diag.astrologyError(
         'astrology.print_prepare_failed',
@@ -178,6 +189,12 @@ class AstrologyPaidPrint {
       );
     } catch (error) {
       if (!mounted()) return;
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Astrology')) {
+        applyPrint(
+          readPrint().copyWith(phoneBusy: false, clearError: true),
+        );
+        return;
+      }
       applyPrint(
         readPrint().copyWith(
           phoneBusy: false,
@@ -226,6 +243,12 @@ class AstrologyPaidPrint {
       );
     } catch (error) {
       if (!mounted()) return null;
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Astrology')) {
+        applyPrint(
+          readPrint().copyWith(phoneBusy: false, clearError: true),
+        );
+        return null;
+      }
       applyPrint(
         readPrint().copyWith(
           phoneBusy: false,

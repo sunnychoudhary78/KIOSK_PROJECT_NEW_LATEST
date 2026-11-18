@@ -26,7 +26,7 @@ const HOME_SERVICE_CODES = [
   'print',
   'local_services',
   'well_being',
-  'charging',
+  'phone_charging',
   'astrology',
   'fuel_stations',
 ] as const;

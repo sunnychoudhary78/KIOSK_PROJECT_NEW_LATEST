@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/network/api_client.dart';
+import 'package:skp_kiosk/core/network/service_enablement.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/digilocker_print/data/digilocker_print_repository.dart';
 import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
@@ -388,6 +389,10 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       );
       _startPolling(session.id);
     } catch (error) {
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Print Documents')) {
+        state = const DigilockerUiState();
+        return;
+      }
       state = DigilockerUiState(
         phase: DigilockerPhase.error,
         paperOut: error is ApiException && error.code == 'printing_paused',

@@ -5,6 +5,7 @@ import { assertActiveDevice } from '../../shared/device-guard.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
+import { ServicesCatalogService } from '../services/services.service.js';
 import {
   createLocalServiceCategorySchema,
   createLocalServiceContactSchema,
@@ -12,15 +13,18 @@ import {
 import { LocalServicesService } from './local_services.service.js';
 
 export function registerLocalServicesModule(router: Router, deps: AppDeps): void {
-  const service = new LocalServicesService(deps.db, deps.auditService);
+  const services = new ServicesCatalogService(deps.db, deps.auditService);
+  const service = new LocalServicesService(deps.db, deps.auditService, services);
 
   router.get(
     '/local-services',
     authRequired(deps.config, ['admin', 'device']),
     assertActiveDevice(deps.db),
-    async (_req: Request, res: Response, next: NextFunction) => {
+    async (req: Request, res: Response, next: NextFunction) => {
       try {
-        res.json(await service.list());
+        const deviceId =
+          req.principal?.type === 'device' ? req.principal.deviceId : undefined;
+        res.json(await service.list(deviceId));
       } catch (error) {
         next(error);
       }

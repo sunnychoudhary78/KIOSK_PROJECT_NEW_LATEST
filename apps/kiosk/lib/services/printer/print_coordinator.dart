@@ -128,6 +128,9 @@ class PrintCoordinator {
     unawaited(clearPendingSpoolerWork());
   }
 
+  /// Max wait for a Windows USB spooler clear so Home/session reset cannot hang.
+  static const Duration spoolerClearTimeout = Duration(seconds: 5);
+
   /// Cancel/purge any pending USB spooler work for this kiosk printer.
   /// Safe when idle (purges orphans). Prefer awaiting from session reset.
   Future<void> clearPendingSpoolerWork() => _clearActiveSpoolerWork();
@@ -138,13 +141,24 @@ class PrintCoordinator {
     _activeSpoolerJobId = null;
     _activePrintTitle = null;
     try {
-      final result = await _monitor.clearUsbSpoolerJobs(
-        jobId: jobId,
-        documentTitle: title,
-      );
+      final result = await _monitor
+          .clearUsbSpoolerJobs(
+            jobId: jobId,
+            documentTitle: title,
+          )
+          .timeout(spoolerClearTimeout);
       AppLogger.info(
         'PRINTER spooler clear ok=${result.ok} purged=${result.purged} '
         'jobId=${result.jobId ?? jobId} win32=${result.win32Error}',
+      );
+    } on TimeoutException {
+      AppLogger.warn(
+        'PRINTER spooler clear timed out after ${spoolerClearTimeout.inSeconds}s',
+      );
+      Diag.printerError(
+        'printer.spooler_clear_timeout',
+        'Spooler clear timed out',
+        {'timeoutMs': spoolerClearTimeout.inMilliseconds},
       );
     } catch (error) {
       AppLogger.error('PRINTER spooler clear failed', error);

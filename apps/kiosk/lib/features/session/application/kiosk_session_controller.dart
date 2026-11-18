@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
+import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/application/visitor_session_reset.dart';
 import 'package:skp_kiosk/features/session/domain/kiosk_session_policy.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
 enum KioskSessionPhase { catalog, inService, warning, resetting }
+
+/// Hard cap so a hung reset cannot leave the UI stuck in [KioskSessionPhase.resetting].
+const Duration kSessionResetWatchdog = Duration(seconds: 10);
 
 class KioskSessionState {
   const KioskSessionState({
@@ -45,6 +49,7 @@ final kioskSessionControllerProvider =
 class KioskSessionController extends Notifier<KioskSessionState> {
   Timer? _idleTimer;
   Timer? _warningTick;
+  Timer? _resetWatchdog;
 
   @override
   KioskSessionState build() {
@@ -163,16 +168,20 @@ class KioskSessionController extends Notifier<KioskSessionState> {
       phase: KioskSessionPhase.resetting,
       warningRemaining: Duration.zero,
     );
+    AppLogger.info('session_reset_start attract=$attract');
+    _armResetWatchdog();
 
     try {
       await ref.read(visitorSessionResetProvider)(attract: attract);
     } finally {
+      _cancelResetWatchdog();
       if (ref.mounted) {
         state = state.copyWith(
           phase: KioskSessionPhase.catalog,
           onHome: true,
           warningRemaining: Duration.zero,
         );
+        AppLogger.info('session_reset_done attract=$attract');
       }
     }
   }
@@ -216,10 +225,34 @@ class KioskSessionController extends Notifier<KioskSessionState> {
     });
   }
 
+  void _armResetWatchdog() {
+    _cancelResetWatchdog();
+    _resetWatchdog = Timer(kSessionResetWatchdog, () {
+      if (!ref.mounted) {
+        return;
+      }
+      if (state.phase != KioskSessionPhase.resetting) {
+        return;
+      }
+      AppLogger.warn('session_reset_timeout afterMs=${kSessionResetWatchdog.inMilliseconds}');
+      state = state.copyWith(
+        phase: KioskSessionPhase.catalog,
+        onHome: true,
+        warningRemaining: Duration.zero,
+      );
+    });
+  }
+
+  void _cancelResetWatchdog() {
+    _resetWatchdog?.cancel();
+    _resetWatchdog = null;
+  }
+
   void _cancelTimers() {
     _idleTimer?.cancel();
     _idleTimer = null;
     _warningTick?.cancel();
     _warningTick = null;
+    _cancelResetWatchdog();
   }
 }

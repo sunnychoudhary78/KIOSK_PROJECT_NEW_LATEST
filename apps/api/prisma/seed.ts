@@ -75,21 +75,6 @@ async function main() {
       description: 'Scan a QR on the kiosk and upload documents from a phone browser',
     },
     {
-      code: 'local_services',
-      name: 'Find Services',
-      description: 'Local trades and nearby service contacts',
-    },
-    {
-      code: 'well_being',
-      name: 'Well Being',
-      description: 'Heart rate, blood oxygen, and temperature checks',
-    },
-    {
-      code: 'charging',
-      name: 'Phone Charging',
-      description: 'Kiosk phone charging sessions',
-    },
-    {
       code: 'astrology',
       name: 'Astrology & Palm Reading',
       description: 'Vedic chart plus palm reading from the kiosk camera',
@@ -98,6 +83,21 @@ async function main() {
       code: 'fuel_stations',
       name: 'Fuel stations',
       description: 'Nearby petrol, diesel, CNG, and EV stations',
+    },
+    {
+      code: 'local_services',
+      name: 'Find Services',
+      description: 'Local trades and contacts shown on the kiosk Find Services screen',
+    },
+    {
+      code: 'well_being',
+      name: 'Well Being',
+      description: 'Heart rate, blood oxygen, and temperature on the kiosk',
+    },
+    {
+      code: 'phone_charging',
+      name: 'Phone Charging',
+      description: 'Phone charging session on the kiosk',
     },
   ]) {
     await prisma.platformService.upsert({
@@ -111,38 +111,37 @@ async function main() {
     });
   }
 
-  const extraServices = await prisma.platformService.findMany({
-    where: {
-      code: {
-        in: [
-          'print',
-          'astrology',
-          'quick_print',
-          'fuel_stations',
-          'local_services',
-          'well_being',
-          'charging',
-        ],
-      },
-    },
+  const homeServiceCodes = [
+    'print',
+    'otp_print',
+    'digilocker_print',
+    'quick_print',
+    'astrology',
+    'fuel_stations',
+    'local_services',
+    'well_being',
+    'phone_charging',
+  ];
+  const homeServices = await prisma.platformService.findMany({
+    where: { code: { in: homeServiceCodes } },
     select: { id: true, code: true },
   });
-  if (extraServices.length) {
+  if (homeServices.length) {
     const devices = await prisma.device.findMany({ select: { id: true, tenantId: true } });
     for (const device of devices) {
-      for (const extra of extraServices) {
+      for (const home of homeServices) {
         await prisma.serviceEnablement.upsert({
           where: {
             deviceId_serviceId: {
               deviceId: device.id,
-              serviceId: extra.id,
+              serviceId: home.id,
             },
           },
           update: {},
           create: {
             tenantId: device.tenantId,
             deviceId: device.id,
-            serviceId: extra.id,
+            serviceId: home.id,
             enabled: true,
           },
         });
@@ -217,6 +216,18 @@ async function main() {
         period: 'daily',
         freeBwPages: 5,
         freeColorPages: 0,
+      },
+    },
+  });
+
+  await prisma.platformSetting.upsert({
+    where: { settingKey: 'ads_config' },
+    update: {},
+    create: {
+      settingKey: 'ads_config',
+      description: 'Global idle ad attract delay for all kiosks',
+      settingValue: {
+        idleTimeoutSeconds: 18,
       },
     },
   });

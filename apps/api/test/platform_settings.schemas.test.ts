@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adsConfigSchema,
   cabinetLightConfigSchema,
   citizenAuthConfigSchema,
   otpPrintConfigSchema,
   quickPrintConfigSchema,
 } from '../src/modules/platform_settings/platform_settings.schemas.js';
 import {
+  DEFAULT_ADS_CONFIG,
   DEFAULT_CABINET_LIGHT_CONFIG,
   DEFAULT_CITIZEN_AUTH_CONFIG,
   DEFAULT_OTP_PRINT_CONFIG,
@@ -82,5 +84,13 @@ describe('platform settings schemas', () => {
         offTime: '06:00',
       }).success,
     ).toBe(false);
+  });
+
+  it('accepts ads idle timeout defaults and clamps range 5–300', () => {
+    expect(adsConfigSchema.parse(DEFAULT_ADS_CONFIG).idleTimeoutSeconds).toBe(18);
+    expect(adsConfigSchema.parse({ idleTimeoutSeconds: 5 }).idleTimeoutSeconds).toBe(5);
+    expect(adsConfigSchema.parse({ idleTimeoutSeconds: 300 }).idleTimeoutSeconds).toBe(300);
+    expect(adsConfigSchema.safeParse({ idleTimeoutSeconds: 4 }).success).toBe(false);
+    expect(adsConfigSchema.safeParse({ idleTimeoutSeconds: 301 }).success).toBe(false);
   });
 });

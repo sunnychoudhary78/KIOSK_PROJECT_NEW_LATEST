@@ -51,10 +51,20 @@ final adsControllerProvider =
 class AdsController extends Notifier<AdsUiState> {
   Timer? _pollTimer;
   Timer? _idleTimer;
-  static const idleTimeout = Duration(seconds: 18);
+  static const defaultIdleTimeoutSeconds =
+      AdPlaylist.defaultIdleTimeoutSeconds;
   static const pollInterval = Duration(seconds: 60);
 
+  /// Fallback used by tests when playlist has not been loaded yet.
+  static Duration get idleTimeout =>
+      const Duration(seconds: defaultIdleTimeoutSeconds);
+
   AdsRepository get _repo => ref.read(adsRepositoryProvider);
+
+  Duration get _resolvedIdleTimeout {
+    final seconds = state.playlist.idleTimeoutSeconds;
+    return Duration(seconds: seconds);
+  }
 
   @override
   AdsUiState build() {
@@ -99,9 +109,13 @@ class AdsController extends Notifier<AdsUiState> {
     }
     state = state.copyWith(loading: true, clearError: true);
     try {
+      final previousTimeout = state.playlist.idleTimeoutSeconds;
       final playlist = await _repo.fetchPlaylist();
       state = state.copyWith(playlist: playlist, loading: false);
-      _armIdleTimerIfNeeded();
+      // Re-arm when timeout changed so a new admin value takes effect soon.
+      if (playlist.idleTimeoutSeconds != previousTimeout || !state.idleVisible) {
+        _armIdleTimerIfNeeded();
+      }
       unawaited(_prefetchIdleMedia(playlist));
     } catch (error) {
       state = state.copyWith(loading: false, error: error.toString());
@@ -144,7 +158,7 @@ class AdsController extends Notifier<AdsUiState> {
       return;
     }
     _idleTimer?.cancel();
-    _idleTimer = Timer(idleTimeout, () {
+    _idleTimer = Timer(_resolvedIdleTimeout, () {
       if (!_onHome || state.playlist.idle.isEmpty) {
         return;
       }

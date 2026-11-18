@@ -5,6 +5,7 @@ import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { RazorpayClient } from '../payments/razorpay.client.js';
+import { ServicesCatalogService } from '../services/services.service.js';
 import {
   wellBeingOtpRequestSchema,
   wellBeingOtpVerifySchema,
@@ -14,12 +15,14 @@ import { WellBeingService } from './well_being.service.js';
 
 function createWellBeingService(deps: AppDeps): WellBeingService {
   const razorpay = new RazorpayClient(deps.config);
+  const services = new ServicesCatalogService(deps.db, deps.auditService);
   return new WellBeingService(
     deps.db,
     deps.auditService,
     deps.config,
     razorpay,
     deps.sms,
+    services,
   );
 }
 

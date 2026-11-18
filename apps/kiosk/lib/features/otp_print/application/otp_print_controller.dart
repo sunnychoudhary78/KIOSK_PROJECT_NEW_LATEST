@@ -6,6 +6,7 @@ import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/features/printer/application/printer_health_controller.dart';
 import 'package:skp_kiosk/services/printer/print_job_support.dart';
 import 'package:skp_kiosk/core/network/api_client.dart';
+import 'package:skp_kiosk/core/network/service_enablement.dart';
 import 'package:skp_kiosk/core/network/user_facing_error.dart';
 import 'package:skp_kiosk/features/otp_print/data/otp_print_repository.dart';
 import 'package:skp_kiosk/features/otp_print/domain/otp_redeem_result.dart';
@@ -157,6 +158,14 @@ class OtpPrintController extends Notifier<OtpPrintUiState> {
         message: 'Preview a document or tap Print',
       );
     } catch (error) {
+      if (reportServiceEnablementBlocked(error, serviceTitle: 'Print Documents')) {
+        state = state.copyWith(
+          phase: OtpPrintPhase.enterOtp,
+          clearError: true,
+          clearRedeemResult: true,
+        );
+        return;
+      }
       state = state.copyWith(
         phase: OtpPrintPhase.error,
         paperOut: error is ApiException && error.code == 'printing_paused',

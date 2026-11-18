@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -129,6 +131,44 @@ void main() {
       async.elapse(const Duration(minutes: 5));
       expect(container.read(kioskSessionControllerProvider).phase, KioskSessionPhase.catalog);
       expect(resets, isEmpty);
+    });
+  });
+
+  test('hung reset is forced back to catalog by watchdog', () {
+    fakeAsync((async) {
+      final container = ProviderContainer(
+        overrides: [
+          kioskSessionPolicyProvider.overrideWithValue(policy),
+          visitorSessionResetProvider.overrideWithValue(
+            ({required bool attract}) => Completer<void>().future,
+          ),
+          deviceAuthProvider.overrideWith(_AuthedDeviceAuth.new),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.listen(kioskSessionControllerProvider, (_, _) {});
+      final session = container.read(kioskSessionControllerProvider.notifier);
+
+      session.setOnHome(false);
+      expect(
+        container.read(kioskSessionControllerProvider).phase,
+        KioskSessionPhase.inService,
+      );
+
+      unawaited(session.endVisitorSession(attract: false));
+      async.flushMicrotasks();
+      expect(
+        container.read(kioskSessionControllerProvider).phase,
+        KioskSessionPhase.resetting,
+      );
+
+      async.elapse(kSessionResetWatchdog);
+      async.flushMicrotasks();
+      expect(
+        container.read(kioskSessionControllerProvider).phase,
+        KioskSessionPhase.catalog,
+      );
+      expect(container.read(kioskSessionControllerProvider).onHome, isTrue);
     });
   });
 }
