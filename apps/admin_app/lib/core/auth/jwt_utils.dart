@@ -30,6 +30,10 @@ String? roleFromToken(String? token) {
 
 bool staffCanWrite(String? role) => role == 'admin' || role == 'operator';
 
+/// Support desk may close tickets without full fleet write access.
+bool staffCanManageSupport(String? role) =>
+    role == 'admin' || role == 'operator' || role == 'viewer';
+
 Map<String, dynamic>? _payload(String token) {
   try {
     final parts = token.split('.');

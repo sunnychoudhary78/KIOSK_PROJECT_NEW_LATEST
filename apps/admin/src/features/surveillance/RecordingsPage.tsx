@@ -6,6 +6,7 @@ import {
   EmptyState,
   FilterChips,
   Input,
+  Modal,
   PageHeader,
   Panel,
   Select,
@@ -37,8 +38,54 @@ type Segment = {
   lastUploadError: string | null;
 };
 
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
+type DayPreset = 'today' | 'yesterday' | 'custom';
+
+/** Local calendar day as YYYY-MM-DD (matches Started column timezone). */
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseLocalDate(isoDate: string): Date {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function addLocalDays(isoDate: string, days: number): string {
+  const dt = parseLocalDate(isoDate);
+  dt.setDate(dt.getDate() + days);
+  return formatLocalDate(dt);
+}
+
+function todayLocal(): string {
+  return formatLocalDate(new Date());
+}
+
+function yesterdayLocal(): string {
+  return addLocalDays(todayLocal(), -1);
+}
+
+/**
+ * UTC `recordedOn` folder keys that can contain clips whose local startedAt
+ * falls on `localDate` (needed for timezones east/west of UTC).
+ */
+function utcRecordedOnKeysForLocalDay(localDate: string): string[] {
+  const start = parseLocalDate(localDate);
+  const end = new Date(start);
+  end.setHours(23, 59, 59, 999);
+  return [...new Set([start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)])].sort();
+}
+
+function startedAtOnLocalDay(startedAt: string, localDate: string): boolean {
+  return formatLocalDate(new Date(startedAt)) === localDate;
+}
+
+function presetForDate(isoDate: string): DayPreset {
+  if (isoDate === todayLocal()) return 'today';
+  if (isoDate === yesterdayLocal()) return 'yesterday';
+  return 'custom';
 }
 
 function formatBytes(bytes: number): string {
@@ -74,7 +121,8 @@ export function RecordingsPage() {
   const { token } = useAuth();
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceId, setDeviceId] = useState('');
-  const [recordedOn, setRecordedOn] = useState(todayUtc);
+  const [recordedOn, setRecordedOn] = useState(todayLocal);
+  const [dayPreset, setDayPreset] = useState<DayPreset>('today');
   const [items, setItems] = useState<Segment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +135,11 @@ export function RecordingsPage() {
   const selected = devices.find((device) => device.id === deviceId) ?? null;
   const healthDisplay = selected ? resolveRecordingDisplay(selected) : null;
   const pendingOnKiosk = selected?.surveillanceHealth?.queuePending ?? 0;
+
+  function applyDay(isoDate: string, preset?: DayPreset) {
+    setRecordedOn(isoDate);
+    setDayPreset(preset ?? presetForDate(isoDate));
+  }
 
   useEffect(() => {
     void (async () => {
@@ -112,11 +165,27 @@ export function RecordingsPage() {
       setPlayingId(null);
       setPlayingLabel(null);
       try {
-        const result = await apiRequest<{ items: Segment[] }>(
-          `/devices/${deviceId}/surveillance/segments?recordedOn=${encodeURIComponent(recordedOn)}&status=all`,
-          { token },
+        const keys = utcRecordedOnKeysForLocalDay(recordedOn);
+        const batches = await Promise.all(
+          keys.map((key) =>
+            apiRequest<{ items: Segment[] }>(
+              `/devices/${deviceId}/surveillance/segments?recordedOn=${encodeURIComponent(key)}&status=all`,
+              { token },
+            ),
+          ),
         );
-        setItems(result.items);
+        const byId = new Map<string, Segment>();
+        for (const batch of batches) {
+          for (const segment of batch.items) {
+            if (startedAtOnLocalDay(segment.startedAt, recordedOn)) {
+              byId.set(segment.id, segment);
+            }
+          }
+        }
+        const merged = [...byId.values()].sort(
+          (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+        );
+        setItems(merged);
         setError(null);
       } catch (err) {
         setItems([]);
@@ -146,6 +215,12 @@ export function RecordingsPage() {
     }
   }
 
+  function closePlayback() {
+    setPlaybackUrl(null);
+    setPlayingId(null);
+    setPlayingLabel(null);
+  }
+
   const uploadedCount = items.filter((item) => item.status === 'uploaded').length;
   const pendingCount = items.filter((item) => item.status === 'pending_upload').length;
   const failedCount = items.filter((item) => item.status === 'failed').length;
@@ -166,7 +241,7 @@ export function RecordingsPage() {
     <div>
       <PageHeader
         title="Recordings"
-        subtitle="Browse kiosk surveillance clips by device and UTC calendar day"
+        subtitle="Browse kiosk surveillance clips by device and local calendar day"
       />
 
       <Panel>
@@ -186,14 +261,28 @@ export function RecordingsPage() {
               ))}
             </Select>
           </label>
-          <label>
-            Date (UTC)
-            <Input
-              type="date"
-              value={recordedOn}
-              onChange={(e) => setRecordedOn(e.target.value)}
-            />
-          </label>
+          <div>
+            <span className="mb-1 block text-sm font-medium">Date</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterChips
+                options={[
+                  { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
+                ]}
+                value={dayPreset === 'custom' ? '' : dayPreset}
+                onChange={(value) => {
+                  if (value === 'today') applyDay(todayLocal(), 'today');
+                  else if (value === 'yesterday') applyDay(yesterdayLocal(), 'yesterday');
+                }}
+              />
+              <Input
+                type="date"
+                value={recordedOn}
+                onChange={(e) => applyDay(e.target.value)}
+                className="w-auto"
+              />
+            </div>
+          </div>
         </div>
 
         {healthDisplay ? (
@@ -212,7 +301,7 @@ export function RecordingsPage() {
             description={
               pendingOnKiosk > 0
                 ? `${pendingOnKiosk} recording(s) are still on the kiosk waiting to upload.`
-                : 'No recordings for this kiosk and UTC day.'
+                : 'No recordings for this kiosk and local day.'
             }
           />
         ) : (
@@ -285,26 +374,43 @@ export function RecordingsPage() {
             )}
           </>
         )}
+      </Panel>
 
-        {playbackUrl ? (
-          <div className="mt-5 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Playing {playingLabel ?? 'clip'} (signed URL expires after a few minutes)
-            </p>
-            <video
-              key={playbackUrl}
-              controls
-              src={playbackUrl}
-              className="max-h-[480px] w-full rounded-lg bg-black"
-            />
-            <p>
-              <a href={playbackUrl} download target="_blank" rel="noreferrer">
+      <Modal
+        open={playbackUrl != null}
+        title={playingLabel ? `Playback · ${playingLabel}` : 'Playback'}
+        description="Signed URL expires after a few minutes"
+        className="max-w-4xl"
+        onClose={closePlayback}
+        footer={
+          <>
+            {playbackUrl ? (
+              <a
+                href={playbackUrl}
+                download
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-8 items-center rounded-md px-3 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              >
                 Download
               </a>
-            </p>
-          </div>
+            ) : null}
+            <Button type="button" variant="ghost" onClick={closePlayback}>
+              Close
+            </Button>
+          </>
+        }
+      >
+        {playbackUrl ? (
+          <video
+            key={playbackUrl}
+            controls
+            autoPlay
+            src={playbackUrl}
+            className="max-h-[min(70vh,36rem)] w-full rounded-lg bg-black"
+          />
         ) : null}
-      </Panel>
+      </Modal>
     </div>
   );
 }

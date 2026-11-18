@@ -191,7 +191,7 @@ export function registerPaymentsModule(router: Router, deps: AppDeps): void {
   router.post(
     '/support-queries/:queryId/resolve',
     authRequired(deps.config, ['admin']),
-    requireAdminRole(UserRole.admin, UserRole.operator),
+    requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
     validateBody(resolveSupportQuerySchema),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -214,7 +214,7 @@ export function registerPaymentsModule(router: Router, deps: AppDeps): void {
   router.post(
     '/support-queries/:queryId/resend-otp',
     authRequired(deps.config, ['admin']),
-    requireAdminRole(UserRole.admin, UserRole.operator),
+    requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         if (!req.principal) {
