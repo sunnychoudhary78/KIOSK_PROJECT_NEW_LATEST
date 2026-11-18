@@ -8,6 +8,7 @@ import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/quick_print/application/quick_print_controller.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -161,6 +162,7 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
                   ? controller.continueToDocuments
                   : null,
               onNotReceived: state.printed ? controller.reportPagesMissing : null,
+              ratingServiceKey: ServiceRatingKeys.quickPrint,
             ),
           QuickPrintPhase.documents || QuickPrintPhase.done => Padding(
               padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),

@@ -7,6 +7,8 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
 import 'package:skp_kiosk/features/charging/domain/charging_phase.dart';
 import 'package:skp_kiosk/features/charging/presentation/charging_ad_gate.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
+import 'package:skp_kiosk/features/service_ratings/presentation/service_rating_page.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -73,6 +75,17 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
                   if (state.socketArmed) {
                     await controller.finishCharging();
                   }
+                  if (!context.mounted) {
+                    return;
+                  }
+                  await Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      fullscreenDialog: true,
+                      builder: (_) => const ServiceRatingPage(
+                        serviceKey: ServiceRatingKeys.charging,
+                      ),
+                    ),
+                  );
                   if (!context.mounted) {
                     return;
                   }

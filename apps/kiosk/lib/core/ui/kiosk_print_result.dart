@@ -1,14 +1,22 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/kiosk_buttons.dart';
+import 'package:skp_kiosk/features/service_ratings/application/service_ratings_gate.dart';
+import 'package:skp_kiosk/features/service_ratings/application/service_ratings_tracker.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
+import 'package:skp_kiosk/features/service_ratings/presentation/service_rating_prompt.dart';
 
 /// Full-screen end of a print.
 ///
 /// [onHome] ends the visitor session. When [onContinue] is set (more documents
 /// remain), show **Print another** and do not auto-return home.
-class KioskPrintResult extends StatefulWidget {
+///
+/// When [ratingServiceKey] is set and [confirmed] is true, Done / auto-return
+/// shows an optional star rating before calling [onHome].
+class KioskPrintResult extends ConsumerStatefulWidget {
   const KioskPrintResult({
     super.key,
     required this.confirmed,
@@ -19,6 +27,7 @@ class KioskPrintResult extends StatefulWidget {
     this.onContinue,
     this.continueLabel = 'Print another',
     this.doneLabel = 'Done',
+    this.ratingServiceKey,
   });
 
   final bool confirmed;
@@ -32,18 +41,27 @@ class KioskPrintResult extends StatefulWidget {
   final String continueLabel;
   final String doneLabel;
 
+  /// When set on a confirmed print, prompt for stars before [onHome].
+  final String? ratingServiceKey;
+
   @override
-  State<KioskPrintResult> createState() => _KioskPrintResultState();
+  ConsumerState<KioskPrintResult> createState() => _KioskPrintResultState();
 }
 
-class _KioskPrintResultState extends State<KioskPrintResult> {
+class _KioskPrintResultState extends ConsumerState<KioskPrintResult> {
   Timer? _timer;
   var _left = false;
   var _noting = false;
   var _noted = false;
+  var _promptingRating = false;
   String? _noteError;
 
   bool get _hasContinue => widget.onContinue != null;
+
+  bool get _shouldPromptRating {
+    final key = widget.ratingServiceKey;
+    return widget.confirmed && key != null && key.isNotEmpty;
+  }
 
   @override
   void initState() {
@@ -86,6 +104,20 @@ class _KioskPrintResultState extends State<KioskPrintResult> {
   }
 
   void _goHome() {
+    if (_left || _promptingRating) return;
+    _timer?.cancel();
+    if (_shouldPromptRating) {
+      final family = ServiceRatingKeys.familyFor(widget.ratingServiceKey!);
+      if (family != null) {
+        ref.read(serviceRatingsGateProvider.notifier).markPrompted(family);
+      }
+      setState(() => _promptingRating = true);
+      return;
+    }
+    _finishHome();
+  }
+
+  void _finishHome() {
     if (_left) return;
     _left = true;
     _timer?.cancel();
@@ -93,14 +125,29 @@ class _KioskPrintResultState extends State<KioskPrintResult> {
   }
 
   void _goContinue() {
-    if (_left) return;
+    if (_left || _promptingRating) return;
     _left = true;
     _timer?.cancel();
     widget.onContinue?.call();
   }
 
+  void _onRated(int stars) {
+    final key = widget.ratingServiceKey;
+    if (key != null && key.isNotEmpty) {
+      unawaited(ref.read(serviceRatingsTrackerProvider).submit(key, stars));
+    }
+    _finishHome();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_promptingRating) {
+      return ServiceRatingPrompt(
+        onRated: _onRated,
+        onSkip: _finishHome,
+      );
+    }
+
     final theme = Theme.of(context);
     final title = widget.confirmed ? 'Print successful' : 'Print not confirmed';
     final line = widget.confirmed

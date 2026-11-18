@@ -16,6 +16,7 @@ import 'package:skp_kiosk/features/digilocker_print/application/digilocker_contr
 import 'package:skp_kiosk/features/fuel_stations/application/fuel_stations_controller.dart';
 import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
 import 'package:skp_kiosk/features/quick_print/application/quick_print_controller.dart';
+import 'package:skp_kiosk/features/service_ratings/application/service_ratings_gate.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_controller.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
 
@@ -101,6 +102,10 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
   ref.invalidate(wellBeingControllerProvider);
   ref.invalidate(chargingControllerProvider);
   ref.invalidate(fuelStationsControllerProvider);
+
+  try {
+    ref.read(serviceRatingsGateProvider.notifier).clear();
+  } catch (_) {}
 
   await bestEffortTimed(
     'wipe_digilocker_temp',
