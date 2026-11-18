@@ -99,15 +99,21 @@ describe('VedAstro URL builder', () => {
   });
 
   it('appends /api when the host-only VedAstro origin is used', () => {
-    expect(normalizeVedAstroBaseUrl('https://api.vedastro.org')).toBe('https://api.vedastro.org/api');
-    expect(normalizeVedAstroBaseUrl('https://api.vedastro.org/api')).toBe(
+    expect(normalizeVedAstroBaseUrl('https://vedastro.zaishi.net')).toBe(
+      'https://vedastro.zaishi.net/api',
+    );
+    expect(normalizeVedAstroBaseUrl('https://vedastro.zaishi.net/api')).toBe(
+      'https://vedastro.zaishi.net/api',
+    );
+    // Legacy host still normalizes for older env values.
+    expect(normalizeVedAstroBaseUrl('https://api.vedastro.org')).toBe(
       'https://api.vedastro.org/api',
     );
   });
 
   it('builds Calculate path with split date segments and literal offset', () => {
     const url = buildVedAstroCalculateUrl({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       calculator: 'AllPlanetData',
       extraPath: 'PlanetName/All',
       location: 'Jaipur/Rajasthan',
@@ -115,13 +121,13 @@ describe('VedAstro URL builder', () => {
       dateOfBirth: '1990-01-15',
     });
     expect(url).toBe(
-      'https://api.vedastro.org/api/Calculate/AllPlanetData/PlanetName/All/Location/Jaipur/Rajasthan/Time/14:20/15/01/1990/+05:30',
+      'https://vedastro.zaishi.net/api/Calculate/AllPlanetData/PlanetName/All/Location/Jaipur/Rajasthan/Time/14:20/15/01/1990/+05:30',
     );
   });
 
   it('inserts extra path for house calculators', () => {
     const url = buildVedAstroCalculateUrl({
-      baseUrl: 'https://api.vedastro.org/api/',
+      baseUrl: 'https://vedastro.zaishi.net/api/',
       calculator: 'AllHouseData',
       extraPath: 'HouseName/All',
       location: 'NewDelhi',
@@ -138,7 +144,7 @@ describe('VedAstro URL builder', () => {
     expect(kundaliCalculatorForStyle('north')).toBe('NorthIndianChart');
     expect(kundaliCalculatorForStyle('south')).toBe('SouthIndianChart');
     const north = buildVedAstroCalculateUrl({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       calculator: kundaliCalculatorForStyle('north'),
       trailingPath: 'ChartType/RasiD1',
       location: 'Jaipur/Rajasthan',
@@ -146,10 +152,10 @@ describe('VedAstro URL builder', () => {
       dateOfBirth: '1990-01-15',
     });
     expect(north).toBe(
-      'https://api.vedastro.org/api/Calculate/NorthIndianChart/Location/Jaipur/Rajasthan/Time/14:20/15/01/1990/+05:30/ChartType/RasiD1',
+      'https://vedastro.zaishi.net/api/Calculate/NorthIndianChart/Location/Jaipur/Rajasthan/Time/14:20/15/01/1990/+05:30/ChartType/RasiD1',
     );
     const south = buildVedAstroCalculateUrl({
-      baseUrl: 'https://api.vedastro.org/api',
+      baseUrl: 'https://vedastro.zaishi.net/api',
       calculator: kundaliCalculatorForStyle('south'),
       trailingPath: 'ChartType/RasiD1',
       location: 'NewDelhi',
@@ -349,7 +355,7 @@ describe('createVedAstroClient', () => {
     });
 
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       apiKey: 'sk_live_test_key',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -393,7 +399,7 @@ describe('createVedAstroClient', () => {
     });
 
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       apiKey: '',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -424,7 +430,7 @@ describe('createVedAstroClient', () => {
     });
 
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -464,7 +470,7 @@ describe('createVedAstroClient', () => {
     });
 
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -485,7 +491,7 @@ describe('createVedAstroClient', () => {
       return new Response('down', { status: 503 });
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -509,7 +515,7 @@ describe('createVedAstroClient', () => {
       );
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -533,7 +539,7 @@ describe('createVedAstroClient', () => {
       if (href.includes('geocoding-api.open-meteo.com')) {
         return geoOk('Pune', 18.52, 73.85);
       }
-      expect(href).toBe('https://api.vedastro.org/api/Calculate/NorthIndianChart');
+      expect(href).toBe('https://vedastro.zaishi.net/api/Calculate/NorthIndianChart');
       expect(init?.method).toBe('POST');
       posted = JSON.parse(String(init?.body)) as Record<string, unknown>;
       return new Response(JSON.stringify({ Status: 'Pass', Payload: sampleSvg }), {
@@ -542,7 +548,7 @@ describe('createVedAstroClient', () => {
       });
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -576,7 +582,7 @@ describe('createVedAstroClient', () => {
       });
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -609,7 +615,7 @@ describe('createVedAstroClient', () => {
       return new Response(JSON.stringify({ Status: 'Pass', Payload: 'ok' }), { status: 200 });
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -640,7 +646,7 @@ describe('createVedAstroClient', () => {
       return new Response('nope', { status: 500 });
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -668,7 +674,7 @@ describe('createVedAstroClient', () => {
       if (href.includes('geocoding-api.open-meteo.com')) {
         return geoOk('Pune', 18.52, 73.85);
       }
-      expect(href).toBe('https://api.vedastro.org/api/Calculate/DasaForNow');
+      expect(href).toBe('https://vedastro.zaishi.net/api/Calculate/DasaForNow');
       posted = JSON.parse(String(init?.body)) as Record<string, unknown>;
       return new Response(
         JSON.stringify({
@@ -686,7 +692,7 @@ describe('createVedAstroClient', () => {
       );
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -729,7 +735,7 @@ describe('createVedAstroClient', () => {
           { status: 200 },
         );
       }
-      expect(href).toBe('https://api.vedastro.org/api/Calculate/MatchReport');
+      expect(href).toBe('https://vedastro.zaishi.net/api/Calculate/MatchReport');
       expect(init?.method).toBe('POST');
       posted = JSON.parse(String(init?.body)) as Record<string, unknown>;
       return new Response(
@@ -747,7 +753,7 @@ describe('createVedAstroClient', () => {
       );
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -793,7 +799,7 @@ describe('createVedAstroClient', () => {
       });
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -815,7 +821,7 @@ describe('createVedAstroClient', () => {
       throw new Error('MatchReport should not be called');
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -868,13 +874,13 @@ describe('PanchangaTable mapping', () => {
           { status: 200 },
         );
       }
-      expect(href).toBe('https://api.vedastro.org/api/Calculate/PanchangaTable');
+      expect(href).toBe('https://vedastro.zaishi.net/api/Calculate/PanchangaTable');
       expect(init?.method).toBe('POST');
       posted = JSON.parse(String(init?.body)) as Record<string, unknown>;
       return new Response(JSON.stringify(panchangaFixture), { status: 200 });
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -903,7 +909,7 @@ describe('PanchangaTable mapping', () => {
       });
     });
     const client = createVedAstroClient({
-      baseUrl: 'https://api.vedastro.org',
+      baseUrl: 'https://vedastro.zaishi.net',
       logger: silentLogger,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });

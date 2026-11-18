@@ -387,10 +387,13 @@ export function splitIsoDate(dateOfBirth: string): { year: string; month: string
   return { year: year ?? '2000', month: month ?? '01', day: day ?? '01' };
 }
 
-/** Bare `api.vedastro.org` is not a Calculate host; the live API is under `/api`. */
+/** Bare API hosts are not Calculate roots; the live API is under `/api`. */
 export function normalizeVedAstroBaseUrl(baseUrl: string): string {
   const base = baseUrl.replace(/\/$/, '');
-  if (/^https?:\/\/api\.vedastro\.org$/i.test(base)) {
+  if (
+    /^https?:\/\/api\.vedastro\.org$/i.test(base) ||
+    /^https?:\/\/vedastro\.zaishi\.net$/i.test(base)
+  ) {
     return `${base}/api`;
   }
   return base;

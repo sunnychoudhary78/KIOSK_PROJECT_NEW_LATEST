@@ -38,7 +38,7 @@ function testConfig(overrides?: Partial<AppConfig['digilocker']>): AppConfig {
     msg91: { authKey: '', senderId: '', flowId: '', otpVar: 'var1', expiryVar: 'var2' },
     razorpay: { keyId: '', keySecret: '', webhookSecret: '' },
     payments: { windowMinutes: 15 },
-    vedastro: { baseUrl: 'https://api.vedastro.org/api', apiKey: '' },
+    vedastro: { baseUrl: 'https://vedastro.zaishi.net/api', apiKey: '' },
     aiProvider: 'noop',
     openai: { apiKey: '', model: 'gpt-4o' },
     objectStorage: {

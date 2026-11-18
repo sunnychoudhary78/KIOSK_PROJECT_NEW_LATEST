@@ -42,7 +42,7 @@ const envSchema = z.object({
   SKP_RAZORPAY_KEY_SECRET: z.string().optional().default(''),
   SKP_RAZORPAY_WEBHOOK_SECRET: z.string().optional().default(''),
   SKP_PAYMENT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
-  SKP_VEDASTRO_BASE_URL: z.string().url().default('https://api.vedastro.org/api'),
+  SKP_VEDASTRO_BASE_URL: z.string().url().default('https://vedastro.zaishi.net/api'),
   SKP_VEDASTRO_API_KEY: z.string().optional().default(''),
   SKP_AI_PROVIDER: z.enum(['openai', 'noop']).default('noop'),
   SKP_OPENAI_API_KEY: z.string().optional().default(''),
