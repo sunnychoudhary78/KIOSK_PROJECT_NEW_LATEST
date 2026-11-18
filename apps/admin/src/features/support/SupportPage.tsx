@@ -88,7 +88,8 @@ export function SupportPage() {
   const [source, setSource] = useState<'all' | 'payment' | 'print' | 'kiosk'>('all');
   const [kiosk, setKiosk] = useState('all');
   const [search, setSearch] = useState('');
-  const canResolve = roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
+  const role = roleFromToken(token);
+  const canResolve = role === 'admin' || role === 'operator' || role === 'viewer';
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const isKiosk = selected?.source === 'kiosk';
   const outcomeOptions = isKiosk ? KIOSK_RESOLUTIONS : RESOLUTIONS;
@@ -326,6 +327,9 @@ export function SupportPage() {
                 ) : null}
               </>
             ) : null}
+            <div className="flex items-center gap-2">
+              Status: <StatusBadge status={selected.status} />
+            </div>
             {selected.resolution ? (
               <div>Outcome: {resolutionLabel(selected.resolution, selected.source)}</div>
             ) : null}

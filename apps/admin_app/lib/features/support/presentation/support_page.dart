@@ -131,7 +131,7 @@ class _SupportDetailPageState extends ConsumerState<SupportDetailPage> {
   Widget build(BuildContext context) {
     final support = ref.watch(supportProvider);
     final query = support.byId(widget.queryId);
-    final canWrite = ref.watch(staffAuthProvider).canWrite;
+    final canWrite = ref.watch(staffAuthProvider).canManageSupport;
 
     if (query == null) {
       return Scaffold(

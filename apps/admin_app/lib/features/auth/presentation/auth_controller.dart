@@ -36,6 +36,8 @@ class StaffAuthState {
   bool get isAuthenticated => token != null && token!.isNotEmpty && !isJwtExpired(token!);
 
   bool get canWrite => staffCanWrite(role);
+
+  bool get canManageSupport => staffCanManageSupport(role);
 }
 
 class StaffAuthNotifier extends Notifier<StaffAuthState> {
