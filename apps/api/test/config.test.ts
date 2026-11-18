@@ -63,6 +63,12 @@ describe('loadConfig', () => {
       getTtlSeconds: 900,
     });
     expect(config.kioskUpdateKey).toBe('');
+    expect(config.livekit).toEqual({
+      url: '',
+      apiKey: '',
+      apiSecret: '',
+    });
+    expect(config.screenShare.ttlSeconds).toBe(900);
     expect(config.digilocker.purpose).toBe('Document printing at kiosk');
     expect(config.digilocker.serviceName).toBe('Athena Smart Kiosk');
   });

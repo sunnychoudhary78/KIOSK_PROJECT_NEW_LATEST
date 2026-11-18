@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   DoorOpen,
   DoorClosed,
+  Monitor,
 } from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
@@ -30,6 +31,7 @@ import {
   StatusBadge,
   Toolbar,
 } from '../../core/ui/primitives';
+import { ScreenShareViewerModal } from '../screen-share/ScreenShareViewerModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -735,6 +737,7 @@ export function KiosksPage() {
   const [servicesLoading, setServicesLoading] = useState(false);
   const [servicesError, setServicesError] = useState<string | null>(null);
   const [servicesSavingId, setServicesSavingId] = useState<string | null>(null);
+  const [screenShareDevice, setScreenShareDevice] = useState<Device | null>(null);
   const printerRefreshGeneration = useRef(0);
   const canEnablePrinting =
     roleFromToken(token) === 'admin' || roleFromToken(token) === 'operator';
@@ -1676,6 +1679,21 @@ export function KiosksPage() {
                             Logs
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
+                          {canEnablePrinting ? (
+                            <DropdownMenuItem
+                              disabled={
+                                device.status === 'inactive' ||
+                                !device.lastHeartbeatAt ||
+                                Date.now() - new Date(device.lastHeartbeatAt).getTime() >
+                                  3 * 60 * 1000
+                              }
+                              title="View live kiosk desktop (view-only; kiosk joins within ~10s). Disabled when heartbeat is stale."
+                              onClick={() => setScreenShareDevice(device)}
+                            >
+                              <Monitor className="h-4 w-4" />
+                              View screen
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuItem
                             disabled={device.status === 'inactive'}
                             title="Open shutter (next kiosk poll ~20s; blocked during print)"
@@ -1729,6 +1747,16 @@ export function KiosksPage() {
           </>
         )}
       </Panel>
+
+      {screenShareDevice ? (
+        <ScreenShareViewerModal
+          open
+          deviceId={screenShareDevice.id}
+          deviceName={screenShareDevice.name}
+          token={token}
+          onClose={() => setScreenShareDevice(null)}
+        />
+      ) : null}
 
       <Modal
         open={addOpen}

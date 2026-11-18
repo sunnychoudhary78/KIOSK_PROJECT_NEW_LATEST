@@ -21,6 +21,14 @@ enum UserRole {
   viewer
 }
 
+enum ScreenShareSessionStatus {
+  pending
+  active
+  ended
+  expired
+  failed
+}
+
 enum DeviceStatus {
   provisioning
   active
@@ -181,10 +189,11 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  tenant         Tenant?        @relation(fields: [tenantId], references: [id])
-  otpChallenges  OtpChallenge[]
-  payments       Payment[]
-  supportQueries SupportQuery[]
+  tenant              Tenant?              @relation(fields: [tenantId], references: [id])
+  otpChallenges       OtpChallenge[]
+  payments            Payment[]
+  supportQueries      SupportQuery[]
+  screenShareSessions ScreenShareSession[]
 
   @@map("users")
 }
@@ -278,10 +287,36 @@ model Device {
   surveillanceSegments SurveillanceSegment[]
   quickPrintSessions QuickPrintSession[]
   serviceNavigationEvents ServiceNavigationEvent[]
-  diagnosticLogs     DeviceDiagnosticLog[]
-  supportQueries     SupportQuery[]
+  diagnosticLogs      DeviceDiagnosticLog[]
+  supportQueries      SupportQuery[]
+  screenShareSessions ScreenShareSession[]
 
   @@map("devices")
+}
+
+/// On-demand LiveKit screen-share session (admin viewer ↔ kiosk publisher).
+model ScreenShareSession {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  tenantId           String                    @map("tenant_id") @db.Uuid
+  deviceId           String                    @map("device_id") @db.Uuid
+  roomName           String                    @map("room_name") @db.VarChar(120)
+  status             ScreenShareSessionStatus  @default(pending)
+  requestedByUserId  String?                   @map("requested_by_user_id") @db.Uuid
+  requestedAt        DateTime                  @default(now()) @map("requested_at")
+  startedAt          DateTime?                 @map("started_at")
+  endedAt            DateTime?                 @map("ended_at")
+  /// Pending: request + 2m. Active: started + session TTL. Used for lazy + sweep expiry.
+  expiresAt          DateTime                  @map("expires_at")
+  lastError          String?                   @map("last_error") @db.VarChar(500)
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  device      Device @relation(fields: [deviceId], references: [id])
+  requestedBy User?  @relation(fields: [requestedByUserId], references: [id])
+
+  @@index([deviceId, status])
+  @@index([expiresAt])
+  @@map("screen_share_sessions")
 }
 
 model DeviceDiagnosticLog {

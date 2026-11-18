@@ -11,6 +11,7 @@ import { AuditService } from './modules/audit/audit.service.js';
 import { PlatformSettingsService } from './modules/platform_settings/platform_settings.service.js';
 import { DiagnosticLogsService } from './modules/diagnostic_logs/diagnostic_logs.service.js';
 import { SurveillanceService } from './modules/surveillance/surveillance.service.js';
+import { ScreenShareService } from './modules/screen_share/screen_share.service.js';
 import { createApp } from './app.js';
 import type { AppDeps } from './types/deps.js';
 
@@ -75,6 +76,7 @@ async function main() {
 
   const diagnosticLogs = new DiagnosticLogsService(prisma);
   const surveillance = new SurveillanceService(prisma, deps.objectStorage, auditService);
+  const screenShare = new ScreenShareService(prisma, auditService, config);
   const runPurge = async () => {
     try {
       const deleted = await diagnosticLogs.purgeOlderThan();
@@ -101,14 +103,30 @@ async function main() {
     } catch (error) {
       logger.error({ err: error }, '[Surveillance] purge failed');
     }
+    try {
+      const expired = await screenShare.expireStale();
+      if (expired > 0) {
+        logger.info({ expired }, '[ScreenShare] expired stale sessions');
+      }
+    } catch (error) {
+      logger.error({ err: error }, '[ScreenShare] expire sweep failed');
+    }
   };
   void runPurge();
   const purgeTimer = setInterval(() => void runPurge(), 60 * 60 * 1000);
   purgeTimer.unref?.();
+  // Screen-share pending TTL is 2 minutes — sweep more often than hourly purge.
+  const screenShareTimer = setInterval(() => {
+    void screenShare.expireStale().catch((error) => {
+      logger.error({ err: error }, '[ScreenShare] expire sweep failed');
+    });
+  }, 60 * 1000);
+  screenShareTimer.unref?.();
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down');
     clearInterval(purgeTimer);
+    clearInterval(screenShareTimer);
     server.close(async () => {
       await prisma.$disconnect();
       process.exit(0);

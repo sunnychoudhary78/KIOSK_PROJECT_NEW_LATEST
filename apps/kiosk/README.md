@@ -72,6 +72,12 @@ Without GET CORS, the clip list still works but the browser video player fails.
 
 Cloud clips are retained **7 calendar days** (by UTC `recordedOn`). The API hourly purge deletes expired objects from R2 and the matching `surveillance_segments` rows. Local files on the kiosk are still removed right after a successful upload.
 
+## Screen share (Windows)
+
+Admin **View screen** starts an on-demand LiveKit session. The kiosk polls `GET /devices/:id/screen-share/pending` every ~10s, publishes the primary monitor (view-only; no remote control), and acks started/failed.
+
+Requires API LiveKit env (`SKP_LIVEKIT_*`). Secrets stay on the API — the kiosk only receives short-lived room JWTs. Fleet firewalls must allow outbound LiveKit + TURN (see `packages/docs/KIOSK_LOCKDOWN.md`). Pending requests expire in 2 minutes if the kiosk never joins; active shares end after `SKP_SCREEN_SHARE_TTL_SECONDS` (default 15 minutes) or when admin clicks **End session**.
+
 ## Getting Started
 
 ```powershell

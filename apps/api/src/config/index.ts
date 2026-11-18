@@ -56,6 +56,12 @@ const envSchema = z.object({
   SKP_OBJECT_STORAGE_GET_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   /** Shared secret for GET /kiosk-updates/current (X-Update-Key). Empty disables the poll. */
   SKP_KIOSK_UPDATE_KEY: z.string().optional().default(''),
+  /** LiveKit Cloud WebSocket URL (wss://…). Empty disables screen share. */
+  SKP_LIVEKIT_URL: z.string().optional().default(''),
+  SKP_LIVEKIT_API_KEY: z.string().optional().default(''),
+  SKP_LIVEKIT_API_SECRET: z.string().optional().default(''),
+  /** Active screen-share lifetime after kiosk ack (seconds). */
+  SKP_SCREEN_SHARE_TTL_SECONDS: z.coerce.number().int().positive().default(900),
 });
 
 export type AppConfig = {
@@ -132,6 +138,14 @@ export type AppConfig = {
   };
   /** Shared secret for fleet updater poll; empty means misconfigured. */
   kioskUpdateKey: string;
+  livekit: {
+    url: string;
+    apiKey: string;
+    apiSecret: string;
+  };
+  screenShare: {
+    ttlSeconds: number;
+  };
 };
 
 let cached: Readonly<AppConfig> | undefined;
@@ -229,6 +243,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
       getTtlSeconds: data.SKP_OBJECT_STORAGE_GET_TTL_SECONDS,
     },
     kioskUpdateKey: data.SKP_KIOSK_UPDATE_KEY.trim(),
+    livekit: {
+      url: data.SKP_LIVEKIT_URL.trim().replace(/\/$/, ''),
+      apiKey: data.SKP_LIVEKIT_API_KEY.trim(),
+      apiSecret: data.SKP_LIVEKIT_API_SECRET.trim(),
+    },
+    screenShare: {
+      ttlSeconds: data.SKP_SCREEN_SHARE_TTL_SECONDS,
+    },
   };
 
   cached = Object.freeze(config);

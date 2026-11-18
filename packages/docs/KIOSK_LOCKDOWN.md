@@ -25,15 +25,29 @@ Use before production fleet rollout.
 
 ## Network
 
-- [ ] Outbound allow-list to API + DigiLocker endpoints only
+- [ ] Outbound allow-list to API + DigiLocker endpoints
+- [ ] Outbound allow-list for LiveKit Cloud screen share (see Remote support)
 - [ ] TLS inspection exceptions documented if corporate proxy exists
 - [ ] No inbound ports exposed on kiosk LAN interface
 
 ## Ops
 
-- [ ] Remote support channel defined
+- [x] Remote support channel defined (LiveKit Cloud view-only screen share from admin **View screen**)
 - [ ] Signed builds only; version reported in heartbeat (future)
 - [ ] Wipe / re-provision procedure documented
+
+### Remote support (LiveKit screen share)
+
+Admin **View screen** (admin/operator) starts an on-demand, view-only desktop share. The kiosk dials **out** to LiveKit; no inbound ports on the kiosk.
+
+Configure API env: `SKP_LIVEKIT_URL`, `SKP_LIVEKIT_API_KEY`, `SKP_LIVEKIT_API_SECRET` (see `apps/api/.env.example`).
+
+Outbound allow-list (in addition to API + DigiLocker):
+
+- Your LiveKit project host from `SKP_LIVEKIT_URL` (e.g. `*.livekit.cloud` wss/https)
+- LiveKit TURN / media relays used by that project (confirm in LiveKit Cloud dashboard / docs for your region)
+
+Smoke test before fleet rollout: publish a Windows screen with LiveKit Meet or the Flutter sample against the same project; subscribe in a browser.
 
 ---
 

@@ -668,6 +668,113 @@ paths:
         '409':
           description: Object was not found in storage
 
+  /devices/{deviceId}/screen-share/start:
+    post:
+      tags: [Devices]
+      summary: Start an on-demand LiveKit screen-share session (admin, operator)
+      operationId: startDeviceScreenShare
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Pending session plus LiveKit viewer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenShareStartResponse'
+        '409':
+          description: Device inactive or a session is already open
+        '503':
+          description: LiveKit is not configured
+
+  /devices/{deviceId}/screen-share/end:
+    post:
+      tags: [Devices]
+      summary: End the open screen-share session (admin, operator)
+      operationId: endDeviceScreenShare
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenShareSessionResponse'
+        '404':
+          description: No open session
+
+  /devices/{deviceId}/screen-share:
+    get:
+      tags: [Devices]
+      summary: Current screen-share session status (admin, operator, viewer)
+      operationId: getDeviceScreenShare
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Current session or null
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenShareCurrentResponse'
+        '404':
+          description: Device not found
+
+  /devices/{deviceId}/screen-share/pending:
+    get:
+      tags: [Devices]
+      summary: Kiosk poll for pending/active screen share (device JWT)
+      operationId: getDeviceScreenSharePending
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Pending/active session with publisher token when open
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenSharePendingResponse'
+        '403':
+          description: Device JWT does not match path deviceId
+        '503':
+          description: LiveKit is not configured
+
+  /devices/{deviceId}/screen-share/ack:
+    post:
+      tags: [Devices]
+      summary: Kiosk acknowledges screen-share lifecycle (device JWT)
+      operationId: ackDeviceScreenShare
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreenShareAckRequest'
+      responses:
+        '200':
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenShareSessionResponse'
+        '404':
+          description: Session not found
+        '409':
+          description: Invalid status transition
+
   /devices/{deviceId}/service-analytics:
     get:
       tags: [Analytics]
@@ -3233,6 +3340,110 @@ components:
               count:
                 type: integer
                 minimum: 0
+
+    ScreenShareSession:
+      type: object
+      required:
+        [
+          id,
+          deviceId,
+          roomName,
+          status,
+          requestedAt,
+          expiresAt,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        roomName:
+          type: string
+        status:
+          type: string
+          enum: [pending, active, ended, expired, failed]
+        requestedByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        requestedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+        lastError:
+          type: string
+          nullable: true
+
+    ScreenShareStartResponse:
+      type: object
+      required: [session, livekitUrl, token]
+      properties:
+        session:
+          $ref: '#/components/schemas/ScreenShareSession'
+        livekitUrl:
+          type: string
+          description: LiveKit WebSocket URL (wss://…)
+        token:
+          type: string
+          description: Subscriber JWT for the admin viewer
+
+    ScreenShareSessionResponse:
+      type: object
+      required: [session]
+      properties:
+        session:
+          $ref: '#/components/schemas/ScreenShareSession'
+
+    ScreenShareCurrentResponse:
+      type: object
+      required: [session]
+      properties:
+        session:
+          allOf:
+            - $ref: '#/components/schemas/ScreenShareSession'
+          nullable: true
+
+    ScreenSharePendingResponse:
+      type: object
+      required: [session]
+      properties:
+        session:
+          allOf:
+            - $ref: '#/components/schemas/ScreenShareSession'
+          nullable: true
+        livekitUrl:
+          type: string
+          nullable: true
+        token:
+          type: string
+          nullable: true
+          description: Publisher JWT when a session is open
+
+    ScreenShareAckRequest:
+      type: object
+      required: [sessionId, result]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        result:
+          type: string
+          enum: [started, failed, ended]
+        error:
+          type: string
+          maxLength: 500
 
     SurveillanceUploadUrlRequest:
       type: object
