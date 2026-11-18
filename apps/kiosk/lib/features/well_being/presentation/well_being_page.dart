@@ -7,6 +7,7 @@ import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
+import 'package:skp_kiosk/features/service_ratings/presentation/prompt_service_rating.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -34,10 +35,33 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
     });
   }
 
-  Future<void> _endSession() {
-    return ref
+  Future<void> _promptWellBeingSessionRatingIfComplete() async {
+    final phase = ref.read(wellBeingControllerProvider).phase;
+    final complete = phase == WellBeingPhase.oxiComplete ||
+        phase == WellBeingPhase.tempComplete;
+    if (!complete || !mounted) {
+      return;
+    }
+    await promptServiceRatingIfNeeded(
+      context,
+      ref,
+      family: ServiceRatingKeys.familyWellBeing,
+      serviceKey: ServiceRatingKeys.wellBeingSession,
+    );
+  }
+
+  Future<void> _endSession() async {
+    await _promptWellBeingSessionRatingIfComplete();
+    if (!mounted) return;
+    await ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
+  }
+
+  Future<void> _doneAfterMeasurement() async {
+    await _promptWellBeingSessionRatingIfComplete();
+    if (!mounted) return;
+    await ref.read(wellBeingControllerProvider.notifier).returnToHub();
   }
 
   Future<void> _verifyOtpAndShowQuota(WellBeingController controller) async {
@@ -423,7 +447,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                 children: [
                   KioskGhostButton(
                     label: 'Done',
-                    onPressed: () => controller.returnToHub(),
+                    onPressed: _doneAfterMeasurement,
                   ),
                   const SizedBox(width: 12),
                   KioskPrimaryButton(

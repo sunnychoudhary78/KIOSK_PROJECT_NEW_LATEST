@@ -19,6 +19,8 @@ import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_birt
 import 'package:skp_kiosk/features/astrology/presentation/widgets/astrology_insights_panel.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/glass_panel.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
+import 'package:skp_kiosk/features/service_ratings/presentation/prompt_service_rating.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -50,8 +52,17 @@ class _MyKundaliPageState extends ConsumerState<MyKundaliPage> {
     super.dispose();
   }
 
-  Future<void> _endSession() {
-    return ref
+  Future<void> _endSession() async {
+    if (ref.read(myKundaliControllerProvider).phase == KundaliPhase.result) {
+      await promptServiceRatingIfNeeded(
+        context,
+        ref,
+        family: ServiceRatingKeys.familyAstrology,
+        serviceKey: ServiceRatingKeys.astrologySession,
+      );
+      if (!mounted) return;
+    }
+    await ref
         .read(kioskSessionControllerProvider.notifier)
         .endVisitorSession(attract: false);
   }

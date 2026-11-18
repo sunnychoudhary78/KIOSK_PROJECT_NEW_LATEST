@@ -16,7 +16,9 @@ const RATING_LABELS: Record<string, string> = {
   'print.quick_print': 'Quick Print',
   'print.digilocker_print': 'DigiLocker Print',
   'well_being.print': 'Well Being print',
+  'well_being.session': 'Well Being session',
   'astrology.print': 'Astrology print',
+  'astrology.session': 'Astrology session',
   'home.charging': 'Phone Charging',
 };
 
@@ -25,7 +27,9 @@ const RATING_ORDER = [
   'print.quick_print',
   'print.digilocker_print',
   'well_being.print',
+  'well_being.session',
   'astrology.print',
+  'astrology.session',
   'home.charging',
 ] as const;
 

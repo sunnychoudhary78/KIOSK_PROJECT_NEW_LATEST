@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/kiosk_buttons.dart';
+import 'package:skp_kiosk/features/service_ratings/application/service_ratings_gate.dart';
 import 'package:skp_kiosk/features/service_ratings/application/service_ratings_tracker.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
 import 'package:skp_kiosk/features/service_ratings/presentation/service_rating_prompt.dart';
 
 /// Full-screen end of a print.
@@ -105,6 +107,10 @@ class _KioskPrintResultState extends ConsumerState<KioskPrintResult> {
     if (_left || _promptingRating) return;
     _timer?.cancel();
     if (_shouldPromptRating) {
+      final family = ServiceRatingKeys.familyFor(widget.ratingServiceKey!);
+      if (family != null) {
+        ref.read(serviceRatingsGateProvider.notifier).markPrompted(family);
+      }
       setState(() => _promptingRating = true);
       return;
     }
