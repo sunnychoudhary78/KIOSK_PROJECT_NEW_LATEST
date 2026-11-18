@@ -91,18 +91,45 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
 
 function badgeVariant(status: string): 'success' | 'destructive' | 'warning' | 'muted' | 'secondary' {
   const value = status.toLowerCase();
-  if (['active', 'ready', 'printed', 'completed', 'paid', 'resolved', 'on', 'ok', 'online', 'connected'].includes(value)) {
+  if (
+    [
+      'active',
+      'ready',
+      'printed',
+      'completed',
+      'paid',
+      'resolved',
+      'on',
+      'ok',
+      'online',
+      'connected',
+      'available',
+    ].includes(value)
+  ) {
     return 'success';
   }
   if (value === 'open') return 'warning';
   if (
-    ['inactive', 'ended', 'failed', 'expired', 'not_configured', 'error', 'offline', 'paper_out', 'jam'].includes(
-      value,
-    )
+    [
+      'inactive',
+      'ended',
+      'failed',
+      'expired',
+      'not_configured',
+      'error',
+      'offline',
+      'paper_out',
+      'jam',
+      'out_of_service',
+    ].includes(value)
   ) {
     return 'destructive';
   }
-  if (['paused', 'draft', 'scheduled', 'printing', 'warn', 'behind'].includes(value)) return 'warning';
+  if (
+    ['paused', 'draft', 'scheduled', 'printing', 'warn', 'behind', 'under_maintenance'].includes(value)
+  ) {
+    return 'warning';
+  }
   if (['off', 'unknown', 'disconnected'].includes(value)) return 'muted';
   return 'secondary';
 }

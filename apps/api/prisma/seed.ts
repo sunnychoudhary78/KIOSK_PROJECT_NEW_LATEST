@@ -55,6 +55,11 @@ async function main() {
 
   for (const service of [
     {
+      code: 'print',
+      name: 'Print Documents',
+      description: 'Phone, OTP, or DigiLocker printing on the kiosk home screen',
+    },
+    {
       code: 'otp_print',
       name: 'OTP Print',
       description: 'Print documents using OTP from the mobile app',
@@ -65,14 +70,14 @@ async function main() {
       description: 'Access DigiLocker and print documents from the kiosk',
     },
     {
-      code: 'astrology',
-      name: 'Astrology & Palm Reading',
-      description: 'Vedic chart plus palm reading from the kiosk camera',
-    },
-    {
       code: 'quick_print',
       name: 'Quick Print',
       description: 'Scan a QR on the kiosk and upload documents from a phone browser',
+    },
+    {
+      code: 'astrology',
+      name: 'Astrology & Palm Reading',
+      description: 'Vedic chart plus palm reading from the kiosk camera',
     },
     {
       code: 'fuel_stations',
@@ -107,6 +112,7 @@ async function main() {
   }
 
   const homeServiceCodes = [
+    'print',
     'otp_print',
     'digilocker_print',
     'quick_print',

@@ -46,6 +46,8 @@ export type PrinterHealthView = {
 export type PrinterErrorHistoryEntry = {
   index?: number | null;
   description?: string | null;
+  firstSeenAt?: string | null;
+  lastSeenAt?: string | null;
 };
 
 export type PrinterErrorHistory = {
@@ -59,8 +61,31 @@ export type ErrorHistoryDisplay =
   | {
       status: 'current' | 'stale';
       title?: string;
-      entries: { index: number; description: string }[];
+      entries: {
+        index: number;
+        description: string;
+        firstSeenAt?: string;
+        lastSeenAt?: string;
+        durationLabel?: string;
+      }[];
     };
+
+export function formatErrorDuration(fromIso: string | null | undefined, to = Date.now()): string | null {
+  if (!fromIso) return null;
+  const from = Date.parse(fromIso);
+  if (!Number.isFinite(from) || from > to) return null;
+  const seconds = Math.floor((to - from) / 1000);
+  if (seconds < 60) return `${Math.max(seconds, 0)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) {
+    const remMin = minutes % 60;
+    return remMin > 0 ? `${hours}h ${remMin}m` : `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
 
 export type MaintenanceMetricLines = {
   toner: {
@@ -217,7 +242,15 @@ export function resolvePrinterMaintenance(
   return { status: 'current', ...lines };
 }
 
-function errorEntries(history: PrinterErrorHistory): { index: number; description: string }[] {
+function errorEntries(
+  history: PrinterErrorHistory,
+): {
+  index: number;
+  description: string;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  durationLabel?: string;
+}[] {
   return (history.entries ?? [])
     .filter((entry): entry is PrinterErrorHistoryEntry => {
       const index = entry?.index;
@@ -232,10 +265,24 @@ function errorEntries(history: PrinterErrorHistory): { index: number; descriptio
       );
     })
     .slice(0, 10)
-    .map((entry) => ({
-      index: entry.index as number,
-      description: (entry.description as string).trim(),
-    }));
+    .map((entry) => {
+      const firstSeenAt =
+        typeof entry.firstSeenAt === 'string' && entry.firstSeenAt.trim()
+          ? entry.firstSeenAt
+          : undefined;
+      const lastSeenAt =
+        typeof entry.lastSeenAt === 'string' && entry.lastSeenAt.trim()
+          ? entry.lastSeenAt
+          : undefined;
+      const durationLabel = formatErrorDuration(firstSeenAt ?? lastSeenAt ?? null) ?? undefined;
+      return {
+        index: entry.index as number,
+        description: (entry.description as string).trim(),
+        firstSeenAt,
+        lastSeenAt,
+        durationLabel,
+      };
+    });
 }
 
 export function resolvePrinterErrorHistory(
@@ -297,6 +344,7 @@ export function resolvePrinterStatus(
 
 export function resolvePrinterRowSummary(
   health: PrinterHealthView | null | undefined,
+  opts?: { errorsHidden?: boolean },
 ): PrinterRowSummary {
   const maintenance = resolvePrinterMaintenance(health);
   const errors = resolvePrinterErrorHistory(health);
@@ -304,9 +352,16 @@ export function resolvePrinterRowSummary(
   const stale = maintenance.status === 'stale' || errors.status === 'stale';
   const recorded =
     errors.status === 'current' || errors.status === 'stale' ? errors.entries.length : 0;
+  const hidden = opts?.errorsHidden === true && recorded > 0;
 
   if (status.fault) {
     return { label: status.label, tone: health?.snmpOk === false ? 'amber' : 'alert' };
+  }
+  if (hidden) {
+    return {
+      label: recorded === 1 ? '1 error hidden' : `${recorded} errors hidden`,
+      tone: 'amber',
+    };
   }
   if (recorded > 0) {
     return {

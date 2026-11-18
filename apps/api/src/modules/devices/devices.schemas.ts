@@ -137,11 +137,19 @@ export const printerErrorHistorySchema = z.object({
       z.object({
         index: z.number().int().min(1).max(10),
         description: z.string().min(1).max(160),
+        firstSeenAt: z.string().datetime().optional(),
+        lastSeenAt: z.string().datetime().optional(),
       }),
     )
     .max(10)
     .optional(),
 });
+
+export const setPrinterErrorsHiddenSchema = z.object({
+  hidden: z.boolean(),
+});
+
+export type SetPrinterErrorsHiddenInput = z.infer<typeof setPrinterErrorsHiddenSchema>;
 
 export const printerHealthSchema = z.object({
   state: z.enum(printerHealthStates),

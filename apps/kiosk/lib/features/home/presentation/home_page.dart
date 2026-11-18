@@ -220,10 +220,24 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
     final colors = context.athenaColors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final playlist = ref.watch(adsControllerProvider).playlist;
-    // Rebuild when enablement changes so taps use the latest map.
-    ref.watch(serviceCatalogControllerProvider);
+    // Rebuild when enablement/status changes so taps use the latest map.
+    final catalog = ref.watch(serviceCatalogControllerProvider);
     final showHorizontal = playlist.homeBanners.isNotEmpty;
     final showVertical = playlist.homeSideBanners.isNotEmpty;
+
+    ({String? label, bool blocked}) tileStatus(KioskHomeService service) {
+      if (catalog.isHomeServiceEnabled(service)) {
+        return (label: null, blocked: false);
+      }
+      return (label: 'Under maintenance', blocked: true);
+    }
+
+    final printStatus = tileStatus(KioskHomeService.printDocuments);
+    final localStatus = tileStatus(KioskHomeService.localServices);
+    final wellBeingStatus = tileStatus(KioskHomeService.wellBeing);
+    final chargingStatus = tileStatus(KioskHomeService.phoneCharging);
+    final astrologyStatus = tileStatus(KioskHomeService.astrology);
+    final fuelStatus = tileStatus(KioskHomeService.fuelStations);
 
     // 6 Signature Service Tiles with pastel organic waves
     final tiles = [
@@ -234,6 +248,8 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFF0077B6),
         waveColor: const Color(0xFFE0F2FE),
         gradientColors: const [Color(0xFF38BDF8), Color(0xFF0284C7)],
+        statusLabel: printStatus.label,
+        statusBlocked: printStatus.blocked,
         onTap: () => _openService(
           context,
           KioskHomeService.printDocuments,
@@ -247,6 +263,8 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFF059669),
         waveColor: const Color(0xFFD1FAE5),
         gradientColors: const [Color(0xFF34D399), Color(0xFF059669)],
+        statusLabel: localStatus.label,
+        statusBlocked: localStatus.blocked,
         onTap: () => _openService(
           context,
           KioskHomeService.localServices,
@@ -260,6 +278,8 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFFE11D48),
         waveColor: const Color(0xFFFFE4E6),
         gradientColors: const [Color(0xFFFB7185), Color(0xFFE11D48)],
+        statusLabel: wellBeingStatus.label,
+        statusBlocked: wellBeingStatus.blocked,
         onTap: () => _openService(
           context,
           KioskHomeService.wellBeing,
@@ -273,6 +293,8 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFFD97706),
         waveColor: const Color(0xFFFEF3C7),
         gradientColors: const [Color(0xFFFBBF24), Color(0xFFD97706)],
+        statusLabel: chargingStatus.label,
+        statusBlocked: chargingStatus.blocked,
         onTap: () => _openService(
           context,
           KioskHomeService.phoneCharging,
@@ -286,6 +308,8 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFF7C3AED),
         waveColor: const Color(0xFFEDE9FE),
         gradientColors: const [Color(0xFFA855F7), Color(0xFF7C3AED)],
+        statusLabel: astrologyStatus.label,
+        statusBlocked: astrologyStatus.blocked,
         onTap: () => _openService(
           context,
           KioskHomeService.astrology,
@@ -299,6 +323,8 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         accent: const Color(0xFFEA580C),
         waveColor: const Color(0xFFFFEDD5),
         gradientColors: const [Color(0xFFFB923C), Color(0xFFEA580C)],
+        statusLabel: fuelStatus.label,
+        statusBlocked: fuelStatus.blocked,
         onTap: () => _openService(
           context,
           KioskHomeService.fuelStations,

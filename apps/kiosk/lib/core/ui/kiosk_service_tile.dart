@@ -45,6 +45,8 @@ class KioskServiceTile extends StatefulWidget {
     this.accent,
     this.gradientColors,
     this.waveColor,
+    this.statusLabel,
+    this.statusBlocked = false,
   });
 
   final IconData icon;
@@ -55,6 +57,12 @@ class KioskServiceTile extends StatefulWidget {
   final Color? accent;
   final List<Color>? gradientColors;
   final Color? waveColor;
+
+  /// When set, shown as a badge (e.g. Under maintenance / Out of service).
+  final String? statusLabel;
+
+  /// When true, tap is blocked and the tile looks unavailable.
+  final bool statusBlocked;
 
   @override
   State<KioskServiceTile> createState() => _KioskServiceTileState();
@@ -117,159 +125,187 @@ class _KioskServiceTileState extends State<KioskServiceTile> {
             ],
           );
 
-    final titleColor = isDark ? Colors.white : const Color(0xFF101828);
+    final blocked = widget.statusBlocked;
+    final statusLabel = widget.statusLabel;
+    final titleColor = blocked
+        ? (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))
+        : (isDark ? Colors.white : const Color(0xFF101828));
     final subtitleColor = isDark ? const Color(0xFFCBD2E1) : const Color(0xFF64748B);
     final arrowBg = isDark ? const Color(0xFF1C143F) : Colors.white;
     final arrowBorderColor = isDark
-        ? effectiveAccent.withValues(alpha: 0.6)
-        : effectiveAccent.withValues(alpha: 0.35);
-    final arrowIconColor = effectiveAccent;
+        ? effectiveAccent.withValues(alpha: blocked ? 0.3 : 0.6)
+        : effectiveAccent.withValues(alpha: blocked ? 0.2 : 0.35);
+    final arrowIconColor = blocked ? subtitleColor : effectiveAccent;
+    final statusColor = statusLabel == 'Out of service'
+        ? const Color(0xFFDC2626)
+        : const Color(0xFFD97706);
 
-    return AnimatedScale(
-      scale: _pressed ? 0.985 : 1.0,
-      duration: const Duration(milliseconds: 140),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
-        child: InkWell(
-          onTap: widget.onTap,
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTapCancel: () => setState(() => _pressed = false),
+    return Opacity(
+      opacity: blocked ? 0.78 : 1,
+      child: AnimatedScale(
+        scale: _pressed && !blocked ? 0.985 : 1.0,
+        duration: const Duration(milliseconds: 140),
+        child: Material(
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(24),
-          splashColor: effectiveAccent.withValues(alpha: 0.12),
-          highlightColor: effectiveAccent.withValues(alpha: 0.05),
-          child: Ink(
-            decoration: cardDecoration,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // 1. Organic bottom wave matching Athena reading cards
-                  CustomPaint(
-                    painter: _CardBottomWavePainter(color: effectiveWaveColor),
-                    size: Size.infinite,
-                  ),
-
-                  // 2. Card Content
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // 3D Squircle Icon with glossy border & colored glow
-                        Container(
-                          width: 68,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: grad,
-                            ),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.40),
-                              width: 1.4,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: grad.last.withValues(alpha: 0.40),
-                                blurRadius: 14,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Icon(
-                              widget.icon,
-                              size: 34,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-
-                        // Vertical Separator Line
-                        Container(
-                          width: 1,
-                          height: 48,
-                          color: isDark
-                              ? const Color(0xFF2E2452)
-                              : const Color(0xFFE2E8F0),
-                        ),
-                        const SizedBox(width: 16),
-
-                        // Title + Subtitle
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontFamily: 'PlusJakartaSans',
-                                  fontSize: 25,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.4,
-                                  color: titleColor,
-                                  height: 1.15,
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                widget.subtitle,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontFamily: 'PlusJakartaSans',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.35,
-                                  color: subtitleColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        // Circular arrow button
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: arrowBg,
-                            border: Border.all(
-                              color: arrowBorderColor,
-                              width: 1.4,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: effectiveAccent.withValues(alpha: 0.12),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 19,
-                              color: arrowIconColor,
-                            ),
-                          ),
-                        ),
-                      ],
+          child: InkWell(
+            onTap: blocked ? null : widget.onTap,
+            onTapDown: blocked ? null : (_) => setState(() => _pressed = true),
+            onTapUp: blocked ? null : (_) => setState(() => _pressed = false),
+            onTapCancel: blocked ? null : () => setState(() => _pressed = false),
+            borderRadius: BorderRadius.circular(24),
+            splashColor: effectiveAccent.withValues(alpha: 0.12),
+            highlightColor: effectiveAccent.withValues(alpha: 0.05),
+            child: Ink(
+              decoration: cardDecoration,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CustomPaint(
+                      painter: _CardBottomWavePainter(color: effectiveWaveColor),
+                      size: Size.infinite,
                     ),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 68,
+                            height: 68,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: blocked
+                                    ? [
+                                        const Color(0xFF94A3B8),
+                                        const Color(0xFF64748B),
+                                      ]
+                                    : grad,
+                              ),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.40),
+                                width: 1.4,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (blocked ? const Color(0xFF64748B) : grad.last)
+                                      .withValues(alpha: 0.40),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Icon(
+                                blocked ? Icons.block_rounded : widget.icon,
+                                size: 34,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Container(
+                            width: 1,
+                            height: 48,
+                            color: isDark
+                                ? const Color(0xFF2E2452)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'PlusJakartaSans',
+                                    fontSize: 25,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.4,
+                                    color: titleColor,
+                                    height: 1.15,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  blocked && statusLabel != null
+                                      ? statusLabel
+                                      : widget.subtitle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'PlusJakartaSans',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.35,
+                                    color: blocked ? statusColor : subtitleColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          if (statusLabel != null && blocked)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: isDark ? 0.22 : 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: statusColor.withValues(alpha: 0.45),
+                                ),
+                              ),
+                              child: Text(
+                                statusLabel,
+                                style: TextStyle(
+                                  fontFamily: 'PlusJakartaSans',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: statusColor,
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: arrowBg,
+                                border: Border.all(
+                                  color: arrowBorderColor,
+                                  width: 1.4,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: effectiveAccent.withValues(alpha: 0.12),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 19,
+                                  color: arrowIconColor,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -6,6 +6,7 @@ class ServiceCatalogRepository {
   final ApiClient _api;
 
   /// Returns a map of platform service code → enabled for this device JWT.
+  /// Fleet operational status also counts: under_maintenance / out_of_service ⇒ disabled.
   Future<Map<String, bool>> fetchEnabledByCode() async {
     final json = await _api.get('/services');
     final items = json['items'] as List<dynamic>? ?? const [];
@@ -14,7 +15,11 @@ class ServiceCatalogRepository {
       if (raw is! Map) continue;
       final code = raw['code']?.toString();
       if (code == null || code.isEmpty) continue;
-      map[code] = raw['enabled'] == true;
+      final enabled = raw['enabled'] == true;
+      final status = raw['status']?.toString();
+      final available =
+          status == null || status.isEmpty || status == 'available';
+      map[code] = enabled && available;
     }
     return map;
   }

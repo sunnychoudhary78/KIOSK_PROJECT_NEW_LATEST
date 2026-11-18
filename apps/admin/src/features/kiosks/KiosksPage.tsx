@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button as UiButton } from '@/components/ui/button';
 import {
+  formatErrorDuration,
   hasPrinterDuplex,
   hasPrinterParts,
   hasPrinterRefill,
@@ -102,6 +103,8 @@ type Device = {
   surveillanceHealthAt?: string | null;
   printerHealth?: PrinterHealthView | null;
   printerHealthAt?: string | null;
+  printerErrorsHidden?: boolean | null;
+  printerErrorsHiddenAt?: string | null;
   printerRefreshRequestedAt?: string | null;
   printingPausedReason?: string | null;
   maxPagesPerSession: number;
@@ -169,14 +172,15 @@ function PrinterSummaryCell({
   device: Device;
   onDetails: () => void;
 }) {
-  const summary = resolvePrinterRowSummary(device.printerHealth);
+  const errorsHidden = device.printerErrorsHidden === true;
+  const summary = resolvePrinterRowSummary(device.printerHealth, { errorsHidden });
   const errors = resolvePrinterErrorHistory(device.printerHealth);
   const errorEntries =
     errors.status === 'current' || errors.status === 'stale' ? errors.entries : [];
   const pagesLeft = device.pagesLeft == null ? '—' : String(device.pagesLeft);
   const available = device.trayAvailable == null ? null : String(device.trayAvailable);
-  const topError = errorEntries[0]?.description ?? null;
-  const hasErrors = errorEntries.length > 0;
+  const topError = !errorsHidden ? errorEntries[0]?.description ?? null : null;
+  const hasErrors = errorEntries.length > 0 && !errorsHidden;
 
   return (
     <div className="flex min-w-[11rem] max-w-[16rem] items-center gap-2 text-sm">
@@ -266,6 +270,10 @@ function PrinterDetailsBody({
   trayAvailable,
   canEditTray,
   canClearOpen,
+  canHideErrors,
+  errorsHidden,
+  errorsHiddenAt,
+  printerHealthAt,
   trayInput,
   onTrayInput,
   trayError,
@@ -273,6 +281,8 @@ function PrinterDetailsBody({
   onSaveTray,
   clearOpenSaving,
   onClearOpen,
+  hideErrorsSaving,
+  onToggleHideErrors,
 }: {
   health: PrinterHealthView | null | undefined;
   pagesLeft: number | null;
@@ -280,6 +290,10 @@ function PrinterDetailsBody({
   trayAvailable: number | null;
   canEditTray: boolean;
   canClearOpen: boolean;
+  canHideErrors: boolean;
+  errorsHidden: boolean;
+  errorsHiddenAt: string | null;
+  printerHealthAt: string | null;
   trayInput: string;
   onTrayInput: (value: string) => void;
   trayError: string | null;
@@ -287,6 +301,8 @@ function PrinterDetailsBody({
   onSaveTray: (mode: 'add' | 'replace') => void;
   clearOpenSaving: boolean;
   onClearOpen: () => void;
+  hideErrorsSaving: boolean;
+  onToggleHideErrors: () => void;
 }) {
   const maintenance = resolvePrinterMaintenance(health);
   const errors = resolvePrinterErrorHistory(health);
@@ -315,15 +331,21 @@ function PrinterDetailsBody({
   const errorList =
     errors.status === 'current' || errors.status === 'stale' ? errors.entries : [];
   const hasErrors = errorList.length > 0;
+  const showErrorAlert = hasErrors && !errorsHidden;
 
   return (
     <div className="flex flex-col gap-4 pr-1">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Status</span>
         <span className={`text-sm ${statusClass}`}>{printerStatus.label}</span>
-        {hasErrors ? (
+        {showErrorAlert ? (
           <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
             {errorList.length === 1 ? '1 error' : `${errorList.length} errors`}
+          </span>
+        ) : null}
+        {errorsHidden && hasErrors ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+            Errors hidden
           </span>
         ) : null}
         {stale ? (
@@ -335,44 +357,82 @@ function PrinterDetailsBody({
 
       <section
         className={
-          hasErrors
+          showErrorAlert
             ? 'rounded-xl border border-red-200 bg-red-50/80 p-3'
             : 'rounded-xl border border-border bg-muted/20 p-3'
         }
       >
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className={`text-sm font-medium ${hasErrors ? 'text-red-900' : 'text-muted-foreground'}`}>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3
+            className={`text-sm font-medium ${showErrorAlert ? 'text-red-900' : 'text-muted-foreground'}`}
+          >
             Printer errors
           </h3>
-          {hasErrors ? (
-            <span className="text-xs font-medium text-red-800">
-              {errorList.length} recorded
-            </span>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {hasErrors ? (
+              <span
+                className={`text-xs font-medium ${showErrorAlert ? 'text-red-800' : 'text-muted-foreground'}`}
+              >
+                {errorList.length} recorded
+              </span>
+            ) : null}
+            {hasErrors && canHideErrors ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-7 px-2 text-xs"
+                disabled={hideErrorsSaving}
+                onClick={onToggleHideErrors}
+              >
+                {hideErrorsSaving
+                  ? 'Saving…'
+                  : errorsHidden
+                    ? 'Show again'
+                    : 'Hide from dashboard'}
+              </Button>
+            ) : null}
+          </div>
         </div>
         {errors.status === 'unavailable' ? (
           <p className="text-sm text-muted-foreground">Error history unavailable from this printer.</p>
         ) : !hasErrors ? (
           <p className="text-sm text-muted-foreground">No recorded errors</p>
+        ) : errorsHidden ? (
+          <p className="text-sm text-muted-foreground">
+            {errorList.length === 1 ? '1 printer error is' : `${errorList.length} printer errors are`}{' '}
+            hidden from the kiosk list
+            {errorsHiddenAt ? ` · hidden ${new Date(errorsHiddenAt).toLocaleString()}` : ''}.
+            The printer may still report them until the device clears its log.
+          </p>
         ) : (
           <ol className="space-y-2">
-            {errorList.map((entry, i) => (
-              <li
-                key={`${entry.index}-${entry.description}`}
-                className="flex gap-3 rounded-lg border border-red-200/80 bg-white px-3 py-2.5 shadow-sm"
-              >
-                <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-100 text-xs font-semibold text-red-800">
-                  {i + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium leading-snug text-red-950">{entry.description}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Printer log #{entry.index}</p>
-                </div>
-              </li>
-            ))}
+            {errorList.map((entry, i) => {
+              const seenFrom = entry.firstSeenAt ?? entry.lastSeenAt ?? printerHealthAt;
+              const firstSeen = seenFrom ? new Date(seenFrom).toLocaleString() : null;
+              const durationText =
+                entry.durationLabel ?? formatErrorDuration(seenFrom) ?? null;
+              return (
+                <li
+                  key={`${entry.index}-${entry.description}`}
+                  className="flex gap-3 rounded-lg border border-red-200/80 bg-white px-3 py-2.5 shadow-sm"
+                >
+                  <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-100 text-xs font-semibold text-red-800">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium leading-snug text-red-950">{entry.description}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Printer log #{entry.index}
+                      {durationText ? ` · open for ${durationText}` : ''}
+                      {firstSeen ? ` · first seen ${firstSeen}` : ''}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         )}
-        {stale && hasErrors && staleTitle ? (
+        {stale && showErrorAlert && staleTitle ? (
           <p className="mt-2 text-xs text-amber-800">{staleTitle}</p>
         ) : null}
       </section>
@@ -643,6 +703,7 @@ export function KiosksPage() {
   const [printerDeviceId, setPrinterDeviceId] = useState<string | null>(null);
   const [printerRefreshing, setPrinterRefreshing] = useState(false);
   const [printerRefreshNote, setPrinterRefreshNote] = useState<string | null>(null);
+  const [hideErrorsSaving, setHideErrorsSaving] = useState(false);
   const [trayInput, setTrayInput] = useState('');
   const [trayError, setTrayError] = useState<string | null>(null);
   const [traySaving, setTraySaving] = useState(false);
@@ -1233,6 +1294,7 @@ export function KiosksPage() {
     printerRefreshGeneration.current += 1;
     setPrinterRefreshing(false);
     setPrinterRefreshNote(null);
+    setHideErrorsSaving(false);
     setTrayInput('');
     setTrayError(null);
     setClearOpenSaving(false);
@@ -1284,6 +1346,34 @@ export function KiosksPage() {
       setTrayError(err instanceof Error ? err.message : 'Could not update the tray');
     } finally {
       setTraySaving(false);
+    }
+  }
+
+  async function togglePrinterErrorsHidden() {
+    if (!printerDeviceId || hideErrorsSaving || !canEnablePrinting) return;
+    const device = items.find((item) => item.id === printerDeviceId);
+    if (!device) return;
+    const nextHidden = device.printerErrorsHidden !== true;
+    setHideErrorsSaving(true);
+    setPrinterRefreshNote(null);
+    try {
+      const updated = await apiRequest<Device>(`/devices/${printerDeviceId}/printer-errors/hidden`, {
+        method: 'POST',
+        token,
+        body: { hidden: nextHidden },
+      });
+      setItems((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+      setPrinterRefreshNote(
+        nextHidden
+          ? 'Printer errors hidden from the kiosk list'
+          : 'Printer errors shown again on the kiosk list',
+      );
+    } catch (err) {
+      setPrinterRefreshNote(
+        err instanceof Error ? err.message : 'Could not update printer error visibility',
+      );
+    } finally {
+      setHideErrorsSaving(false);
     }
   }
 
@@ -2009,11 +2099,15 @@ export function KiosksPage() {
                 const hist = resolvePrinterErrorHistory(printerDevice.printerHealth);
                 const count =
                   hist.status === 'current' || hist.status === 'stale' ? hist.entries.length : 0;
-                return count > 0
-                  ? count === 1
-                    ? '1 recorded printer error — listed first below'
-                    : `${count} recorded printer errors — listed first below`
-                  : 'Ink, tray, and printer diagnostics';
+                if (count === 0) return 'Ink, tray, and printer diagnostics';
+                if (printerDevice.printerErrorsHidden) {
+                  return count === 1
+                    ? '1 printer error hidden from the kiosk list'
+                    : `${count} printer errors hidden from the kiosk list`;
+                }
+                return count === 1
+                  ? '1 recorded printer error — listed first below'
+                  : `${count} recorded printer errors — listed first below`;
               })()
             : undefined
         }
@@ -2054,6 +2148,10 @@ export function KiosksPage() {
             trayAvailable={printerDevice.trayAvailable ?? null}
             canEditTray={canEnablePrinting}
             canClearOpen={canEnablePrinting}
+            canHideErrors={canEnablePrinting}
+            errorsHidden={printerDevice.printerErrorsHidden === true}
+            errorsHiddenAt={printerDevice.printerErrorsHiddenAt ?? null}
+            printerHealthAt={printerDevice.printerHealthAt ?? null}
             trayInput={trayInput}
             onTrayInput={(value) => {
               setTrayInput(value);
@@ -2064,6 +2162,8 @@ export function KiosksPage() {
             onSaveTray={(mode) => void saveTray(mode)}
             clearOpenSaving={clearOpenSaving}
             onClearOpen={() => void clearOpenJobs()}
+            hideErrorsSaving={hideErrorsSaving}
+            onToggleHideErrors={() => void togglePrinterErrorsHidden()}
           />
         ) : null}
       </Modal>

@@ -30,7 +30,8 @@ extension KioskHomeServiceX on KioskHomeService {
   List<String> get platformCodes {
     switch (this) {
       case KioskHomeService.printDocuments:
-        return const ['otp_print', 'quick_print', 'digilocker_print'];
+        // Prefer umbrella `print` when present; else all print channels.
+        return const ['print', 'otp_print', 'quick_print', 'digilocker_print'];
       case KioskHomeService.localServices:
         return const ['local_services'];
       case KioskHomeService.wellBeing:
@@ -46,10 +47,18 @@ extension KioskHomeServiceX on KioskHomeService {
 
   /// True when every required platform code is enabled.
   /// If [byCode] is null (catalog never loaded), treat as enabled.
+  /// Print: if umbrella `print` exists in the map, that alone decides; otherwise
+  /// require otp/quick/digilocker.
   bool isEnabled(Map<String, bool>? byCode) {
     if (byCode == null) {
       return true;
     }
-    return platformCodes.every((code) => byCode[code] == true);
+    if (this == KioskHomeService.printDocuments && byCode.containsKey('print')) {
+      return byCode['print'] == true;
+    }
+    final codes = this == KioskHomeService.printDocuments
+        ? const ['otp_print', 'quick_print', 'digilocker_print']
+        : platformCodes;
+    return codes.every((code) => byCode[code] == true);
   }
 }

@@ -27,6 +27,13 @@ import { applyTrayLoad, pagesLeft, usbPagesTotal } from './printer_tray.js';
 import { getTrayCapacity } from '../printing/tray_capacity.js';
 import { isWithinLocalTimeWindow } from '../print_quota/print_quota.time.js';
 import { printLimitsFromDevice } from './device_print_limits.js';
+import {
+  applyPrinterErrorsHidden,
+  enrichPrinterHealthErrors,
+  printerErrorsAreHidden,
+  readPrinterErrorAdminMeta,
+  stripPrinterAdminMeta,
+} from './printer_error_history.js';
 
 function mapSurveillanceHealth(value: unknown): SurveillanceHealthInput | null {
   if (value == null || typeof value !== 'object') {
@@ -39,7 +46,7 @@ function mapPrinterHealth(value: unknown): PrinterHealthInput | null {
   if (value == null || typeof value !== 'object') {
     return null;
   }
-  return value as PrinterHealthInput;
+  return stripPrinterAdminMeta(value as Record<string, unknown>) as PrinterHealthInput;
 }
 
 function mapHardwareHealth(value: unknown): HardwareHealthInput | null {
@@ -110,6 +117,8 @@ function mapDevice(
     surveillanceHealthAt: device.surveillanceHealthAt?.toISOString() ?? null,
     printerHealth: mapPrinterHealth(device.printerHealth),
     printerHealthAt: device.printerHealthAt?.toISOString() ?? null,
+    printerErrorsHidden: printerErrorsAreHidden(device.printerHealth),
+    printerErrorsHiddenAt: readPrinterErrorAdminMeta(device.printerHealth).hiddenAt ?? null,
     hardwareHealth: mapHardwareHealth(device.hardwareHealth),
     hardwareHealthAt: device.hardwareHealthAt?.toISOString() ?? null,
     shutterCommand: device.shutterCommand ?? null,
@@ -542,6 +551,43 @@ export class DevicesService {
     return { requestedAt: requestedAt.toISOString() };
   }
 
+  async setPrinterErrorsHidden(
+    deviceId: string,
+    hidden: boolean,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+    if (!device.printerHealth || typeof device.printerHealth !== 'object') {
+      throw new AppError('printer_health_unavailable', 'No printer health snapshot yet', 409);
+    }
+    const nextHealth = applyPrinterErrorsHidden(device.printerHealth, hidden, new Date());
+    if (!nextHealth) {
+      throw new AppError('printer_health_unavailable', 'No printer health snapshot yet', 409);
+    }
+    const updated = await this.db.device.update({
+      where: { id: deviceId },
+      data: { printerHealth: nextHealth },
+      include: { site: true },
+    });
+    await this.audit.record({
+      action: hidden ? 'device.printer_errors_hidden' : 'device.printer_errors_shown',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: { hidden },
+    });
+    return mapDeviceWithTray(this.db, updated);
+  }
+
   async getPrinterRefresh(deviceId: string, principalDeviceId: string) {
     if (deviceId !== principalDeviceId) {
       throw new AppError('forbidden', 'Device can only read its own refresh request', 403);
@@ -695,7 +741,12 @@ export class DevicesService {
           : {}),
         ...(body.printer
           ? {
-              printerHealth: body.printer,
+              printerHealth: enrichPrinterHealthErrors(
+                device.printerHealth,
+                body.printer as Record<string, unknown>,
+                now,
+                device.printerHealthAt,
+              ),
               printerHealthAt: now,
             }
           : {}),
