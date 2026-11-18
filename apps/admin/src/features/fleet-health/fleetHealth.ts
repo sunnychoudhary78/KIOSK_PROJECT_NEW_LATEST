@@ -48,7 +48,12 @@ export type PrinterHealth = {
   };
   errorHistory?: {
     available?: boolean | null;
-    entries?: Array<{ index?: number | null; description?: string | null }> | null;
+    entries?: Array<{
+      index?: number | null;
+      description?: string | null;
+      firstSeenAt?: string | null;
+      lastSeenAt?: string | null;
+    }> | null;
   } | null;
 };
 

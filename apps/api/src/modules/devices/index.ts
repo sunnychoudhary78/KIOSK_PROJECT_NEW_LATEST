@@ -16,6 +16,7 @@ import {
   setDevicePrintLimitsSchema,
   setDeviceStatusSchema,
   setDeviceSurveillanceSchema,
+  setPrinterErrorsHiddenSchema,
   setPrinterTraySchema,
   updateDeviceSchema,
 } from './devices.schemas.js';
@@ -213,6 +214,29 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
       try {
         const result = await service.requestPrinterRefresh(
           requireParam(req.params.deviceId, 'deviceId'),
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/devices/:deviceId/printer-errors/hidden',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(setPrinterErrorsHiddenSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.setPrinterErrorsHidden(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.body.hidden === true,
+          req.principal.id,
+          req.correlationId,
         );
         res.json(result);
       } catch (error) {

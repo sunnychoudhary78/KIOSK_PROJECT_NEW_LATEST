@@ -440,14 +440,23 @@ model AdPlaybackEvent {
   @@map("ad_playback_events")
 }
 
+enum ServiceOperationalStatus {
+  available
+  under_maintenance
+  out_of_service
+
+  @@map("service_operational_status")
+}
+
 model PlatformService {
-  id          String   @id @default(uuid()) @db.Uuid
-  code        String   @unique
-  name        String
-  description String?
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                String                    @id @default(uuid()) @db.Uuid
+  code              String                    @unique
+  name              String
+  description       String?
+  isActive          Boolean                   @default(true) @map("is_active")
+  operationalStatus ServiceOperationalStatus  @default(available) @map("operational_status")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
 
   enablements ServiceEnablement[]
 

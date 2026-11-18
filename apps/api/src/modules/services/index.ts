@@ -7,7 +7,10 @@ import { validateBody } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { ServicesCatalogService } from './services.service.js';
-import { serviceEnablementSchema } from './services.schemas.js';
+import {
+  serviceEnablementSchema,
+  setServiceOperationalStatusSchema,
+} from './services.schemas.js';
 
 export function registerServicesModule(router: Router, deps: AppDeps): void {
   const service = new ServicesCatalogService(deps.db, deps.auditService);
@@ -42,6 +45,29 @@ export function registerServicesModule(router: Router, deps: AppDeps): void {
           throw new AppError('unauthorized', 'Missing principal', 401);
         }
         const result = await service.setEnablement(
+          requireParam(req.params.serviceCode, 'serviceCode'),
+          req.body,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.patch(
+    '/services/:serviceCode/status',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(setServiceOperationalStatusSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.setOperationalStatus(
           requireParam(req.params.serviceCode, 'serviceCode'),
           req.body,
           req.principal.id,

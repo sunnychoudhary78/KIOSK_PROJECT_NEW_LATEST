@@ -1,7 +1,30 @@
+import { ServiceOperationalStatus } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
-import type { ServiceEnablementInput } from './services.schemas.js';
+import type {
+  ServiceEnablementInput,
+  SetServiceOperationalStatusInput,
+} from './services.schemas.js';
+
+/** Home “Print Documents” umbrella → print feature codes gated by the same status. */
+const PRINT_CHILD_CODES = ['otp_print', 'quick_print', 'digilocker_print'] as const;
+
+function mapServiceItem(service: {
+  code: string;
+  name: string;
+  description: string | null;
+  operationalStatus: ServiceOperationalStatus;
+  enabled: boolean;
+}) {
+  return {
+    code: service.code,
+    name: service.name,
+    description: service.description ?? undefined,
+    enabled: service.enabled,
+    status: service.operationalStatus,
+  };
+}
 
 export class ServicesCatalogService {
   constructor(
@@ -17,12 +40,15 @@ export class ServicesCatalogService {
 
     if (!deviceId) {
       return {
-        items: services.map((s) => ({
-          code: s.code,
-          name: s.name,
-          description: s.description ?? undefined,
-          enabled: true,
-        })),
+        items: services.map((s) =>
+          mapServiceItem({
+            code: s.code,
+            name: s.name,
+            description: s.description,
+            operationalStatus: s.operationalStatus,
+            enabled: true,
+          }),
+        ),
       };
     }
 
@@ -32,12 +58,15 @@ export class ServicesCatalogService {
     const byServiceId = new Map(enablements.map((e) => [e.serviceId, e.enabled]));
 
     return {
-      items: services.map((s) => ({
-        code: s.code,
-        name: s.name,
-        description: s.description ?? undefined,
-        enabled: byServiceId.get(s.id) ?? false,
-      })),
+      items: services.map((s) =>
+        mapServiceItem({
+          code: s.code,
+          name: s.name,
+          description: s.description,
+          operationalStatus: s.operationalStatus,
+          enabled: byServiceId.get(s.id) ?? false,
+        }),
+      ),
     };
   }
 
@@ -87,7 +116,48 @@ export class ServicesCatalogService {
       code: service.code,
       deviceId: enablement.deviceId,
       enabled: enablement.enabled,
+      status: service.operationalStatus,
     };
+  }
+
+  async setOperationalStatus(
+    serviceCode: string,
+    input: SetServiceOperationalStatusInput,
+    adminId: string,
+    correlationId?: string,
+  ) {
+    const service = await this.db.platformService.findUnique({ where: { code: serviceCode } });
+    if (!service || !service.isActive) {
+      throw new AppError('not_found', `Unknown service: ${serviceCode}`, 404);
+    }
+
+    const status = input.status as ServiceOperationalStatus;
+    const codesToUpdate =
+      serviceCode === 'print' ? ['print', ...PRINT_CHILD_CODES] : [serviceCode];
+
+    await this.db.platformService.updateMany({
+      where: { code: { in: codesToUpdate }, isActive: true },
+      data: { operationalStatus: status },
+    });
+
+    await this.audit.record({
+      action: 'service.operational_status_updated',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'platform_service',
+      resourceId: service.id,
+      correlationId,
+      metadata: { serviceCode, status, cascadedCodes: codesToUpdate },
+    });
+
+    const updated = await this.db.platformService.findUnique({ where: { code: serviceCode } });
+    return mapServiceItem({
+      code: service.code,
+      name: service.name,
+      description: service.description,
+      operationalStatus: updated?.operationalStatus ?? status,
+      enabled: true,
+    });
   }
 
   async assertEnabled(deviceId: string, serviceCode: string): Promise<void> {
@@ -104,6 +174,29 @@ export class ServicesCatalogService {
 
     if (!enablement?.enabled) {
       throw new AppError('service_disabled', `Service ${serviceCode} is disabled for this device`, 403);
+    }
+
+    const umbrella =
+      PRINT_CHILD_CODES.includes(serviceCode as (typeof PRINT_CHILD_CODES)[number])
+        ? await this.db.platformService.findUnique({ where: { code: 'print' } })
+        : null;
+    const effectiveStatus = umbrella?.isActive
+      ? umbrella.operationalStatus
+      : service.operationalStatus;
+
+    if (effectiveStatus === ServiceOperationalStatus.out_of_service) {
+      throw new AppError(
+        'service_out_of_service',
+        `Service ${serviceCode} is out of service`,
+        403,
+      );
+    }
+    if (effectiveStatus === ServiceOperationalStatus.under_maintenance) {
+      throw new AppError(
+        'service_under_maintenance',
+        `Service ${serviceCode} is under maintenance`,
+        403,
+      );
     }
   }
 }

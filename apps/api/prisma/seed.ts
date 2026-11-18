@@ -55,6 +55,11 @@ async function main() {
 
   for (const service of [
     {
+      code: 'print',
+      name: 'Print Documents',
+      description: 'Phone, OTP, or DigiLocker printing on the kiosk home screen',
+    },
+    {
       code: 'otp_print',
       name: 'OTP Print',
       description: 'Print documents using OTP from the mobile app',
@@ -65,14 +70,29 @@ async function main() {
       description: 'Access DigiLocker and print documents from the kiosk',
     },
     {
-      code: 'astrology',
-      name: 'Astrology & Palm Reading',
-      description: 'Vedic chart plus palm reading from the kiosk camera',
-    },
-    {
       code: 'quick_print',
       name: 'Quick Print',
       description: 'Scan a QR on the kiosk and upload documents from a phone browser',
+    },
+    {
+      code: 'local_services',
+      name: 'Find Services',
+      description: 'Local trades and nearby service contacts',
+    },
+    {
+      code: 'well_being',
+      name: 'Well Being',
+      description: 'Heart rate, blood oxygen, and temperature checks',
+    },
+    {
+      code: 'charging',
+      name: 'Phone Charging',
+      description: 'Kiosk phone charging sessions',
+    },
+    {
+      code: 'astrology',
+      name: 'Astrology & Palm Reading',
+      description: 'Vedic chart plus palm reading from the kiosk camera',
     },
     {
       code: 'fuel_stations',
@@ -92,7 +112,19 @@ async function main() {
   }
 
   const extraServices = await prisma.platformService.findMany({
-    where: { code: { in: ['astrology', 'quick_print', 'fuel_stations'] } },
+    where: {
+      code: {
+        in: [
+          'print',
+          'astrology',
+          'quick_print',
+          'fuel_stations',
+          'local_services',
+          'well_being',
+          'charging',
+        ],
+      },
+    },
     select: { id: true, code: true },
   });
   if (extraServices.length) {
