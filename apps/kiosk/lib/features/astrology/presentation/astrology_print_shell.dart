@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
@@ -308,6 +309,7 @@ class AstrologyPrintShell extends StatelessWidget {
                   },
                   onNotReceived:
                       print.printConfirmed ? onReportMissing : null,
+                  ratingServiceKey: ServiceRatingKeys.astrologyPrint,
                 ),
         ),
       );

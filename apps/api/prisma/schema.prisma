@@ -287,6 +287,7 @@ model Device {
   surveillanceSegments SurveillanceSegment[]
   quickPrintSessions QuickPrintSession[]
   serviceNavigationEvents ServiceNavigationEvent[]
+  serviceRatings      ServiceRating[]
   diagnosticLogs      DeviceDiagnosticLog[]
   supportQueries      SupportQuery[]
   screenShareSessions ScreenShareSession[]
@@ -350,6 +351,21 @@ model ServiceNavigationEvent {
   @@index([deviceId, occurredAt])
   @@index([deviceId, eventKey, occurredAt])
   @@map("service_navigation_events")
+}
+
+model ServiceRating {
+  id         String   @id @default(uuid()) @db.Uuid
+  deviceId   String   @map("device_id") @db.Uuid
+  serviceKey String   @map("service_key") @db.VarChar(120)
+  stars      Int
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  metadata   Json?
+
+  device Device @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, occurredAt])
+  @@index([deviceId, serviceKey, occurredAt])
+  @@map("service_ratings")
 }
 
 model Advertiser {

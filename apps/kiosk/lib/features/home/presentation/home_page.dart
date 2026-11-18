@@ -10,6 +10,7 @@ import 'package:skp_kiosk/features/ads/presentation/home_banner_strip.dart';
 import 'package:skp_kiosk/features/ads/presentation/idle_ad_player.dart';
 import 'package:skp_kiosk/features/home/application/service_catalog_controller.dart';
 import 'package:skp_kiosk/features/home/domain/kiosk_home_service.dart';
+import 'package:skp_kiosk/features/home/presentation/stopped_kiosk_page.dart';
 import 'package:skp_kiosk/features/home/presentation/under_maintenance_page.dart';
 import 'package:skp_kiosk/features/home/presentation/widgets/kiosk_terminal_graphic.dart';
 import 'package:skp_kiosk/features/weather/application/weather_controller.dart';
@@ -65,7 +66,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     final Widget body;
     if (auth.stopped) {
-      body = const _StoppedNotice();
+      body = StoppedKioskPage(deviceName: auth.deviceName);
     } else if (auth.provisioned && !auth.isAuthenticated) {
       body = _ReconnectNotice(error: auth.error);
     } else if (auth.bootstrapping || auth.loading) {
@@ -724,24 +725,6 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
           ),
           Expanded(child: mainBody),
         ],
-      ),
-    );
-  }
-}
-
-class _StoppedNotice extends StatelessWidget {
-  const _StoppedNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return KioskShell(
-      showHome: false,
-      body: Center(
-        child: KioskStatusBanner(
-          message: 'This kiosk is temporarily decommissioned.',
-          tone: KioskBannerTone.warning,
-          icon: Icons.block,
-        ),
       ),
     );
   }

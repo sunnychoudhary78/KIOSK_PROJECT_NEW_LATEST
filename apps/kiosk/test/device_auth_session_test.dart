@@ -93,7 +93,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('This kiosk has been stopped'), findsOneWidget);
+    expect(find.text('This kiosk is stopped'), findsOneWidget);
     expect(find.text('Activate this terminal'), findsNothing);
     expect(find.text('Deactivate this device'), findsNothing);
   });

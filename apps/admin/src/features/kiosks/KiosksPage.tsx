@@ -66,6 +66,12 @@ import {
   type UsageSort,
 } from './serviceUsage';
 import {
+  buildRatingRows,
+  formatAvgStars,
+  type ServiceRatingItem,
+  type ServiceRatingRow,
+} from './serviceRatings';
+import {
   resolveRecordingDisplay,
   type SurveillanceHealth,
 } from '../surveillance/surveillanceStatus';
@@ -715,6 +721,7 @@ export function KiosksPage() {
   const [usageFromLocal, setUsageFromLocal] = useState(() => rangeForPreset('30').fromLocal);
   const [usageToLocal, setUsageToLocal] = useState(() => rangeForPreset('30').toLocal);
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
+  const [usageRatingRows, setUsageRatingRows] = useState<ServiceRatingRow[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [usageSearch, setUsageSearch] = useState('');
@@ -985,15 +992,22 @@ export function KiosksPage() {
     setUsageLoading(true);
     setUsageError(null);
     try {
-      const result = await apiRequest<{
-        items: ServiceAnalyticsItem[];
-      }>(
-        `/devices/${device.id}/service-analytics?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
-        { token },
-      );
-      setUsageRows(buildUsageRows(result.items ?? []));
+      const query = `from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`;
+      const [usageResult, ratingsResult] = await Promise.all([
+        apiRequest<{ items: ServiceAnalyticsItem[] }>(
+          `/devices/${device.id}/service-analytics?${query}`,
+          { token },
+        ),
+        apiRequest<{ items: ServiceRatingItem[] }>(
+          `/devices/${device.id}/service-ratings?${query}`,
+          { token },
+        ).catch(() => ({ items: [] as ServiceRatingItem[] })),
+      ]);
+      setUsageRows(buildUsageRows(usageResult.items ?? []));
+      setUsageRatingRows(buildRatingRows(ratingsResult.items ?? []));
     } catch (err) {
       setUsageRows([]);
+      setUsageRatingRows([]);
       setUsageError(err instanceof Error ? err.message : 'Failed to load usage');
     } finally {
       setUsageLoading(false);
@@ -1038,6 +1052,7 @@ export function KiosksPage() {
     setUsageFromLocal(range.fromLocal);
     setUsageToLocal(range.toLocal);
     setUsageRows([]);
+    setUsageRatingRows([]);
     setUsageError(null);
     setUsageSearch('');
     setUsageServiceFilter('all');
@@ -2608,6 +2623,38 @@ export function KiosksPage() {
             </table>
           </div>
         )}
+
+        {!usageLoading ? (
+          <div className="mt-6 space-y-3 border-t border-border/70 pt-4">
+            <h3 className="text-sm font-semibold">Ratings</h3>
+            {usageRatingRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No ratings in this range</p>
+            ) : (
+              <div className="overflow-x-auto rounded-md border border-border">
+                <table className="table w-full">
+                  <thead>
+                    <tr>
+                      <th>Service</th>
+                      <th className="w-28 text-right">Avg stars</th>
+                      <th className="w-24 text-right">Ratings</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usageRatingRows.map((row) => (
+                      <tr key={row.serviceKey}>
+                        <td className="text-sm font-medium">{row.label}</td>
+                        <td className="text-right text-sm tabular-nums font-medium">
+                          {formatAvgStars(row.avgStars)}
+                        </td>
+                        <td className="text-right text-sm tabular-nums">{row.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : null}
       </Modal>
     </div>
   );

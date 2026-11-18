@@ -7,6 +7,7 @@ import 'package:skp_kiosk/core/theme/athena_colors.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -183,6 +184,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
                   ? controller.continueToDocuments
                   : null,
               onNotReceived: state.printed ? controller.reportPagesMissing : null,
+              ratingServiceKey: ServiceRatingKeys.otpPrint,
             ),
           OtpPrintPhase.documents || OtpPrintPhase.done => _DocumentList(
               title: state.redeemResult?.title ?? 'Your documents',

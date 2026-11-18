@@ -4,6 +4,7 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
 import 'package:skp_kiosk/features/digilocker_print/presentation/digilocker_auth_webview.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -318,6 +319,7 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
                   ? controller.continueToDocuments
                   : null,
               onNotReceived: state.printConfirmed ? controller.reportPagesMissing : null,
+              ratingServiceKey: ServiceRatingKeys.digilockerPrint,
             ),
           _ => Padding(
               padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),

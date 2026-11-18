@@ -6,6 +6,7 @@ import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
 import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/presentation/kiosk_wait_ads.dart';
+import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
@@ -297,6 +298,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
             },
             onNotReceived:
                 print.printConfirmed ? controller.reportPrintPagesMissing : null,
+            ratingServiceKey: ServiceRatingKeys.wellBeingPrint,
           ),
         ),
       );
