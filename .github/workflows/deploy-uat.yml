@@ -108,7 +108,6 @@ jobs:
       - name: Build print-web
         env:
           VITE_SKP_API_BASE_URL: ${{ vars.VITE_SKP_API_BASE_URL }}
-          VITE_PLAY_STORE_URL: ${{ vars.VITE_PLAY_STORE_URL }}
         run: pnpm --filter @skp/print-web build
 
       - name: Upload print-web dist to VPS
