@@ -1108,9 +1108,6 @@ export class PaymentsService {
 
     for (const item of items) {
       totalAmountPaise += item.amountPaise;
-      pageCount += item.pageCount;
-      freePages += item.freePages;
-      paidPages += item.extraPages;
       const statusBucket = byStatus[item.status] ?? { count: 0, amountPaise: 0 };
       statusBucket.count += 1;
       statusBucket.amountPaise += item.amountPaise;
@@ -1128,6 +1125,10 @@ export class PaymentsService {
         serviceBucket.paidPaise += item.amountPaise;
         totalPaidPaise += item.amountPaise;
         paidCount += 1;
+        // Page mix only from completed payments — pending intents would inflate these.
+        pageCount += item.pageCount;
+        freePages += item.freePages;
+        paidPages += item.extraPages;
       }
       byServiceMap.set(item.service, serviceBucket);
     }
