@@ -61,7 +61,7 @@ export class ServiceAnalyticsService {
     const previousFrom = new Date(from.getTime() - durationMs);
     const previousTo = new Date(to.getTime() - durationMs);
 
-    const [rows, previousRows, dailyRaw, hourlyRaw] = await Promise.all([
+    const [rows, previousRows, dailyRaw, hourlyRaw, hourlyByServiceRaw] = await Promise.all([
       this.db.serviceNavigationEvent.groupBy({
         by: ['eventKey'],
         where: {
@@ -97,6 +97,27 @@ export class ServiceAnalyticsService {
           AND occurred_at <= ${to}
         GROUP BY 1
         ORDER BY 1 ASC
+      `,
+      this.db.$queryRaw<Array<{ hour: number; service_key: string; count: bigint }>>`
+        SELECT EXTRACT(HOUR FROM occurred_at AT TIME ZONE 'Asia/Kolkata')::int AS hour,
+               CASE
+                 WHEN event_key LIKE 'home.print%' OR event_key LIKE 'print.%' THEN 'home.print'
+                 WHEN event_key LIKE 'home.local_services%' OR event_key LIKE 'local_services.%' THEN 'home.local_services'
+                 WHEN event_key LIKE 'home.well_being%' OR event_key LIKE 'well_being.%' THEN 'home.well_being'
+                 WHEN event_key LIKE 'home.charging%' THEN 'home.charging'
+                 WHEN event_key LIKE 'home.astrology%' OR event_key LIKE 'astrology.%' THEN 'home.astrology'
+                 WHEN event_key LIKE 'home.fuel_stations%' OR event_key LIKE 'fuel_stations.%' THEN 'home.fuel_stations'
+                 WHEN event_key LIKE 'home.emergency%' THEN 'home.emergency'
+                 WHEN event_key LIKE 'home.support%' OR event_key LIKE 'support.%' THEN 'home.support'
+                 ELSE 'other'
+               END AS service_key,
+               COUNT(*)::bigint AS count
+        FROM service_navigation_events
+        WHERE device_id = ${deviceId}::uuid
+          AND occurred_at >= ${from}
+          AND occurred_at <= ${to}
+        GROUP BY 1, 2
+        ORDER BY 1 ASC, 2 ASC
       `,
     ]);
 
@@ -147,6 +168,24 @@ export class ServiceAnalyticsService {
       count: hourlyMap.get(hour) ?? 0,
     }));
 
+    const serviceHourMap = new Map<string, Map<number, number>>();
+    for (const row of hourlyByServiceRaw) {
+      const key = row.service_key;
+      const byHour = serviceHourMap.get(key) ?? new Map<number, number>();
+      byHour.set(Number(row.hour), Number(row.count));
+      serviceHourMap.set(key, byHour);
+    }
+    const hourlyByService = [...serviceHourMap.entries()]
+      .map(([serviceKey, byHour]) => ({
+        serviceKey,
+        total: [...byHour.values()].reduce((sum, n) => sum + n, 0),
+        hours: Array.from({ length: 24 }, (_, hour) => ({
+          hour,
+          count: byHour.get(hour) ?? 0,
+        })),
+      }))
+      .sort((a, b) => b.total - a.total || a.serviceKey.localeCompare(b.serviceKey));
+
     const totalClicks = items.reduce((sum, item) => sum + item.count, 0);
     const homeItems = items.filter((item) => item.eventKey.startsWith('home.'));
 
@@ -163,6 +202,7 @@ export class ServiceAnalyticsService {
       items,
       daily,
       hourly,
+      hourlyByService,
       previous: {
         from: previousFrom.toISOString(),
         to: previousTo.toISOString(),

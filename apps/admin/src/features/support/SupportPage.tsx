@@ -355,7 +355,7 @@ export function SupportPage() {
                 {outcomeOptions.map((item) => (
                   <option key={item.value} value={item.value}>
                     {item.label}
-                  </option>
+                  </option> 
                 ))}
               </Select>
               <Button type="button" disabled={resolving} onClick={() => void markResolved()}>

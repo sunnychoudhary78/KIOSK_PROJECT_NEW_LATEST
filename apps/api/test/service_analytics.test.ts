@@ -101,6 +101,11 @@ describe('ServiceAnalyticsService', () => {
       .mockResolvedValueOnce([
         { hour: 10, count: 4n },
         { hour: 14, count: 6n },
+      ])
+      .mockResolvedValueOnce([
+        { hour: 10, service_key: 'home.print', count: 4n },
+        { hour: 14, service_key: 'home.print', count: 3n },
+        { hour: 14, service_key: 'home.astrology', count: 3n },
       ]);
     const db = {
       device: { findUnique },
@@ -128,8 +133,21 @@ describe('ServiceAnalyticsService', () => {
     expect(result.hourly).toHaveLength(24);
     expect(result.hourly[10]).toEqual({ hour: 10, count: 4 });
     expect(result.hourly[14]).toEqual({ hour: 14, count: 6 });
+    expect(result.hourlyByService).toEqual([
+      {
+        serviceKey: 'home.print',
+        total: 7,
+        hours: expect.any(Array),
+      },
+      {
+        serviceKey: 'home.astrology',
+        total: 3,
+        hours: expect.any(Array),
+      },
+    ]);
+    expect(result.hourlyByService[0]?.hours).toHaveLength(24);
     expect(groupBy).toHaveBeenCalledTimes(2);
-    expect(queryRaw).toHaveBeenCalledTimes(2);
+    expect(queryRaw).toHaveBeenCalledTimes(3);
   });
 
   it('throws not_found when device is missing', async () => {
