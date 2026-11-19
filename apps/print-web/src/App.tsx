@@ -294,8 +294,8 @@ function SessionPage() {
       setError(null);
     }
     setFiles((prev) => {
-      const map = new Map(
-        prev.map((item) => [`${item.file.name}:${item.file.size}`, item] as const),
+      const map = new Map<string, { file: File; copies: number }>(
+        prev.map((item) => [`${item.file.name}:${item.file.size}`, item]),
       );
       for (const file of incoming) {
         const key = `${file.name}:${file.size}`;
