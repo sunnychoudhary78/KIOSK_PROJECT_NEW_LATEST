@@ -98,6 +98,7 @@ function badgeVariant(status: string): 'success' | 'destructive' | 'warning' | '
       'printed',
       'completed',
       'paid',
+      'free',
       'resolved',
       'on',
       'ok',
@@ -115,6 +116,7 @@ function badgeVariant(status: string): 'success' | 'destructive' | 'warning' | '
       'ended',
       'failed',
       'expired',
+      'unpaid',
       'not_configured',
       'error',
       'offline',
@@ -126,7 +128,17 @@ function badgeVariant(status: string): 'success' | 'destructive' | 'warning' | '
     return 'destructive';
   }
   if (
-    ['paused', 'draft', 'scheduled', 'printing', 'warn', 'behind', 'under_maintenance'].includes(value)
+    [
+      'paused',
+      'draft',
+      'scheduled',
+      'printing',
+      'warn',
+      'behind',
+      'under_maintenance',
+      'awaiting_payment',
+      'mixed',
+    ].includes(value)
   ) {
     return 'warning';
   }

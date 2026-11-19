@@ -23,7 +23,18 @@ export function registerPrintQuotaModule(router: Router, deps: AppDeps): void {
       try {
         const q = typeof req.query.q === 'string' ? req.query.q : undefined;
         const limit = parseLimit(req.query.limit);
-        res.json(await service.listUsage({ q, limit }));
+        const audience =
+          req.query.audience === 'society' || req.query.audience === 'public'
+            ? req.query.audience
+            : 'all';
+        const usage =
+          req.query.usage === 'has_remaining' ||
+          req.query.usage === 'exhausted' ||
+          req.query.usage === 'used_bw' ||
+          req.query.usage === 'used_color'
+            ? req.query.usage
+            : 'all';
+        res.json(await service.listUsage({ q, limit, audience, usage }));
       } catch (error) {
         next(error);
       }

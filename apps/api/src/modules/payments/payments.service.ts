@@ -2,6 +2,7 @@ import {
   OtpChallengeStatus,
   PaymentStatus,
   Prisma,
+  PrintJobSource,
   QuickPrintSessionStatus,
   SupportQueryStatus,
   SupportResolution,
@@ -20,10 +21,68 @@ import {
 } from './razorpay.client.js';
 import type {
   CreateRazorpayOrderInput,
+  ListPaymentsQuery,
   OpenKioskSupportQueryInput,
   OpenSupportQueryInput,
+  PaymentServiceCode,
+  PaymentsSummaryQuery,
   VerifyRazorpayPaymentInput,
 } from './payments.schemas.js';
+
+const deviceSelect = {
+  id: true,
+  name: true,
+  site: { select: { name: true } },
+} satisfies Prisma.DeviceSelect;
+
+const paymentLedgerInclude = {
+  challenge: {
+    select: {
+      id: true,
+      deviceId: true,
+      device: { select: deviceSelect },
+      user: { select: { phone: true } },
+    },
+  },
+  quickPrintSession: {
+    select: {
+      id: true,
+      deviceId: true,
+      verifiedPhone: true,
+      device: { select: deviceSelect },
+    },
+  },
+  printJob: {
+    select: {
+      id: true,
+      source: true,
+      title: true,
+      deviceId: true,
+      device: { select: deviceSelect },
+    },
+  },
+  user: { select: { phone: true } },
+} satisfies Prisma.PaymentInclude;
+
+type PaymentLedgerRow = Prisma.PaymentGetPayload<{ include: typeof paymentLedgerInclude }>;
+
+function inferPaymentService(row: {
+  challengeId: string | null;
+  quickPrintSessionId: string | null;
+  printJob: { source: PrintJobSource } | null;
+}): PaymentServiceCode {
+  if (row.printJob?.source) {
+    return row.printJob.source;
+  }
+  if (row.challengeId) return 'otp_print';
+  if (row.quickPrintSessionId) return 'quick_print';
+  return 'unknown';
+}
+
+function parseDayBound(value: string | undefined, endOfDay: boolean): Date | undefined {
+  if (!value) return undefined;
+  return new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`);
+}
 
 const supportQueryInclude = {
   payment: {
@@ -999,6 +1058,200 @@ export class PaymentsService {
       resolution: query.resolution,
       createdAt: query.createdAt.toISOString(),
       resolvedAt: query.resolvedAt?.toISOString() ?? null,
+    };
+  }
+
+  async listPayments(query: ListPaymentsQuery) {
+    const limit = query.limit ?? 200;
+    const rows = await this.db.payment.findMany({
+      where: this.paymentLedgerWhere(query),
+      include: paymentLedgerInclude,
+      orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      take: Math.min(limit * 3, 600),
+    });
+    const items = rows
+      .map((row) => this.toLedgerPayment(row))
+      .filter((item) => {
+        if (!query.service || query.service === 'all') return true;
+        return item.service === query.service;
+      })
+      .slice(0, limit);
+    return { items };
+  }
+
+  async summarizePayments(query: PaymentsSummaryQuery) {
+    const rows = await this.db.payment.findMany({
+      where: this.paymentLedgerWhere(query),
+      include: paymentLedgerInclude,
+      orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      take: 5000,
+    });
+    const items = rows
+      .map((row) => this.toLedgerPayment(row))
+      .filter((item) => {
+        if (!query.service || query.service === 'all') return true;
+        return item.service === query.service;
+      });
+
+    const byStatus: Record<string, { count: number; amountPaise: number }> = {};
+    const byServiceMap = new Map<
+      PaymentServiceCode,
+      { service: PaymentServiceCode; count: number; paidPaise: number; amountPaise: number }
+    >();
+
+    let totalPaidPaise = 0;
+    let paidCount = 0;
+    let totalAmountPaise = 0;
+
+    for (const item of items) {
+      totalAmountPaise += item.amountPaise;
+      const statusBucket = byStatus[item.status] ?? { count: 0, amountPaise: 0 };
+      statusBucket.count += 1;
+      statusBucket.amountPaise += item.amountPaise;
+      byStatus[item.status] = statusBucket;
+
+      const serviceBucket = byServiceMap.get(item.service) ?? {
+        service: item.service,
+        count: 0,
+        paidPaise: 0,
+        amountPaise: 0,
+      };
+      serviceBucket.count += 1;
+      serviceBucket.amountPaise += item.amountPaise;
+      if (item.status === PaymentStatus.PAID) {
+        serviceBucket.paidPaise += item.amountPaise;
+        totalPaidPaise += item.amountPaise;
+        paidCount += 1;
+      }
+      byServiceMap.set(item.service, serviceBucket);
+    }
+
+    const byService = [...byServiceMap.values()].sort((a, b) => b.paidPaise - a.paidPaise);
+
+    return {
+      totalCount: items.length,
+      paidCount,
+      totalAmountPaise,
+      totalPaidPaise,
+      byStatus,
+      byService,
+    };
+  }
+
+  private paymentLedgerWhere(query: ListPaymentsQuery | PaymentsSummaryQuery): Prisma.PaymentWhereInput {
+    const from = parseDayBound(query.from, false);
+    const to = parseDayBound(query.to, true);
+    const q = query.q?.trim();
+    const status =
+      query.status && query.status !== 'all' ? (query.status as PaymentStatus) : undefined;
+
+    const and: Prisma.PaymentWhereInput[] = [];
+    if (status) and.push({ status });
+    if (from || to) {
+      and.push({
+        OR: [
+          {
+            paidAt: {
+              ...(from ? { gte: from } : {}),
+              ...(to ? { lte: to } : {}),
+            },
+          },
+          {
+            paidAt: null,
+            createdAt: {
+              ...(from ? { gte: from } : {}),
+              ...(to ? { lte: to } : {}),
+            },
+          },
+        ],
+      });
+    }
+    if (q) {
+      const searchOr: Prisma.PaymentWhereInput[] = [
+        { razorpayOrderId: { contains: q, mode: 'insensitive' } },
+        { razorpayPaymentId: { contains: q, mode: 'insensitive' } },
+        { failureReason: { contains: q, mode: 'insensitive' } },
+        { user: { phone: { contains: q } } },
+        { challenge: { user: { phone: { contains: q } } } },
+        { quickPrintSession: { verifiedPhone: { contains: q } } },
+        { printJob: { title: { contains: q, mode: 'insensitive' } } },
+      ];
+      if (/^[0-9a-f-]{36}$/i.test(q)) {
+        searchOr.unshift({ id: q });
+      }
+      and.push({ OR: searchOr });
+    }
+
+    if (query.service && query.service !== 'all') {
+      and.push(this.serviceWhere(query.service));
+    }
+
+    return and.length > 0 ? { AND: and } : {};
+  }
+
+  private serviceWhere(service: PaymentServiceCode): Prisma.PaymentWhereInput {
+    switch (service) {
+      case 'otp_print':
+        return {
+          OR: [{ challengeId: { not: null } }, { printJob: { source: PrintJobSource.otp_print } }],
+        };
+      case 'quick_print':
+        return {
+          OR: [
+            { quickPrintSessionId: { not: null } },
+            { printJob: { source: PrintJobSource.quick_print } },
+          ],
+        };
+      case 'digilocker_print':
+        return { printJob: { source: PrintJobSource.digilocker_print } };
+      case 'well_being_print':
+        return { printJob: { source: PrintJobSource.well_being_print } };
+      case 'astrology_print':
+        return { printJob: { source: PrintJobSource.astrology_print } };
+      case 'unknown':
+        return {
+          challengeId: null,
+          quickPrintSessionId: null,
+          printJobId: null,
+        };
+      default:
+        return {};
+    }
+  }
+
+  private toLedgerPayment(row: PaymentLedgerRow) {
+    const service = inferPaymentService(row);
+    const device =
+      row.printJob?.device ?? row.challenge?.device ?? row.quickPrintSession?.device ?? null;
+    const phone =
+      row.user?.phone ??
+      row.challenge?.user?.phone ??
+      row.quickPrintSession?.verifiedPhone ??
+      null;
+    return {
+      id: row.id,
+      status: row.status,
+      service,
+      amountPaise: row.amountPaise,
+      currency: row.currency,
+      pageCount: row.pageCount,
+      freePages: row.freePages,
+      extraPages: row.extraPages,
+      printColorMode: row.printColorMode,
+      razorpayOrderId: row.razorpayOrderId,
+      razorpayPaymentId: row.razorpayPaymentId,
+      failureReason: row.failureReason,
+      phone,
+      kioskName: device?.name ?? null,
+      siteName: device?.site?.name ?? null,
+      deviceId: device?.id ?? row.printJob?.deviceId ?? row.challenge?.deviceId ?? row.quickPrintSession?.deviceId ?? null,
+      printJobId: row.printJobId,
+      printJobTitle: row.printJob?.title ?? null,
+      challengeId: row.challengeId,
+      quickPrintSessionId: row.quickPrintSessionId,
+      paidAt: row.paidAt?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
+      expiresAt: row.expiresAt.toISOString(),
     };
   }
 

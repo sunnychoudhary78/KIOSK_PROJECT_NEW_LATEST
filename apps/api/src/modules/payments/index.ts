@@ -12,9 +12,11 @@ import { PaymentsService } from './payments.service.js';
 import { RazorpayClient } from './razorpay.client.js';
 import {
   createRazorpayOrderSchema,
+  listPaymentsQuerySchema,
   listSupportQueriesQuerySchema,
   openKioskSupportQuerySchema,
   openSupportQuerySchema,
+  paymentsSummaryQuerySchema,
   resolveSupportQuerySchema,
   supportQueryChallengeQuerySchema,
   verifyRazorpayPaymentSchema,
@@ -159,6 +161,34 @@ export function registerPaymentsModule(router: Router, deps: AppDeps): void {
           req.correlationId,
         );
         res.status(201).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/payments',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
+    validateQuery(listPaymentsQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        res.json(await service.listPayments(listPaymentsQuerySchema.parse(req.query)));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/payments/summary',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
+    validateQuery(paymentsSummaryQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        res.json(await service.summarizePayments(paymentsSummaryQuerySchema.parse(req.query)));
       } catch (error) {
         next(error);
       }

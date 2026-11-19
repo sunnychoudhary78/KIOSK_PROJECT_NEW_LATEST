@@ -14,6 +14,64 @@ import type { UpdatePrintJobStatusInput } from './printing.schemas.js';
 import { assertPrintingAvailable } from './printing_pause.js';
 import { assertTrayCapacity } from './tray_capacity.js';
 
+type PaymentSnapshot = {
+  status: PaymentStatus;
+  amountPaise: number;
+  extraPages: number;
+  freePages: number;
+  paidAt: Date | null;
+} | null;
+
+function pickPayment(job: {
+  payment?: PaymentSnapshot;
+  otpChallenge?: { payment?: PaymentSnapshot } | null;
+  quickPrintSession?: { payment?: PaymentSnapshot } | null;
+}): PaymentSnapshot {
+  return job.payment ?? job.otpChallenge?.payment ?? job.quickPrintSession?.payment ?? null;
+}
+
+function mapBilling(
+  job: { pageCount: number; freePagesGranted?: number | null },
+  payment: PaymentSnapshot,
+) {
+  const freePages = job.freePagesGranted ?? payment?.freePages ?? 0;
+  const pageCount = job.pageCount;
+  if (payment && payment.amountPaise > 0) {
+    const billing =
+      payment.status === PaymentStatus.PAID
+        ? 'paid'
+        : payment.status === PaymentStatus.PENDING
+          ? 'awaiting_payment'
+          : 'unpaid';
+    return {
+      billing,
+      amountPaise: payment.amountPaise,
+      paymentStatus: payment.status,
+      freePages,
+      paidPages: payment.extraPages > 0 ? payment.extraPages : Math.max(0, pageCount - freePages),
+      paidAt: payment.paidAt?.toISOString() ?? null,
+    };
+  }
+  if (freePages > 0 && freePages < pageCount) {
+    return {
+      billing: 'mixed' as const,
+      amountPaise: 0,
+      paymentStatus: payment?.status ?? null,
+      freePages,
+      paidPages: Math.max(0, pageCount - freePages),
+      paidAt: payment?.paidAt?.toISOString() ?? null,
+    };
+  }
+  return {
+    billing: 'free' as const,
+    amountPaise: 0,
+    paymentStatus: payment?.status ?? null,
+    freePages: freePages > 0 ? freePages : pageCount,
+    paidPages: 0,
+    paidAt: null,
+  };
+}
+
 function mapJob(job: {
   id: string;
   status: PrintJobStatus;
@@ -29,13 +87,20 @@ function mapJob(job: {
   needsAdminReview: boolean;
   reconcileDetail: string | null;
   reconciledAt: Date | null;
+  freePagesGranted?: number | null;
   printColorMode?: PrintColorMode | null;
   deviceId: string | null;
+  device?: { name: string; site?: { name: string } | null } | null;
   payloadUrl: string | null;
   payloadPath?: string | null;
   createdAt: Date;
   updatedAt: Date;
+  payment?: PaymentSnapshot;
+  otpChallenge?: { payment?: PaymentSnapshot } | null;
+  quickPrintSession?: { payment?: PaymentSnapshot } | null;
 }) {
+  const payment = pickPayment(job);
+  const billing = mapBilling(job, payment);
   return {
     id: job.id,
     status: job.status,
@@ -51,11 +116,15 @@ function mapJob(job: {
     needsAdminReview: job.needsAdminReview,
     reconcileDetail: job.reconcileDetail,
     reconciledAt: job.reconciledAt?.toISOString() ?? null,
+    freePagesGranted: job.freePagesGranted ?? 0,
     printColorMode: job.printColorMode === PrintColorMode.color ? 'color' : 'bw',
     deviceId: job.deviceId,
+    kioskName: job.device?.name ?? null,
+    siteName: job.device?.site?.name ?? null,
     payloadUrl: job.payloadUrl,
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
+    ...billing,
   };
 }
 
@@ -174,12 +243,43 @@ export class PrintingService {
   }
 
   async list() {
-    const items = await this.db.printJob.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+    const paymentSelect = {
+      status: true,
+      amountPaise: true,
+      extraPages: true,
+      freePages: true,
+      paidAt: true,
+    } as const;
+    const items = await this.db.printJob.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        device: { select: { name: true, site: { select: { name: true } } } },
+        payment: { select: paymentSelect },
+        otpChallenge: { select: { payment: { select: paymentSelect } } },
+        quickPrintSession: { select: { payment: { select: paymentSelect } } },
+      },
+    });
     return { items: items.map(mapJob) };
   }
 
   async get(jobId: string) {
-    const job = await this.db.printJob.findUnique({ where: { id: jobId } });
+    const paymentSelect = {
+      status: true,
+      amountPaise: true,
+      extraPages: true,
+      freePages: true,
+      paidAt: true,
+    } as const;
+    const job = await this.db.printJob.findUnique({
+      where: { id: jobId },
+      include: {
+        device: { select: { name: true, site: { select: { name: true } } } },
+        payment: { select: paymentSelect },
+        otpChallenge: { select: { payment: { select: paymentSelect } } },
+        quickPrintSession: { select: { payment: { select: paymentSelect } } },
+      },
+    });
     if (!job) {
       throw new AppError('not_found', 'Print job not found', 404);
     }

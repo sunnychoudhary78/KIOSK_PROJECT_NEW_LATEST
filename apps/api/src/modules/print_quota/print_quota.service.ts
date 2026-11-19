@@ -327,9 +327,17 @@ export class PrintQuotaService {
     }
   }
 
-  async listUsage(input: { q?: string; limit?: number; now?: Date } = {}) {
+  async listUsage(
+    input: {
+      q?: string;
+      limit?: number;
+      audience?: 'all' | 'society' | 'public';
+      usage?: 'all' | 'has_remaining' | 'exhausted' | 'used_bw' | 'used_color';
+      now?: Date;
+    } = {},
+  ) {
     const now = input.now ?? new Date();
-    const limit = Math.min(200, Math.max(1, Math.floor(input.limit ?? 50)));
+    const limit = Math.min(1000, Math.max(1, Math.floor(input.limit ?? 500)));
     const config = await this.settings.getPrintFreeQuotaConfig();
     const periodKey = periodKeyFor(now, config.period);
     const societyRows = await this.db.societyPhone.findMany({ select: { phone: true } });
@@ -381,21 +389,39 @@ export class PrintQuotaService {
     const searchDigits = (input.q ?? '').replace(/\D/g, '');
     let items = Array.from(byPhone.entries()).map(([phone, stats]) => {
       const limits = stats.society ? societyConfig : config;
+      const bwRemaining = Math.max(0, limits.freeBwPages - stats.bwUsed);
+      const colorRemaining = Math.max(0, limits.freeColorPages - stats.colorUsed);
       return {
         phone,
         society: stats.society,
         bwUsed: stats.bwUsed,
-        bwRemaining: Math.max(0, limits.freeBwPages - stats.bwUsed),
+        bwRemaining,
         colorUsed: stats.colorUsed,
-        colorRemaining: Math.max(0, limits.freeColorPages - stats.colorUsed),
+        colorRemaining,
         bwLimit: limits.freeBwPages,
         colorLimit: limits.freeColorPages,
+        totalUsed: stats.bwUsed + stats.colorUsed,
+        exhausted: bwRemaining === 0 && colorRemaining === 0,
         lastActivityAt: stats.lastActivityAt?.toISOString() ?? null,
       };
     });
 
     if (searchDigits) {
       items = items.filter((item) => item.phone.replace(/\D/g, '').includes(searchDigits));
+    }
+    if (input.audience === 'society') {
+      items = items.filter((item) => item.society);
+    } else if (input.audience === 'public') {
+      items = items.filter((item) => !item.society);
+    }
+    if (input.usage === 'has_remaining') {
+      items = items.filter((item) => !item.exhausted);
+    } else if (input.usage === 'exhausted') {
+      items = items.filter((item) => item.exhausted);
+    } else if (input.usage === 'used_bw') {
+      items = items.filter((item) => item.bwUsed > 0);
+    } else if (input.usage === 'used_color') {
+      items = items.filter((item) => item.colorUsed > 0);
     }
 
     items.sort((a, b) => {
@@ -404,14 +430,24 @@ export class PrintQuotaService {
       return bTime - aTime;
     });
 
+    const total = items.length;
+    const sliced = items.slice(0, limit);
     return {
       period: config.period,
       periodKey,
+      societyPeriod: societyConfig.period,
+      societyPeriodKey: societyKey,
       limits: {
         freeBwPages: config.freeBwPages,
         freeColorPages: config.freeColorPages,
       },
-      items: items.slice(0, limit),
+      societyLimits: {
+        freeBwPages: societyConfig.freeBwPages,
+        freeColorPages: societyConfig.freeColorPages,
+      },
+      total,
+      truncated: total > sliced.length,
+      items: sliced,
     };
   }
 
@@ -425,7 +461,7 @@ export class PrintQuotaService {
     const entries = await this.db.phoneFreePageLedger.findMany({
       where: { phone, periodKey: bw.periodKey },
       orderBy: { updatedAt: 'desc' },
-      take: 50,
+      take: 200,
       select: {
         id: true,
         printColorMode: true,
@@ -435,6 +471,7 @@ export class PrintQuotaService {
         otpChallengeId: true,
         quickPrintSessionId: true,
         printJobId: true,
+        printJob: { select: { title: true, source: true } },
         createdAt: true,
         updatedAt: true,
       },
@@ -461,11 +498,14 @@ export class PrintQuotaService {
         pages: entry.pages,
         status: entry.status,
         periodKey: entry.periodKey,
-        source: entry.otpChallengeId
-          ? 'otp_print'
-          : entry.quickPrintSessionId
-            ? 'quick_print'
-            : 'unknown',
+        title: entry.printJob?.title ?? null,
+        source:
+          entry.printJob?.source ??
+          (entry.otpChallengeId
+            ? 'otp_print'
+            : entry.quickPrintSessionId
+              ? 'quick_print'
+              : 'unknown'),
         otpChallengeId: entry.otpChallengeId,
         quickPrintSessionId: entry.quickPrintSessionId,
         printJobId: entry.printJobId,

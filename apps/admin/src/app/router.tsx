@@ -8,6 +8,7 @@ import { KiosksPage } from '../features/kiosks/KiosksPage';
 import { ServicesPage } from '../features/services/ServicesPage';
 import { FuelStationsPage } from '../features/fuel_stations/FuelStationsPage';
 import { PrintJobsPage } from '../features/print-jobs/PrintJobsPage';
+import { PaymentsPage } from '../features/payments/PaymentsPage';
 import { SupportPage } from '../features/support/SupportPage';
 import { FreePrintUsagePage } from '../features/print-quota/FreePrintUsagePage';
 import { SocietyPhonesPage } from '../features/society-phones/SocietyPhonesPage';
@@ -49,6 +50,7 @@ export function AppRouter() {
             <Route path="cabinet-light" element={<CabinetLightPage />} />
             <Route path="fuel-stations" element={<FuelStationsPage />} />
             <Route path="print-jobs" element={<PrintJobsPage />} />
+            <Route path="payments" element={<PaymentsPage />} />
             <Route path="support" element={<SupportPage />} />
             <Route path="print-quota" element={<FreePrintUsagePage />} />
             <Route path="society-phones" element={<SocietyPhonesPage />} />
