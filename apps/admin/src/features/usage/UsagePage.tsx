@@ -62,6 +62,11 @@ type DeviceUsageResponse = {
   items: ServiceAnalyticsItem[];
   daily?: Array<{ date: string; count: number }>;
   hourly?: Array<{ hour: number; count: number }>;
+  hourlyByService?: Array<{
+    serviceKey: string;
+    total: number;
+    hours: Array<{ hour: number; count: number }>;
+  }>;
   previous?: {
     from: string;
     to: string;
@@ -305,32 +310,198 @@ function MetricCard({
   );
 }
 
-function HourHeatmap({ hours }: { hours: Array<{ hour: number; count: number }> }) {
-  const max = Math.max(1, ...hours.map((h) => h.count));
-  const peak = hours.reduce(
-    (best, row) => (!best || row.count > best.count ? row : best),
-    null as { hour: number; count: number } | null,
+const HOUR_SERVICE_COLORS = [
+  'oklch(0.55 0.14 255)',
+  'oklch(0.62 0.12 145)',
+  'oklch(0.66 0.12 95)',
+  'oklch(0.58 0.13 30)',
+  'oklch(0.58 0.12 210)',
+  'oklch(0.52 0.08 280)',
+  'oklch(0.62 0.11 175)',
+  'oklch(0.5 0.06 260)',
+];
+
+function labelHour(hour: number) {
+  const suffix = hour < 12 ? 'a' : 'p';
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h12}${suffix}`;
+}
+
+function sumHours(
+  hours: Array<{ hour: number; count: number }>,
+  fromHour: number,
+  toHour: number,
+) {
+  return hours.reduce((sum, row) => {
+    if (row.hour >= fromHour && row.hour <= toHour) return sum + row.count;
+    return sum;
+  }, 0);
+}
+
+function HourHeatmap({
+  hours,
+  byService,
+}: {
+  hours: Array<{ hour: number; count: number }>;
+  byService: Array<{
+    serviceKey: string;
+    total: number;
+    hours: Array<{ hour: number; count: number }>;
+  }>;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const serviceOptions = useMemo(
+    () =>
+      byService
+        .filter((s) => s.serviceKey !== 'other' || s.total > 0)
+        .map((s) => ({
+          value: s.serviceKey,
+          label: s.serviceKey === 'other' ? 'Other' : labelForEventKey(s.serviceKey),
+          total: s.total,
+        })),
+    [byService],
   );
 
-  function labelHour(hour: number) {
-    const suffix = hour < 12 ? 'a' : 'p';
-    const h12 = hour % 12 === 0 ? 12 : hour % 12;
-    return `${h12}${suffix}`;
-  }
+  const activeKeys = selected.length > 0 ? selected : [];
+  const multiMode = activeKeys.length > 0;
 
-  function barTone(count: number) {
-    if (count <= 0) return 'bg-slate-200';
-    const t = count / max;
-    if (t >= 0.75) return 'bg-sky-600';
-    if (t >= 0.5) return 'bg-sky-500';
-    if (t >= 0.25) return 'bg-sky-400';
-    return 'bg-sky-300';
+  const series = useMemo(() => {
+    if (!multiMode) {
+      return [
+        {
+          key: 'all',
+          label: 'All services',
+          color: HOUR_SERVICE_COLORS[0]!,
+          hours,
+        },
+      ];
+    }
+    return activeKeys
+      .map((key, index) => {
+        const match = byService.find((s) => s.serviceKey === key);
+        if (!match) return null;
+        return {
+          key,
+          label: key === 'other' ? 'Other' : labelForEventKey(key),
+          color: HOUR_SERVICE_COLORS[index % HOUR_SERVICE_COLORS.length]!,
+          hours: match.hours,
+        };
+      })
+      .filter(Boolean) as Array<{
+      key: string;
+      label: string;
+      color: string;
+      hours: Array<{ hour: number; count: number }>;
+    }>;
+  }, [multiMode, activeKeys, byService, hours]);
+
+  const combined = useMemo(() => {
+    return Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      count: series.reduce((sum, s) => sum + (s.hours[hour]?.count ?? 0), 0),
+      parts: series.map((s) => ({
+        key: s.key,
+        color: s.color,
+        count: s.hours[hour]?.count ?? 0,
+      })),
+    }));
+  }, [series]);
+
+  const max = Math.max(1, ...combined.map((h) => h.count));
+  const peak = combined.reduce(
+    (best, row) => (!best || row.count > best.count ? row : best),
+    null as (typeof combined)[number] | null,
+  );
+  const quiet = combined.reduce(
+    (best, row) =>
+      row.count > 0 && (!best || row.count < best.count) ? row : best,
+    null as (typeof combined)[number] | null,
+  );
+  const total = combined.reduce((sum, row) => sum + row.count, 0);
+  const morning = sumHours(combined, 6, 11);
+  const afternoon = sumHours(combined, 12, 16);
+  const evening = sumHours(combined, 17, 21);
+  const night = sumHours(combined, 22, 23) + sumHours(combined, 0, 5);
+  const avgHour = Math.round((total / 24) * 10) / 10;
+
+  function toggleService(value: string) {
+    setSelected((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value],
+    );
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>IST · 24h</span>
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => setSelected([])}
+          className={cn(
+            'rounded-md border px-2 py-1 text-[11px] font-medium transition-colors',
+            !multiMode
+              ? 'border-sky-300 bg-sky-50 text-sky-800'
+              : 'border-border bg-card text-muted-foreground hover:bg-slate-50',
+          )}
+        >
+          All
+        </button>
+        {serviceOptions.map((opt, index) => {
+          const on = selected.includes(opt.value);
+          const color = HOUR_SERVICE_COLORS[index % HOUR_SERVICE_COLORS.length]!;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => toggleService(opt.value)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors',
+                on
+                  ? 'border-transparent text-white'
+                  : 'border-border bg-card text-muted-foreground hover:bg-slate-50',
+              )}
+              style={on ? { backgroundColor: color, borderColor: color } : undefined}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: on ? 'white' : color }}
+              />
+              {opt.label}
+              <span className={cn('tabular-nums', on ? 'text-white/80' : 'text-muted-foreground')}>
+                {opt.total}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { label: 'Morning', value: morning, hint: '6a–12p' },
+          { label: 'Afternoon', value: afternoon, hint: '12p–5p' },
+          { label: 'Evening', value: evening, hint: '5p–10p' },
+          { label: 'Night', value: night, hint: '10p–6a' },
+        ].map((block) => (
+          <div
+            key={block.label}
+            className="rounded-md border border-border/80 bg-slate-50/70 px-2.5 py-2"
+          >
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {block.label}
+            </div>
+            <div className="text-sm font-semibold tabular-nums">{block.value}</div>
+            <div className="text-[10px] text-muted-foreground">{block.hint}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>
+          IST · avg {avgHour}/hr
+          {quiet && quiet.count > 0 ? ` · quietest ${labelHour(quiet.hour)}` : ''}
+        </span>
         <span className="font-medium text-foreground">
           {peak && peak.count > 0
             ? `Peak ${labelHour(peak.hour)} · ${peak.count}`
@@ -338,9 +509,10 @@ function HourHeatmap({ hours }: { hours: Array<{ hour: number; count: number }> 
         </span>
       </div>
 
-      <div className="flex h-28 items-stretch gap-0.5 rounded-lg border border-border/70 bg-slate-50/60 px-2 py-2 sm:gap-1">
-        {hours.map((row) => {
-          const heightPct = row.count <= 0 ? 6 : Math.max(10, Math.round((row.count / max) * 100));
+      <div className="flex h-32 items-stretch gap-0.5 rounded-lg border border-border/70 bg-slate-50/60 px-2 py-2 sm:gap-1">
+        {combined.map((row) => {
+          const heightPct =
+            row.count <= 0 ? 6 : Math.max(10, Math.round((row.count / max) * 100));
           const isPeak = peak?.hour === row.hour && peak.count > 0;
           return (
             <div
@@ -348,17 +520,66 @@ function HourHeatmap({ hours }: { hours: Array<{ hour: number; count: number }> 
               className="group relative flex h-full min-w-0 flex-1 flex-col items-center justify-end"
               title={`${String(row.hour).padStart(2, '0')}:00 — ${row.count} clicks`}
             >
-              <span className="pointer-events-none absolute bottom-full z-10 mb-1 hidden rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-medium text-white group-hover:block">
-                {row.count}
-              </span>
+              <div className="pointer-events-none absolute bottom-full z-10 mb-1 hidden min-w-[7rem] rounded-md bg-slate-900 px-2 py-1.5 text-[10px] text-white group-hover:block">
+                <div className="font-semibold">
+                  {labelHour(row.hour)} · {row.count}
+                </div>
+                {row.parts
+                  .filter((p) => p.count > 0)
+                  .map((p) => (
+                    <div key={p.key} className="flex items-center justify-between gap-2 opacity-90">
+                      <span className="inline-flex items-center gap-1">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: p.color }}
+                        />
+                        {p.key === 'all'
+                          ? 'All'
+                          : p.key === 'other'
+                            ? 'Other'
+                            : labelForEventKey(p.key)}
+                      </span>
+                      <span className="tabular-nums">{p.count}</span>
+                    </div>
+                  ))}
+              </div>
               <div
                 className={cn(
-                  'w-full max-w-[12px] rounded-t-sm transition-all',
-                  barTone(row.count),
+                  'flex w-full max-w-[14px] flex-col justify-end overflow-hidden rounded-t-sm',
                   isPeak && 'ring-2 ring-sky-700/25 ring-offset-1',
                 )}
                 style={{ height: `${heightPct}%` }}
-              />
+              >
+                {multiMode ? (
+                  row.parts
+                    .filter((p) => p.count > 0)
+                    .map((p) => (
+                      <div
+                        key={p.key}
+                        style={{
+                          backgroundColor: p.color,
+                          height: `${(p.count / Math.max(row.count, 1)) * 100}%`,
+                        }}
+                      />
+                    ))
+                ) : (
+                  <div
+                    className="h-full w-full"
+                    style={{
+                      backgroundColor:
+                        row.count <= 0
+                          ? 'oklch(0.9 0.01 250)'
+                          : row.count / max >= 0.75
+                            ? HOUR_SERVICE_COLORS[0]
+                            : row.count / max >= 0.5
+                              ? 'oklch(0.62 0.12 255)'
+                              : row.count / max >= 0.25
+                                ? 'oklch(0.72 0.1 255)'
+                                : 'oklch(0.82 0.06 255)',
+                    }}
+                  />
+                )}
+              </div>
             </div>
           );
         })}
@@ -370,17 +591,28 @@ function HourHeatmap({ hours }: { hours: Array<{ hour: number; count: number }> 
         ))}
       </div>
 
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-sm bg-slate-200" /> Low
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-sm bg-sky-400" /> Mid
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-sm bg-sky-600" /> High
-        </span>
-      </div>
+      {multiMode ? (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+          {series.map((s) => (
+            <span key={s.key} className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: s.color }} />
+              {s.label}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-sm bg-slate-200" /> Low
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-sm bg-sky-400" /> Mid
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-sm bg-sky-600" /> High
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -804,6 +1036,7 @@ export function UsagePage() {
 
   const daily = detail?.daily ?? [];
   const hourly = detail?.hourly ?? Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+  const hourlyByService = detail?.hourlyByService ?? [];
   const totalClicks = detail?.totalClicks ?? usageStats.totalClicks;
   const avgPerDay =
     daily.length > 0 ? Math.round((totalClicks / daily.length) * 10) / 10 : 0;
@@ -1114,7 +1347,7 @@ export function UsagePage() {
             />
           </div>
 
-          <div className="mb-4 grid gap-4 xl:grid-cols-[1.1fr_1fr_0.9fr]">
+          <div className="mb-4 grid gap-4 xl:grid-cols-[1fr_1.25fr_0.9fr]">
             <Panel
               title="Fleet ranking"
               className="mb-0"
@@ -1132,54 +1365,63 @@ export function UsagePage() {
                 <EmptyState title="No fleet data" description="No kiosks found for this range." />
               ) : (
                 <div className="overflow-hidden rounded-lg border border-border">
-                  <table className="table w-full">
-                    <thead>
-                      <tr className="bg-slate-50/90">
-                        <th className="w-10">#</th>
-                        <th>Kiosk</th>
-                        <th className="w-[32%]">Share</th>
-                        <th className="w-20 text-right">Clicks</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fleet.items.map((item, index) => {
-                        const share = (item.totalClicks / fleetMax) * 100;
-                        const selected = item.deviceId === deviceId;
-                        return (
-                          <tr
-                            key={item.deviceId}
-                            className={cn(
-                              'cursor-pointer transition-colors',
-                              selected ? 'bg-sky-50' : 'hover:bg-slate-50/80',
-                            )}
-                            onClick={() => setDeviceId(item.deviceId)}
-                          >
-                            <td className="py-2 tabular-nums text-muted-foreground">{index + 1}</td>
-                            <td className="py-2">
-                              <div className="truncate text-sm font-medium">{item.name}</div>
-                              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                {item.siteName ? (
-                                  <span className="truncate">{item.siteName}</span>
-                                ) : null}
-                                <StatusBadge status={item.status} />
-                              </div>
-                            </td>
-                            <td className="py-2">
-                              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                                <div
-                                  className="h-full rounded-full bg-sky-500/80"
-                                  style={{ width: `${share}%` }}
-                                />
-                              </div>
-                            </td>
-                            <td className="py-2 text-right text-sm font-semibold tabular-nums">
-                              {item.totalClicks}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <div className="max-h-[16.75rem] overflow-y-auto">
+                    <table className="table w-full">
+                      <thead className="sticky top-0 z-[1]">
+                        <tr className="bg-slate-50/95 shadow-[inset_0_-1px_0_0_var(--border)]">
+                          <th className="w-10">#</th>
+                          <th>Kiosk</th>
+                          <th className="w-[32%]">Share</th>
+                          <th className="w-20 text-right">Clicks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fleet.items.map((item, index) => {
+                          const share = (item.totalClicks / fleetMax) * 100;
+                          const selected = item.deviceId === deviceId;
+                          return (
+                            <tr
+                              key={item.deviceId}
+                              className={cn(
+                                'cursor-pointer transition-colors',
+                                selected ? 'bg-sky-50' : 'hover:bg-slate-50/80',
+                              )}
+                              onClick={() => setDeviceId(item.deviceId)}
+                            >
+                              <td className="py-2.5 tabular-nums text-muted-foreground">
+                                {index + 1}
+                              </td>
+                              <td className="py-2.5">
+                                <div className="truncate text-sm font-medium">{item.name}</div>
+                                <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                  {item.siteName ? (
+                                    <span className="truncate">{item.siteName}</span>
+                                  ) : null}
+                                  <StatusBadge status={item.status} />
+                                </div>
+                              </td>
+                              <td className="py-2.5">
+                                <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                  <div
+                                    className="h-full rounded-full bg-sky-500/80"
+                                    style={{ width: `${share}%` }}
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-2.5 text-right text-sm font-semibold tabular-nums">
+                                {item.totalClicks}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {fleet.items.length > 5 ? (
+                    <div className="border-t border-border bg-slate-50/80 px-3 py-1.5 text-[11px] text-muted-foreground">
+                      Top 5 visible · scroll for {fleet.items.length - 5} more
+                    </div>
+                  ) : null}
                 </div>
               )}
             </Panel>
@@ -1188,7 +1430,7 @@ export function UsagePage() {
               title="Hour of day"
               className="mb-0"
               actions={
-                <span className="text-xs text-muted-foreground">When people use it</span>
+                <span className="text-xs text-muted-foreground">Filter services</span>
               }
             >
               {loading ? (
@@ -1196,7 +1438,11 @@ export function UsagePage() {
                   Loading chart…
                 </div>
               ) : (
-                <HourHeatmap hours={hourly} />
+                <HourHeatmap
+                  key={deviceId}
+                  hours={hourly}
+                  byService={hourlyByService}
+                />
               )}
             </Panel>
 
