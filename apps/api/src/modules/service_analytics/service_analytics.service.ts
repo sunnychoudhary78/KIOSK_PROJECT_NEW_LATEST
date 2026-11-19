@@ -10,7 +10,11 @@ const DEFAULT_RANGE_DAYS = 30;
 const TZ = 'Asia/Kolkata';
 
 function pctDelta(current: number, previous: number): number | null {
-  if (previous === 0) return current === 0 ? 0 : null;
+  if (previous === 0) {
+    // 0 → 0 is flat; 0 → N is treated as +100% so the UI can show a clear uplift.
+    if (current === 0) return 0;
+    return 100;
+  }
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 
