@@ -20,4 +20,6 @@ export type UploadedPdf = {
   mimetype: string;
   size: number;
   buffer: Buffer;
+  /** Print copies for this file (1–10). Defaults to 1 when omitted. */
+  copies?: number;
 };

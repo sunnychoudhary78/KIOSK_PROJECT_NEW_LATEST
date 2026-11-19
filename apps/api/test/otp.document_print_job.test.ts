@@ -31,6 +31,7 @@ function baseDocs() {
       storagePath: '/tmp/a.pdf',
       contentType: 'application/pdf',
       pageCount: 2,
+      copies: 1,
       byteSize: 100,
       sortOrder: 0,
       printJobId: null as string | null,
@@ -44,6 +45,7 @@ function baseDocs() {
       storagePath: '/tmp/b.pdf',
       contentType: 'application/pdf',
       pageCount: 3,
+      copies: 2,
       byteSize: 120,
       sortOrder: 1,
       printJobId: null as string | null,
@@ -180,6 +182,8 @@ describe('OtpPrintService multi-document jobs', () => {
       expect.objectContaining({
         title: 'a.pdf',
         pageCount: 2,
+        copies: 1,
+        pagesExpected: 2,
         freePagesGranted: 5,
         idempotencyKey: `otp-doc-${docA}`,
       }),
@@ -200,6 +204,9 @@ describe('OtpPrintService multi-document jobs', () => {
     expect(printing.createJob).toHaveBeenLastCalledWith(
       expect.objectContaining({
         title: 'b.pdf',
+        pageCount: 3,
+        copies: 2,
+        pagesExpected: 6,
         freePagesGranted: 0,
         idempotencyKey: `otp-doc-${docB}`,
       }),

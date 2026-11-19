@@ -21,6 +21,8 @@ import {
   isAcceptedPrintUpload,
   normalizeToPdf,
 } from '../printing/normalize_to_pdf.js';
+import { billablePages, parseCopies } from '../printing/print_copies.js';
+import { sanitizeDisplayName, storagePdfName } from '../printing/print_file_names.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { assertTrayCapacity } from '../printing/tray_capacity.js';
 import { ServicesCatalogService } from '../services/services.service.js';
@@ -55,10 +57,12 @@ type ChallengeWithDocs = OtpChallenge & {
 
 function mapOtpDocumentForKiosk(challengeId: string, d: OtpDocumentWithJob) {
   const status = d.printJob?.status ?? null;
+  const copies = d.copies ?? 1;
   return {
     id: d.id,
     fileName: d.fileName,
     pageCount: d.pageCount,
+    copies,
     byteSize: d.byteSize,
     contentPath: `/otp-challenges/${challengeId}/documents/${d.id}/content`,
     printJobId: d.printJobId ?? d.printJob?.id ?? null,
@@ -78,13 +82,6 @@ const deviceQuoteSelect = {
   freeDisabledFromLocal: true,
   freeDisabledToLocal: true,
 } as const;
-
-function pdfSafeName(original: string): string {
-  const cleaned = original.replace(/[^\w.\- ()[\]]+/g, '_').slice(0, 180) || 'document';
-  return cleaned.toLowerCase().endsWith('.pdf')
-    ? cleaned
-    : `${cleaned.replace(/\.[^.]+$/, '') || cleaned}.pdf`;
-}
 
 function quoteFromPayment(payment: Payment): PrintQuote {
   return {
@@ -174,7 +171,9 @@ export class OtpPrintService {
     const prepared: Array<{
       pdfBytes: Buffer;
       pageCount: number;
-      safeName: string;
+      copies: number;
+      displayName: string;
+      pdfName: string;
       byteSize: number;
     }> = [];
 
@@ -194,16 +193,20 @@ export class OtpPrintService {
           400,
         );
       }
+      const copies = parseCopies(file.copies);
       const normalized = await normalizeToPdf({
         bytes: file.buffer,
         mimeType: file.mimetype,
         fileName: file.originalname,
       });
-      totalPages += normalized.pageCount;
+      totalPages += billablePages(normalized.pageCount, copies);
+      const displayName = sanitizeDisplayName(file.originalname);
       prepared.push({
         pdfBytes: normalized.pdfBytes,
         pageCount: normalized.pageCount,
-        safeName: pdfSafeName(file.originalname),
+        copies,
+        displayName,
+        pdfName: storagePdfName(displayName),
         byteSize: normalized.pdfBytes.length,
       });
     }
@@ -246,7 +249,7 @@ export class OtpPrintService {
     const challengeId = randomUUID();
     const label =
       documentLabel?.trim() ||
-      (prepared.length === 1 ? prepared[0]!.safeName : `${prepared.length} documents`);
+      (prepared.length === 1 ? prepared[0]!.displayName : `${prepared.length} documents`);
 
     const challengeDir = join(OTP_UPLOAD_DIR, challengeId);
     await mkdir(challengeDir, { recursive: true });
@@ -256,19 +259,21 @@ export class OtpPrintService {
       storagePath: string;
       contentType: string;
       pageCount: number;
+      copies: number;
       byteSize: number;
       sortOrder: number;
     }> = [];
 
     try {
       for (const [index, item] of prepared.entries()) {
-        const storagePath = join(challengeDir, `${String(index).padStart(2, '0')}-${item.safeName}`);
+        const storagePath = join(challengeDir, `${String(index).padStart(2, '0')}-${item.pdfName}`);
         await writeFile(storagePath, item.pdfBytes);
         documentRows.push({
-          fileName: item.safeName,
+          fileName: item.displayName,
           storagePath,
           contentType: 'application/pdf',
           pageCount: item.pageCount,
+          copies: item.copies,
           byteSize: item.byteSize,
           sortOrder: index,
         });
@@ -718,12 +723,14 @@ export class OtpPrintService {
     const anyPriorJob = challenge.documents.some((d) => d.printJobId != null);
     const freePagesGranted = anyPriorJob ? 0 : challenge.freePagesGranted;
 
+    const copies = doc.copies ?? 1;
     const printJob = await this.printing.createJob(
       {
         source: PrintJobSource.otp_print,
         title: doc.fileName,
         pageCount: doc.pageCount,
-        pagesExpected: doc.pageCount,
+        copies,
+        pagesExpected: billablePages(doc.pageCount, copies),
         freePagesGranted,
         printColorMode: challenge.printColorMode,
         deviceId,
@@ -826,6 +833,7 @@ export class OtpPrintService {
         id: d.id,
         fileName: d.fileName,
         pageCount: d.pageCount,
+        copies: d.copies ?? 1,
         byteSize: d.byteSize,
       })),
       quote,

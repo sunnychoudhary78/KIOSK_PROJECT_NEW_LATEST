@@ -14,6 +14,8 @@ class KioskPrintOptionsBody extends StatelessWidget {
     required this.onChoosePhone,
     required this.onChoosePay,
     required this.onContinueFree,
+    this.copies = 1,
+    this.onCopiesChanged,
     this.headline = 'Print options',
     this.documentHint,
     this.error,
@@ -27,6 +29,8 @@ class KioskPrintOptionsBody extends StatelessWidget {
   final VoidCallback? onChoosePhone;
   final VoidCallback? onChoosePay;
   final VoidCallback? onContinueFree;
+  final int copies;
+  final ValueChanged<int>? onCopiesChanged;
   final String headline;
   final String? documentHint;
   final String? error;
@@ -120,6 +124,48 @@ class KioskPrintOptionsBody extends StatelessWidget {
               ),
             ],
           ),
+          if (onCopiesChanged != null) ...[
+            const SizedBox(height: 22),
+            Text(
+              'Copies',
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                IconButton.filledTonal(
+                  onPressed: busy || copies <= 1
+                      ? null
+                      : () => onCopiesChanged!(copies - 1),
+                  icon: const Icon(Icons.remove),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    '$copies×',
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF101828),
+                    ),
+                  ),
+                ),
+                IconButton.filledTonal(
+                  onPressed: busy || copies >= 10
+                      ? null
+                      : () => onCopiesChanged!(copies + 1),
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 22),
           Text(
             _isFree ? 'Ready to print' : 'How would you like to continue?',

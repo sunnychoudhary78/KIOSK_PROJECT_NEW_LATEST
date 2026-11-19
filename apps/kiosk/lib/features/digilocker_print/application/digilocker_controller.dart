@@ -84,6 +84,7 @@ class DigilockerUiState {
     this.pendingDocumentId,
     this.pendingDocumentTitle,
     this.colorMode,
+    this.copies = 1,
     this.bwChargeRupees = 0,
     this.colorChargeRupees = 0,
     this.paymentRequired = false,
@@ -121,6 +122,7 @@ class DigilockerUiState {
   final String? pendingDocumentId;
   final String? pendingDocumentTitle;
   final String? colorMode;
+  final int copies;
   final int bwChargeRupees;
   final int colorChargeRupees;
   final bool paymentRequired;
@@ -187,6 +189,7 @@ class DigilockerUiState {
     bool clearPendingDocumentTitle = false,
     String? colorMode,
     bool clearColorMode = false,
+    int? copies,
     int? bwChargeRupees,
     int? colorChargeRupees,
     bool? paymentRequired,
@@ -235,6 +238,7 @@ class DigilockerUiState {
           ? null
           : (pendingDocumentTitle ?? this.pendingDocumentTitle),
       colorMode: clearColorMode ? null : (colorMode ?? this.colorMode),
+      copies: copies ?? this.copies,
       bwChargeRupees: bwChargeRupees ?? this.bwChargeRupees,
       colorChargeRupees: colorChargeRupees ?? this.colorChargeRupees,
       paymentRequired: paymentRequired ?? this.paymentRequired,
@@ -563,6 +567,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       pendingDocumentTitle: documentTitle,
       colorMode: 'bw',
       printColorMode: 'bw',
+      copies: 1,
       skipPreview: fromListQueue ? true : false,
       printQueue: fromListQueue ? state.printQueue : const [],
       clearError: true,
@@ -601,6 +606,12 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       clearError: true,
       clearPhoneNotice: true,
     );
+  }
+
+  void setCopies(int value) {
+    if (state.phase != DigilockerPhase.choosingPrintOptions) return;
+    final next = value.clamp(1, 10);
+    state = state.copyWith(copies: next, clearError: true);
   }
 
   Future<void> continueFreePrint() async {
@@ -764,6 +775,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         documentId: documentId,
         title: documentTitle,
         colorMode: colorMode,
+        copies: state.copies,
         phoneProofToken: phoneProofToken,
       );
       final jobId = job['id'] as String;
@@ -775,6 +787,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
       final amountPaise = (job['amountPaise'] as num?)?.toInt() ?? 0;
       final qrImageUrl = job['qrImageUrl'] as String?;
       final jobColorMode = job['printColorMode'] as String? ?? colorMode;
+      final jobCopies = (job['copies'] as num?)?.toInt() ?? state.copies;
       final bytes = await _repository.downloadPrintContent(jobId);
 
       final dir = Directory(p.join(Directory.systemTemp.path, 'skp_digilocker'));
@@ -799,6 +812,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         pendingDocumentId: documentId,
         pendingDocumentTitle: documentTitle,
         colorMode: colorMode,
+        copies: jobCopies,
         bwChargeRupees: bw,
         colorChargeRupees: color,
         previewTitle: title,
@@ -934,6 +948,7 @@ class DigilockerController extends Notifier<DigilockerUiState> {
         title: title,
         pdfBytes: bytes,
         pagesExpected: pagesExpected,
+        copies: state.copies,
         colorMode: colorMode,
         holdForRetry: failures == 0,
         reportStatus: _repository.reportStatus,

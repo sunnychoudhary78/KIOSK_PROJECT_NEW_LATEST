@@ -26,8 +26,9 @@ type PrintJob = {
   siteName?: string | null;
   needsAdminReview?: boolean;
   reconcileDetail?: string | null;
-  pagesExpected?: number;
   pageCount?: number;
+  copies?: number;
+  pagesExpected?: number;
   freePagesGranted?: number;
   billing?: 'free' | 'paid' | 'awaiting_payment' | 'unpaid' | 'mixed';
   amountPaise?: number;
@@ -94,12 +95,15 @@ function billingBadge(job: PrintJob) {
 
 function pagesLabel(job: PrintJob) {
   const pages = job.pageCount ?? job.pagesExpected ?? 0;
+  const copies = job.copies && job.copies > 1 ? ` · ×${job.copies}` : '';
   const color = job.printColorMode === 'color' ? 'Color' : 'B/W';
   const free = job.freePages ?? job.freePagesGranted ?? 0;
-  if (free > 0 && free < pages) return `${pages} pg · ${color} · ${free} free`;
-  if ((job.billing ?? 'free') === 'free') return `${pages} pg · ${color} · free`;
-  if (job.paidPages && job.paidPages > 0) return `${pages} pg · ${color} · ${job.paidPages} paid`;
-  return `${pages} pg · ${color}`;
+  if (free > 0 && free < pages) return `${pages} pg${copies} · ${color} · ${free} free`;
+  if ((job.billing ?? 'free') === 'free') return `${pages} pg${copies} · ${color} · free`;
+  if (job.paidPages && job.paidPages > 0) {
+    return `${pages} pg${copies} · ${color} · ${job.paidPages} paid`;
+  }
+  return `${pages} pg${copies} · ${color}`;
 }
 
 function kioskLabel(job: PrintJob) {
@@ -393,6 +397,11 @@ export function PrintJobsPage() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{job.title}</span>
+                          {(job.copies ?? 1) > 1 ? (
+                            <span className="text-xs font-medium text-muted-foreground">
+                              ×{job.copies}
+                            </span>
+                          ) : null}
                           {job.needsAdminReview ? (
                             <Badge variant="warning">Review</Badge>
                           ) : null}

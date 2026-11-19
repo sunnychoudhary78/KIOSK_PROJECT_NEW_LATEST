@@ -191,7 +191,7 @@ class _QuickPrintPageState extends ConsumerState<QuickPrintPage> {
                             child: KioskDocCard(
                               title: doc.fileName,
                               subtitle:
-                                  '${doc.pageCount} page(s) · ${state.claim?.printColorLabel ?? 'B/W'}'
+                                  '${doc.pageCount} page(s)${doc.copies > 1 ? ' · ${doc.copies}×' : ''} · ${state.claim?.printColorLabel ?? 'B/W'}'
                                   '${doc.printed ? ' · Printed' : ''}',
                               actionLabel: doc.printed ? 'Printed' : 'Preview',
                               onAction: state.loading || doc.printed

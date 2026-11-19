@@ -215,7 +215,7 @@ function SessionPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('chooser');
   const [session, setSession] = useState<QuickPrintSession | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<Array<{ file: File; copies: number }>>([]);
   const [colorMode, setColorMode] = useState<'bw' | 'color'>('bw');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -294,9 +294,14 @@ function SessionPage() {
       setError(null);
     }
     setFiles((prev) => {
-      const map = new Map(prev.map((file) => [`${file.name}:${file.size}`, file]));
+      const map = new Map<string, { file: File; copies: number }>(
+        prev.map((item) => [`${item.file.name}:${item.file.size}`, item]),
+      );
       for (const file of incoming) {
-        map.set(`${file.name}:${file.size}`, file);
+        const key = `${file.name}:${file.size}`;
+        if (!map.has(key)) {
+          map.set(key, { file, copies: 1 });
+        }
       }
       return Array.from(map.values());
     });
@@ -308,6 +313,13 @@ function SessionPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  }
+
+  function setFileCopies(index: number, copies: number) {
+    const next = Math.min(10, Math.max(1, Math.floor(copies)));
+    setFiles((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, copies: next } : item)),
+    );
   }
 
   async function onRequestOtp() {
@@ -891,18 +903,44 @@ function SessionPage() {
       </label>
       {files.length > 0 ? (
         <ul className="files">
-          {files.map((file, index) => (
-            <li className="file-chip" key={`${file.name}-${file.size}-${index}`}>
+          {files.map((item, index) => (
+            <li className="file-chip" key={`${item.file.name}-${item.file.size}-${index}`}>
               <span className="file-thumb">
-                {file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
+                {item.file.name.toLowerCase().endsWith('.pdf') || item.file.type === 'application/pdf'
                   ? 'PDF'
                   : 'IMG'}
               </span>
               <span className="file-meta">
-                <strong>{file.name}</strong>
-                <span>{formatBytes(file.size)}</span>
+                <strong>{item.file.name}</strong>
+                <span>{formatBytes(item.file.size)}</span>
               </span>
-              <button className="icon-btn" type="button" aria-label={`Remove ${file.name}`} onClick={() => removeFile(index)}>
+              <div className="copies-stepper" aria-label={`Copies for ${item.file.name}`}>
+                <button
+                  className="icon-btn"
+                  type="button"
+                  aria-label="Fewer copies"
+                  disabled={item.copies <= 1}
+                  onClick={() => setFileCopies(index, item.copies - 1)}
+                >
+                  −
+                </button>
+                <span className="copies-value">{item.copies}×</span>
+                <button
+                  className="icon-btn"
+                  type="button"
+                  aria-label="More copies"
+                  disabled={item.copies >= 10}
+                  onClick={() => setFileCopies(index, item.copies + 1)}
+                >
+                  +
+                </button>
+              </div>
+              <button
+                className="icon-btn"
+                type="button"
+                aria-label={`Remove ${item.file.name}`}
+                onClick={() => removeFile(index)}
+              >
                 ×
               </button>
             </li>

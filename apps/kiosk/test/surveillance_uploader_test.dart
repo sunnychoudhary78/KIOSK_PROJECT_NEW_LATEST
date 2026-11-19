@@ -184,6 +184,96 @@ void main() {
     expect(segment.existsSync(), isTrue);
     expect(queue.items, hasLength(1));
     expect(queue.items.single.attempts, greaterThan(0));
+    expect(queue.items.single.isFailed, isFalse);
+    expect(queue.items.single.lastError, 'upload_incomplete');
+    await uploader.detach();
+  });
+
+  test('processes only one due item per tick', () async {
+    final second = File(p.join(dir.path, '2026-09-03', '143152_def.mp4'));
+    second.writeAsBytesSync(List<int>.filled(2048, 8));
+
+    var putCount = 0;
+    final api = ApiClient(
+      config: const AppConfig(apiBaseUrl: 'http://example.test/v1', environment: 'test'),
+      httpClient: MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('upload-url')) {
+          return http.Response(
+            jsonEncode({
+              'segmentId': 'seg-$putCount',
+              'uploadUrl': 'https://r2.example/put',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.method == 'PUT') {
+          putCount += 1;
+          return http.Response('', 200);
+        }
+        if (request.method == 'POST' && request.url.path.endsWith('complete')) {
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }
+        return http.Response('nope', 500);
+      }),
+    );
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final uploader = SurveillanceUploader(
+      api: api,
+      recorder: _StubRecorder(),
+      tickInterval: const Duration(days: 1),
+      rootOverride: dir,
+      queue: queue,
+    );
+    await uploader.attach(deviceId: 'device-1');
+    // attach scans leftovers and runs one tick — only one of two files.
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(putCount, 1);
+    final remaining = [segment, second].where((f) => f.existsSync()).length;
+    expect(remaining, 1);
+    await uploader.detach();
+  });
+
+  test('put timeout scales with byte size between 5 and 15 minutes', () {
+    expect(surveillancePutTimeoutForBytes(1024).inMinutes, 5);
+    expect(surveillancePutTimeoutForBytes(100 * 1024 * 60 * 10).inMinutes, 10);
+    expect(surveillancePutTimeoutForBytes(100 * 1024 * 60 * 60).inMinutes, 15);
+  });
+
+  test('transient upload_failed stays pending with backoff', () async {
+    final api = ApiClient(
+      config: const AppConfig(apiBaseUrl: 'http://example.test/v1', environment: 'test'),
+      httpClient: MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('upload-url')) {
+          return http.Response(
+            jsonEncode({
+              'segmentId': 'seg-1',
+              'uploadUrl': 'https://r2.example/put',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('gateway', 502);
+      }),
+    );
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final uploader = SurveillanceUploader(
+      api: api,
+      recorder: _StubRecorder(),
+      tickInterval: const Duration(days: 1),
+      rootOverride: dir,
+      queue: queue,
+    );
+    await uploader.attach(deviceId: 'device-1');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(segment.existsSync(), isTrue);
+    expect(queue.items.single.isFailed, isFalse);
+    expect(queue.items.single.attempts, greaterThan(0));
     await uploader.detach();
   });
 }

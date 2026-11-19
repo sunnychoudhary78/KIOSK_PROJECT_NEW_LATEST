@@ -23,6 +23,7 @@ import type { RazorpayClient } from '../payments/razorpay.client.js';
 import { PlatformSettingsService } from '../platform_settings/platform_settings.service.js';
 import { PrintQuotaService } from '../print_quota/print_quota.service.js';
 import { assertPrintingAvailable } from '../printing/printing_pause.js';
+import { billablePages, parseCopies } from '../printing/print_copies.js';
 import { normalizeToPdf } from '../printing/normalize_to_pdf.js';
 import type { PrintingService } from '../printing/printing.service.js';
 import {
@@ -424,6 +425,8 @@ export class DigiLockerService {
       fileName: file.fileName ?? title,
     });
     const pageCount = Math.max(1, normalized.pageCount);
+    const copies = parseCopies(input.copies);
+    const billable = billablePages(pageCount, copies);
 
     let freePhone: string | null = null;
     let freePeriodKey: string | null = null;
@@ -438,7 +441,7 @@ export class DigiLockerService {
           deviceId,
           proof.phone,
           colorMode,
-          pageCount,
+          billable,
         );
         if (eligibility.freeEligible) {
           freePhone = proof.phone;
@@ -460,13 +463,14 @@ export class DigiLockerService {
     }
 
     const printColorMode = toPrismaColorMode(colorMode);
-    const freePagesGranted = freePhone ? pageCount : 0;
+    const freePagesGranted = freePhone ? billable : 0;
     const job = await this.printing.createJob(
       {
         source: PrintJobSource.digilocker_print,
         title,
         pageCount,
-        pagesExpected: pageCount,
+        copies,
+        pagesExpected: billable,
         freePagesGranted,
         printColorMode,
         deviceId,
@@ -474,7 +478,7 @@ export class DigiLockerService {
         digiLockerSessionId: session.id,
         idempotencyKey:
           input.idempotencyKey ??
-          `dl-print-${session.id}-${documentUri}-${colorMode}`.slice(0, 100),
+          `dl-print-${session.id}-${documentUri}-${colorMode}-c${copies}`.slice(0, 100),
       },
       'device',
       deviceId,
@@ -503,6 +507,8 @@ export class DigiLockerService {
         sessionId,
         colorMode,
         pageCount,
+        copies,
+        billablePages: billable,
         freePages: freePagesGranted,
       },
     });
@@ -512,7 +518,7 @@ export class DigiLockerService {
         await this.quota.reserveFreePages({
           phone: freePhone,
           mode: colorMode,
-          pages: pageCount,
+          pages: billable,
           periodKey: freePeriodKey,
           printJobId: job.id,
         });
@@ -530,7 +536,7 @@ export class DigiLockerService {
       };
     }
 
-    const amountPaise = pageCount * chargePerPageRupees * 100;
+    const amountPaise = billable * chargePerPageRupees * 100;
     const nowMs = Date.now();
     const windowMs = this.config.payments.windowMinutes * 60_000;
     const closeByMs = Math.min(
@@ -559,9 +565,9 @@ export class DigiLockerService {
       data: {
         printJobId: job.id,
         status: PaymentStatus.PENDING,
-        pageCount,
+        pageCount: billable,
         freePages: 0,
-        extraPages: pageCount,
+        extraPages: billable,
         printColorMode,
         amountPaise,
         currency: 'INR',

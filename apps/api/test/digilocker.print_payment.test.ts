@@ -89,12 +89,14 @@ describe('DigiLockerService.printDocument payment + quota', () => {
       },
       printJob: {
         findUnique: vi.fn(async () => null),
+        aggregate: vi.fn(async () => ({ _sum: { pagesExpected: 0 } })),
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
           id: 'job-1',
           status: PrintJobStatus.ready,
           source: data.source,
           title: data.title,
           pageCount: data.pageCount ?? 1,
+          copies: data.copies ?? 1,
           pagesExpected: data.pagesExpected ?? 1,
           pagesReported: null,
           spoolerJobId: null,
@@ -213,6 +215,37 @@ describe('DigiLockerService.printDocument payment + quota', () => {
           amountPaise: 4000,
           extraPages: 2,
           printColorMode: PrintColorMode.color,
+        }),
+      }),
+    );
+  });
+
+  it('scales payment and pagesExpected by copies', async () => {
+    const { service, db } = setup({ bw: 10, color: 20 });
+    const result = await service.printDocument(sessionId, deviceId, {
+      documentId: 'uri:doc',
+      title: 'Aadhaar',
+      colorMode: 'color',
+      copies: 3,
+    });
+    expect(result.paymentRequired).toBe(true);
+    expect(result.amountPaise).toBe(12000); // 2 pages × 3 copies × ₹20
+    expect(db.printJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          pageCount: 2,
+          copies: 3,
+          pagesExpected: 6,
+          printColorMode: PrintColorMode.color,
+        }),
+      }),
+    );
+    expect(db.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amountPaise: 12000,
+          pageCount: 6,
+          extraPages: 6,
         }),
       }),
     );

@@ -25,6 +25,7 @@ import {
   type FleetDevice,
 } from './fleetHealth';
 import { toneClass, toneLabel } from './healthUi';
+import { resolveUploadBacklogWarning } from '../surveillance/surveillanceStatus';
 
 function formatWhen(value?: string | null) {
   if (!value) return '—';
@@ -131,6 +132,7 @@ export function FleetHealthDetailPage() {
 
   const printer = device.printerHealth;
   const camera = device.surveillanceHealth;
+  const cameraBacklog = resolveUploadBacklogWarning(camera);
   const hw = device.hardwareHealth;
   const overallTone: ComponentTone = row.overall;
   const printerErrors = printerErrorEntries(printer);
@@ -270,6 +272,17 @@ export function FleetHealthDetailPage() {
           <DetailRow label="Camera name" value={camera?.cameraName ?? '—'} />
           <DetailRow label="Queue pending" value={formatMaybe(camera?.queuePending)} />
           <DetailRow label="Queue failed" value={formatMaybe(camera?.queueFailed)} />
+          <DetailRow label="Oldest queued" value={formatWhen(camera?.oldestQueuedAt)} />
+          <DetailRow
+            label="Backlog"
+            value={
+              cameraBacklog.warn
+                ? `Warning${cameraBacklog.ageLabel ? ` · oldest ${cameraBacklog.ageLabel}` : ''}`
+                : cameraBacklog.pending > 0
+                  ? 'Pending'
+                  : 'Clear'
+            }
+          />
           <DetailRow label="Last segment" value={formatWhen(camera?.lastSegmentAt)} />
           <DetailRow
             label="Last segment size"

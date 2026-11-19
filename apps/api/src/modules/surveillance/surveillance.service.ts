@@ -152,6 +152,8 @@ export class SurveillanceService {
       }));
 
     if (existing) {
+      // Keep lastUploadError until complete succeeds so admin can see chronic
+      // retry failures instead of clearing them on every upload-url reissue.
       await this.db.surveillanceSegment.update({
         where: { id: existing.id },
         data: {
@@ -159,7 +161,6 @@ export class SurveillanceService {
           contentType: body.contentType,
           recordedOn,
           startedAt,
-          lastUploadError: null,
         },
       });
     }

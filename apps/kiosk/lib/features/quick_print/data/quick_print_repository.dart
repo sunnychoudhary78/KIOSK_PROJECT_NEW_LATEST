@@ -27,6 +27,7 @@ class QuickPrintRepository {
             id: raw['id'] as String,
             fileName: raw['fileName'] as String,
             pageCount: raw['pageCount'] as int? ?? 1,
+            copies: raw['copies'] as int? ?? 1,
             contentPath: raw['contentPath'] as String,
             printJobId: raw['printJobId'] as String?,
             printed: raw['printed'] == true,

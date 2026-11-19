@@ -126,6 +126,7 @@ class DigilockerPrintRepository {
     required String sessionId,
     required String documentId,
     required String colorMode,
+    int copies = 1,
     String? title,
     String? phoneProofToken,
   }) async {
@@ -134,6 +135,7 @@ class DigilockerPrintRepository {
       body: {
         'documentId': documentId,
         'colorMode': colorMode,
+        'copies': copies.clamp(1, 10),
         if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
         if (phoneProofToken != null && phoneProofToken.isNotEmpty)
           'phoneProofToken': phoneProofToken,

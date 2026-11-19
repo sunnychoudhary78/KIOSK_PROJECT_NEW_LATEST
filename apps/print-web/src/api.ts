@@ -42,7 +42,13 @@ export type QuickPrintSession = {
     remainingBw: number | null;
     remainingColor: number | null;
   };
-  documents: Array<{ id: string; fileName: string; pageCount: number; byteSize: number }>;
+  documents: Array<{
+    id: string;
+    fileName: string;
+    pageCount: number;
+    copies?: number;
+    byteSize: number;
+  }>;
   quote: PrintQuote | null;
   printLimits: PrintLimits;
 };
@@ -128,13 +134,14 @@ export async function verifyPhoneOtp(
 
 export async function uploadDocuments(
   token: string,
-  files: File[],
+  files: Array<{ file: File; copies: number }>,
   printColorMode: 'bw' | 'color',
 ): Promise<QuickPrintSession> {
   const body = new FormData();
   body.set('printColorMode', printColorMode);
-  for (const file of files) {
-    body.append('files', file);
+  for (const item of files) {
+    body.append('files', item.file);
+    body.append('copies', String(item.copies));
   }
   const response = await fetch(
     `${API_BASE}/quick-print/public/sessions/${encodeURIComponent(token)}/documents`,

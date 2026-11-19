@@ -32,6 +32,8 @@ import {
   isAcceptedPrintUpload,
   normalizeToPdf,
 } from '../printing/normalize_to_pdf.js';
+import { billablePages, parseCopies } from '../printing/print_copies.js';
+import { sanitizeDisplayName, storagePdfName } from '../printing/print_file_names.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { RazorpayClient, verifyPaymentSignature } from '../payments/razorpay.client.js';
@@ -79,10 +81,12 @@ type SessionWithRelations = QuickPrintSession & {
 
 function mapQuickDocumentForKiosk(sessionId: string, doc: QuickPrintDocumentWithJob) {
   const status = doc.printJob?.status ?? null;
+  const copies = doc.copies ?? 1;
   return {
     id: doc.id,
     fileName: doc.fileName,
     pageCount: doc.pageCount,
+    copies,
     byteSize: doc.byteSize,
     contentPath: `/quick-print/sessions/${sessionId}/documents/${doc.id}/content`,
     printJobId: doc.printJobId ?? doc.printJob?.id ?? null,
@@ -92,13 +96,6 @@ function mapQuickDocumentForKiosk(sessionId: string, doc: QuickPrintDocumentWith
 }
 
 const phoneOtpCooldownUntil = new Map<string, number>();
-
-function pdfSafeName(original: string): string {
-  const cleaned = original.replace(/[^\w.\- ()[\]]+/g, '_').slice(0, 180) || 'document';
-  return cleaned.toLowerCase().endsWith('.pdf')
-    ? cleaned
-    : `${cleaned.replace(/\.[^.]+$/, '') || cleaned}.pdf`;
-}
 
 function quoteFromPayment(payment: Payment): PrintQuote {
   return {
@@ -337,7 +334,9 @@ export class QuickPrintService {
     const prepared: Array<{
       pdfBytes: Buffer;
       pageCount: number;
-      safeName: string;
+      copies: number;
+      displayName: string;
+      pdfName: string;
       byteSize: number;
     }> = [];
     let totalPages = 0;
@@ -357,16 +356,20 @@ export class QuickPrintService {
           400,
         );
       }
+      const copies = parseCopies(file.copies);
       const normalized = await normalizeToPdf({
         bytes: file.buffer,
         mimeType: file.mimetype,
         fileName: file.originalname,
       });
-      totalPages += normalized.pageCount;
+      totalPages += billablePages(normalized.pageCount, copies);
+      const displayName = sanitizeDisplayName(file.originalname);
       prepared.push({
         pdfBytes: normalized.pdfBytes,
         pageCount: normalized.pageCount,
-        safeName: pdfSafeName(file.originalname),
+        copies,
+        displayName,
+        pdfName: storagePdfName(displayName),
         byteSize: normalized.pdfBytes.length,
       });
     }
@@ -399,7 +402,7 @@ export class QuickPrintService {
       printColorMode === 'color' ? PrintColorMode.color : PrintColorMode.bw;
     const freePagesGranted = quote.freePages;
     const label =
-      prepared.length === 1 ? prepared[0]!.safeName : `${prepared.length} documents`;
+      prepared.length === 1 ? prepared[0]!.displayName : `${prepared.length} documents`;
     const sessionDir = join(QUICK_PRINT_UPLOAD_DIR, session.id);
     await mkdir(sessionDir, { recursive: true });
 
@@ -408,19 +411,21 @@ export class QuickPrintService {
       storagePath: string;
       contentType: string;
       pageCount: number;
+      copies: number;
       byteSize: number;
       sortOrder: number;
     }> = [];
 
     try {
       for (const [index, item] of prepared.entries()) {
-        const storagePath = join(sessionDir, `${String(index).padStart(2, '0')}-${item.safeName}`);
+        const storagePath = join(sessionDir, `${String(index).padStart(2, '0')}-${item.pdfName}`);
         await writeFile(storagePath, item.pdfBytes);
         documentRows.push({
-          fileName: item.safeName,
+          fileName: item.displayName,
           storagePath,
           contentType: 'application/pdf',
           pageCount: item.pageCount,
+          copies: item.copies,
           byteSize: item.byteSize,
           sortOrder: index,
         });
@@ -724,12 +729,14 @@ export class QuickPrintService {
       });
     }
 
+    const copies = doc.copies ?? 1;
     const printJob = await this.printing.createJob(
       {
         source: PrintJobSource.quick_print,
         title: doc.fileName,
         pageCount: doc.pageCount,
-        pagesExpected: doc.pageCount,
+        copies,
+        pagesExpected: billablePages(doc.pageCount, copies),
         freePagesGranted,
         printColorMode: session.printColorMode,
         deviceId,
@@ -940,6 +947,7 @@ export class QuickPrintService {
         id: doc.id,
         fileName: doc.fileName,
         pageCount: doc.pageCount,
+        copies: doc.copies ?? 1,
         byteSize: doc.byteSize,
       })),
       quote,

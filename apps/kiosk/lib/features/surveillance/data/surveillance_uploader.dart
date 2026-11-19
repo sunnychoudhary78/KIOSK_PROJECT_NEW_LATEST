@@ -14,6 +14,18 @@ abstract class SurveillanceUploadSink {
   SurveillanceQueueStats queueStats();
 }
 
+/// PUT timeout for surveillance segments: assume ~100 KB/s, clamp 5–15 min.
+Duration surveillancePutTimeoutForBytes(int bytes) {
+  const minSeconds = 5 * 60;
+  const maxSeconds = 15 * 60;
+  const bytesPerSecond = 100 * 1024;
+  final estimated = bytes <= 0 ? minSeconds : (bytes / bytesPerSecond).ceil();
+  return Duration(seconds: estimated.clamp(minSeconds, maxSeconds));
+}
+
+/// Errors that should never leave the queue (corrupt/stub only).
+bool surveillanceIsPermanentUploadError(String code) => code == 'invalid_segment';
+
 class SurveillanceUploader implements SurveillanceUploadSink {
   SurveillanceUploader({
     required ApiClient api,
@@ -133,13 +145,31 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     }
     _tickInFlight = true;
     try {
-      for (final item in queue.due(now: _clock().toUtc())) {
-        try {
-          await _process(queue, deviceId, item);
-        } catch (error) {
-          final code = error is ApiException ? error.code : 'upload_failed';
-          _lastError = code;
-          AppLogger.error('SURVEILLANCE_UPLOAD_RETRY ${item.filename}', error);
+      // One item per tick so a large backlog cannot monopolize the timer and
+      // so JWT refresh / attach stays responsive.
+      final due = queue.due(now: _clock().toUtc());
+      if (due.isEmpty) {
+        return;
+      }
+      final item = due.first;
+      final started = _clock().toUtc();
+      try {
+        await _process(queue, deviceId, item);
+      } catch (error) {
+        final code = error is ApiException ? error.code : 'upload_failed';
+        _lastError = code;
+        final durationMs = _clock().toUtc().difference(started).inMilliseconds;
+        AppLogger.error(
+          'SURVEILLANCE_UPLOAD_RETRY ${item.filename} '
+          'attempts=${item.attempts + 1} errorCode=$code '
+          'bytes=${item.bytes} durationMs=$durationMs',
+          error,
+        );
+        if (surveillanceIsPermanentUploadError(code)) {
+          await queue.markFailed(item.path, error: code);
+        } else {
+          // Transient (network, timeout, incomplete, size_mismatch, 401, 5xx,
+          // storage_not_configured, device_inactive): retry forever with backoff.
           await queue.markAttempt(item.path, now: _clock().toUtc(), error: code);
         }
       }
@@ -153,6 +183,7 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     String deviceId,
     SurveillanceQueueItem item,
   ) async {
+    final started = _clock().toUtc();
     final file = File(item.path);
     if (!file.existsSync()) {
       await queue.remove(item.path);
@@ -170,7 +201,8 @@ class SurveillanceUploader implements SurveillanceUploadSink {
 
     if (item.bytes < surveillanceMinSegmentBytes) {
       AppLogger.error(
-        'SURVEILLANCE_UPLOAD_REJECT ${item.filename} bytes=${item.bytes}',
+        'SURVEILLANCE_UPLOAD_REJECT ${item.filename} bytes=${item.bytes} '
+        'attempts=${item.attempts} errorCode=invalid_segment',
       );
       _lastError = 'invalid_segment';
       await queue.markFailed(item.path, error: 'invalid_segment');
@@ -202,7 +234,11 @@ class SurveillanceUploader implements SurveillanceUploadSink {
       throw ApiException(code: 'upload_url_failed', message: 'Missing uploadUrl');
     }
 
-    await _api.putFileToUrl(url: uploadUrl, file: file);
+    await _api.putFileToUrl(
+      url: uploadUrl,
+      file: file,
+      timeout: surveillancePutTimeoutForBytes(item.bytes),
+    );
 
     try {
       await _api.post('/devices/$deviceId/surveillance/segments/$segmentId/complete');
@@ -220,7 +256,11 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     await queue.markUploadedPendingDelete(item.path, segmentId: segmentId);
     await _deleteLocal(queue, item);
     _lastError = null;
-    AppLogger.info('SURVEILLANCE_UPLOAD_OK ${item.filename}');
+    final durationMs = _clock().toUtc().difference(started).inMilliseconds;
+    AppLogger.info(
+      'SURVEILLANCE_UPLOAD_OK ${item.filename} attempts=${item.attempts} '
+      'bytes=${item.bytes} durationMs=$durationMs',
+    );
   }
 
   Future<void> _deleteLocal(SurveillanceUploadQueue queue, SurveillanceQueueItem item) async {

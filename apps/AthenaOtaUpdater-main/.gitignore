@@ -1,0 +1,23 @@
+## Build outputs (self-contained publish exe exceeds GitHub 100MB limit)
+bin/
+obj/
+publish/
+**/publish/
+
+## Visual Studio / Rider / VS Code
+.vs/
+*.user
+*.suo
+*.user
+*.DotSettings.user
+.idea/
+
+## Logs / local runtime
+*.log
+*.zip
+*.zip.part
+
+## OS
+Thumbs.db
+Desktop.ini
+.DS_Store

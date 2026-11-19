@@ -184,6 +184,7 @@ class PrintCoordinator {
     required Uint8List pdfBytes,
     required int pagesExpected,
     required String colorMode,
+    int copies = 1,
     required PrintJobStatusReporter reportStatus,
     bool holdForRetry = false,
     void Function(String message)? onProgress,
@@ -238,6 +239,7 @@ class PrintCoordinator {
         pdfBytes: pdfBytes,
         pagesExpected: pagesExpected,
         colorMode: colorMode,
+        copies: copies < 1 ? 1 : copies,
         reportStatus: report,
         onProgress: onProgress,
       );
@@ -361,10 +363,12 @@ class PrintCoordinator {
     required Uint8List pdfBytes,
     required int pagesExpected,
     required String colorMode,
+    int copies = 1,
     required PrintJobStatusReporter reportStatus,
     void Function(String message)? onProgress,
   }) async {
     final expected = pagesExpected < 1 ? 1 : pagesExpected;
+    final copyCount = copies < 1 ? 1 : copies;
     _traySequenceActive = false;
 
     onProgress?.call('Checking printer…');
@@ -419,7 +423,9 @@ class PrintCoordinator {
       );
     }
 
-    onProgress?.call('Sending to printer…');
+    onProgress?.call(
+      copyCount > 1 ? 'Sending copy 1 of $copyCount…' : 'Sending to printer…',
+    );
     await reportStatus(
       jobId: jobId,
       status: 'printing',
@@ -432,12 +438,24 @@ class PrintCoordinator {
     await _trayStart();
 
     try {
-      await _spooler.printDocument(
-        jobId: jobId,
-        title: title,
-        pdfBytes: pdfBytes,
-        colorMode: colorMode,
-      );
+      for (var i = 0; i < copyCount; i += 1) {
+        if (_isAborted(runId)) {
+          return _abortedResult(
+            jobId: jobId,
+            reportStatus: reportStatus,
+            pageCounterBefore: counterBefore,
+          );
+        }
+        if (copyCount > 1) {
+          onProgress?.call('Sending copy ${i + 1} of $copyCount…');
+        }
+        await _spooler.printDocument(
+          jobId: jobId,
+          title: copyCount > 1 ? '$title (copy ${i + 1})' : title,
+          pdfBytes: pdfBytes,
+          colorMode: colorMode,
+        );
+      }
     } catch (error) {
       await _clearActiveSpoolerWork();
       await reportStatus(

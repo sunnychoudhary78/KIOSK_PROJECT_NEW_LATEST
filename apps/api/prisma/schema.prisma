@@ -633,6 +633,8 @@ model OtpDocument {
   storagePath String   @map("storage_path")
   contentType String   @default("application/pdf") @map("content_type")
   pageCount   Int      @default(1) @map("page_count")
+  /// How many times to print this document (1–10).
+  copies      Int      @default(1)
   byteSize    Int      @map("byte_size")
   sortOrder   Int      @default(0) @map("sort_order")
   /// Per-document print job (lazy, created when the kiosk confirms Print).
@@ -680,6 +682,8 @@ model QuickPrintDocument {
   storagePath String   @map("storage_path")
   contentType String   @default("application/pdf") @map("content_type")
   pageCount   Int      @default(1) @map("page_count")
+  /// How many times to print this document (1–10).
+  copies      Int      @default(1)
   byteSize    Int      @map("byte_size")
   sortOrder   Int      @default(0) @map("sort_order")
   /// Per-document print job (lazy, created when the kiosk confirms Print).
@@ -723,6 +727,8 @@ model PrintJob {
   status           PrintJobStatus @default(created)
   title            String
   pageCount        Int            @default(1) @map("page_count")
+  /// How many copies were requested (1–10). pagesExpected = pageCount * copies.
+  copies           Int            @default(1)
   /// Expected physical pages; defaults to pageCount on create.
   pagesExpected    Int            @default(1) @map("pages_expected")
   /// Observed physical pages (SNMP delta / spooler), when known.

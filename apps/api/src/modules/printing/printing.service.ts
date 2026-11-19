@@ -86,6 +86,7 @@ function mapJob(job: {
   source: PrintJobSource;
   title: string;
   pageCount: number;
+  copies?: number;
   pagesExpected: number;
   pagesReported: number | null;
   spoolerJobId: string | null;
@@ -115,6 +116,7 @@ function mapJob(job: {
     source: job.source,
     title: job.title,
     pageCount: job.pageCount,
+    copies: job.copies ?? 1,
     pagesExpected: job.pagesExpected,
     pagesReported: job.pagesReported,
     spoolerJobId: job.spoolerJobId,
@@ -140,6 +142,7 @@ export type CreatePrintJobInput = {
   source: PrintJobSource;
   title: string;
   pageCount?: number;
+  copies?: number;
   pagesExpected?: number;
   freePagesGranted?: number;
   printColorMode?: PrintColorMode;
@@ -184,7 +187,8 @@ export class PrintingService {
     }
 
     const pageCount = input.pageCount ?? 1;
-    const pagesExpected = input.pagesExpected ?? pageCount;
+    const copies = input.copies ?? 1;
+    const pagesExpected = input.pagesExpected ?? pageCount * copies;
 
     if (input.deviceId) {
       await assertPrintingAvailable(this.db, input.deviceId);
@@ -196,6 +200,7 @@ export class PrintingService {
         source: input.source,
         title: input.title,
         pageCount,
+        copies,
         pagesExpected,
         freePagesGranted: input.freePagesGranted ?? 0,
         printColorMode: input.printColorMode ?? PrintColorMode.bw,
