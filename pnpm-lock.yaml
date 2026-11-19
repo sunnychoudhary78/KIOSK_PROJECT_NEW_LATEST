@@ -201,6 +201,9 @@ importers:
 
   apps/print-web:
     dependencies:
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
       react:
         specifier: ^19.0.0
         version: 19.2.8

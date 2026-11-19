@@ -16,21 +16,28 @@ class ServiceRatingsTracker {
 
   final Ref _ref;
 
-  Future<void> submit(String serviceKey, int stars) async {
+  Future<void> submit(
+    String serviceKey,
+    int stars, {
+    String? feedback,
+  }) async {
     if (serviceKey.isEmpty || stars < 1 || stars > 5) {
       return;
     }
     if (!_ref.read(deviceAuthProvider).isAuthenticated) {
       return;
     }
+    final trimmed = feedback?.trim();
+    final body = <String, dynamic>{
+      'serviceKey': serviceKey,
+      'stars': stars,
+      'occurredAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (trimmed != null && trimmed.isNotEmpty) {
+      body['metadata'] = {'feedback': trimmed};
+    }
     try {
-      await _ref.read(serviceRatingsRepositoryProvider).reportRatings([
-        {
-          'serviceKey': serviceKey,
-          'stars': stars,
-          'occurredAt': DateTime.now().toUtc().toIso8601String(),
-        },
-      ]);
+      await _ref.read(serviceRatingsRepositoryProvider).reportRatings([body]);
     } catch (_) {
       // Non-blocking for UX
     }

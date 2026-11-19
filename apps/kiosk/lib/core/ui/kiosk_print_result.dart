@@ -131,10 +131,16 @@ class _KioskPrintResultState extends ConsumerState<KioskPrintResult> {
     widget.onContinue?.call();
   }
 
-  void _onRated(int stars) {
+  void _onSubmitted(int stars, String? feedback) {
     final key = widget.ratingServiceKey;
     if (key != null && key.isNotEmpty) {
-      unawaited(ref.read(serviceRatingsTrackerProvider).submit(key, stars));
+      unawaited(
+        ref.read(serviceRatingsTrackerProvider).submit(
+              key,
+              stars,
+              feedback: feedback,
+            ),
+      );
     }
     _finishHome();
   }
@@ -143,7 +149,7 @@ class _KioskPrintResultState extends ConsumerState<KioskPrintResult> {
   Widget build(BuildContext context) {
     if (_promptingRating) {
       return ServiceRatingPrompt(
-        onRated: _onRated,
+        onSubmitted: _onSubmitted,
         onSkip: _finishHome,
       );
     }

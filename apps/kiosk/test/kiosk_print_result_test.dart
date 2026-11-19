@@ -121,4 +121,31 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     expect(home, 1);
   });
+
+  testWidgets('tapping a star alone does not leave; Submit does', (tester) async {
+    var home = 0;
+    await tester.pumpWidget(
+      _wrap(
+        KioskPrintResult(
+          confirmed: true,
+          autoReturn: null,
+          ratingServiceKey: 'print.otp_print',
+          onHome: () => home++,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Done'));
+    await tester.pump();
+
+    // Fifth star (high rating — no keyboard).
+    await tester.tap(find.byType(IconButton).at(4));
+    await tester.pump();
+    expect(home, 0);
+    expect(find.text('How was your experience?'), findsOneWidget);
+
+    await tester.tap(find.text('Submit'));
+    await tester.pump();
+    expect(home, 1);
+  });
 }
