@@ -8,7 +8,9 @@ import { validateBody } from '../../infrastructure/http/validate.js';
 import { contentDispositionInline } from '../../shared/content_disposition.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
+import { storagePdfName } from '../printing/print_file_names.js';
 import { PrintingService } from '../printing/printing.service.js';
+import { parseCopiesList } from '../printing/print_copies.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { OtpPrintService } from './otp_print.service.js';
 import { parsePrintColorMode, redeemOtpSchema, type UploadedPdf } from './otp_print.schemas.js';
@@ -55,11 +57,13 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
           throw new AppError('unauthorized', 'Missing principal', 401);
         }
         const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-        const uploaded: UploadedPdf[] = files.map((f) => ({
+        const copiesList = parseCopiesList(req.body?.copies, files.length);
+        const uploaded: UploadedPdf[] = files.map((f, index) => ({
           originalname: f.originalname,
           mimetype: f.mimetype,
           size: f.size,
           buffer: f.buffer,
+          copies: copiesList[index] ?? 1,
         }));
         const documentLabel =
           typeof req.body?.documentLabel === 'string' ? req.body.documentLabel : undefined;
@@ -170,7 +174,7 @@ export function registerOtpPrintModule(router: Router, deps: AppDeps): void {
         res.setHeader('Content-Type', doc.contentType || 'application/pdf');
         res.setHeader(
           'Content-Disposition',
-          contentDispositionInline(doc.fileName),
+          contentDispositionInline(storagePdfName(doc.fileName)),
         );
         res.send(bytes);
       } catch (error) {

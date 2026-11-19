@@ -194,6 +194,7 @@ describe('QuickPrintService', () => {
           storagePath: '/tmp/a.pdf',
           contentType: 'application/pdf',
           pageCount: 1,
+          copies: 1,
           byteSize: file.size,
           sortOrder: 0,
           createdAt: new Date(),
@@ -236,6 +237,148 @@ describe('QuickPrintService', () => {
     expect(result.paymentRequired).toBe(true);
     expect(result.quote?.freePages).toBe(0);
     expect(result.quote?.amountPaise).toBe(1000);
+  });
+
+  it('multiplies session pageCount and quote by copies', async () => {
+    const file = { ...(await onePagePdf()), copies: 3 };
+    const token = 'guest-token';
+    const waiting = {
+      id: sessionId,
+      deviceId,
+      tokenHash: hashSecret(token),
+      status: QuickPrintSessionStatus.waiting_upload,
+      documentLabel: '',
+      pageCount: 0,
+      freePagesGranted: 0,
+      printColorMode: 'bw',
+      verifiedPhone: null,
+      phoneVerifiedAt: null,
+      expiresAt: new Date(Date.now() + 600_000),
+      printJobId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      documents: [],
+      payment: null,
+      device: deviceRow(),
+    };
+    const awaiting = {
+      ...waiting,
+      status: QuickPrintSessionStatus.awaiting_payment,
+      documentLabel: 'a.pdf',
+      pageCount: 3,
+      freePagesGranted: 0,
+      documents: [
+        {
+          id: '33333333-3333-3333-3333-333333333333',
+          sessionId,
+          fileName: 'a.pdf',
+          storagePath: '/tmp/a.pdf',
+          contentType: 'application/pdf',
+          pageCount: 1,
+          copies: 3,
+          byteSize: file.size,
+          sortOrder: 0,
+          createdAt: new Date(),
+        },
+      ],
+      payment: {
+        id: '44444444-4444-4444-4444-444444444444',
+        challengeId: null,
+        quickPrintSessionId: sessionId,
+        userId: null,
+        status: PaymentStatus.PENDING,
+        pageCount: 3,
+        freePages: 0,
+        extraPages: 3,
+        printColorMode: 'bw',
+        amountPaise: 3000,
+        currency: 'INR',
+        razorpayOrderId: null,
+        razorpayPaymentId: null,
+        razorpaySignature: null,
+        failureReason: null,
+        paidAt: null,
+        expiresAt: new Date(Date.now() + 900_000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    };
+
+    const sessionUpdate = vi.fn().mockResolvedValue(awaiting);
+    const db = txPassthrough({
+      platformSetting: { findUnique: vi.fn().mockResolvedValue(null) },
+      quickPrintSession: {
+        findUnique: vi.fn().mockResolvedValueOnce(waiting).mockResolvedValue(awaiting),
+        update: sessionUpdate,
+      },
+    });
+
+    const service = makeService(db);
+    const result = await service.uploadDocuments(token, [file], 'bw');
+    expect(result.paymentRequired).toBe(true);
+    expect(result.quote?.pageCount).toBe(3);
+    expect(result.quote?.amountPaise).toBe(3000);
+    expect(sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          pageCount: 3,
+          documents: {
+            create: [
+              expect.objectContaining({
+                pageCount: 1,
+                copies: 3,
+                fileName: 'a.pdf',
+              }),
+            ],
+          },
+          payment: {
+            create: expect.objectContaining({
+              pageCount: 3,
+              extraPages: 3,
+              amountPaise: 3000,
+            }),
+          },
+        }),
+      }),
+    );
+  });
+
+  it('rejects invalid copies on upload', async () => {
+    const base = await onePagePdf();
+    const token = 'guest-token';
+    const waiting = {
+      id: sessionId,
+      deviceId,
+      tokenHash: hashSecret(token),
+      status: QuickPrintSessionStatus.waiting_upload,
+      documentLabel: '',
+      pageCount: 0,
+      freePagesGranted: 0,
+      printColorMode: 'bw',
+      verifiedPhone: null,
+      phoneVerifiedAt: null,
+      expiresAt: new Date(Date.now() + 600_000),
+      printJobId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      documents: [],
+      payment: null,
+      device: deviceRow(),
+    };
+    const db = txPassthrough({
+      platformSetting: { findUnique: vi.fn().mockResolvedValue(null) },
+      quickPrintSession: {
+        findUnique: vi.fn().mockResolvedValue(waiting),
+        update: vi.fn(),
+      },
+    });
+    const service = makeService(db);
+    await expect(
+      service.uploadDocuments(token, [{ ...base, copies: 0 }], 'bw'),
+    ).rejects.toMatchObject({ code: 'validation_error', statusCode: 400 });
+    await expect(
+      service.uploadDocuments(token, [{ ...base, copies: 11 }], 'bw'),
+    ).rejects.toMatchObject({ code: 'validation_error', statusCode: 400 });
   });
 
   it('marks a free upload ready when phone is verified and under quota', async () => {
@@ -298,6 +441,93 @@ describe('QuickPrintService', () => {
     expect(result.status).toBe('ready');
     expect(result.paymentRequired).toBe(false);
     expect(result.phoneVerified).toBe(true);
+  });
+
+  it('keeps image display name while storing normalized PDF bytes', async () => {
+    /** Small valid JPEG (8×8) accepted by pdf-lib embedJpg. */
+    const jpeg = Buffer.from(
+      '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAIAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDi6KKK+ZP3E//Z',
+      'base64',
+    );
+    const file = {
+      originalname: 'photo.jpg',
+      mimetype: 'image/jpeg',
+      size: jpeg.length,
+      buffer: jpeg,
+    };
+    const token = 'image-token';
+    const waiting = {
+      id: sessionId,
+      deviceId,
+      tokenHash: hashSecret(token),
+      status: QuickPrintSessionStatus.waiting_upload,
+      documentLabel: '',
+      pageCount: 0,
+      freePagesGranted: 0,
+      printColorMode: 'bw',
+      verifiedPhone: '+919876543210',
+      phoneVerifiedAt: new Date(),
+      expiresAt: new Date(Date.now() + 600_000),
+      printJobId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      documents: [],
+      payment: null,
+      device: deviceRow(),
+    };
+    const ready = {
+      ...waiting,
+      status: QuickPrintSessionStatus.ready,
+      documentLabel: 'photo.jpg',
+      pageCount: 1,
+      freePagesGranted: 1,
+      documents: [
+        {
+          id: '33333333-3333-3333-3333-333333333333',
+          sessionId,
+          fileName: 'photo.jpg',
+          storagePath: `/tmp/00-photo.pdf`,
+          contentType: 'application/pdf',
+          pageCount: 1,
+          byteSize: 100,
+          sortOrder: 0,
+          createdAt: new Date(),
+        },
+      ],
+    };
+    const update = vi.fn().mockResolvedValue(ready);
+
+    const db = txPassthrough({
+      platformSetting: { findUnique: vi.fn().mockResolvedValue(null) },
+      quickPrintSession: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(waiting)
+          .mockResolvedValueOnce(ready)
+          .mockResolvedValue(ready),
+        update,
+      },
+    });
+
+    const service = makeService(db);
+    const result = await service.uploadDocuments(token, [file], 'bw');
+    expect(result.status).toBe('ready');
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          documentLabel: 'photo.jpg',
+          documents: {
+            create: [
+              expect.objectContaining({
+                fileName: 'photo.jpg',
+                contentType: 'application/pdf',
+                storagePath: expect.stringMatching(/00-photo\.pdf$/),
+              }),
+            ],
+          },
+        }),
+      }),
+    );
   });
 
   it('requires payment when pages exceed the kiosk free quota', async () => {
@@ -518,6 +748,7 @@ describe('QuickPrintService', () => {
         storagePath: '/tmp/a.pdf',
         contentType: 'application/pdf',
         pageCount: 2,
+        copies: 1,
         byteSize: 10,
         sortOrder: 0,
         printJobId: null as string | null,
@@ -531,6 +762,7 @@ describe('QuickPrintService', () => {
         storagePath: '/tmp/b.pdf',
         contentType: 'application/pdf',
         pageCount: 3,
+        copies: 2,
         byteSize: 12,
         sortOrder: 1,
         printJobId: null as string | null,
@@ -544,7 +776,7 @@ describe('QuickPrintService', () => {
       tokenHash: 'hash',
       status: QuickPrintSessionStatus.consumed,
       documentLabel: '2 documents',
-      pageCount: 5,
+      pageCount: 8,
       freePagesGranted: 5,
       printColorMode: 'bw',
       verifiedPhone: '+919876543210',
@@ -615,6 +847,9 @@ describe('QuickPrintService', () => {
     expect(printing.createJob).toHaveBeenLastCalledWith(
       expect.objectContaining({
         title: 'a.pdf',
+        pageCount: 2,
+        copies: 1,
+        pagesExpected: 2,
         freePagesGranted: 5,
         idempotencyKey: `quick-print-doc-${docA}`,
       }),
@@ -634,6 +869,9 @@ describe('QuickPrintService', () => {
     expect(printing.createJob).toHaveBeenLastCalledWith(
       expect.objectContaining({
         title: 'b.pdf',
+        pageCount: 3,
+        copies: 2,
+        pagesExpected: 6,
         freePagesGranted: 0,
       }),
       'device',

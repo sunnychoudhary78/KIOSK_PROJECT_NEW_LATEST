@@ -4,6 +4,7 @@ class OtpDocumentRef {
     required this.fileName,
     required this.pageCount,
     required this.contentPath,
+    this.copies = 1,
     this.printJobId,
     this.printed = false,
   });
@@ -11,9 +12,12 @@ class OtpDocumentRef {
   final String id;
   final String fileName;
   final int pageCount;
+  final int copies;
   final String contentPath;
   final String? printJobId;
   final bool printed;
+
+  int get billablePages => pageCount * (copies < 1 ? 1 : copies);
 
   OtpDocumentRef copyWith({
     String? printJobId,
@@ -23,6 +27,7 @@ class OtpDocumentRef {
       id: id,
       fileName: fileName,
       pageCount: pageCount,
+      copies: copies,
       contentPath: contentPath,
       printJobId: printJobId ?? this.printJobId,
       printed: printed ?? this.printed,

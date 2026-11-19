@@ -21,6 +21,8 @@ type PrintJob = {
   deviceId?: string | null;
   needsAdminReview?: boolean;
   reconcileDetail?: string | null;
+  pageCount?: number;
+  copies?: number;
   pagesExpected?: number;
   createdAt: string;
 };
@@ -200,6 +202,11 @@ export function PrintJobsPage() {
                 <tr key={job.id}>
                   <td className="font-medium">
                     {job.title}
+                    {(job.copies ?? 1) > 1 ? (
+                      <span className="ml-2 text-xs font-medium text-muted-foreground">
+                        ×{job.copies}
+                      </span>
+                    ) : null}
                     {job.needsAdminReview ? (
                       <span className="ml-2 text-xs font-medium text-amber-700">Review</span>
                     ) : null}
@@ -208,7 +215,14 @@ export function PrintJobsPage() {
                   <td className="font-mono text-xs text-muted-foreground">
                     {job.deviceId ? job.deviceId.slice(0, 8) : '—'}
                   </td>
-                  <td>{job.printColorMode === 'color' ? 'Color' : 'B/W'}</td>
+                  <td>
+                    {job.printColorMode === 'color' ? 'Color' : 'B/W'}
+                    {job.pagesExpected != null ? (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        · {job.pagesExpected} pg
+                      </span>
+                    ) : null}
+                  </td>
                   <td>
                     <StatusBadge status={job.status} />
                   </td>

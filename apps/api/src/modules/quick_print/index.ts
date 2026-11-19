@@ -8,12 +8,14 @@ import { validateBody } from '../../infrastructure/http/validate.js';
 import { contentDispositionInline } from '../../shared/content_disposition.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
+import { storagePdfName } from '../printing/print_file_names.js';
 import { PrintingService } from '../printing/printing.service.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import { OtpPrintService } from '../otp_print/otp_print.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { RazorpayClient } from '../payments/razorpay.client.js';
 import { parsePrintColorMode, type UploadedPdf } from '../otp_print/otp_print.schemas.js';
+import { parseCopiesList } from '../printing/print_copies.js';
 import { QuickPrintService } from './quick_print.service.js';
 import {
   openQuickPrintSupportQuerySchema,
@@ -169,7 +171,7 @@ export function registerQuickPrintModule(router: Router, deps: AppDeps): void {
         res.setHeader('Content-Type', doc.contentType || 'application/pdf');
         res.setHeader(
           'Content-Disposition',
-          contentDispositionInline(doc.fileName),
+          contentDispositionInline(storagePdfName(doc.fileName)),
         );
         res.send(bytes);
       } catch (error) {
@@ -229,11 +231,13 @@ export function registerQuickPrintModule(router: Router, deps: AppDeps): void {
       try {
         const token = requireParam(req.params.token, 'token');
         const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-        const uploaded: UploadedPdf[] = files.map((file) => ({
+        const copiesList = parseCopiesList(req.body?.copies, files.length);
+        const uploaded: UploadedPdf[] = files.map((file, index) => ({
           originalname: file.originalname,
           mimetype: file.mimetype,
           size: file.size,
           buffer: file.buffer,
+          copies: copiesList[index] ?? 1,
         }));
         const printColorMode = parsePrintColorMode(req.body?.printColorMode);
         res.status(201).json(

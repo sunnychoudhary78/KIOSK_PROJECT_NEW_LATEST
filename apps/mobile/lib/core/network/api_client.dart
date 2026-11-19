@@ -67,6 +67,8 @@ class ApiClient {
     Map<String, String>? fields,
     required List<File> files,
     String fileField = 'files',
+    /// Parallel copies values (1–10), one per file. Sent as a JSON array field.
+    List<int>? copies,
   }) async {
     final request = http.MultipartRequest(
       'POST',
@@ -75,6 +77,9 @@ class ApiClient {
     request.headers.addAll(_headers(json: false));
     if (fields != null) {
       request.fields.addAll(fields);
+    }
+    if (copies != null && copies.isNotEmpty) {
+      request.fields['copies'] = '[${copies.join(',')}]';
     }
     for (final file in files) {
       request.files.add(await http.MultipartFile.fromPath(fileField, file.path));

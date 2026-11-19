@@ -43,12 +43,14 @@ class OtpDocumentInfo {
     required this.fileName,
     required this.pageCount,
     required this.byteSize,
+    this.copies = 1,
   });
 
   final String id;
   final String fileName;
   final int pageCount;
   final int byteSize;
+  final int copies;
 
   factory OtpDocumentInfo.fromJson(Map<String, dynamic> json) {
     return OtpDocumentInfo(
@@ -56,6 +58,7 @@ class OtpDocumentInfo {
       fileName: json['fileName'] as String,
       pageCount: _asInt(json['pageCount'], 1),
       byteSize: _asInt(json['byteSize']),
+      copies: _asInt(json['copies'], 1).clamp(1, 10),
     );
   }
 }

@@ -11,6 +11,7 @@ export const printDigiLockerSchema = z.object({
   documentId: z.string().min(1),
   title: z.string().min(1).max(200).optional(),
   colorMode: digilockerColorModeSchema,
+  copies: z.number().int().min(1).max(10).optional(),
   idempotencyKey: z.string().min(8).max(100).optional(),
   phoneProofToken: z.string().trim().min(1).max(800).optional(),
 });

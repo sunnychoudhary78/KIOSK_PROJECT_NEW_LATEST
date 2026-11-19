@@ -98,6 +98,8 @@ class _DigilockerPrintPageState extends ConsumerState<DigilockerPrintPage> {
             colorMode: state.colorMode ?? 'bw',
             bwChargeRupees: state.bwChargeRupees,
             colorChargeRupees: state.colorChargeRupees,
+            copies: state.copies,
+            onCopiesChanged: controller.setCopies,
             documentHint: state.pendingDocumentTitle == null
                 ? null
                 : 'Printing “${state.pendingDocumentTitle}”.',

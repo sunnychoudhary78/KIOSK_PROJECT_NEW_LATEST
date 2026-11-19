@@ -386,6 +386,46 @@ void main() {
     expect(native.cancelCalls, 0);
   });
 
+  test('spools PDF N times then reconciles against pagesExpected', () async {
+    final native = FakePrinterNative(
+      health: const PrinterHealth(
+        state: 'ready',
+        online: true,
+        spoolerLatestJobId: 9,
+      ),
+    );
+    final watch = UsbPageWatch();
+    watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 50));
+    final spooler = _FakeSpooler();
+    final coordinator = buildCoordinator(
+      native: native,
+      spooler: spooler,
+      usbPageWatch: watch,
+      reconcileTimeout: const Duration(seconds: 2),
+    );
+    final progress = <String>[];
+    Future<void>.delayed(const Duration(milliseconds: 30), () {
+      watch.record(const UsbSnapshot(ok: true, connected: true, pagesTotal: 53));
+    });
+
+    final result = await coordinator.printAndReconcile(
+      jobId: 'job-copies',
+      title: 'copies.pdf',
+      pdfBytes: pdf,
+      pagesExpected: 3,
+      copies: 3,
+      colorMode: 'bw',
+      reportStatus: quietReport,
+      onProgress: progress.add,
+    );
+
+    expect(spooler.calls, 3);
+    expect(result.outcome, PrintReconcileOutcome.verified);
+    expect(result.pagesReported, 3);
+    expect(progress, contains('Sending copy 1 of 3…'));
+    expect(progress, contains('Sending copy 3 of 3…'));
+  });
+
   test('dirty pre-print queue triggers purge before send', () async {
     final native = FakePrinterNative(
       health: const PrinterHealth(

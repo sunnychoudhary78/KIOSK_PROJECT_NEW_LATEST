@@ -21,6 +21,7 @@ class OtpPrintPage extends ConsumerStatefulWidget {
 class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
   final _label = TextEditingController();
   final List<File> _files = [];
+  final List<int> _copies = [];
   String _printColorMode = 'bw';
   NearbyKiosk? _kiosk;
 
@@ -47,11 +48,13 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
     );
     if (result == null) return;
     setState(() {
+      final picked = result.paths.whereType<String>().map(File.new).toList();
       _files
         ..clear()
-        ..addAll(
-          result.paths.whereType<String>().map(File.new),
-        );
+        ..addAll(picked);
+      _copies
+        ..clear()
+        ..addAll(List<int>.filled(picked.length, 1));
     });
   }
 
@@ -60,6 +63,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
     if (kiosk == null) return;
     await ref.read(otpPrintControllerProvider.notifier).createChallenge(
           files: List<File>.from(_files),
+          copies: List<int>.from(_copies),
           deviceId: kiosk.id,
           documentLabel: _label.text.trim(),
           printColorMode: _printColorMode,
@@ -69,6 +73,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
     if (state.hasValue && state.value != null) {
       setState(() {
         _files.clear();
+        _copies.clear();
         _label.clear();
       });
       final challenge = state.value!;
@@ -82,8 +87,15 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
 
   String _fileName(File file) => file.path.split(RegExp(r'[\\/]')).last;
 
+  void _setCopies(int index, int value) {
+    setState(() {
+      _copies[index] = value.clamp(1, 10);
+    });
+  }
+
   Widget _fileCard(ThemeData theme, int index, bool loading) {
     final file = _files[index];
+    final copies = index < _copies.length ? _copies[index] : 1;
     final bytes = file.existsSync() ? file.lengthSync() : 0;
     return SkpPanelCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
@@ -118,8 +130,29 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
             ),
           ),
           IconButton(
+            onPressed: loading || copies <= 1 ? null : () => _setCopies(index, copies - 1),
+            icon: const Icon(Icons.remove_circle_outline),
+            tooltip: 'Fewer copies',
+          ),
+          Text(
+            '$copies×',
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          IconButton(
+            onPressed: loading || copies >= 10 ? null : () => _setCopies(index, copies + 1),
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'More copies',
+          ),
+          IconButton(
             icon: const Icon(Icons.close_rounded),
-            onPressed: loading ? null : () => setState(() => _files.removeAt(index)),
+            onPressed: loading
+                ? null
+                : () => setState(() {
+                      _files.removeAt(index);
+                      if (index < _copies.length) {
+                        _copies.removeAt(index);
+                      }
+                    }),
           ),
         ],
       ),

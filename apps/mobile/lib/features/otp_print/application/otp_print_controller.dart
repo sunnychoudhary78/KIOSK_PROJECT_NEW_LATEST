@@ -18,11 +18,13 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
   Future<void> createChallenge({
     required List<File> files,
     required String deviceId,
+    List<int>? copies,
     String? documentLabel,
     String printColorMode = 'bw',
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
+      final resolvedCopies = copies ?? List<int>.filled(files.length, 1);
       final result = await _api.postMultipart(
         '/otp-challenges',
         fields: {
@@ -33,6 +35,7 @@ class OtpPrintController extends AsyncNotifier<OtpChallenge?> {
         },
         files: files,
         fileField: 'files',
+        copies: resolvedCopies,
       );
       return OtpChallenge.fromJson(result);
     });
