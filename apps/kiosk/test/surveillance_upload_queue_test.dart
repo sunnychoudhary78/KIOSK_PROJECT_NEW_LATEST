@@ -38,4 +38,34 @@ void main() {
     expect(queue.due(), hasLength(1));
     expect(queue.due().single.path, ok.path);
   });
+
+  test('surveillanceHasUploadBacklog uses pending count and age', () {
+    expect(
+      surveillanceHasUploadBacklog(
+        const SurveillanceQueueStats(pendingCount: 5, failedCount: 0),
+      ),
+      isFalse,
+    );
+    expect(
+      surveillanceHasUploadBacklog(
+        SurveillanceQueueStats(
+          pendingCount: surveillanceBacklogPendingLimit + 1,
+          failedCount: 0,
+        ),
+      ),
+      isTrue,
+    );
+    final now = DateTime.utc(2026, 9, 3, 12);
+    expect(
+      surveillanceHasUploadBacklog(
+        SurveillanceQueueStats(
+          pendingCount: 1,
+          failedCount: 0,
+          oldestQueuedAt: now.subtract(surveillanceBacklogMaxAge + const Duration(minutes: 1)),
+        ),
+        now: now,
+      ),
+      isTrue,
+    );
+  });
 }

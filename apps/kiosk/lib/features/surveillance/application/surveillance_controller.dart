@@ -8,6 +8,7 @@ import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/features/surveillance/application/surveillance_health.dart';
 import 'package:skp_kiosk/features/surveillance/data/surveillance_native.dart';
 import 'package:skp_kiosk/features/surveillance/data/surveillance_recorder.dart';
+import 'package:skp_kiosk/features/surveillance/data/surveillance_upload_queue.dart';
 import 'package:skp_kiosk/features/surveillance/data/surveillance_uploader.dart';
 
 export 'package:skp_kiosk/features/surveillance/application/surveillance_health.dart'
@@ -82,7 +83,9 @@ class SurveillanceController extends Notifier<SurveillanceState> {
     final auth = ref.read(deviceAuthProvider);
     final sink = ref.read(surveillanceUploadSinkProvider);
     final deviceId = auth.deviceId;
-    if (!auth.isAuthenticated || deviceId == null || deviceId.isEmpty) {
+    // Detach only when stopped / logged out / missing identity — not during
+    // JWT refresh loading (accessToken is preserved while loading).
+    if (auth.stopped || !auth.isAuthenticated || deviceId == null || deviceId.isEmpty) {
       await sink.detach();
       return;
     }
@@ -96,7 +99,7 @@ class SurveillanceController extends Notifier<SurveillanceState> {
     if (retryDelayFor != null) {
       return retryDelayFor!(attempt, error);
     }
-    if (error == 'STORAGE_LOW') {
+    if (error == 'STORAGE_LOW' || error == 'UPLOAD_BACKLOG') {
       return const Duration(minutes: 5);
     }
     // 15s → 30s → 60s → 5m cap
@@ -128,6 +131,31 @@ class SurveillanceController extends Notifier<SurveillanceState> {
     _retryAttempt = 0;
   }
 
+  Future<void> _pauseForUploadBacklog() async {
+    final holder = ref.read(cameraLeaseProvider).holder;
+    if (state.recording || state.pausedForPalm || holder == CameraHolder.surveillance) {
+      try {
+        await _recorder.stop();
+      } catch (error) {
+        AppLogger.error('Surveillance stop for backlog failed', error);
+      }
+      _lease.release(CameraHolder.surveillance);
+    }
+    if (!ref.mounted) {
+      return;
+    }
+    AppLogger.info('SURVEILLANCE_PAUSED_UPLOAD_BACKLOG');
+    state = SurveillanceState(
+      error: 'UPLOAD_BACKLOG',
+      lastErrorAt: DateTime.now().toUtc(),
+      lastSegmentAt: state.lastSegmentAt,
+      lastSegmentBytes: state.lastSegmentBytes,
+      cameraName: state.cameraName,
+      retryAttempt: _retryAttempt + 1,
+    );
+    _scheduleRetry('UPLOAD_BACKLOG');
+  }
+
   Future<void> _sync() async {
     if (_syncing || !ref.mounted) {
       return;
@@ -137,6 +165,7 @@ class SurveillanceController extends Notifier<SurveillanceState> {
       final auth = ref.read(deviceAuthProvider);
       final desired = auth.isAuthenticated && auth.surveillanceEnabled;
       final holder = ref.read(cameraLeaseProvider).holder;
+      final queue = ref.read(surveillanceUploadSinkProvider).queueStats();
 
       if (!desired) {
         _clearRetry();
@@ -145,6 +174,12 @@ class SurveillanceController extends Notifier<SurveillanceState> {
       }
 
       if (holder == CameraHolder.palm) {
+        return;
+      }
+
+      // Pause new recording while uploads catch up; uploader keeps draining.
+      if (surveillanceHasUploadBacklog(queue)) {
+        await _pauseForUploadBacklog();
         return;
       }
 

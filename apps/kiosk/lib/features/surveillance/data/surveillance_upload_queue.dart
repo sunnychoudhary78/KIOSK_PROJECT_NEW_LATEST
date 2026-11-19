@@ -13,6 +13,28 @@ const surveillanceFailedStatus = 'failed';
 /// Local segments below this size are never uploaded (corrupt/stub).
 const surveillanceMinSegmentBytes = 1024;
 
+/// Pause new recording when pending uploads exceed this count.
+const surveillanceBacklogPendingLimit = 20;
+
+/// Pause new recording when the oldest pending item is older than this.
+const surveillanceBacklogMaxAge = Duration(hours: 2);
+
+/// True when the upload queue is large/old enough to pause new recording.
+bool surveillanceHasUploadBacklog(
+  SurveillanceQueueStats stats, {
+  DateTime? now,
+}) {
+  if (stats.pendingCount > surveillanceBacklogPendingLimit) {
+    return true;
+  }
+  final oldest = stats.oldestQueuedAt;
+  if (oldest == null) {
+    return false;
+  }
+  final utc = (now ?? DateTime.now()).toUtc();
+  return utc.difference(oldest.toUtc()) > surveillanceBacklogMaxAge;
+}
+
 final _dateFolder = RegExp(r'^\d{4}-\d{2}-\d{2}$');
 
 class SurveillanceQueueStats {

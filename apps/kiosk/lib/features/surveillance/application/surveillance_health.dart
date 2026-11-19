@@ -68,6 +68,10 @@ SurveillanceHealthState resolveSurveillanceHealth({
   if (state.error == 'STORAGE_LOW') {
     return SurveillanceHealthState.storageLow;
   }
+  // Recording paused for upload catch-up — still report as uploading backlog.
+  if (state.error == 'UPLOAD_BACKLOG') {
+    return SurveillanceHealthState.uploading;
+  }
   if (state.error != null && state.error!.isNotEmpty) {
     return SurveillanceHealthState.cameraError;
   }

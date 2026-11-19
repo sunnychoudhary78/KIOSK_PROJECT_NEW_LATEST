@@ -48,10 +48,15 @@ class FakeRecorder implements SurveillanceRecorder {
 
 class FakeUploadSink implements SurveillanceUploadSink {
   String? attachedDeviceId;
+  int attachCalls = 0;
+  int detachCalls = 0;
+  SurveillanceQueueStats stats =
+      const SurveillanceQueueStats(pendingCount: 0, failedCount: 0);
   final enqueued = <({String path, int? bytes})>[];
 
   @override
   Future<void> attach({required String deviceId}) async {
+    attachCalls += 1;
     attachedDeviceId = deviceId;
   }
 
@@ -62,12 +67,12 @@ class FakeUploadSink implements SurveillanceUploadSink {
 
   @override
   Future<void> detach() async {
+    detachCalls += 1;
     attachedDeviceId = null;
   }
 
   @override
-  SurveillanceQueueStats queueStats() =>
-      const SurveillanceQueueStats(pendingCount: 0, failedCount: 0);
+  SurveillanceQueueStats queueStats() => stats;
 }
 
 class _DeviceAuth extends DeviceAuthNotifier {
@@ -210,5 +215,68 @@ void main() {
     expect(recorder.starts, greaterThanOrEqualTo(2));
     expect(container.read(surveillanceControllerProvider).recording, isTrue);
     expect(container.read(surveillanceControllerProvider).error, isNull);
+  });
+
+  test('JWT refresh loading does not detach the upload sink', () async {
+    await Future<void>.delayed(Duration.zero);
+    expect(uploads.attachedDeviceId, 'device-1');
+    final detachBefore = uploads.detachCalls;
+
+    auth.emit(
+      const DeviceAuthState(
+        loading: true,
+        accessToken: 'token',
+        deviceId: 'device-1',
+        provisioned: true,
+        surveillanceEnabled: true,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(uploads.detachCalls, detachBefore);
+    expect(uploads.attachedDeviceId, 'device-1');
+  });
+
+  test('keeps uploader attached when surveillance is turned off', () async {
+    await Future<void>.delayed(Duration.zero);
+    expect(uploads.attachedDeviceId, 'device-1');
+    auth.emit(
+      const DeviceAuthState(
+        accessToken: 'token',
+        deviceId: 'device-1',
+        provisioned: true,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.stops, 1);
+    expect(uploads.attachedDeviceId, 'device-1');
+  });
+
+  test('pauses recording when upload backlog exceeds limit', () async {
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.starts, 1);
+
+    final controller = container.read(surveillanceControllerProvider.notifier);
+    controller.retryDelayFor = (_, __) => const Duration(days: 1);
+
+    uploads.stats = SurveillanceQueueStats(
+      pendingCount: surveillanceBacklogPendingLimit + 1,
+      failedCount: 0,
+      oldestQueuedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+    );
+    // Non-const state so Riverpod sees a new identity and notifies listeners.
+    auth.emit(
+      DeviceAuthState(
+        accessToken: 'token-refresh',
+        deviceId: 'device-1',
+        provisioned: true,
+        surveillanceEnabled: true,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(surveillanceControllerProvider).error, 'UPLOAD_BACKLOG');
+    expect(container.read(surveillanceControllerProvider).recording, isFalse);
+    expect(uploads.attachedDeviceId, 'device-1');
   });
 }

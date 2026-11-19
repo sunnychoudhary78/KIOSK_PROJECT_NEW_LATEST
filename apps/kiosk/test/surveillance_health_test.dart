@@ -39,5 +39,14 @@ void main() {
       ),
       SurveillanceHealthState.cameraError,
     );
+
+    expect(
+      resolveSurveillanceHealth(
+        enabled: true,
+        state: const SurveillanceState(error: 'UPLOAD_BACKLOG'),
+        queue: const SurveillanceQueueStats(pendingCount: 21, failedCount: 0),
+      ),
+      SurveillanceHealthState.uploading,
+    );
   });
 }

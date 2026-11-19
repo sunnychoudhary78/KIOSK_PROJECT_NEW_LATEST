@@ -14,6 +14,7 @@ import {
 } from '../../core/ui/primitives';
 import {
   resolveRecordingDisplay,
+  resolveUploadBacklogWarning,
   type SurveillanceHealth,
 } from './surveillanceStatus';
 
@@ -135,6 +136,7 @@ export function RecordingsPage() {
   const selected = devices.find((device) => device.id === deviceId) ?? null;
   const healthDisplay = selected ? resolveRecordingDisplay(selected) : null;
   const pendingOnKiosk = selected?.surveillanceHealth?.queuePending ?? 0;
+  const backlogWarning = resolveUploadBacklogWarning(selected?.surveillanceHealth);
 
   function applyDay(isoDate: string, preset?: DayPreset) {
     setRecordedOn(isoDate);
@@ -289,6 +291,9 @@ export function RecordingsPage() {
           <p className={`mb-3 text-sm font-medium ${healthDisplay.className}`} title={healthDisplay.title}>
             Live status: {healthDisplay.label}
             {pendingOnKiosk > 0 ? ` · ${pendingOnKiosk} clip(s) waiting on kiosk` : ''}
+            {backlogWarning.ageLabel ? ` · oldest ${backlogWarning.ageLabel}` : ''}
+            {backlogWarning.lastErrorCode ? ` · ${backlogWarning.lastErrorCode}` : ''}
+            {backlogWarning.warn ? ' · backlog warning' : ''}
           </p>
         ) : null}
 
@@ -300,7 +305,9 @@ export function RecordingsPage() {
             title={pendingOnKiosk > 0 ? 'Clips pending upload' : 'No clips for this day'}
             description={
               pendingOnKiosk > 0
-                ? `${pendingOnKiosk} recording(s) are still on the kiosk waiting to upload.`
+                ? `${pendingOnKiosk} recording(s) are still on the kiosk waiting to upload${
+                    backlogWarning.ageLabel ? ` (oldest ${backlogWarning.ageLabel})` : ''
+                  }${backlogWarning.lastErrorCode ? ` · last error: ${backlogWarning.lastErrorCode}` : ''}.`
                 : 'No recordings for this kiosk and local day.'
             }
           />

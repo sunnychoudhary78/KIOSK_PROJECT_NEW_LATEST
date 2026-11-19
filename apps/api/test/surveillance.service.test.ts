@@ -136,6 +136,43 @@ describe('SurveillanceService.createUploadUrl', () => {
     expect(result).toEqual({ segmentId, objectKey, alreadyUploaded: true });
     expect(storage.presignPut).not.toHaveBeenCalled();
   });
+
+  it('reissues upload-url without clearing lastUploadError on pending rows', async () => {
+    const update = vi.fn(async () => undefined);
+    const storage = storageMock();
+    const db = {
+      device: { findUnique: vi.fn(async () => ({ id: deviceId, tenantId })) },
+      surveillanceSegment: {
+        findUnique: vi.fn(async () => ({
+          id: segmentId,
+          deviceId,
+          objectKey,
+          status: SurveillanceSegmentStatus.pending_upload,
+          lastUploadError: 'upload_incomplete',
+        })),
+        update,
+      },
+    };
+    const service = new SurveillanceService(
+      db as unknown as DbClient,
+      storage,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+    const result = await service.createUploadUrl(deviceId, deviceId, body);
+    expect(result).toMatchObject({
+      segmentId,
+      uploadUrl: 'https://r2.example/put',
+      alreadyUploaded: false,
+    });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: segmentId },
+        data: expect.not.objectContaining({ lastUploadError: null }),
+      }),
+    );
+    const data = update.mock.calls[0][0].data as Record<string, unknown>;
+    expect(data).not.toHaveProperty('lastUploadError');
+  });
 });
 
 describe('SurveillanceService.complete', () => {

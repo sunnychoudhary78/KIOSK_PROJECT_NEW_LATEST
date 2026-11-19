@@ -117,11 +117,14 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
       return;
     }
 
+    // Keep the previous JWT during refresh so isAuthenticated stays true and
+    // SurveillanceUploader is not detached mid-backlog.
     state = DeviceAuthState(
       loading: true,
       bootstrapping: state.bootstrapping,
       provisioned: _credentials != null,
       stopped: state.stopped,
+      accessToken: state.accessToken,
       deviceName: state.deviceName,
       deviceId: state.deviceId,
       surveillanceEnabled: state.surveillanceEnabled,

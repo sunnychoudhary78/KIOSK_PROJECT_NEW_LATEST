@@ -28,12 +28,60 @@ export type DeviceSurveillanceView = {
 
 const HEARTBEAT_STALE_MS = 3 * 60 * 1000;
 
+/** Warn in admin when kiosk backlog reaches this many pending clips. */
+export const UPLOAD_BACKLOG_WARN_PENDING = 10;
+
+/** Warn in admin when oldest pending clip is at least this old. */
+export const UPLOAD_BACKLOG_WARN_AGE_MS = 60 * 60 * 1000;
+
 export type RecordingDisplayStatus = {
   key: string;
   label: string;
   className: string;
   title: string;
 };
+
+export type UploadBacklogWarning = {
+  warn: boolean;
+  pending: number;
+  oldestQueuedAt: string | null;
+  ageLabel: string | null;
+  lastErrorCode: string | null;
+};
+
+export function formatQueueAge(oldestQueuedAt: string | null | undefined, now = Date.now()): string | null {
+  if (!oldestQueuedAt) return null;
+  const ts = Date.parse(oldestQueuedAt);
+  if (!Number.isFinite(ts)) return null;
+  const ageMs = Math.max(0, now - ts);
+  const minutes = Math.floor(ageMs / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rem = minutes % 60;
+  return rem > 0 ? `${hours}h ${rem}m` : `${hours}h`;
+}
+
+/** True when queuePending >= 10 or oldest queued age >= 1h. */
+export function resolveUploadBacklogWarning(
+  health: SurveillanceHealth | null | undefined,
+  now = Date.now(),
+): UploadBacklogWarning {
+  const pending = health?.queuePending ?? 0;
+  const oldestQueuedAt = health?.oldestQueuedAt ?? null;
+  const lastErrorCode = health?.lastErrorCode ?? null;
+  const oldestTs = oldestQueuedAt ? Date.parse(oldestQueuedAt) : NaN;
+  const ageMs = Number.isFinite(oldestTs) ? Math.max(0, now - oldestTs) : 0;
+  const warn =
+    pending >= UPLOAD_BACKLOG_WARN_PENDING ||
+    (pending > 0 && ageMs >= UPLOAD_BACKLOG_WARN_AGE_MS);
+  return {
+    warn,
+    pending,
+    oldestQueuedAt,
+    ageLabel: pending > 0 ? formatQueueAge(oldestQueuedAt, now) : null,
+    lastErrorCode,
+  };
+}
 
 export function resolveRecordingDisplay(device: DeviceSurveillanceView): RecordingDisplayStatus {
   if (!device.surveillanceEnabled) {
@@ -68,24 +116,33 @@ export function resolveRecordingDisplay(device: DeviceSurveillanceView): Recordi
     };
   }
 
+  const backlog = resolveUploadBacklogWarning(health);
+  const ageNote = backlog.ageLabel ? ` · oldest ${backlog.ageLabel}` : '';
   const queueNote =
-    (health.queuePending ?? 0) > 0 ? ` · ${health.queuePending} pending upload` : '';
+    (health.queuePending ?? 0) > 0 ? ` · ${health.queuePending} pending upload${ageNote}` : '';
   const errorNote = health.lastErrorCode ? ` · ${health.lastErrorCode}` : '';
+  const backlogClass = backlog.warn ? 'text-red-700' : 'text-amber-700';
 
   switch (health.state) {
     case 'recording':
       return {
         key: 'recording',
-        label: 'Recording',
-        className: 'text-emerald-700',
-        title: `Camera recording${queueNote}`,
+        label: backlog.warn
+          ? `Recording · backlog (${health.queuePending})`
+          : 'Recording',
+        className: backlog.warn ? backlogClass : 'text-emerald-700',
+        title: `Camera recording${queueNote}${errorNote}`,
       };
     case 'uploading':
       return {
         key: 'uploading',
-        label: health.queuePending ? `Uploading (${health.queuePending})` : 'Uploading',
-        className: 'text-amber-700',
-        title: `Recording with upload backlog${queueNote}${errorNote}`,
+        label: health.queuePending
+          ? backlog.warn
+            ? `Backlog (${health.queuePending})`
+            : `Uploading (${health.queuePending})`
+          : 'Uploading',
+        className: backlogClass,
+        title: `Upload backlog${queueNote}${errorNote}`,
       };
     case 'paused_palm':
       return {
