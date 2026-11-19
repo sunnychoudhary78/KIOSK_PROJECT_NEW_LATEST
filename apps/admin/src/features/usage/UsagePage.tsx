@@ -125,6 +125,7 @@ type PrintSummary = {
   freeJobs: number;
   paidJobs: number;
   mixedJobs: number;
+  otherJobs?: number;
 };
 
 function formatDeltaPct(pct: number | null | undefined): string | null {
@@ -748,17 +749,34 @@ export function UsagePage() {
       : '—';
   const topCount = detail?.topEventCount ?? usageStats.top?.count ?? 0;
   const clicksDeltaPct = detail?.comparison?.totalClicksDeltaPct ?? null;
-  const activeDeltaPct = detail?.comparison?.uniqueServicesDeltaPct ?? null;
   const fleetMax = Math.max(1, ...(fleet?.items.map((item) => item.totalClicks) ?? [0]));
   const fleetRank =
     fleet?.items.findIndex((item) => item.deviceId === deviceId) ?? -1;
-  const deadServices = useMemo(
-    () => usageRows.filter((row) => row.depth === 0 && row.count === 0),
+  const homeRows = useMemo(
+    () => usageRows.filter((row) => row.depth === 0),
     [usageRows],
+  );
+  const activeHomeServices = useMemo(
+    () => homeRows.filter((row) => row.count > 0).length,
+    [homeRows],
+  );
+  const deadServices = useMemo(
+    () => homeRows.filter((row) => row.count === 0),
+    [homeRows],
   );
   const idleKiosks = fleet?.idleKiosks ?? [];
   const sites = fleet?.sites ?? [];
   const siteMax = Math.max(1, ...sites.map((site) => site.totalClicks));
+  const printBillingHint = prints
+    ? [
+        `${prints.freeJobs} free`,
+        `${prints.paidJobs} paid`,
+        prints.mixedJobs > 0 ? `${prints.mixedJobs} mixed` : null,
+        (prints.otherJobs ?? 0) > 0 ? `${prints.otherJobs} other` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined;
 
   function onDownload() {
     if (!detail || !selectedDevice) return;
@@ -926,16 +944,15 @@ export function UsagePage() {
             <MetricCard
               label="Total clicks"
               value={String(totalClicks)}
-              hint="vs prior"
+              hint="this kiosk"
               deltaPct={clicksDeltaPct}
               icon={MousePointerClick}
               tone="primary"
             />
             <MetricCard
               label="Active"
-              value={`${usageStats.active}/${usageRows.length || 0}`}
-              hint="services"
-              deltaPct={activeDeltaPct}
+              value={`${activeHomeServices}/${homeRows.length || 0}`}
+              hint="home services"
               icon={Activity}
               tone="success"
             />
@@ -981,7 +998,7 @@ export function UsagePage() {
               value={payments ? String(payments.totalCount) : overlayLoading ? '…' : '—'}
               hint={
                 payments
-                  ? `${payments.freePages ?? 0} free · ${payments.paidPages ?? 0} paid pg`
+                  ? `${payments.freePages ?? 0} free pg · ${payments.paidPages ?? 0} paid pg`
                   : undefined
               }
               icon={CreditCard}
@@ -990,11 +1007,7 @@ export function UsagePage() {
             <MetricCard
               label="Print jobs"
               value={prints ? String(prints.jobs) : overlayLoading ? '…' : '—'}
-              hint={
-                prints
-                  ? `${prints.freeJobs} free · ${prints.paidJobs} paid`
-                  : undefined
-              }
+              hint={printBillingHint}
               icon={Printer}
               tone="slate"
             />
@@ -1003,7 +1016,7 @@ export function UsagePage() {
               value={prints ? String(prints.pages) : overlayLoading ? '…' : '—'}
               hint={
                 prints
-                  ? `${prints.freePages} free · ${prints.paidPages} paid`
+                  ? `${prints.freePages} free pg · ${prints.paidPages} paid pg`
                   : undefined
               }
               icon={Printer}

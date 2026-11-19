@@ -315,6 +315,7 @@ export class PrintingService {
     let freeJobs = 0;
     let paidJobs = 0;
     let mixedJobs = 0;
+    let otherJobs = 0;
 
     for (const job of mapped) {
       pages += job.pageCount;
@@ -323,6 +324,7 @@ export class PrintingService {
       if (job.billing === 'free') freeJobs += 1;
       else if (job.billing === 'paid') paidJobs += 1;
       else if (job.billing === 'mixed') mixedJobs += 1;
+      else otherJobs += 1;
     }
 
     return {
@@ -333,6 +335,7 @@ export class PrintingService {
       freeJobs,
       paidJobs,
       mixedJobs,
+      otherJobs,
     };
   }
 
