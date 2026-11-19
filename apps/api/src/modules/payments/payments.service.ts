@@ -1102,9 +1102,15 @@ export class PaymentsService {
     let totalPaidPaise = 0;
     let paidCount = 0;
     let totalAmountPaise = 0;
+    let freePages = 0;
+    let paidPages = 0;
+    let pageCount = 0;
 
     for (const item of items) {
       totalAmountPaise += item.amountPaise;
+      pageCount += item.pageCount;
+      freePages += item.freePages;
+      paidPages += item.extraPages;
       const statusBucket = byStatus[item.status] ?? { count: 0, amountPaise: 0 };
       statusBucket.count += 1;
       statusBucket.amountPaise += item.amountPaise;
@@ -1133,6 +1139,9 @@ export class PaymentsService {
       paidCount,
       totalAmountPaise,
       totalPaidPaise,
+      pageCount,
+      freePages,
+      paidPages,
       byStatus,
       byService,
     };
@@ -1184,6 +1193,16 @@ export class PaymentsService {
 
     if (query.service && query.service !== 'all') {
       and.push(this.serviceWhere(query.service));
+    }
+
+    if (query.deviceId) {
+      and.push({
+        OR: [
+          { printJob: { deviceId: query.deviceId } },
+          { challenge: { deviceId: query.deviceId } },
+          { quickPrintSession: { deviceId: query.deviceId } },
+        ],
+      });
     }
 
     return and.length > 0 ? { AND: and } : {};

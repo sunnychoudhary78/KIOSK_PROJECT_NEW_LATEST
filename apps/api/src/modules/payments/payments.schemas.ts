@@ -56,6 +56,7 @@ export const listPaymentsQuerySchema = z.object({
     .enum(['PENDING', 'PAID', 'FAILED', 'EXPIRED', 'CANCELLED', 'all'])
     .optional(),
   service: z.enum([...paymentServiceValues, 'all']).optional(),
+  deviceId: z.string().uuid().optional(),
   from: dateOnly.optional(),
   to: dateOnly.optional(),
   q: z.string().trim().max(80).optional(),

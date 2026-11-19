@@ -3,11 +3,15 @@ import { UserRole } from '@prisma/client';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired, requireAdminRole } from '../../shared/auth.js';
 import { assertActiveDevice, requireDevice } from '../../shared/device-guard.js';
-import { validateBody } from '../../infrastructure/http/validate.js';
+import { validateBody, validateQuery } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { PrintingService } from './printing.service.js';
-import { printJobSupportSchema, updatePrintJobStatusSchema } from './printing.schemas.js';
+import {
+  printJobSupportSchema,
+  printJobsSummaryQuerySchema,
+  updatePrintJobStatusSchema,
+} from './printing.schemas.js';
 
 export function registerPrintingModule(router: Router, deps: AppDeps): void {
   const service = new PrintingService(deps.db, deps.auditService);
@@ -19,6 +23,20 @@ export function registerPrintingModule(router: Router, deps: AppDeps): void {
     async (_req: Request, res: Response, next: NextFunction) => {
       try {
         res.json(await service.list());
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/print-jobs/summary',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
+    validateQuery(printJobsSummaryQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        res.json(await service.summarize(printJobsSummaryQuerySchema.parse(req.query)));
       } catch (error) {
         next(error);
       }

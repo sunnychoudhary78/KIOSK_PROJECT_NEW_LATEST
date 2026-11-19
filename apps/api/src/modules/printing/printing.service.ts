@@ -10,9 +10,17 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { PrintQuotaService } from '../print_quota/print_quota.service.js';
-import type { UpdatePrintJobStatusInput } from './printing.schemas.js';
+import type {
+  PrintJobsSummaryQuery,
+  UpdatePrintJobStatusInput,
+} from './printing.schemas.js';
 import { assertPrintingAvailable } from './printing_pause.js';
 import { assertTrayCapacity } from './tray_capacity.js';
+
+function parseDayBound(value: string | undefined, endOfDay: boolean): Date | undefined {
+  if (!value) return undefined;
+  return new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`);
+}
 
 type PaymentSnapshot = {
   status: PaymentStatus;
@@ -261,6 +269,66 @@ export class PrintingService {
       },
     });
     return { items: items.map(mapJob) };
+  }
+
+  async summarize(query: PrintJobsSummaryQuery) {
+    const paymentSelect = {
+      status: true,
+      amountPaise: true,
+      extraPages: true,
+      freePages: true,
+      paidAt: true,
+    } as const;
+    const from = parseDayBound(query.from, false);
+    const to = parseDayBound(query.to, true);
+    const items = await this.db.printJob.findMany({
+      where: {
+        ...(query.deviceId ? { deviceId: query.deviceId } : {}),
+        ...(from || to
+          ? {
+              createdAt: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+      include: {
+        device: { select: { name: true, site: { select: { name: true } } } },
+        payment: { select: paymentSelect },
+        otpChallenge: { select: { payment: { select: paymentSelect } } },
+        quickPrintSession: { select: { payment: { select: paymentSelect } } },
+      },
+    });
+
+    const mapped = items.map(mapJob);
+    let pages = 0;
+    let freePages = 0;
+    let paidPages = 0;
+    let freeJobs = 0;
+    let paidJobs = 0;
+    let mixedJobs = 0;
+
+    for (const job of mapped) {
+      pages += job.pageCount;
+      freePages += job.freePages;
+      paidPages += job.paidPages;
+      if (job.billing === 'free') freeJobs += 1;
+      else if (job.billing === 'paid') paidJobs += 1;
+      else if (job.billing === 'mixed') mixedJobs += 1;
+    }
+
+    return {
+      jobs: mapped.length,
+      pages,
+      freePages,
+      paidPages,
+      freeJobs,
+      paidJobs,
+      mixedJobs,
+    };
   }
 
   async get(jobId: string) {

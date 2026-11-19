@@ -11,6 +11,7 @@ import { PrintJobsPage } from '../features/print-jobs/PrintJobsPage';
 import { PaymentsPage } from '../features/payments/PaymentsPage';
 import { SupportPage } from '../features/support/SupportPage';
 import { FreePrintUsagePage } from '../features/print-quota/FreePrintUsagePage';
+import { UsagePage } from '../features/usage/UsagePage';
 import { SocietyPhonesPage } from '../features/society-phones/SocietyPhonesPage';
 import { EmergencyContactsPage } from '../features/emergency-contacts/EmergencyContactsPage';
 import { FindServicesPage } from '../features/find-services/FindServicesPage';
@@ -52,6 +53,7 @@ export function AppRouter() {
             <Route path="print-jobs" element={<PrintJobsPage />} />
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="support" element={<SupportPage />} />
+            <Route path="usage" element={<UsagePage />} />
             <Route path="print-quota" element={<FreePrintUsagePage />} />
             <Route path="society-phones" element={<SocietyPhonesPage />} />
             <Route path="emergency-contacts" element={<EmergencyContactsPage />} />

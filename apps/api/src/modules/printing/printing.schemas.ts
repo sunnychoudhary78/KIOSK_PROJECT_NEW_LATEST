@@ -25,4 +25,13 @@ export const printJobSupportSchema = z.object({
   message: z.string().trim().min(1).max(500),
 });
 
+const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const printJobsSummaryQuerySchema = z.object({
+  deviceId: z.string().uuid().optional(),
+  from: dateOnly.optional(),
+  to: dateOnly.optional(),
+});
+
 export type UpdatePrintJobStatusInput = z.infer<typeof updatePrintJobStatusSchema>;
+export type PrintJobsSummaryQuery = z.infer<typeof printJobsSummaryQuerySchema>;

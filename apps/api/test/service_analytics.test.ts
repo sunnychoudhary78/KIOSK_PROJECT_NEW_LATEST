@@ -79,15 +79,33 @@ describe('ServiceAnalyticsService', () => {
   });
 
   it('aggregates counts for a device in range', async () => {
-    const findUnique = vi.fn(async () => ({ id: deviceId }));
-    const groupBy = vi.fn(async () => [
-      { eventKey: 'home.print', _count: { _all: 5 } },
-      { eventKey: 'print.digilocker_print', _count: { _all: 12 } },
-      { eventKey: 'astrology.kundali', _count: { _all: 3 } },
-    ]);
+    const findUnique = vi.fn(async () => ({
+      id: deviceId,
+      name: 'Demo',
+      site: { name: 'Site' },
+    }));
+    const groupBy = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { eventKey: 'home.print', _count: { _all: 5 } },
+        { eventKey: 'print.digilocker_print', _count: { _all: 12 } },
+        { eventKey: 'astrology.kundali', _count: { _all: 3 } },
+      ])
+      .mockResolvedValueOnce([
+        { eventKey: 'home.print', _count: { _all: 2 } },
+        { eventKey: 'print.digilocker_print', _count: { _all: 8 } },
+      ]);
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([{ day: new Date('2026-10-15T00:00:00.000Z'), count: 10n }])
+      .mockResolvedValueOnce([
+        { hour: 10, count: 4n },
+        { hour: 14, count: 6n },
+      ]);
     const db = {
       device: { findUnique },
       serviceNavigationEvent: { groupBy },
+      $queryRaw: queryRaw,
     };
     const service = new ServiceAnalyticsService(db as unknown as DbClient);
 
@@ -104,7 +122,14 @@ describe('ServiceAnalyticsService', () => {
       { eventKey: 'home.print', count: 5 },
       { eventKey: 'astrology.kundali', count: 3 },
     ]);
-    expect(groupBy).toHaveBeenCalledOnce();
+    expect(result.totalClicks).toBe(20);
+    expect(result.previous.totalClicks).toBe(10);
+    expect(result.comparison.totalClicksDeltaPct).toBe(100);
+    expect(result.hourly).toHaveLength(24);
+    expect(result.hourly[10]).toEqual({ hour: 10, count: 4 });
+    expect(result.hourly[14]).toEqual({ hour: 14, count: 6 });
+    expect(groupBy).toHaveBeenCalledTimes(2);
+    expect(queryRaw).toHaveBeenCalledTimes(2);
   });
 
   it('throws not_found when device is missing', async () => {

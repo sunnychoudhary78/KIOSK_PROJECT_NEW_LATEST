@@ -33,6 +33,21 @@ export function registerServiceAnalyticsModule(router: Router, deps: AppDeps): v
   );
 
   router.get(
+    '/service-analytics',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
+    validateQuery(serviceAnalyticsQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const query = req.query as unknown as ServiceAnalyticsQuery;
+        res.json(await service.analyticsByDevice(query));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
     '/devices/:deviceId/service-analytics',
     authRequired(deps.config, ['admin']),
     requireAdminRole(UserRole.admin, UserRole.operator, UserRole.viewer),
