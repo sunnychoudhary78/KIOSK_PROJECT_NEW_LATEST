@@ -68,7 +68,8 @@ a {
   flex-direction: column;
   max-width: 28rem;
   margin: 0 auto;
-  overflow: clip;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .atmosphere {
@@ -175,6 +176,7 @@ a {
 
 .body {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1.05rem;
@@ -456,22 +458,28 @@ h1,
   padding: 0;
   display: grid;
   gap: 0.75rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .file-card {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  min-width: 0;
+  width: 100%;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 1.1rem;
-  padding: 0.95rem 1rem;
+  padding: 0.85rem 0.9rem;
 }
 
 .file-card-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  min-width: 0;
 }
 
 .file-card-meta {
@@ -486,7 +494,8 @@ h1,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  min-width: 0;
   padding-top: 0.15rem;
 }
 
@@ -499,26 +508,27 @@ h1,
 .copies-stepper {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
+  flex: none;
 }
 
 .copies-btn {
   flex: none;
-  width: 2.75rem;
-  height: 2.75rem;
-  min-height: 2.75rem;
-  border-radius: 0.85rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  border-radius: 0.8rem;
   background: var(--canvas-deep);
   color: var(--ink);
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   font-weight: 700;
   line-height: 1;
 }
 
 .copies-value {
-  min-width: 2.5rem;
+  min-width: 2.25rem;
   text-align: center;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -533,12 +543,13 @@ h1,
 .file-remove {
   flex: none;
   align-self: flex-start;
-  min-height: 2.5rem;
-  padding: 0.45rem 0.85rem;
+  margin-left: auto;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.75rem;
   border-radius: 0.75rem;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 

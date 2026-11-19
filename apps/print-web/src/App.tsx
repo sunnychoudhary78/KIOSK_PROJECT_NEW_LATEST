@@ -308,27 +308,31 @@ function SessionPage() {
     }
     setError(null);
 
-    const additions: UploadFile[] = [];
+    const existing = new Set(files.map((item) => fileKey(item.file)));
+    const nextAdditions: UploadFile[] = [];
+    for (const file of incoming) {
+      const key = fileKey(file);
+      if (existing.has(key)) continue;
+      existing.add(key);
+      nextAdditions.push({
+        file,
+        copies: 1,
+        pageCount: null,
+        pageStatus: 'pending',
+      });
+    }
+    if (nextAdditions.length === 0) {
+      return;
+    }
+
     setFiles((prev) => {
-      const existing = new Set(prev.map((item) => fileKey(item.file)));
-      const nextAdditions: UploadFile[] = [];
-      for (const file of incoming) {
-        const key = fileKey(file);
-        if (existing.has(key)) continue;
-        existing.add(key);
-        nextAdditions.push({
-          file,
-          copies: 1,
-          pageCount: null,
-          pageStatus: 'pending',
-        });
-      }
-      additions.splice(0, additions.length, ...nextAdditions);
-      if (nextAdditions.length === 0) return prev;
-      return [...prev, ...nextAdditions];
+      const seen = new Set(prev.map((item) => fileKey(item.file)));
+      const unique = nextAdditions.filter((item) => !seen.has(fileKey(item.file)));
+      if (unique.length === 0) return prev;
+      return [...prev, ...unique];
     });
 
-    for (const item of additions) {
+    for (const item of nextAdditions) {
       const key = fileKey(item.file);
       void (async () => {
         try {
