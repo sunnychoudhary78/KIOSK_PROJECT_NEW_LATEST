@@ -28,9 +28,13 @@ class ServiceRatingPage extends ConsumerWidget {
       showHome: false,
       body: ServiceRatingPrompt(
         onSkip: () => _finish(context),
-        onRated: (stars) {
+        onSubmitted: (stars, feedback) {
           unawaited(
-            ref.read(serviceRatingsTrackerProvider).submit(serviceKey, stars),
+            ref.read(serviceRatingsTrackerProvider).submit(
+                  serviceKey,
+                  stars,
+                  feedback: feedback,
+                ),
           );
           _finish(context);
         },

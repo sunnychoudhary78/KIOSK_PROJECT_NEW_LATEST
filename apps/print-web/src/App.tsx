@@ -16,11 +16,20 @@ import {
   type AstrologyPrintCheckout,
   type QuickPrintSession,
 } from './api';
+import { countUploadPages, isPdf } from './count_pages';
 
 const PLAY_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.imt.skp_mobile';
 
 type Step = 'chooser' | 'identity' | 'upload' | 'pay' | 'done' | 'error';
+
+type UploadFile = {
+  file: File;
+  copies: number;
+  /** null while pending or when count failed */
+  pageCount: number | null;
+  pageStatus: 'pending' | 'ready' | 'error';
+};
 
 function formatMoney(paise: number): string {
   return `₹${(paise / 100).toFixed(0)}`;
@@ -215,7 +224,7 @@ function SessionPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('chooser');
   const [session, setSession] = useState<QuickPrintSession | null>(null);
-  const [files, setFiles] = useState<Array<{ file: File; copies: number }>>([]);
+  const [files, setFiles] = useState<UploadFile[]>([]);
   const [colorMode, setColorMode] = useState<'bw' | 'color'>('bw');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -276,6 +285,10 @@ function SessionPage() {
       : session.printLimits.extraPageChargeRupees;
   }, [colorMode, session]);
 
+  function fileKey(file: File): string {
+    return `${file.name}:${file.size}`;
+  }
+
   function addFiles(list: FileList | null) {
     const incoming = Array.from(list ?? []).filter((file) => {
       const name = file.name.toLowerCase();
@@ -290,21 +303,54 @@ function SessionPage() {
         name.endsWith('.png')
       );
     });
-    if (incoming.length > 0) {
-      setError(null);
+    if (incoming.length === 0) {
+      return;
     }
+    setError(null);
+
+    const additions: UploadFile[] = [];
     setFiles((prev) => {
-      const map = new Map<string, { file: File; copies: number }>(
-        prev.map((item) => [`${item.file.name}:${item.file.size}`, item]),
-      );
+      const existing = new Set(prev.map((item) => fileKey(item.file)));
+      const nextAdditions: UploadFile[] = [];
       for (const file of incoming) {
-        const key = `${file.name}:${file.size}`;
-        if (!map.has(key)) {
-          map.set(key, { file, copies: 1 });
-        }
+        const key = fileKey(file);
+        if (existing.has(key)) continue;
+        existing.add(key);
+        nextAdditions.push({
+          file,
+          copies: 1,
+          pageCount: null,
+          pageStatus: 'pending',
+        });
       }
-      return Array.from(map.values());
+      additions.splice(0, additions.length, ...nextAdditions);
+      if (nextAdditions.length === 0) return prev;
+      return [...prev, ...nextAdditions];
     });
+
+    for (const item of additions) {
+      const key = fileKey(item.file);
+      void (async () => {
+        try {
+          const pages = await countUploadPages(item.file);
+          setFiles((current) =>
+            current.map((row) =>
+              fileKey(row.file) === key
+                ? { ...row, pageCount: pages, pageStatus: 'ready' }
+                : row,
+            ),
+          );
+        } catch {
+          setFiles((current) =>
+            current.map((row) =>
+              fileKey(row.file) === key
+                ? { ...row, pageCount: null, pageStatus: 'error' }
+                : row,
+            ),
+          );
+        }
+      })();
+    }
   }
 
   function removeFile(index: number) {
@@ -321,6 +367,15 @@ function SessionPage() {
       prev.map((item, i) => (i === index ? { ...item, copies: next } : item)),
     );
   }
+
+  const billablePreview = useMemo(() => {
+    if (files.length === 0) return null;
+    if (files.some((f) => f.pageStatus === 'pending')) return 'counting' as const;
+    if (files.some((f) => f.pageStatus !== 'ready' || f.pageCount == null)) {
+      return null;
+    }
+    return files.reduce((sum, f) => sum + (f.pageCount ?? 0) * f.copies, 0);
+  }, [files]);
 
   async function onRequestOtp() {
     const phoneDigits = digitsOnly(phone, 10);
@@ -859,6 +914,15 @@ function SessionPage() {
       footer={
         <>
           {error ? <p className="banner error">{error}</p> : null}
+          {files.length > 0 ? (
+            <p className="upload-total" aria-live="polite">
+              {billablePreview === 'counting'
+                ? 'Counting pages…'
+                : typeof billablePreview === 'number'
+                  ? `Total: ${billablePreview} billable page${billablePreview === 1 ? '' : 's'}`
+                  : 'Page totals will be confirmed after upload'}
+            </p>
+          ) : null}
           <button className="primary" type="button" disabled={busy || files.length === 0} onClick={() => void onUpload()}>
             {busy ? 'Uploading…' : files.length ? `Send ${files.length} file${files.length === 1 ? '' : 's'} to kiosk` : 'Send to kiosk'}
           </button>
@@ -903,48 +967,68 @@ function SessionPage() {
       </label>
       {files.length > 0 ? (
         <ul className="files">
-          {files.map((item, index) => (
-            <li className="file-chip" key={`${item.file.name}-${item.file.size}-${index}`}>
-              <span className="file-thumb">
-                {item.file.name.toLowerCase().endsWith('.pdf') || item.file.type === 'application/pdf'
-                  ? 'PDF'
-                  : 'IMG'}
-              </span>
-              <span className="file-meta">
-                <strong>{item.file.name}</strong>
-                <span>{formatBytes(item.file.size)}</span>
-              </span>
-              <div className="copies-stepper" aria-label={`Copies for ${item.file.name}`}>
-                <button
-                  className="icon-btn"
-                  type="button"
-                  aria-label="Fewer copies"
-                  disabled={item.copies <= 1}
-                  onClick={() => setFileCopies(index, item.copies - 1)}
-                >
-                  −
-                </button>
-                <span className="copies-value">{item.copies}×</span>
-                <button
-                  className="icon-btn"
-                  type="button"
-                  aria-label="More copies"
-                  disabled={item.copies >= 10}
-                  onClick={() => setFileCopies(index, item.copies + 1)}
-                >
-                  +
-                </button>
-              </div>
-              <button
-                className="icon-btn"
-                type="button"
-                aria-label={`Remove ${item.file.name}`}
-                onClick={() => removeFile(index)}
-              >
-                ×
-              </button>
-            </li>
-          ))}
+          {files.map((item, index) => {
+            const pdf = isPdf(item.file);
+            const sizeLabel = formatBytes(item.file.size);
+            const metaLabel =
+              item.pageStatus === 'pending'
+                ? `Counting… · ${sizeLabel}`
+                : item.pageStatus === 'ready' && item.pageCount != null
+                  ? `${item.pageCount} page${item.pageCount === 1 ? '' : 's'} · ${sizeLabel}`
+                  : `Pages unknown · ${sizeLabel}`;
+            const billable =
+              item.pageStatus === 'ready' && item.pageCount != null
+                ? item.pageCount * item.copies
+                : null;
+            return (
+              <li className="file-card" key={`${item.file.name}-${item.file.size}-${index}`}>
+                <div className="file-card-top">
+                  <span className="file-thumb">{pdf ? 'PDF' : 'IMG'}</span>
+                  <div className="file-meta">
+                    <strong title={item.file.name}>{item.file.name}</strong>
+                    <span className="file-card-meta">{metaLabel}</span>
+                  </div>
+                  <button
+                    className="file-remove"
+                    type="button"
+                    aria-label={`Remove ${item.file.name}`}
+                    onClick={() => removeFile(index)}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="file-card-copies">
+                  <span className="copies-label">Copies</span>
+                  <div className="copies-stepper" aria-label={`Copies for ${item.file.name}`}>
+                    <button
+                      className="copies-btn"
+                      type="button"
+                      aria-label="Fewer copies"
+                      disabled={item.copies <= 1}
+                      onClick={() => setFileCopies(index, item.copies - 1)}
+                    >
+                      −
+                    </button>
+                    <span className="copies-value">{item.copies}×</span>
+                    <button
+                      className="copies-btn"
+                      type="button"
+                      aria-label="More copies"
+                      disabled={item.copies >= 10}
+                      onClick={() => setFileCopies(index, item.copies + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                {billable != null && item.copies > 1 ? (
+                  <p className="file-billable">
+                    {item.pageCount} page{item.pageCount === 1 ? '' : 's'} × {item.copies} copies = {billable}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </AppShell>
