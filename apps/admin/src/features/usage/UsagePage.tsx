@@ -196,6 +196,7 @@ function MetricCard({
   value,
   hint,
   deltaPct,
+  split,
   icon: Icon,
   tone = 'primary',
 }: {
@@ -203,6 +204,8 @@ function MetricCard({
   value: string;
   hint?: string;
   deltaPct?: number | null;
+  /** Optional free/paid breakdown. Pass `total` when free+paid should equal the headline. */
+  split?: { free: number; paid: number; unit?: string; total?: number };
   icon: typeof Activity;
   tone?: 'primary' | 'success' | 'warning' | 'slate';
 }) {
@@ -226,6 +229,11 @@ function MetricCard({
   const deltaLabel = formatDeltaPct(deltaPct);
   const deltaUp = (deltaPct ?? 0) > 0;
   const deltaDown = (deltaPct ?? 0) < 0;
+  const splitSum = split ? split.free + split.paid : 0;
+  const splitTotal = Math.max(1, split?.total ?? splitSum);
+  const unit = split?.unit ?? '';
+  const splitBalances =
+    split != null && split.total != null ? splitSum === split.total : false;
 
   return (
     <div className={cn('flex items-center gap-3 rounded-lg border px-3 py-2.5', toneClass)}>
@@ -256,10 +264,42 @@ function MetricCard({
             </span>
           ) : null}
         </div>
-        <div className="truncate text-[11px] text-muted-foreground">
-          {label}
-          {hint ? ` · ${hint}` : ''}
+        <div className="text-[11px] leading-snug text-muted-foreground">
+          <span className="font-medium text-foreground/80">{label}</span>
+          {hint ? <span className="text-muted-foreground"> · {hint}</span> : null}
         </div>
+        {split ? (
+          <div className="mt-1.5 space-y-1">
+            <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${(split.free / splitTotal) * 100}%` }}
+                title={`Free ${split.free}${unit}`}
+              />
+              <div
+                className="h-full bg-sky-500"
+                style={{ width: `${(split.paid / splitTotal) * 100}%` }}
+                title={`Paid ${split.paid}${unit}`}
+              />
+            </div>
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] tabular-nums text-muted-foreground">
+              <span className="text-emerald-700">
+                {split.free}
+                {unit} free
+              </span>
+              <span className="text-sky-700">
+                {split.paid}
+                {unit} paid
+              </span>
+              {splitBalances ? (
+                <span className="text-muted-foreground/80">
+                  = {splitSum}
+                  {unit}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -272,45 +312,74 @@ function HourHeatmap({ hours }: { hours: Array<{ hour: number; count: number }> 
     null as { hour: number; count: number } | null,
   );
 
-  function cellColor(count: number) {
-    if (count <= 0) return 'bg-slate-100 text-slate-400';
-    const t = count / max;
-    if (t >= 0.75) return 'bg-sky-600 text-white';
-    if (t >= 0.5) return 'bg-sky-500 text-white';
-    if (t >= 0.25) return 'bg-sky-300 text-sky-950';
-    return 'bg-sky-100 text-sky-800';
-  }
-
   function labelHour(hour: number) {
     const suffix = hour < 12 ? 'a' : 'p';
     const h12 = hour % 12 === 0 ? 12 : hour % 12;
     return `${h12}${suffix}`;
   }
 
+  function barTone(count: number) {
+    if (count <= 0) return 'bg-slate-200';
+    const t = count / max;
+    if (t >= 0.75) return 'bg-sky-600';
+    if (t >= 0.5) return 'bg-sky-500';
+    if (t >= 0.25) return 'bg-sky-400';
+    return 'bg-sky-300';
+  }
+
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>IST · 24h pattern</span>
-        <span>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>IST · 24h</span>
+        <span className="font-medium text-foreground">
           {peak && peak.count > 0
             ? `Peak ${labelHour(peak.hour)} · ${peak.count}`
             : 'No peak yet'}
         </span>
       </div>
-      <div className="grid grid-cols-8 gap-1 sm:grid-cols-12">
-        {hours.map((row) => (
-          <div
-            key={row.hour}
-            title={`${String(row.hour).padStart(2, '0')}:00 — ${row.count} clicks`}
-            className={cn(
-              'flex aspect-square flex-col items-center justify-center rounded-md text-[10px] font-medium tabular-nums',
-              cellColor(row.count),
-            )}
-          >
-            <span className="leading-none opacity-80">{labelHour(row.hour)}</span>
-            <span className="mt-0.5 leading-none">{row.count || '·'}</span>
-          </div>
+
+      <div className="flex h-28 items-stretch gap-0.5 rounded-lg border border-border/70 bg-slate-50/60 px-2 py-2 sm:gap-1">
+        {hours.map((row) => {
+          const heightPct = row.count <= 0 ? 6 : Math.max(10, Math.round((row.count / max) * 100));
+          const isPeak = peak?.hour === row.hour && peak.count > 0;
+          return (
+            <div
+              key={row.hour}
+              className="group relative flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+              title={`${String(row.hour).padStart(2, '0')}:00 — ${row.count} clicks`}
+            >
+              <span className="pointer-events-none absolute bottom-full z-10 mb-1 hidden rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-medium text-white group-hover:block">
+                {row.count}
+              </span>
+              <div
+                className={cn(
+                  'w-full max-w-[12px] rounded-t-sm transition-all',
+                  barTone(row.count),
+                  isPeak && 'ring-2 ring-sky-700/25 ring-offset-1',
+                )}
+                style={{ height: `${heightPct}%` }}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-between px-1 text-[10px] tabular-nums text-muted-foreground">
+        {[0, 6, 12, 18, 23].map((hour) => (
+          <span key={hour}>{labelHour(hour)}</span>
         ))}
+      </div>
+
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-sm bg-slate-200" /> Low
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-sm bg-sky-400" /> Mid
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-sm bg-sky-600" /> High
+        </span>
       </div>
     </div>
   );
@@ -767,16 +836,29 @@ export function UsagePage() {
   const idleKiosks = fleet?.idleKiosks ?? [];
   const sites = fleet?.sites ?? [];
   const siteMax = Math.max(1, ...sites.map((site) => site.totalClicks));
-  const printBillingHint = prints
-    ? [
-        `${prints.freeJobs} free`,
-        `${prints.paidJobs} paid`,
-        prints.mixedJobs > 0 ? `${prints.mixedJobs} mixed` : null,
-        (prints.otherJobs ?? 0) > 0 ? `${prints.otherJobs} other` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : undefined;
+  const printJobSplit = prints
+    ? {
+        free: prints.freeJobs,
+        paid: prints.paidJobs,
+        total: prints.freeJobs + prints.paidJobs,
+      }
+    : null;
+  const printPageSplit = prints
+    ? {
+        free: prints.freePages,
+        paid: prints.paidPages,
+        unit: ' pg',
+        total: prints.pages,
+      }
+    : null;
+  const paymentPageSplit = payments
+    ? {
+        free: payments.freePages ?? 0,
+        paid: payments.paidPages ?? 0,
+        unit: ' pg',
+        total: (payments.freePages ?? 0) + (payments.paidPages ?? 0),
+      }
+    : null;
 
   function onDownload() {
     if (!detail || !selectedDevice) return;
@@ -996,9 +1078,10 @@ export function UsagePage() {
             <MetricCard
               label="Payment intents"
               value={payments ? String(payments.totalCount) : overlayLoading ? '…' : '—'}
-              hint={
-                payments
-                  ? `${payments.freePages ?? 0} free pg · ${payments.paidPages ?? 0} paid pg`
+              hint={payments ? `${payments.paidCount} paid` : undefined}
+              split={
+                paymentPageSplit && paymentPageSplit.free + paymentPageSplit.paid > 0
+                  ? paymentPageSplit
                   : undefined
               }
               icon={CreditCard}
@@ -1007,18 +1090,25 @@ export function UsagePage() {
             <MetricCard
               label="Print jobs"
               value={prints ? String(prints.jobs) : overlayLoading ? '…' : '—'}
-              hint={printBillingHint}
+              hint={
+                prints
+                  ? [
+                      prints.mixedJobs > 0 ? `${prints.mixedJobs} mixed` : null,
+                      (prints.otherJobs ?? 0) > 0 ? `${prints.otherJobs} other` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || undefined
+                  : undefined
+              }
+              split={printJobSplit ?? undefined}
               icon={Printer}
               tone="slate"
             />
             <MetricCard
               label="Pages printed"
               value={prints ? String(prints.pages) : overlayLoading ? '…' : '—'}
-              hint={
-                prints
-                  ? `${prints.freePages} free pg · ${prints.paidPages} paid pg`
-                  : undefined
-              }
+              hint={prints ? 'free + paid' : undefined}
+              split={printPageSplit ?? undefined}
               icon={Printer}
               tone="warning"
             />
@@ -1041,14 +1131,14 @@ export function UsagePage() {
               ) : !fleet || fleet.items.length === 0 ? (
                 <EmptyState title="No fleet data" description="No kiosks found for this range." />
               ) : (
-                <div className="max-h-72 overflow-auto rounded-lg border border-border">
+                <div className="overflow-hidden rounded-lg border border-border">
                   <table className="table w-full">
                     <thead>
                       <tr className="bg-slate-50/90">
-                        <th className="w-12">#</th>
+                        <th className="w-10">#</th>
                         <th>Kiosk</th>
-                        <th className="w-[36%]">Share</th>
-                        <th className="w-24 text-right">Clicks</th>
+                        <th className="w-[32%]">Share</th>
+                        <th className="w-20 text-right">Clicks</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1064,23 +1154,25 @@ export function UsagePage() {
                             )}
                             onClick={() => setDeviceId(item.deviceId)}
                           >
-                            <td className="tabular-nums text-muted-foreground">{index + 1}</td>
-                            <td>
-                              <div className="font-medium">{item.name}</div>
+                            <td className="py-2 tabular-nums text-muted-foreground">{index + 1}</td>
+                            <td className="py-2">
+                              <div className="truncate text-sm font-medium">{item.name}</div>
                               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                {item.siteName ? <span>{item.siteName}</span> : null}
+                                {item.siteName ? (
+                                  <span className="truncate">{item.siteName}</span>
+                                ) : null}
                                 <StatusBadge status={item.status} />
                               </div>
                             </td>
-                            <td>
-                              <div className="h-2 overflow-hidden rounded-md bg-slate-100">
+                            <td className="py-2">
+                              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                                 <div
-                                  className="h-full rounded-md bg-sky-500/80"
+                                  className="h-full rounded-full bg-sky-500/80"
                                   style={{ width: `${share}%` }}
                                 />
                               </div>
                             </td>
-                            <td className="text-right text-sm font-semibold tabular-nums">
+                            <td className="py-2 text-right text-sm font-semibold tabular-nums">
                               {item.totalClicks}
                             </td>
                           </tr>
@@ -1101,7 +1193,7 @@ export function UsagePage() {
             >
               {loading ? (
                 <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                  Loading heatmap…
+                  Loading chart…
                 </div>
               ) : (
                 <HourHeatmap hours={hourly} />
@@ -1122,7 +1214,7 @@ export function UsagePage() {
               ) : sites.length === 0 ? (
                 <EmptyState title="No sites" description="Sites appear once kiosks are assigned." />
               ) : (
-                <div className="max-h-72 space-y-2.5 overflow-auto pr-1">
+                <div className="space-y-2.5">
                   {sites.map((site) => {
                     const share = (site.totalClicks / siteMax) * 100;
                     return (
@@ -1136,9 +1228,9 @@ export function UsagePage() {
                             </span>
                           </span>
                         </div>
-                        <div className="h-2 overflow-hidden rounded-md bg-slate-100">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className="h-full rounded-md bg-emerald-500/80"
+                            className="h-full rounded-full bg-emerald-500/80"
                             style={{ width: `${share}%` }}
                           />
                         </div>
