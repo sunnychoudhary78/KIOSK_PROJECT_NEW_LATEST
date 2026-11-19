@@ -38,11 +38,25 @@ function pickPayment(job: {
   return job.payment ?? job.otpChallenge?.payment ?? job.quickPrintSession?.payment ?? null;
 }
 
+/** Keep free + paid equal to pageCount so Usage totals never disagree. */
+function splitPages(pageCount: number, freeRaw: number, paidRaw: number) {
+  const total = Math.max(0, pageCount);
+  const freePages = Math.min(Math.max(0, freeRaw), total);
+  const paidPages = Math.min(Math.max(0, paidRaw), total - freePages);
+  const remainder = total - freePages - paidPages;
+  if (remainder <= 0) {
+    return { freePages, paidPages };
+  }
+  // Prefer assigning leftover to the side that already has pages.
+  if (paidPages > 0) return { freePages, paidPages: paidPages + remainder };
+  return { freePages: freePages + remainder, paidPages };
+}
+
 function mapBilling(
   job: { pageCount: number; freePagesGranted?: number | null },
   payment: PaymentSnapshot,
 ) {
-  const freePages = job.freePagesGranted ?? payment?.freePages ?? 0;
+  const freeRaw = job.freePagesGranted ?? payment?.freePages ?? 0;
   const pageCount = job.pageCount;
   if (payment && payment.amountPaise > 0) {
     const billing =
@@ -51,31 +65,44 @@ function mapBilling(
         : payment.status === PaymentStatus.PENDING
           ? 'awaiting_payment'
           : 'unpaid';
+    const paidRaw =
+      payment.extraPages > 0 ? payment.extraPages : Math.max(0, pageCount - freeRaw);
+    const { freePages, paidPages } = splitPages(pageCount, freeRaw, paidRaw);
     return {
       billing,
       amountPaise: payment.amountPaise,
       paymentStatus: payment.status,
       freePages,
-      paidPages: payment.extraPages > 0 ? payment.extraPages : Math.max(0, pageCount - freePages),
+      paidPages,
       paidAt: payment.paidAt?.toISOString() ?? null,
     };
   }
-  if (freePages > 0 && freePages < pageCount) {
+  if (freeRaw > 0 && freeRaw < pageCount) {
+    const { freePages, paidPages } = splitPages(
+      pageCount,
+      freeRaw,
+      Math.max(0, pageCount - freeRaw),
+    );
     return {
       billing: 'mixed' as const,
       amountPaise: 0,
       paymentStatus: payment?.status ?? null,
       freePages,
-      paidPages: Math.max(0, pageCount - freePages),
+      paidPages,
       paidAt: payment?.paidAt?.toISOString() ?? null,
     };
   }
+  const { freePages, paidPages } = splitPages(
+    pageCount,
+    freeRaw > 0 ? freeRaw : pageCount,
+    0,
+  );
   return {
     billing: 'free' as const,
     amountPaise: 0,
     paymentStatus: payment?.status ?? null,
-    freePages: freePages > 0 ? freePages : pageCount,
-    paidPages: 0,
+    freePages,
+    paidPages,
     paidAt: null,
   };
 }
@@ -318,9 +345,10 @@ export class PrintingService {
     let otherJobs = 0;
 
     for (const job of mapped) {
+      const split = splitPages(job.pageCount, job.freePages, job.paidPages);
       pages += job.pageCount;
-      freePages += job.freePages;
-      paidPages += job.paidPages;
+      freePages += split.freePages;
+      paidPages += split.paidPages;
       if (job.billing === 'free') freeJobs += 1;
       else if (job.billing === 'paid') paidJobs += 1;
       else if (job.billing === 'mixed') mixedJobs += 1;
