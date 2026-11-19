@@ -321,25 +321,10 @@ const HOUR_SERVICE_COLORS = [
   'oklch(0.5 0.06 260)',
 ];
 
-type PatternPeriod = 'today' | 'weekly' | 'monthly' | 'custom';
-
-const PATTERN_PERIODS: Array<{ value: PatternPeriod; label: string }> = [
-  { value: 'today', label: 'Today' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'custom', label: 'Custom' },
-];
-
 function labelHour(hour: number) {
   const suffix = hour < 12 ? 'AM' : 'PM';
   const h12 = hour % 12 === 0 ? 12 : hour % 12;
   return `${h12} ${suffix}`;
-}
-
-function formatDayLabel(isoDate: string) {
-  const d = new Date(`${isoDate}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return isoDate.slice(5);
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 function sumHours(
@@ -353,86 +338,22 @@ function sumHours(
   }, 0);
 }
 
-function rangeForPatternPeriod(period: Exclude<PatternPeriod, 'custom'>) {
-  if (period === 'today') return rangeForPreset('today');
-  if (period === 'weekly') return rangeForPreset('7');
-  return rangeForPreset('30');
-}
-
 function HourHeatmap({
-  deviceId,
-  token,
-  hours: initialHours,
-  byService: initialByService,
-  daily: initialDaily,
+  hours,
+  byService,
 }: {
-  deviceId: string;
-  token: string | null;
   hours: Array<{ hour: number; count: number }>;
   byService: Array<{
     serviceKey: string;
     total: number;
     hours: Array<{ hour: number; count: number }>;
   }>;
-  daily: Array<{ date: string; count: number }>;
 }) {
-  const [period, setPeriod] = useState<PatternPeriod>('today');
   const [selected, setSelected] = useState<string[]>([]);
-  const [hours, setHours] = useState(initialHours);
-  const [byService, setByService] = useState(initialByService);
-  const [daily, setDaily] = useState(initialDaily);
-  const [loading, setLoading] = useState(false);
-  const [fromLocal, setFromLocal] = useState(() => rangeForPreset('today').fromLocal);
-  const [toLocal, setToLocal] = useState(() => rangeForPreset('today').toLocal);
-
-  const loadPeriod = useCallback(
-    async (next: PatternPeriod, customFrom?: string, customTo?: string) => {
-      if (!deviceId) return;
-      let fromIso: string;
-      let toIso: string;
-      if (next === 'custom') {
-        const from = fromDatetimeLocalValue(customFrom ?? fromLocal);
-        const to = fromDatetimeLocalValue(customTo ?? toLocal);
-        if (!from || !to || from > to) return;
-        fromIso = from.toISOString();
-        toIso = to.toISOString();
-      } else {
-        const range = rangeForPatternPeriod(next);
-        fromIso = range.fromIso;
-        toIso = range.toIso;
-        setFromLocal(range.fromLocal);
-        setToLocal(range.toLocal);
-      }
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({ from: fromIso, to: toIso });
-        const result = await apiRequest<DeviceUsageResponse>(
-          `/devices/${deviceId}/service-analytics?${params}`,
-          { token },
-        );
-        setHours(
-          result.hourly ?? Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 })),
-        );
-        setByService(result.hourlyByService ?? []);
-        setDaily(result.daily ?? []);
-      } catch {
-        /* keep last good data */
-      } finally {
-        setLoading(false);
-      }
-    },
-    [deviceId, token, fromLocal, toLocal],
-  );
 
   useEffect(() => {
-    // Panel owns its range — default to today so AM/PM graph matches "Today".
-    void loadPeriod('today');
-    setPeriod('today');
     setSelected([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when kiosk changes
-  }, [deviceId]);
-
-  const showDailyGraph = period === 'weekly' || period === 'monthly' || period === 'custom';
+  }, [hours, byService]);
 
   const serviceOptions = useMemo(
     () =>
@@ -508,13 +429,6 @@ function HourHeatmap({
   const night = sumHours(combined, 22, 23) + sumHours(combined, 0, 5);
   const avgHour = Math.round((hourTotal / 24) * 10) / 10;
 
-  const maxDay = Math.max(1, ...daily.map((d) => d.count));
-  const peakDay = daily.reduce(
-    (best, row) => (!best || row.count > best.count ? row : best),
-    null as { date: string; count: number } | null,
-  );
-  const dayTotal = daily.reduce((sum, row) => sum + row.count, 0);
-
   function toggleService(value: string) {
     setSelected((current) =>
       current.includes(value)
@@ -523,66 +437,8 @@ function HourHeatmap({
     );
   }
 
-  function onPeriodChange(next: PatternPeriod) {
-    setPeriod(next);
-    setSelected([]);
-    if (next !== 'custom') {
-      void loadPeriod(next);
-    }
-  }
-
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-1.5">
-        {PATTERN_PERIODS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onPeriodChange(opt.value)}
-            className={cn(
-              'rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors',
-              period === opt.value
-                ? 'border-sky-400 bg-sky-600 text-white'
-                : 'border-border bg-card text-muted-foreground hover:bg-slate-50',
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      {period === 'custom' ? (
-        <div className="flex flex-col gap-2 rounded-md border border-border/80 bg-slate-50/60 p-2 sm:flex-row sm:items-end">
-          <label className="min-w-0 flex-1 space-y-1 text-[11px] text-muted-foreground">
-            From
-            <Input
-              type="datetime-local"
-              value={fromLocal}
-              onChange={(e) => setFromLocal(e.target.value)}
-              className="h-8 bg-card"
-            />
-          </label>
-          <label className="min-w-0 flex-1 space-y-1 text-[11px] text-muted-foreground">
-            To
-            <Input
-              type="datetime-local"
-              value={toLocal}
-              onChange={(e) => setToLocal(e.target.value)}
-              className="h-8 bg-card"
-            />
-          </label>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-8 px-3"
-            disabled={loading}
-            onClick={() => void loadPeriod('custom')}
-          >
-            Apply
-          </Button>
-        </div>
-      ) : null}
-
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
@@ -625,136 +481,47 @@ function HourHeatmap({
         })}
       </div>
 
-      {loading ? (
-        <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-          Loading graph…
-        </div>
-      ) : showDailyGraph ? (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <div className="rounded-md border border-border/80 bg-slate-50/70 px-2.5 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Total clicks
-              </div>
-              <div className="text-sm font-semibold tabular-nums">{dayTotal}</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { label: 'Morning', value: morning, hint: '6 AM – 12 PM' },
+          { label: 'Afternoon', value: afternoon, hint: '12 PM – 5 PM' },
+          { label: 'Evening', value: evening, hint: '5 PM – 10 PM' },
+          { label: 'Night', value: night, hint: '10 PM – 6 AM' },
+        ].map((block) => (
+          <div
+            key={block.label}
+            className="rounded-md border border-border/80 bg-slate-50/70 px-2.5 py-2"
+          >
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {block.label}
             </div>
-            <div className="rounded-md border border-border/80 bg-slate-50/70 px-2.5 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Days
-              </div>
-              <div className="text-sm font-semibold tabular-nums">{daily.length}</div>
-            </div>
-            <div className="rounded-md border border-border/80 bg-slate-50/70 px-2.5 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Peak day
-              </div>
-              <div className="text-sm font-semibold tabular-nums">
-                {peakDay && peakDay.count > 0 ? peakDay.count : '—'}
-              </div>
-              <div className="text-[10px] text-muted-foreground">
-                {peakDay && peakDay.count > 0 ? formatDayLabel(peakDay.date) : 'No peak'}
-              </div>
-            </div>
+            <div className="text-sm font-semibold tabular-nums">{block.value}</div>
+            <div className="text-[10px] text-muted-foreground">{block.hint}</div>
           </div>
+        ))}
+      </div>
 
-          <div className="flex h-36 items-stretch gap-1 overflow-x-auto rounded-lg border border-border/70 bg-slate-50/60 px-2 py-2">
-            {daily.length === 0 ? (
-              <div className="flex w-full items-center justify-center text-sm text-muted-foreground">
-                No clicks in this range
-              </div>
-            ) : (
-              daily.map((row) => {
-                const heightPct =
-                  row.count <= 0 ? 6 : Math.max(10, Math.round((row.count / maxDay) * 100));
-                const isPeak = peakDay?.date === row.date && peakDay.count > 0;
-                return (
-                  <div
-                    key={row.date}
-                    className="group relative flex h-full min-w-[1.35rem] flex-1 flex-col items-center justify-end"
-                    title={`${formatDayLabel(row.date)} — ${row.count} clicks`}
-                  >
-                    <span className="pointer-events-none absolute bottom-full z-10 mb-1 hidden rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-medium text-white group-hover:block">
-                      {row.count}
-                    </span>
-                    <div
-                      className={cn(
-                        'w-full max-w-[18px] rounded-t-sm bg-sky-500',
-                        isPeak && 'bg-sky-700 ring-2 ring-sky-700/25 ring-offset-1',
-                      )}
-                      style={{ height: `${heightPct}%` }}
-                    />
-                  </div>
-                );
-              })
-            )}
-          </div>
-          <div className="flex justify-between gap-2 px-1 text-[10px] text-muted-foreground">
-            <span>{daily[0] ? formatDayLabel(daily[0].date) : '—'}</span>
-            <span className="font-medium text-foreground">
-              {period === 'weekly' ? 'Weekly' : period === 'monthly' ? 'Monthly' : 'Custom'}{' '}
-              trend
-            </span>
-            <span>{daily[daily.length - 1] ? formatDayLabel(daily[daily.length - 1]!.date) : '—'}</span>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>
+          IST · avg {avgHour}/hr
+          {quietHour && quietHour.count > 0
+            ? ` · quietest ${labelHour(quietHour.hour)}`
+            : ''}
+        </span>
+        <span className="font-medium text-foreground">
+          {peakHour && peakHour.count > 0
+            ? `Peak ${labelHour(peakHour.hour)} · ${peakHour.count}`
+            : 'No peak yet'}
+        </span>
+      </div>
 
-          <div className="border-t border-border/70 pt-3">
-            <div className="mb-2 text-[11px] font-medium text-muted-foreground">
-              Hour pattern (AM / PM) for this range
-            </div>
-            <HourBars
-              combined={combined}
-              max={maxHour}
-              peak={peakHour}
-              multiMode={multiMode}
-              series={series}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              { label: 'Morning', value: morning, hint: '6 AM – 12 PM' },
-              { label: 'Afternoon', value: afternoon, hint: '12 PM – 5 PM' },
-              { label: 'Evening', value: evening, hint: '5 PM – 10 PM' },
-              { label: 'Night', value: night, hint: '10 PM – 6 AM' },
-            ].map((block) => (
-              <div
-                key={block.label}
-                className="rounded-md border border-border/80 bg-slate-50/70 px-2.5 py-2"
-              >
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {block.label}
-                </div>
-                <div className="text-sm font-semibold tabular-nums">{block.value}</div>
-                <div className="text-[10px] text-muted-foreground">{block.hint}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-            <span>
-              IST · avg {avgHour}/hr
-              {quietHour && quietHour.count > 0
-                ? ` · quietest ${labelHour(quietHour.hour)}`
-                : ''}
-            </span>
-            <span className="font-medium text-foreground">
-              {peakHour && peakHour.count > 0
-                ? `Peak ${labelHour(peakHour.hour)} · ${peakHour.count}`
-                : 'No peak yet'}
-            </span>
-          </div>
-
-          <HourBars
-            combined={combined}
-            max={maxHour}
-            peak={peakHour}
-            multiMode={multiMode}
-            series={series}
-          />
-        </div>
-      )}
+      <HourBars
+        combined={combined}
+        max={maxHour}
+        peak={peakHour}
+        multiMode={multiMode}
+        series={series}
+      />
     </div>
   );
 }
@@ -1708,12 +1475,9 @@ export function UsagePage() {
                 </div>
               ) : (
                 <HourHeatmap
-                  key={deviceId}
-                  deviceId={deviceId}
-                  token={token}
+                  key={`${deviceId}-${fromIso}-${toIso}`}
                   hours={hourly}
                   byService={hourlyByService}
-                  daily={daily}
                 />
               )}
             </Panel>
