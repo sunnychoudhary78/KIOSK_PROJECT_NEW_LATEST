@@ -5,6 +5,17 @@ import 'package:skp_kiosk/core/logging/app_logger.dart';
 
 enum CameraHolder { none, palm, surveillance }
 
+/// True when an in-flight [CameraLease.acquire] for palm should be released
+/// immediately (page closed, unmounted, or camera session bumped).
+bool shouldAbortPalmCameraOpen({
+  required bool pageClosed,
+  required bool isMounted,
+  required int openSession,
+  required int currentSession,
+}) {
+  return pageClosed || !isMounted || openSession != currentSession;
+}
+
 class CameraLeaseTimeout implements Exception {
   const CameraLeaseTimeout(this.requestedBy);
 

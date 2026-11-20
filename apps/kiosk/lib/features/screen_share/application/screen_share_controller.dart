@@ -42,11 +42,15 @@ final screenShareControllerProvider =
 
 /// Polls for admin-requested LiveKit screen share and publishes the primary display.
 class ScreenShareController extends Notifier<ScreenShareStatus> {
+  static const _failedRetryCooldown = Duration(seconds: 30);
+
   Timer? _timer;
   bool _ticking = false;
   Room? _room;
   LocalVideoTrack? _track;
   String? _activeSessionId;
+  String? _lastFailedSessionId;
+  DateTime? _lastFailedAt;
 
   @override
   ScreenShareStatus build() {
@@ -116,7 +120,15 @@ class ScreenShareController extends Notifier<ScreenShareStatus> {
         return;
       }
 
+      // Already publishing this session.
       if (_activeSessionId == sessionId && _room != null) {
+        return;
+      }
+      // Avoid hammering LiveKit after a connect failure; retry after cooldown
+      // or immediately when admin starts a new session id.
+      if (_lastFailedSessionId == sessionId &&
+          _lastFailedAt != null &&
+          DateTime.now().difference(_lastFailedAt!) < _failedRetryCooldown) {
         return;
       }
 
@@ -156,12 +168,15 @@ class ScreenShareController extends Notifier<ScreenShareStatus> {
     required String token,
   }) async {
     await _stop(ackEnded: false);
+    if (!ref.mounted) return;
     state = state.copyWith(
       state: ScreenShareState.connecting,
       sessionId: sessionId,
       clearError: true,
     );
 
+    Room? room;
+    LocalVideoTrack? track;
     try {
       final sources = await desktopCapturer.getSources(
         types: [SourceType.Screen],
@@ -171,9 +186,9 @@ class ScreenShareController extends Notifier<ScreenShareStatus> {
       }
       final source = sources.first;
 
-      final room = Room();
+      room = Room();
       await room.connect(livekitUrl, token);
-      final track = await LocalVideoTrack.createScreenShareTrack(
+      track = await LocalVideoTrack.createScreenShareTrack(
         ScreenShareCaptureOptions(
           sourceId: source.id,
           maxFrameRate: 15,
@@ -184,6 +199,10 @@ class ScreenShareController extends Notifier<ScreenShareStatus> {
       _room = room;
       _track = track;
       _activeSessionId = sessionId;
+      _lastFailedSessionId = null;
+      _lastFailedAt = null;
+      room = null;
+      track = null;
 
       await ref.read(apiClientProvider).post(
         '/devices/$deviceId/screen-share/ack',
@@ -200,6 +219,12 @@ class ScreenShareController extends Notifier<ScreenShareStatus> {
       AppLogger.error('Screen share start failed', error);
       final message = error.toString();
       try {
+        await track?.stop();
+      } catch (_) {}
+      try {
+        await room?.disconnect();
+      } catch (_) {}
+      try {
         await ref.read(apiClientProvider).post(
           '/devices/$deviceId/screen-share/ack',
           body: {
@@ -209,7 +234,10 @@ class ScreenShareController extends Notifier<ScreenShareStatus> {
           },
         );
       } catch (_) {}
+      // Full cleanup so a later poll can reconnect without an app restart.
       await _stop(ackEnded: false);
+      _lastFailedSessionId = sessionId;
+      _lastFailedAt = DateTime.now();
       if (!ref.mounted) return;
       state = state.copyWith(
         state: ScreenShareState.failed,

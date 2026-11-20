@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/app/router.dart';
+import 'package:skp_kiosk/core/hardware/camera/camera_lease.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_controller.dart';
@@ -50,6 +51,12 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
   WidgetsBinding.instance.scheduleFrame();
   await WidgetsBinding.instance.endOfFrame;
   kioskNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+
+  // Belt-and-suspenders: never leave palm holding the camera after Home/Done.
+  // A raced AstrologyPage._openCamera can otherwise block surveillance forever.
+  try {
+    ref.read(cameraLeaseProvider.notifier).release(CameraHolder.palm);
+  } catch (_) {}
 
   imageCache.clear();
   imageCache.clearLiveImages();
@@ -102,6 +109,11 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
   ref.invalidate(wellBeingControllerProvider);
   ref.invalidate(chargingControllerProvider);
   ref.invalidate(fuelStationsControllerProvider);
+
+  // Invalidate resets astrology to capture; clear any raced palm acquire.
+  try {
+    ref.read(cameraLeaseProvider.notifier).release(CameraHolder.palm);
+  } catch (_) {}
 
   try {
     ref.read(serviceRatingsGateProvider.notifier).clear();

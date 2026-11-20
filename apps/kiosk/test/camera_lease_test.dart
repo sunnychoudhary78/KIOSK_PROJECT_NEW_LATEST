@@ -57,4 +57,60 @@ void main() {
     );
     expect(container.read(cameraLeaseProvider).holder, CameraHolder.surveillance);
   });
+
+  test('shouldAbortPalmCameraOpen covers dispose and session-bump races', () {
+    expect(
+      shouldAbortPalmCameraOpen(
+        pageClosed: false,
+        isMounted: true,
+        openSession: 1,
+        currentSession: 1,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldAbortPalmCameraOpen(
+        pageClosed: true,
+        isMounted: true,
+        openSession: 1,
+        currentSession: 1,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldAbortPalmCameraOpen(
+        pageClosed: false,
+        isMounted: false,
+        openSession: 1,
+        currentSession: 1,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldAbortPalmCameraOpen(
+        pageClosed: false,
+        isMounted: true,
+        openSession: 1,
+        currentSession: 2,
+      ),
+      isTrue,
+    );
+  });
+
+  test('aborted palm open releases lease after session bump', () async {
+    await lease.acquire(CameraHolder.palm);
+    expect(container.read(cameraLeaseProvider).holder, CameraHolder.palm);
+
+    const openSession = 1;
+    const currentSession = 2; // dispose / _endSession bumped the session
+    if (shouldAbortPalmCameraOpen(
+      pageClosed: true,
+      isMounted: true,
+      openSession: openSession,
+      currentSession: currentSession,
+    )) {
+      lease.release(CameraHolder.palm);
+    }
+    expect(container.read(cameraLeaseProvider).holder, CameraHolder.none);
+  });
 }
