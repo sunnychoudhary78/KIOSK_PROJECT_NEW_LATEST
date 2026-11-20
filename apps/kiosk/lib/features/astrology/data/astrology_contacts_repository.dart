@@ -18,4 +18,8 @@ class AstrologyContactsRepository {
           AstrologyContact.fromJson(Map<String, dynamic>.from(item)),
     ];
   }
+
+  Future<void> reveal(String id) async {
+    await _api.post('/astrology-contacts/$id/reveal');
+  }
 }

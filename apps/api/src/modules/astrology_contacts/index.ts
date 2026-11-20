@@ -98,6 +98,19 @@ export function registerAstrologyContactsModule(router: Router, deps: AppDeps): 
       }
     },
   );
+
+  router.post(
+    '/astrology-contacts/:id/reveal',
+    authRequired(deps.config, ['device']),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await service.reveal(requireParam(req.params.id, 'id'));
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 }
 
 export { AstrologyContactsService } from './astrology_contacts.service.js';

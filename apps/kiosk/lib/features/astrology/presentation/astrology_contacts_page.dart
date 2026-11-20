@@ -5,6 +5,8 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/astrology/application/astrology_contacts_controller.dart';
 import 'package:skp_kiosk/features/astrology/domain/astrology_contact.dart';
 import 'package:skp_kiosk/features/astrology/presentation/widgets/reading_mark.dart';
+import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
+import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -38,11 +40,6 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
           ? 'Contact Astrologer'
           : 'Contact Pandit';
 
-  String get _emptyMessage =>
-      widget.kind == AstrologyContactKind.astrologer
-          ? 'Sorry, astrologers are not available yet.\nPlease check back soon.'
-          : 'Sorry, pandits are not available yet.\nPlease check back soon.';
-
   AstrologyReadingKind get _readingKind =>
       widget.kind == AstrologyContactKind.astrologer
           ? AstrologyReadingKind.astrologer
@@ -71,7 +68,7 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Name, phone & rating',
+                'Name & rating',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: colors.textPrimary,
@@ -79,7 +76,7 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Dial from your phone',
+                'Tap Show number to reveal the phone',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: colors.textSecondary,
                     ),
@@ -90,7 +87,6 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
                     ? const Center(child: CircularProgressIndicator())
                     : state.contacts.isEmpty
                         ? _EmptyContactsState(
-                            message: state.error ?? _emptyMessage,
                             accent: accent,
                             isDark: isDark,
                           )
@@ -116,12 +112,10 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
 
 class _EmptyContactsState extends StatelessWidget {
   const _EmptyContactsState({
-    required this.message,
     required this.accent,
     required this.isDark,
   });
 
-  final String message;
   final Color accent;
   final bool isDark;
 
@@ -158,12 +152,12 @@ class _EmptyContactsState extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  message,
+                  'Coming soon',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: 'PlusJakartaSans',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
                     height: 1.35,
                     color: isDark ? Colors.white : const Color(0xFF1E1B4B),
                   ),
@@ -177,7 +171,7 @@ class _EmptyContactsState extends StatelessWidget {
   }
 }
 
-class _ContactCard extends StatelessWidget {
+class _ContactCard extends ConsumerStatefulWidget {
   const _ContactCard({
     required this.contact,
     required this.accent,
@@ -187,10 +181,58 @@ class _ContactCard extends StatelessWidget {
   final Color accent;
 
   @override
+  ConsumerState<_ContactCard> createState() => _ContactCardState();
+}
+
+class _ContactCardState extends ConsumerState<_ContactCard> {
+  bool _revealed = false;
+  bool _revealing = false;
+
+  Future<void> _reveal() async {
+    if (_revealed || _revealing) {
+      return;
+    }
+    setState(() => _revealing = true);
+    try {
+      await ref
+          .read(astrologyContactsRepositoryProvider)
+          .reveal(widget.contact.id);
+      final eventKey = widget.contact.kind == AstrologyContactKind.astrologer
+          ? ServiceEventKeys.astrologyAstrologerShowNumber
+          : ServiceEventKeys.astrologyPanditShowNumber;
+      // ignore: discarded_futures
+      ref.read(serviceAnalyticsTrackerProvider).track(
+            eventKey,
+            metadata: {
+              'contactId': widget.contact.id,
+              'name': widget.contact.name,
+            },
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _revealed = true;
+        _revealing = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      // Still reveal locally so the visitor is not blocked by a network blip.
+      setState(() {
+        _revealed = true;
+        _revealing = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = context.athenaColors;
     final isDark = theme.brightness == Brightness.dark;
+    final accent = widget.accent;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -224,26 +266,81 @@ class _ContactCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    contact.name,
+                    widget.contact.name,
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: colors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  _StarRating(rating: contact.rating, accent: accent),
+                  _StarRating(rating: widget.contact.rating, accent: accent),
                 ],
               ),
             ),
             const SizedBox(width: 16),
-            Text(
-              _formatPhone(contact.phone),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
-                color: accent,
+            if (_revealed)
+              Text(
+                _formatPhone(widget.contact.phone),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: accent,
+                ),
+              )
+            else
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _revealing ? null : () => _reveal(),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: accent.withValues(alpha: isDark ? 0.22 : 0.12),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.7),
+                        width: 1.4,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_revealing)
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: accent,
+                              ),
+                            )
+                          else
+                            Icon(
+                              Icons.phone_rounded,
+                              size: 18,
+                              color: accent,
+                            ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _revealing ? 'Opening…' : 'Show number',
+                            style: TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),

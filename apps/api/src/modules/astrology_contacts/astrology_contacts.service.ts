@@ -1,4 +1,4 @@
-import type { AstrologyContactKind as PrismaKind, Prisma } from '@prisma/client';
+import { Prisma, type AstrologyContactKind as PrismaKind } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
@@ -14,6 +14,7 @@ function mapRow(row: {
   phone: string;
   rating: Prisma.Decimal;
   sortOrder: number;
+  showNumberClicks: number;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -24,6 +25,7 @@ function mapRow(row: {
     phone: row.phone,
     rating: Number(row.rating),
     sortOrder: row.sortOrder,
+    showNumberClicks: row.showNumberClicks,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -128,5 +130,27 @@ export class AstrologyContactsService {
       correlationId,
       metadata: { kind: row.kind, name: row.name, phone: row.phone },
     });
+  }
+
+  async reveal(id: string) {
+    try {
+      const row = await this.db.astrologyContact.update({
+        where: { id },
+        data: { showNumberClicks: { increment: 1 } },
+        select: { id: true, showNumberClicks: true },
+      });
+      return {
+        id: row.id,
+        showNumberClicks: row.showNumberClicks,
+      };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new AppError('not_found', 'Astrology contact not found', 404);
+      }
+      throw error;
+    }
   }
 }

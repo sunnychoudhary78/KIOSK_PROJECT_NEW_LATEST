@@ -23,6 +23,7 @@ type AstrologyContact = {
   phone: string;
   rating: number;
   sortOrder: number;
+  showNumberClicks: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -301,6 +302,7 @@ export function AstrologyContactsPage() {
                     <th>Name</th>
                     <th>Phone</th>
                     <th>Rating</th>
+                    <th>Show-number clicks</th>
                     <th />
                   </tr>
                 </thead>
@@ -312,6 +314,7 @@ export function AstrologyContactsPage() {
                       <td className="font-medium">{item.name}</td>
                       <td className="font-mono text-sm">{item.phone}</td>
                       <td>{item.rating.toFixed(1)}</td>
+                      <td>{item.showNumberClicks ?? 0}</td>
                       <td className="whitespace-nowrap">
                         <Button
                           type="button"

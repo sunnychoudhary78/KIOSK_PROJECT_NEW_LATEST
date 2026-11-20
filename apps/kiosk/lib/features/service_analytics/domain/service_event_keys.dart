@@ -28,6 +28,9 @@ abstract final class ServiceEventKeys {
   static const astrologyToday = 'astrology.today';
   static const astrologyAstrologer = 'astrology.contact_astrologer';
   static const astrologyPandit = 'astrology.contact_pandit';
+  static const astrologyAstrologerShowNumber =
+      'astrology.astrologer.show_number';
+  static const astrologyPanditShowNumber = 'astrology.pandit.show_number';
 
   static const wellBeingOxygen = 'well_being.path.oxygen';
   static const wellBeingTemperature = 'well_being.path.temperature';
