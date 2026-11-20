@@ -195,15 +195,16 @@ class AppLocalizationsHi extends AppLocalizations {
   String get labelHint => 'जैसे स्कूल प्रमाणपत्र';
 
   @override
-  String get tapToAddPdfs => 'पीडीएफ जोड़ने के लिए टैप करें';
+  String get tapToAddPdfs => 'पीडीएफ, JPG/PNG या Word (.docx) जोड़ें';
 
   @override
   String pdfsSelected(int count) {
-    return '$count पीडीएफ चुने गए — बदलने के लिए टैप करें';
+    return '$count फ़ाइल चुनी गईं — बदलने के लिए टैप करें';
   }
 
   @override
-  String get pdfOnlyHint => 'केवल पीडीएफ · पेज सीमा सर्वर तय करता है';
+  String get pdfOnlyHint =>
+      'पीडीएफ, JPG/PNG या Word (.docx) · पेज सीमा सर्वर तय करता है';
 
   @override
   String get printColor => 'प्रिंट रंग';

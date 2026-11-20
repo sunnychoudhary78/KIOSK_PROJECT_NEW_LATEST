@@ -69,6 +69,11 @@ describe('loadConfig', () => {
       apiSecret: '',
     });
     expect(config.screenShare.ttlSeconds).toBe(900);
+    expect(config.libreOffice).toEqual({
+      bin: 'soffice',
+      timeoutMs: 60_000,
+      maxConcurrent: 2,
+    });
     expect(config.digilocker.purpose).toBe('Document printing at kiosk');
     expect(config.digilocker.serviceName).toBe('Athena Smart Kiosk');
   });

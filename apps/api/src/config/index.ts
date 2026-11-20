@@ -62,6 +62,10 @@ const envSchema = z.object({
   SKP_LIVEKIT_API_SECRET: z.string().optional().default(''),
   /** Active screen-share lifetime after kiosk ack (seconds). */
   SKP_SCREEN_SHARE_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  /** LibreOffice binary for .docx → PDF (print uploads). */
+  SKP_LIBREOFFICE_BIN: z.string().min(1).default('soffice'),
+  SKP_DOCX_CONVERT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  SKP_DOCX_CONVERT_MAX_CONCURRENT: z.coerce.number().int().positive().max(8).default(2),
 });
 
 export type AppConfig = {
@@ -145,6 +149,11 @@ export type AppConfig = {
   };
   screenShare: {
     ttlSeconds: number;
+  };
+  libreOffice: {
+    bin: string;
+    timeoutMs: number;
+    maxConcurrent: number;
   };
 };
 
@@ -250,6 +259,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Readonly<AppCo
     },
     screenShare: {
       ttlSeconds: data.SKP_SCREEN_SHARE_TTL_SECONDS,
+    },
+    libreOffice: {
+      bin: data.SKP_LIBREOFFICE_BIN.trim() || 'soffice',
+      timeoutMs: data.SKP_DOCX_CONVERT_TIMEOUT_MS,
+      maxConcurrent: data.SKP_DOCX_CONVERT_MAX_CONCURRENT,
     },
   };
 

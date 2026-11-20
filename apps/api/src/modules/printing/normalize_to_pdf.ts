@@ -1,5 +1,7 @@
 import { PDFDocument } from 'pdf-lib';
+import { loadConfig } from '../../config/index.js';
 import { AppError } from '../../shared/errors.js';
+import { docxToPdf, type DocxConvertOptions } from './docx_to_pdf.js';
 import { countPdfPages } from './report_pdf.js';
 
 const PAGE_WIDTH = 595.28;
@@ -10,6 +12,8 @@ export type NormalizeToPdfInput = {
   bytes: Buffer | Uint8Array;
   mimeType?: string | null;
   fileName?: string | null;
+  /** Override LibreOffice settings / inject execFile (tests). */
+  docx?: DocxConvertOptions;
 };
 
 export type NormalizeToPdfResult = {
@@ -18,7 +22,7 @@ export type NormalizeToPdfResult = {
   contentType: 'application/pdf';
 };
 
-type DetectedKind = 'pdf' | 'jpeg' | 'png';
+type DetectedKind = 'pdf' | 'jpeg' | 'png' | 'docx';
 
 function extensionOf(fileName?: string | null): string {
   if (!fileName) return '';
@@ -26,6 +30,18 @@ function extensionOf(fileName?: string | null): string {
   const dot = base.lastIndexOf('.');
   if (dot < 0) return '';
   return base.slice(dot + 1).toLowerCase();
+}
+
+function looksLikeDocxMime(mime: string): boolean {
+  return (
+    mime.includes('wordprocessingml') ||
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime.includes('application/docx')
+  );
+}
+
+function isZipMagic(buf: Buffer): boolean {
+  return buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b;
 }
 
 function detectKind(
@@ -53,11 +69,17 @@ function detectKind(
     return 'png';
   }
 
+  // DOCX is a ZIP; require extension or Word mime so arbitrary ZIPs are rejected.
+  if (isZipMagic(buf) && (ext === 'docx' || looksLikeDocxMime(mime))) {
+    return 'docx';
+  }
+
   if (mime.includes('pdf') || ext === 'pdf') return 'pdf';
   if (mime.includes('jpeg') || mime === 'image/jpg' || ext === 'jpg' || ext === 'jpeg') {
     return 'jpeg';
   }
   if (mime.includes('png') || ext === 'png') return 'png';
+  if (ext === 'docx' || looksLikeDocxMime(mime)) return 'docx';
 
   return null;
 }
@@ -84,9 +106,21 @@ async function imageToPdf(bytes: Buffer | Uint8Array, kind: 'jpeg' | 'png'): Pro
   return Buffer.from(await doc.save());
 }
 
+function resolveDocxOptions(override?: DocxConvertOptions): DocxConvertOptions {
+  if (override) {
+    return override;
+  }
+  const cfg = loadConfig().libreOffice;
+  return {
+    bin: cfg.bin,
+    timeoutMs: cfg.timeoutMs,
+    maxConcurrent: cfg.maxConcurrent,
+  };
+}
+
 /**
  * Normalize citizen / DigiLocker payloads to PDF for the shared print pipeline.
- * Supports PDF pass-through and JPEG/PNG → single A4 page.
+ * Supports PDF pass-through, JPEG/PNG → single A4 page, and DOCX via LibreOffice.
  */
 export async function normalizeToPdf(input: NormalizeToPdfInput): Promise<NormalizeToPdfResult> {
   const bytes = input.bytes;
@@ -98,7 +132,7 @@ export async function normalizeToPdf(input: NormalizeToPdfInput): Promise<Normal
   if (!kind) {
     throw new AppError(
       'unsupported_format',
-      'Only PDF or image files (JPG/PNG) can be printed',
+      'Only PDF, image files (JPG/PNG), or Word (.docx) can be printed',
       400,
     );
   }
@@ -106,6 +140,8 @@ export async function normalizeToPdf(input: NormalizeToPdfInput): Promise<Normal
   let pdfBytes: Buffer;
   if (kind === 'pdf') {
     pdfBytes = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  } else if (kind === 'docx') {
+    pdfBytes = await docxToPdf(bytes, resolveDocxOptions(input.docx));
   } else {
     try {
       pdfBytes = await imageToPdf(bytes, kind);
@@ -152,5 +188,6 @@ export function isAcceptedPrintUpload(mimeType?: string | null, fileName?: strin
     return true;
   }
   if (mime.includes('png') || ext === 'png') return true;
+  if (ext === 'docx' || looksLikeDocxMime(mime)) return true;
   return false;
 }

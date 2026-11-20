@@ -443,19 +443,19 @@ abstract class AppLocalizations {
   /// No description provided for @tapToAddPdfs.
   ///
   /// In en, this message translates to:
-  /// **'Tap to add PDF documents'**
+  /// **'Tap to add PDF, JPG/PNG, or Word (.docx)'**
   String get tapToAddPdfs;
 
   /// No description provided for @pdfsSelected.
   ///
   /// In en, this message translates to:
-  /// **'{count} PDF(s) selected — tap to replace'**
+  /// **'{count} file(s) selected — tap to replace'**
   String pdfsSelected(int count);
 
   /// No description provided for @pdfOnlyHint.
   ///
   /// In en, this message translates to:
-  /// **'PDF or JPG/PNG · page limits enforced by server'**
+  /// **'PDF, JPG/PNG, or Word (.docx) · page limits enforced by server'**
   String get pdfOnlyHint;
 
   /// No description provided for @printColor.
