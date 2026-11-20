@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:skp_kiosk/features/astrology/domain/astrology_contact.dart';
+import 'package:skp_kiosk/features/astrology/presentation/astrology_contacts_page.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_hub_page.dart';
 import 'package:skp_kiosk/features/astrology/presentation/astrology_page.dart';
 import 'package:skp_kiosk/features/astrology/presentation/match_kundali_page.dart';
@@ -35,6 +37,8 @@ class AppRoutes {
   static const astrologyKundali = '/astrology/kundali';
   static const astrologyMatch = '/astrology/match';
   static const astrologyToday = '/astrology/today';
+  static const astrologyAstrologer = '/astrology/contact-astrologer';
+  static const astrologyPandit = '/astrology/contact-pandit';
   static const fuelStations = '/fuel-stations';
   static const localServices = '/local-services';
   static const localServiceContacts = '/local-services/contacts';
@@ -73,6 +77,14 @@ class AppRouter {
         return page((_) => const MatchKundaliPage());
       case AppRoutes.astrologyToday:
         return page((_) => const TodayPeriodsPage());
+      case AppRoutes.astrologyAstrologer:
+        return page(
+          (_) => const AstrologyContactsPage(kind: AstrologyContactKind.astrologer),
+        );
+      case AppRoutes.astrologyPandit:
+        return page(
+          (_) => const AstrologyContactsPage(kind: AstrologyContactKind.pandit),
+        );
       case AppRoutes.fuelStations:
         return page((_) => const FuelStationsPage());
       case AppRoutes.localServices:

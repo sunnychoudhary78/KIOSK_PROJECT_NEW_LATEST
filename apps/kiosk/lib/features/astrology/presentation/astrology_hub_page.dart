@@ -368,6 +368,22 @@ class AstrologyHubPage extends ConsumerWidget {
         subtitle: 'Panchang · Current dasha',
         onTap: () => Navigator.of(context).pushNamed(AppRoutes.astrologyToday),
       ),
+      (
+        kind: AstrologyReadingKind.astrologer,
+        image: 'assets/new_theme_icons/astrology/contact_astrologer.jpg',
+        title: 'Contact Astrologer',
+        subtitle: 'Talk to a trusted guide',
+        onTap: () =>
+            Navigator.of(context).pushNamed(AppRoutes.astrologyAstrologer),
+      ),
+      (
+        kind: AstrologyReadingKind.pandit,
+        image: 'assets/new_theme_icons/astrology/contact_pandit.jpg',
+        title: 'Contact Pandit',
+        subtitle: 'Puja · Rituals · Guidance',
+        onTap: () =>
+            Navigator.of(context).pushNamed(AppRoutes.astrologyPandit),
+      ),
     ];
 
     return VisitorSessionPopScope(
@@ -470,7 +486,7 @@ class AstrologyHubPage extends ConsumerWidget {
                     'Choose a ',
                     style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
-                      fontSize: 38,
+                      fontSize: 32,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.6,
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
@@ -484,7 +500,7 @@ class AstrologyHubPage extends ConsumerWidget {
                       'Reading',
                       style: TextStyle(
                         fontFamily: 'PlusJakartaSans',
-                        fontSize: 38,
+                        fontSize: 32,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.6,
                         color: Colors.white,
@@ -494,21 +510,21 @@ class AstrologyHubPage extends ConsumerWidget {
                   const SizedBox(width: 6),
                   const Text(
                     '✨',
-                    style: TextStyle(fontSize: 26),
+                    style: TextStyle(fontSize: 22),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
-                'Kundali, palm, matching, and daily periods.',
+                'Kundali, palm, matching, periods, and expert contacts.',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
 
               // Glowing Underline Accent Bar
               Container(
@@ -587,12 +603,12 @@ class AstrologyHubPage extends ConsumerWidget {
 
               const SizedBox(height: 16),
 
-              // 3. 2x2 Reading Cards
+              // 3. 3x2 Reading Cards
               Expanded(
                 child: Column(
                   children: [
-                    for (var row = 0; row < 2; row++) ...[
-                      if (row > 0) const SizedBox(height: 16),
+                    for (var row = 0; row < 3; row++) ...[
+                      if (row > 0) const SizedBox(height: 12),
                       Expanded(
                         child: Row(
                           children: [
@@ -605,7 +621,7 @@ class AstrologyHubPage extends ConsumerWidget {
                                 onTap: tiles[row * 2].onTap,
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: AstrologyReadingCard(
                                 kind: tiles[row * 2 + 1].kind,

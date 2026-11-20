@@ -1,10 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:skp_kiosk/core/theme/athena_colors.dart';
-import 'package:skp_kiosk/features/astrology/presentation/astrology_theme.dart';
 
-enum AstrologyReadingKind { kundali, palm, match, today }
+enum AstrologyReadingKind { kundali, palm, match, today, astrologer, pandit }
 
 extension AstrologyReadingKindStyle on AstrologyReadingKind {
   Color get accent => switch (this) {
@@ -12,6 +10,8 @@ extension AstrologyReadingKindStyle on AstrologyReadingKind {
     AstrologyReadingKind.palm => const Color(0xFFEA580C),
     AstrologyReadingKind.match => const Color(0xFFE11D48),
     AstrologyReadingKind.today => const Color(0xFF0284C7),
+    AstrologyReadingKind.astrologer => const Color(0xFF6D28D9),
+    AstrologyReadingKind.pandit => const Color(0xFFC2410C),
   };
 
   Color get secondaryAccent => switch (this) {
@@ -19,6 +19,8 @@ extension AstrologyReadingKindStyle on AstrologyReadingKind {
     AstrologyReadingKind.palm => const Color(0xFFFBBF24),
     AstrologyReadingKind.match => const Color(0xFFF472B6),
     AstrologyReadingKind.today => const Color(0xFF38BDF8),
+    AstrologyReadingKind.astrologer => const Color(0xFFA78BFA),
+    AstrologyReadingKind.pandit => const Color(0xFFFBBF24),
   };
 
   Color get bottomWaveColor => switch (this) {
@@ -26,6 +28,8 @@ extension AstrologyReadingKindStyle on AstrologyReadingKind {
     AstrologyReadingKind.palm => const Color(0xFFFFEDD5),
     AstrologyReadingKind.match => const Color(0xFFFCE7F3),
     AstrologyReadingKind.today => const Color(0xFFE0F2FE),
+    AstrologyReadingKind.astrologer => const Color(0xFFF3E8FF),
+    AstrologyReadingKind.pandit => const Color(0xFFFFF7ED),
   };
 }
 
@@ -73,6 +77,10 @@ class _Astrology3DEmblemPainter extends CustomPainter {
         _paintMatch(canvas, center, radius);
       case AstrologyReadingKind.today:
         _paintToday(canvas, center, radius);
+      case AstrologyReadingKind.astrologer:
+        _paintAstrologer(canvas, center, radius);
+      case AstrologyReadingKind.pandit:
+        _paintPandit(canvas, center, radius);
     }
   }
 
@@ -761,6 +769,63 @@ class _Astrology3DEmblemPainter extends CustomPainter {
     }
   }
 
+  void _paintAstrologer(Canvas canvas, Offset center, double radius) {
+    canvas.drawCircle(
+      center,
+      radius * 0.78,
+      Paint()
+        ..color = const Color(0xFF7C3AED).withValues(alpha: 0.28)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    final disc = Rect.fromCircle(center: center, radius: radius * 0.62);
+    canvas.drawCircle(
+      center,
+      radius * 0.62,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0xFF4C1D95), Color(0xFF1E1B4B)],
+        ).createShader(disc),
+    );
+    canvas.drawCircle(
+      center,
+      radius * 0.38,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0xFFFDE68A), Color(0xFFC084FC)],
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 0.38)),
+    );
+    _drawSparkle(canvas, Offset(center.dx + radius * 0.42, center.dy - radius * 0.36), 7, const Color(0xFFFDE68A));
+  }
+
+  void _paintPandit(Canvas canvas, Offset center, double radius) {
+    canvas.drawCircle(
+      center,
+      radius * 0.78,
+      Paint()
+        ..color = const Color(0xFFEA580C).withValues(alpha: 0.28)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    final flameTop = Offset(center.dx, center.dy - radius * 0.42);
+    final flame = Path()
+      ..moveTo(center.dx - radius * 0.22, center.dy + radius * 0.08)
+      ..quadraticBezierTo(center.dx - radius * 0.08, center.dy - radius * 0.18, flameTop.dx, flameTop.dy)
+      ..quadraticBezierTo(center.dx + radius * 0.08, center.dy - radius * 0.18, center.dx + radius * 0.22, center.dy + radius * 0.08)
+      ..close();
+    canvas.drawPath(
+      flame,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: const [Color(0xFFF97316), Color(0xFFFDE047)],
+        ).createShader(Rect.fromCircle(center: center, radius: radius)),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(center.dx, center.dy + radius * 0.28), width: radius * 0.72, height: radius * 0.28),
+      Paint()..color = const Color(0xFF9A3412),
+    );
+  }
+
   void _drawSparkle(Canvas canvas, Offset center, double size, Color color) {
     final p = Path()
       ..moveTo(center.dx, center.dy - size)
@@ -913,6 +978,38 @@ class _AstrologyReadingCardState extends State<AstrologyReadingCard> {
         isDark ? const Color(0xFF0369A1) : const Color(0xFFBAE6FD),
         const Color(0xFF0284C7),
       ),
+      AstrologyReadingKind.astrologer => (
+        isDark
+            ? const LinearGradient(
+                colors: [Color(0xFF1B1438), Color(0xFF2E1B5A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : const LinearGradient(
+                colors: [Color(0xFFFFFFFF), Color(0xFFFAF5FF), Color(0xFFF3E8FF)],
+                stops: [0.35, 0.75, 1.0],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        isDark ? const Color(0xFF5B21B6) : const Color(0xFFE9D5FF),
+        const Color(0xFF6D28D9),
+      ),
+      AstrologyReadingKind.pandit => (
+        isDark
+            ? const LinearGradient(
+                colors: [Color(0xFF2A1810), Color(0xFF3F2415)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : const LinearGradient(
+                colors: [Color(0xFFFFFFFF), Color(0xFFFFFBEB), Color(0xFFFFF7ED)],
+                stops: [0.35, 0.75, 1.0],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        isDark ? const Color(0xFF9A3412) : const Color(0xFFFED7AA),
+        const Color(0xFFC2410C),
+      ),
     };
 
     return AnimatedScale(
@@ -963,27 +1060,27 @@ class _AstrologyReadingCardState extends State<AstrologyReadingCard> {
                   splashColor: accent.withValues(alpha: 0.12),
                   highlightColor: accent.withValues(alpha: 0.06),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                     child: Row(
                       children: [
                         // 1. Asset PNG image
                         SizedBox(
-                          width: 92,
-                          height: 92,
+                          width: 72,
+                          height: 72,
                           child: Image.asset(
                             widget.image,
-                            width: 92,
-                            height: 92,
+                            width: 72,
+                            height: 72,
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.high,
                             errorBuilder: (context, error, stack) => Icon(
                               Icons.auto_awesome,
-                              size: 56,
+                              size: 44,
                               color: accent,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 20),
+                        const SizedBox(width: 16),
 
                         // 2. Title & Subtitle
                         Expanded(
@@ -997,35 +1094,35 @@ class _AstrologyReadingCardState extends State<AstrologyReadingCard> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 25,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -0.4,
                                   color: isDark ? Colors.white : const Color(0xFF0F172A),
                                 ),
                               ),
-                              const SizedBox(height: 5),
+                              const SizedBox(height: 4),
                               Text(
                                 widget.subtitle,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontFamily: 'PlusJakartaSans',
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                   color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                  height: 1.35,
+                                  height: 1.3,
                                 ),
                               ),
                             ],
                           ),
                         ),
 
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 12),
 
                         // 3. Circular Arrow Button
                         Container(
-                          width: 44,
-                          height: 44,
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: isDark ? const Color(0xFF1E293B) : Colors.white,
