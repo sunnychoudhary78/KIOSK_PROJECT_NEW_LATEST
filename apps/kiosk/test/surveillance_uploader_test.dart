@@ -276,4 +276,93 @@ void main() {
     expect(queue.items.single.attempts, greaterThan(0));
     await uploader.detach();
   });
+
+  test('unauthorized refreshes auth once then uploads successfully', () async {
+    var uploadUrlCalls = 0;
+    var refreshCalls = 0;
+    final api = ApiClient(
+      config: const AppConfig(apiBaseUrl: 'http://example.test/v1', environment: 'test'),
+      httpClient: MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('upload-url')) {
+          uploadUrlCalls += 1;
+          if (uploadUrlCalls == 1) {
+            return http.Response(
+              jsonEncode({'code': 'unauthorized', 'message': 'expired'}),
+              401,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'segmentId': 'seg-1',
+              'uploadUrl': 'https://r2.example/put',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.method == 'PUT') {
+          return http.Response('', 200);
+        }
+        if (request.method == 'POST' && request.url.path.endsWith('complete')) {
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }
+        return http.Response('nope', 500);
+      }),
+    );
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final uploader = SurveillanceUploader(
+      api: api,
+      recorder: _StubRecorder(),
+      tickInterval: const Duration(days: 1),
+      rootOverride: dir,
+      queue: queue,
+      onUnauthorized: () async {
+        refreshCalls += 1;
+        return true;
+      },
+    );
+    await uploader.attach(deviceId: 'device-1');
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(refreshCalls, 1);
+    expect(uploadUrlCalls, 2);
+    expect(segment.existsSync(), isFalse);
+    expect(queue.items, isEmpty);
+    await uploader.detach();
+  });
+
+  test('unauthorized without successful refresh marks attempt', () async {
+    final api = ApiClient(
+      config: const AppConfig(apiBaseUrl: 'http://example.test/v1', environment: 'test'),
+      httpClient: MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('upload-url')) {
+          return http.Response(
+            jsonEncode({'code': 'unauthorized', 'message': 'expired'}),
+            401,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('nope', 500);
+      }),
+    );
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final uploader = SurveillanceUploader(
+      api: api,
+      recorder: _StubRecorder(),
+      tickInterval: const Duration(days: 1),
+      rootOverride: dir,
+      queue: queue,
+      onUnauthorized: () async => false,
+    );
+    await uploader.attach(deviceId: 'device-1');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(segment.existsSync(), isTrue);
+    expect(queue.items.single.attempts, greaterThan(0));
+    expect(queue.items.single.lastError, 'unauthorized');
+    await uploader.detach();
+  });
 }

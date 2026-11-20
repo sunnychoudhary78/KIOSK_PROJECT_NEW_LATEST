@@ -7,18 +7,22 @@ class SurveillanceHealth {
   const SurveillanceHealth({
     this.state,
     this.queuePending,
+    this.queueDue,
     this.lastErrorCode,
   });
 
   final String? state;
   final int? queuePending;
+  final int? queueDue;
   final String? lastErrorCode;
 
   factory SurveillanceHealth.fromJson(Map<String, dynamic> json) {
     final pending = json['queuePending'];
+    final due = json['queueDue'];
     return SurveillanceHealth(
       state: json['state'] as String?,
       queuePending: pending is num ? pending.toInt() : null,
+      queueDue: due is num ? due.toInt() : null,
       lastErrorCode: json['lastErrorCode'] as String?,
     );
   }
@@ -154,9 +158,11 @@ RecordingDisplay resolveRecordingDisplay(KioskDevice device, {DateTime? now}) {
   return switch (health.state) {
     'recording' => const RecordingDisplay(label: 'Recording', tone: PrinterRowTone.ok),
     'uploading' => RecordingDisplay(
-      label: (health.queuePending ?? 0) > 0
-          ? 'Uploading (${health.queuePending})'
-          : 'Uploading',
+      label: (health.queuePending ?? 0) > 0 && health.queueDue == 0
+          ? 'Queue stuck'
+          : (health.queuePending ?? 0) > 0
+              ? 'Uploading (${health.queuePending})'
+              : 'Uploading',
       tone: PrinterRowTone.amber,
     ),
     'paused_palm' => const RecordingDisplay(label: 'Recording paused', tone: PrinterRowTone.muted),

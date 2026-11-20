@@ -24,6 +24,7 @@ final surveillanceUploadSinkProvider = Provider<SurveillanceUploadSink>((ref) {
   return SurveillanceUploader(
     api: ref.watch(apiClientProvider),
     recorder: ref.watch(surveillanceRecorderProvider),
+    onUnauthorized: () => ref.read(deviceAuthProvider.notifier).refreshAccessToken(),
   );
 });
 
@@ -32,10 +33,14 @@ class SurveillanceController extends Notifier<SurveillanceState> {
   StreamSubscription<SurveillanceNativeEvent>? _events;
   void Function()? _preempt;
   Timer? _retryTimer;
+  Timer? _safetyTimer;
   int _retryAttempt = 0;
 
   /// Injectable delays for tests.
   Duration Function(int attempt, String? error)? retryDelayFor;
+
+  /// Override safety sync interval in tests (default 1 minute).
+  Duration safetySyncInterval = const Duration(minutes: 1);
 
   @override
   SurveillanceState build() {
@@ -58,6 +63,8 @@ class SurveillanceController extends Notifier<SurveillanceState> {
       _events = null;
       _retryTimer?.cancel();
       _retryTimer = null;
+      _safetyTimer?.cancel();
+      _safetyTimer = null;
       unawaited(uploadSink.detach());
     });
     ref.listen(deviceAuthProvider, (_, _) {
@@ -65,9 +72,30 @@ class SurveillanceController extends Notifier<SurveillanceState> {
       unawaited(_sync());
     });
     ref.listen(cameraLeaseProvider, (previous, next) {
-      if (previous?.holder == CameraHolder.palm && next.holder == CameraHolder.none) {
-        unawaited(_sync());
+      if (next.holder != CameraHolder.none) {
+        return;
       }
+      if (previous == null || previous.holder == CameraHolder.none) {
+        return;
+      }
+      // Defer so a preempting holder (palm) can acquire before we reclaim.
+      Future<void>.delayed(const Duration(milliseconds: 100), () {
+        if (!ref.mounted) {
+          return;
+        }
+        if (ref.read(cameraLeaseProvider).holder != CameraHolder.none) {
+          return;
+        }
+        unawaited(_sync());
+      });
+    });
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer.periodic(safetySyncInterval, (_) {
+      if (!ref.mounted) {
+        return;
+      }
+      unawaited(_syncUploader());
+      unawaited(_sync());
     });
     Future.microtask(() async {
       await _syncUploader();
@@ -99,6 +127,9 @@ class SurveillanceController extends Notifier<SurveillanceState> {
     if (retryDelayFor != null) {
       return retryDelayFor!(attempt, error);
     }
+    if (error == 'palm_busy') {
+      return const Duration(seconds: 15);
+    }
     if (error == 'STORAGE_LOW' || error == 'UPLOAD_BACKLOG') {
       return const Duration(minutes: 5);
     }
@@ -118,6 +149,24 @@ class SurveillanceController extends Notifier<SurveillanceState> {
     final delay = _delayForRetry(_retryAttempt, error);
     AppLogger.info('SURVEILLANCE_RETRY_SCHEDULED attempt=$_retryAttempt in=${delay.inSeconds}s');
     _retryTimer = Timer(delay, () {
+      if (!ref.mounted) {
+        return;
+      }
+      unawaited(_sync());
+    });
+  }
+
+  /// Arms a retry only when none is pending (palm busy must not drop the chain).
+  void _ensureRetryArmed(String reason, Duration delay) {
+    if (_retryTimer != null) {
+      return;
+    }
+    AppLogger.info(
+      'SURVEILLANCE_RETRY_SCHEDULED attempt=$_retryAttempt in=${delay.inSeconds}s '
+      'reason=$reason',
+    );
+    _retryTimer = Timer(delay, () {
+      _retryTimer = null;
       if (!ref.mounted) {
         return;
       }
@@ -174,6 +223,10 @@ class SurveillanceController extends Notifier<SurveillanceState> {
       }
 
       if (holder == CameraHolder.palm) {
+        final delay = retryDelayFor != null
+            ? retryDelayFor!(_retryAttempt, 'palm_busy')
+            : const Duration(seconds: 15);
+        _ensureRetryArmed('palm_busy', delay);
         return;
       }
 

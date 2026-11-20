@@ -102,6 +102,7 @@ Map<String, dynamic> surveillanceHealthPayload({
     'lastSegmentAt': state.lastSegmentAt?.toUtc().toIso8601String(),
     'lastSegmentBytes': state.lastSegmentBytes,
     'queuePending': queue.pendingCount,
+    'queueDue': queue.dueCount,
     'queueFailed': queue.failedCount,
     'oldestQueuedAt': queue.oldestQueuedAt?.toUtc().toIso8601String(),
     'lastErrorCode': state.error ?? queue.lastError,
