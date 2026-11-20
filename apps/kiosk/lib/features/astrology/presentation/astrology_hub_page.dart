@@ -370,7 +370,7 @@ class AstrologyHubPage extends ConsumerWidget {
       ),
       (
         kind: AstrologyReadingKind.astrologer,
-        image: 'assets/new_theme_icons/astrology/contact_astrologer.jpg',
+        image: 'assets/new_theme_icons/astrology/contact_astrologer.png',
         title: 'Contact Astrologer',
         subtitle: 'Talk to a trusted guide',
         onTap: () =>
@@ -378,7 +378,7 @@ class AstrologyHubPage extends ConsumerWidget {
       ),
       (
         kind: AstrologyReadingKind.pandit,
-        image: 'assets/new_theme_icons/astrology/contact_pandit.jpg',
+        image: 'assets/new_theme_icons/astrology/contact_pandit.png',
         title: 'Contact Pandit',
         subtitle: 'Puja · Rituals · Guidance',
         onTap: () =>
