@@ -88,7 +88,7 @@ Future<void> _pumpHome(
   WidgetTester tester, {
   required Map<String, bool> enablement,
 }) async {
-  tester.view.physicalSize = const Size(1920, 1080);
+  tester.view.physicalSize = const Size(1448, 1086);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);

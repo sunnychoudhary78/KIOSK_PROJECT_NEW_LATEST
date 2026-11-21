@@ -26,7 +26,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 720);
+  // Match the production kiosk panel: 1448×1086 (4:3).
+  Win32Window::Size size(1448, 1086);
   if (!window.Create(L"ATHENA", origin, size)) {
     return EXIT_FAILURE;
   }

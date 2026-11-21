@@ -29,8 +29,16 @@ abstract final class SkpTokens {
   static const double primaryButtonHeight = 88;
   static const double keypadKeySize = 80;
   static const double pinSlotSize = 72;
-  static const double bannerHeight = 80;
-  static const double bannerSideWidth = 80;
+  /// Top/bottom home banners — sized for the 1448×1086 (4:3) kiosk panel.
+  static const double bannerHeight = 72;
+
+  /// Left/right home banners — ~5% of 1448px keeps the center catalog usable.
+  static const double bannerSideWidth = 72;
+
+  /// Physical kiosk display used as the home layout reference.
+  static const double displayWidth = 1448;
+  static const double displayHeight = 1086;
+
   static const EdgeInsets pagePadding = EdgeInsets.fromLTRB(32, 16, 32, 16);
 }
 

@@ -152,7 +152,8 @@ export function AdPreviewModal({
     slot === 'home_banner'
       ? 'aspect-[8/1] max-h-40 w-full'
       : slot === 'home_banner_vertical'
-        ? 'aspect-[2/9] mx-auto h-[28rem] max-h-[55vh] w-auto'
+        ? // 180×1086 on the 4:3 kiosk panel
+          'aspect-[1/6] mx-auto h-[28rem] max-h-[55vh] w-auto'
         : 'aspect-video w-full';
 
   return (

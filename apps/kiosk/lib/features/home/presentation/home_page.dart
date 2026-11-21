@@ -225,6 +225,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
     final catalog = ref.watch(serviceCatalogControllerProvider);
     final showHorizontal = playlist.homeBanners.isNotEmpty;
     final showVertical = playlist.homeSideBanners.isNotEmpty;
+    final layout = _HomeLayout.of(MediaQuery.sizeOf(context));
 
     ({String? label, bool blocked}) tileStatus(KioskHomeService service) {
       if (catalog.isHomeServiceEnabled(service)) {
@@ -334,19 +335,19 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
       ),
     ];
 
-    const gap = 14.0;
+    final gap = layout.gridGap;
     const rows = 3;
 
     final serviceGrid = Column(
       children: [
         for (var row = 0; row < rows; row++) ...[
-          if (row > 0) const SizedBox(height: gap),
+          if (row > 0) SizedBox(height: gap),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(child: tiles[row * 2]),
-                const SizedBox(width: gap),
+                SizedBox(width: gap),
                 Expanded(child: tiles[row * 2 + 1]),
               ],
             ),
@@ -355,11 +356,10 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
       ],
     );
 
-    // Main central layout
+    // Main central layout — tuned for 1448×1086 (4:3).
     final contentArea = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Hero Header Row: Title + Emergency CTA + Kiosk Graphic
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -368,10 +368,12 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Top Pill Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: layout.s(12),
+                      vertical: layout.s(4),
+                    ),
+                    margin: EdgeInsets.only(bottom: layout.s(6)),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF2E1C48) : const Color(0xFFFDF2F8),
                       borderRadius: BorderRadius.circular(16),
@@ -383,13 +385,17 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFFEC4899)),
-                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          size: layout.s(15),
+                          color: const Color(0xFFEC4899),
+                        ),
+                        SizedBox(width: layout.s(6)),
                         Text(
                           'Athena Smart Kiosk',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 14,
+                            fontSize: layout.s(13),
                             fontWeight: FontWeight.w700,
                             color: isDark ? const Color(0xFFF472B6) : const Color(0xFFBE185D),
                           ),
@@ -397,46 +403,46 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                       ],
                     ),
                   ),
-
-                  // Headline: Select a Service ✨
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Select a ',
-                        style: TextStyle(
-                          fontFamily: 'PlusJakartaSans',
-                          fontSize: 40,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.6,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                      ShaderMask(
-                        shaderCallback: (bounds) => const LinearGradient(
-                          colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
-                        ).createShader(bounds),
-                        child: const Text(
-                          'Service',
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Select a ',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 40,
+                            fontSize: layout.headlineSize,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.6,
-                            color: Colors.white,
+                            color: colors.textPrimary,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Text('✨', style: TextStyle(fontSize: 26)),
-                    ],
+                        ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
+                          ).createShader(bounds),
+                          child: Text(
+                            'Service',
+                            style: TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              fontSize: layout.headlineSize,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.6,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: layout.s(6)),
+                        Text('✨', style: TextStyle(fontSize: layout.s(24))),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 5),
-
-                  // Glowing Gradient Underline
+                  SizedBox(height: layout.s(5)),
                   Container(
-                    width: 64,
-                    height: 4.5,
+                    width: layout.s(56),
+                    height: layout.s(4),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
@@ -451,24 +457,26 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-
-                  // Subtitle
+                  SizedBox(height: layout.s(6)),
                   Row(
                     children: [
                       Icon(
                         Icons.touch_app_outlined,
-                        size: 18,
+                        size: layout.s(16),
                         color: colors.textSecondary.withValues(alpha: 0.8),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Touch any card below to start your service',
-                        style: TextStyle(
-                          fontFamily: 'PlusJakartaSans',
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                          color: colors.textSecondary,
+                      SizedBox(width: layout.s(6)),
+                      Flexible(
+                        child: Text(
+                          'Touch any card below to start your service',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: layout.subtitleSize,
+                            fontWeight: FontWeight.w500,
+                            color: colors.textSecondary,
+                          ),
                         ),
                       ),
                     ],
@@ -476,110 +484,41 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-
-            // Emergency Action Button
-            Container(
-              height: 52,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFF43F5E), Color(0xFFE11D48)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFE11D48).withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.emergency),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.sos_rounded, size: 22, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text(
-                          'Emergency',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            SizedBox(width: layout.s(10)),
+            _HomeActionChip(
+              height: layout.actionHeight,
+              horizontalPadding: layout.s(16),
+              iconSize: layout.s(20),
+              fontSize: layout.s(15),
+              label: 'Emergency',
+              icon: Icons.sos_rounded,
+              colors: const [Color(0xFFF43F5E), Color(0xFFE11D48)],
+              shadowColor: const Color(0xFFE11D48),
+              onTap: () => Navigator.of(context).pushNamed(AppRoutes.emergency),
             ),
-            const SizedBox(width: 10),
-            // Support Action Button
-            Container(
-              height: 52,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF38BDF8), Color(0xFF0284C7)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF0284C7).withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.support),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.support_agent_rounded, size: 22, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text(
-                          'Support',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            SizedBox(width: layout.s(8)),
+            _HomeActionChip(
+              height: layout.actionHeight,
+              horizontalPadding: layout.s(16),
+              iconSize: layout.s(20),
+              fontSize: layout.s(15),
+              label: 'Support',
+              icon: Icons.support_agent_rounded,
+              colors: const [Color(0xFF38BDF8), Color(0xFF0284C7)],
+              shadowColor: const Color(0xFF0284C7),
+              onTap: () => Navigator.of(context).pushNamed(AppRoutes.support),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: layout.s(10)),
             Image.asset(
               'assets/new_theme_icons/machine_image.png',
-              height: 110,
+              height: layout.machineSize,
               fit: BoxFit.contain,
               errorBuilder: (_, __, ___) =>
-                  const KioskTerminalGraphic(size: 110),
+                  KioskTerminalGraphic(size: layout.machineSize),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: layout.s(10)),
         Expanded(child: serviceGrid),
       ],
     );
@@ -588,7 +527,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showHorizontal) ...[
-          const HomeBannerStrip(),
+          HomeBannerStrip(height: layout.bannerHeight),
           ColoredBox(
             color: colors.cardBorder,
             child: const SizedBox(height: SkpTokens.hairline),
@@ -597,9 +536,9 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         Expanded(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
-              showVertical ? 20 : 28,
-              showHorizontal ? 10 : 8,
-              showVertical ? 20 : 28,
+              showVertical ? layout.contentPadTight : layout.contentPadWide,
+              showHorizontal ? layout.s(8) : layout.s(6),
+              showVertical ? layout.contentPadTight : layout.contentPadWide,
               0,
             ),
             child: contentArea,
@@ -610,7 +549,7 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
             color: colors.cardBorder,
             child: const SizedBox(height: SkpTokens.hairline),
           ),
-          const HomeBannerStrip(),
+          HomeBannerStrip(height: layout.bannerHeight),
         ],
       ],
     );
@@ -619,7 +558,10 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
         ? Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const HomeBannerStrip(axis: HomeBannerAxis.vertical),
+              HomeBannerStrip(
+                axis: HomeBannerAxis.vertical,
+                width: layout.bannerSideWidth,
+              ),
               ColoredBox(
                 color: colors.cardBorder,
                 child: const SizedBox(width: SkpTokens.hairline),
@@ -629,7 +571,10 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                 color: colors.cardBorder,
                 child: const SizedBox(width: SkpTokens.hairline),
               ),
-              const HomeBannerStrip(axis: HomeBannerAxis.vertical),
+              HomeBannerStrip(
+                axis: HomeBannerAxis.vertical,
+                width: layout.bannerSideWidth,
+              ),
             ],
           )
         : centerColumn;
@@ -638,23 +583,21 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Athena Top Navigation Header (Image 1)
           Container(
-            height: 76,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            height: layout.headerHeight,
+            padding: EdgeInsets.symmetric(horizontal: layout.s(20)),
             child: Row(
               children: [
-                // Athena Brand Lockup
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset(
                       'assets/new_theme_icons/athena_new_logo.png',
-                      height: 44,
+                      height: layout.logoSize,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => Container(
-                        width: 38,
-                        height: 38,
+                        width: layout.logoSize - 6,
+                        height: layout.logoSize - 6,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: colors.accentMagenta, width: 2),
@@ -665,66 +608,166 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                             style: TextStyle(
                               color: colors.accentMagenta,
                               fontWeight: FontWeight.w900,
-                              fontSize: 20,
+                              fontSize: layout.s(18),
                             ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    // Column(
-                    //   mainAxisAlignment: MainAxisAlignment.center,
-                    //   crossAxisAlignment: CrossAxisAlignment.start,
-                    //   children: [
-                    //     Text(
-                    //       'ATHENA',
-                    //       style: TextStyle(
-                    //         fontFamily: 'PlusJakartaSans',
-                    //         fontWeight: FontWeight.w800,
-                    //         fontSize: 20,
-                    //         letterSpacing: 1.1,
-                    //         color: colors.textPrimary,
-                    //       ),
-                    //     ),
-                    //     Text(
-                    //       'Your Smart Everyday Assistant',
-                    //       style: TextStyle(
-                    //         fontFamily: 'PlusJakartaSans',
-                    //         fontWeight: FontWeight.w500,
-                    //         fontSize: 10.5,
-                    //         color: colors.textSecondary,
-                    //       ),
-                    //     ),
-                    //   ],
-                    // ),
                   ],
                 ),
                 const Spacer(),
-
-                // Right header cluster: Weather strip, Theme mode toggle, Clock
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    WeatherHeaderStrip(
-                      locationLabel: (widget.auth.deviceName != null && widget.auth.deviceName!.isNotEmpty)
-                          ? widget.auth.deviceName!
-                          : 'Kiosk 6',
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Dark/Light Theme Mode Toggle (commented out for now; uncomment if toggle is needed later)
-                    // const ThemeModeTogglePill(),
-                    // const SizedBox(width: 14),
-
-                    // Live Clock & Date
-                    const KioskClock(showDate: true),
-                  ],
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: WeatherHeaderStrip(
+                          locationLabel: (widget.auth.deviceName != null &&
+                                  widget.auth.deviceName!.isNotEmpty)
+                              ? widget.auth.deviceName!
+                              : 'Kiosk 6',
+                        ),
+                      ),
+                      SizedBox(width: layout.s(10)),
+                      const KioskClock(showDate: true),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
           Expanded(child: mainBody),
         ],
+      ),
+    );
+  }
+}
+
+/// Layout scale for the production kiosk panel (1448×1086, 4:3).
+class _HomeLayout {
+  const _HomeLayout._({
+    required this.scale,
+    required this.headerHeight,
+    required this.logoSize,
+    required this.headlineSize,
+    required this.subtitleSize,
+    required this.actionHeight,
+    required this.machineSize,
+    required this.bannerHeight,
+    required this.bannerSideWidth,
+    required this.gridGap,
+    required this.contentPadTight,
+    required this.contentPadWide,
+  });
+
+  factory _HomeLayout.of(Size size) {
+    // Prefer width scale: 4:3 panels are width-constrained vs 16:9 designs.
+    final widthScale = (size.width / SkpTokens.displayWidth).clamp(0.72, 1.05);
+    final heightScale = (size.height / SkpTokens.displayHeight).clamp(0.72, 1.05);
+    final scale = widthScale < heightScale ? widthScale : heightScale;
+
+    double s(double value) => value * scale;
+
+    return _HomeLayout._(
+      scale: scale,
+      headerHeight: s(68),
+      logoSize: s(40),
+      headlineSize: s(34),
+      subtitleSize: s(16),
+      actionHeight: s(48),
+      machineSize: s(96),
+      bannerHeight: s(SkpTokens.bannerHeight),
+      bannerSideWidth: s(SkpTokens.bannerSideWidth),
+      gridGap: s(12),
+      contentPadTight: s(16),
+      contentPadWide: s(24),
+    );
+  }
+
+  final double scale;
+  final double headerHeight;
+  final double logoSize;
+  final double headlineSize;
+  final double subtitleSize;
+  final double actionHeight;
+  final double machineSize;
+  final double bannerHeight;
+  final double bannerSideWidth;
+  final double gridGap;
+  final double contentPadTight;
+  final double contentPadWide;
+
+  double s(double value) => value * scale;
+}
+
+class _HomeActionChip extends StatelessWidget {
+  const _HomeActionChip({
+    required this.height,
+    required this.horizontalPadding,
+    required this.iconSize,
+    required this.fontSize,
+    required this.label,
+    required this.icon,
+    required this.colors,
+    required this.shadowColor,
+    required this.onTap,
+  });
+
+  final double height;
+  final double horizontalPadding;
+  final double iconSize;
+  final double fontSize;
+  final String label;
+  final IconData icon;
+  final List<Color> colors;
+  final Color shadowColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor.withValues(alpha: 0.32),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: iconSize, color: Colors.white),
+                SizedBox(width: fontSize * 0.45),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -10,8 +10,9 @@ export type UploadPurpose = 'idle' | 'banner_horizontal' | 'banner_vertical';
 export const ADS_MAX_UPLOAD_BYTES = 80 * 1024 * 1024;
 const ADS_MAX_UPLOAD_MB = 80;
 
-const HORIZONTAL_TARGET = { width: 1920, height: 240, label: '1920×240 (8:1)' };
-const VERTICAL_TARGET = { width: 240, height: 1080, label: '240×1080 (~2:9)' };
+/** Matches the kiosk panel 1448×1086 (4:3). */
+const HORIZONTAL_TARGET = { width: 1448, height: 180, label: '1448×180 (8:1)' };
+const VERTICAL_TARGET = { width: 180, height: 1086, label: '180×1086 (~1:6)' };
 
 function aspectRatio(width: number, height: number): number {
   return width / Math.max(height, 1);
