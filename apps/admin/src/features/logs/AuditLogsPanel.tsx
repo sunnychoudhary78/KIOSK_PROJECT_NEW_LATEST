@@ -56,6 +56,10 @@ const ACTION_LABELS: Record<string, string> = {
   'surveillance.segment_dismiss': 'Recording dismissed',
   'surveillance.segments_dismiss_orphans': 'Errored pending recordings dismissed',
   'surveillance.upload_url': 'Recording upload URL issued',
+  'surveillance.command_create': 'Surveillance command created',
+  'diagnostics.bundle_upload_url': 'Diagnostics upload URL issued',
+  'diagnostics.bundle_uploaded': 'Diagnostics bundle uploaded',
+  'diagnostics.bundle_download': 'Diagnostics bundle downloaded',
 };
 
 const PRINCIPAL_LABELS: Record<string, string> = {

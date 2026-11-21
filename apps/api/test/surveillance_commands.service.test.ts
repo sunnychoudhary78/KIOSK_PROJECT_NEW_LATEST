@@ -5,7 +5,10 @@ import {
   DeviceSurveillanceCommandType,
 } from '@prisma/client';
 import { SurveillanceCommandsService } from '../src/modules/surveillance_commands/surveillance_commands.service.js';
-import { SURVEILLANCE_COMMAND_PENDING_TTL_MS } from '../src/modules/surveillance_commands/surveillance_commands.constants.js';
+import {
+  SURVEILLANCE_COMMAND_COLLECT_DIAGNOSTICS_TTL_MS,
+  SURVEILLANCE_COMMAND_PENDING_TTL_MS,
+} from '../src/modules/surveillance_commands/surveillance_commands.constants.js';
 import { surveillanceCommandTypeSchema } from '../src/modules/surveillance_commands/surveillance_commands.schemas.js';
 import type { DbClient } from '../src/infrastructure/database/prisma.js';
 import type { AuditService } from '../src/modules/audit/audit.service.js';
@@ -47,6 +50,7 @@ describe('SurveillanceCommandsService', () => {
   it('accepts phase-2 command types in the schema', () => {
     expect(surveillanceCommandTypeSchema.parse('restart_recording')).toBe('restart_recording');
     expect(surveillanceCommandTypeSchema.parse('flush_queue')).toBe('flush_queue');
+    expect(surveillanceCommandTypeSchema.parse('collect_diagnostics')).toBe('collect_diagnostics');
   });
 
   it('creates a pending command', async () => {
@@ -107,6 +111,41 @@ describe('SurveillanceCommandsService', () => {
     expect(restart.command.type).toBe('restart_recording');
     const flush = await service.create(deviceId, adminId, { type: 'flush_queue' });
     expect(flush.command.type).toBe('flush_queue');
+  });
+
+  it('uses a longer TTL for collect_diagnostics', async () => {
+    const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) =>
+      commandRow({
+        type: data.type as DeviceSurveillanceCommandType,
+        expiresAt: data.expiresAt as Date,
+      }),
+    );
+    const before = Date.now();
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          id: deviceId,
+          status: DeviceStatus.active,
+        })),
+      },
+      deviceSurveillanceCommand: {
+        findFirst: vi.fn(async () => null),
+        create,
+      },
+    };
+    const service = new SurveillanceCommandsService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+
+    await service.create(deviceId, adminId, { type: 'collect_diagnostics' });
+    const expiresAt = (create.mock.calls[0][0].data as { expiresAt: Date }).expiresAt.getTime();
+    expect(expiresAt).toBeGreaterThanOrEqual(
+      before + SURVEILLANCE_COMMAND_COLLECT_DIAGNOSTICS_TTL_MS - 1000,
+    );
+    expect(expiresAt).toBeLessThanOrEqual(
+      Date.now() + SURVEILLANCE_COMMAND_COLLECT_DIAGNOSTICS_TTL_MS + 1000,
+    );
   });
 
   it('rejects when another command is already open', async () => {

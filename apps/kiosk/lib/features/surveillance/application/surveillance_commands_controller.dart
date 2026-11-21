@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
-import 'package:skp_kiosk/core/network/api_client.dart';
+import 'package:skp_kiosk/features/diagnostics/diagnostic_bundle_collector.dart';
 import 'package:skp_kiosk/features/surveillance/application/surveillance_controller.dart';
 
 /// Polls Admin-issued surveillance maintenance commands (heal / retry / prune).
@@ -106,10 +106,15 @@ class SurveillanceCommandsController extends Notifier<void> {
     final api = ref.read(apiClientProvider);
     AppLogger.info('SURVEILLANCE_COMMAND_RUN id=$commandId type=$type');
     try {
-      final Map<String, int> result;
+      final Map<String, dynamic> result;
       if (type == 'restart_recording') {
         result =
             await ref.read(surveillanceControllerProvider.notifier).forceRestart();
+      } else if (type == 'collect_diagnostics') {
+        result = await DiagnosticBundleCollector(
+          api: api,
+          recorder: ref.read(surveillanceRecorderProvider),
+        ).collectAndUpload(deviceId: deviceId, commandId: commandId);
       } else {
         final sink = ref.read(surveillanceUploadSinkProvider);
         await sink.attach(deviceId: deviceId);

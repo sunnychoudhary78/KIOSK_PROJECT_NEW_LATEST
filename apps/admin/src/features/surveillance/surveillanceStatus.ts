@@ -89,7 +89,8 @@ export type SurveillanceQueueCommandType =
   | 'retry_uploads'
   | 'prune_stubs'
   | 'restart_recording'
-  | 'flush_queue';
+  | 'flush_queue'
+  | 'collect_diagnostics';
 
 export const SURVEILLANCE_QUEUE_ACTIONS: {
   type: SurveillanceQueueCommandType;

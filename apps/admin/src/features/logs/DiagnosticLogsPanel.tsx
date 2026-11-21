@@ -39,6 +39,10 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
   const [hasMore, setHasMore] = useState(false);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [nextBeforeId, setNextBeforeId] = useState<string | null>(null);
+  const [collectBusy, setCollectBusy] = useState(false);
+  const [collectNote, setCollectNote] = useState<string | null>(null);
+  const [bundleId, setBundleId] = useState<string | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -132,8 +136,90 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
     setHasMore(false);
     setNextBefore(null);
     setNextBeforeId(null);
+    setBundleId(null);
+    setCollectNote(null);
     void loadLogs({ hours: 24, levelMode: 'problems', category: '' });
   }, [deviceId, loadLogs]);
+
+  async function waitForCollectCommand(commandId: string) {
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const latest = await apiRequest<{
+        command: {
+          id: string;
+          type: string;
+          status: string;
+          result?: Record<string, unknown> | null;
+          lastError?: string | null;
+        } | null;
+      }>(`/devices/${deviceId}/surveillance/commands/latest`, { token });
+      const command = latest.command;
+      if (!command || command.id !== commandId) {
+        continue;
+      }
+      if (command.status === 'succeeded') {
+        return command.result ?? {};
+      }
+      if (command.status === 'failed' || command.status === 'expired') {
+        throw new Error(command.lastError || `Command ${command.status}`);
+      }
+    }
+    throw new Error('Timed out waiting for kiosk to collect diagnostics');
+  }
+
+  async function collectDiagnostics() {
+    if (!deviceId || collectBusy) return;
+    setCollectBusy(true);
+    setCollectNote('Sending collect command…');
+    setError(null);
+    setBundleId(null);
+    try {
+      const created = await apiRequest<{
+        command: { id: string };
+      }>(`/devices/${deviceId}/surveillance/commands`, {
+        method: 'POST',
+        token,
+        body: { type: 'collect_diagnostics' },
+      });
+      setCollectNote('Waiting for kiosk to zip and upload…');
+      const result = await waitForCollectCommand(created.command.id);
+      const nextBundleId =
+        typeof result.bundleId === 'string' ? result.bundleId : null;
+      const inventoryCount =
+        typeof result.inventoryCount === 'number' ? result.inventoryCount : null;
+      setBundleId(nextBundleId);
+      setCollectNote(
+        nextBundleId
+          ? `Ready to download${
+              inventoryCount != null ? ` · ${inventoryCount} local recording(s)` : ''
+            }`
+          : 'Collect finished but no bundle id was returned',
+      );
+    } catch (err) {
+      setCollectNote(null);
+      setError(err instanceof Error ? err.message : 'Failed to collect diagnostics');
+    } finally {
+      setCollectBusy(false);
+    }
+  }
+
+  async function downloadBundle() {
+    if (!deviceId || !bundleId || downloadBusy) return;
+    setDownloadBusy(true);
+    setError(null);
+    try {
+      const result = await apiRequest<{ url: string; expiresAt: string }>(
+        `/devices/${deviceId}/diagnostic-bundles/${bundleId}/download-url`,
+        { token },
+      );
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to get download URL');
+    } finally {
+      setDownloadBusy(false);
+    }
+  }
 
   return (
     <div>
@@ -154,7 +240,28 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
               ))}
             </Select>
           </label>
+          <div className="flex flex-wrap items-end gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              disabled={!deviceId || collectBusy}
+              onClick={() => void collectDiagnostics()}
+            >
+              {collectBusy ? 'Collecting…' : 'Collect diagnostics'}
+            </Button>
+            {bundleId ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={downloadBusy}
+                onClick={() => void downloadBundle()}
+              >
+                {downloadBusy ? 'Opening…' : 'Download zip'}
+              </Button>
+            ) : null}
+          </div>
         </div>
+        {collectNote ? <p className="muted mb-3 text-sm">{collectNote}</p> : null}
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">Range</span>
@@ -291,7 +398,8 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
         )}
       </Panel>
       <p className="muted mt-3 text-sm">
-        Raw machine logs (app.log) — coming in Phase 2
+        Collect downloads app.log (+ rotations), upload-queue.json, and a local recordings
+        inventory (no MP4s). Bundles expire after 7 days.
       </p>
     </div>
   );
