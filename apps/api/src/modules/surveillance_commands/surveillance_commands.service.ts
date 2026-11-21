@@ -10,6 +10,7 @@ import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import type { AuditService } from '../audit/audit.service.js';
 import {
+  SURVEILLANCE_COMMAND_COLLECT_DIAGNOSTICS_TTL_MS,
   SURVEILLANCE_COMMAND_EXPIRE_BATCH_SIZE,
   SURVEILLANCE_COMMAND_PENDING_TTL_MS,
 } from './surveillance_commands.constants.js';
@@ -17,6 +18,13 @@ import type {
   CreateSurveillanceCommandBody,
   SurveillanceCommandAckBody,
 } from './surveillance_commands.schemas.js';
+
+function ttlMsForCommandType(type: string): number {
+  if (type === 'collect_diagnostics') {
+    return SURVEILLANCE_COMMAND_COLLECT_DIAGNOSTICS_TTL_MS;
+  }
+  return SURVEILLANCE_COMMAND_PENDING_TTL_MS;
+}
 
 const OPEN_STATUSES: DeviceSurveillanceCommandStatus[] = [
   DeviceSurveillanceCommandStatus.pending,
@@ -109,7 +117,7 @@ export class SurveillanceCommandsService {
         type: body.type as DeviceSurveillanceCommandType,
         status: DeviceSurveillanceCommandStatus.pending,
         requestedByUserId: adminUserId,
-        expiresAt: new Date(now.getTime() + SURVEILLANCE_COMMAND_PENDING_TTL_MS),
+        expiresAt: new Date(now.getTime() + ttlMsForCommandType(body.type)),
       },
     });
 

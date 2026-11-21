@@ -40,6 +40,7 @@ import { registerLocalServicesModule } from './modules/local_services/index.js';
 import { registerServiceAnalyticsModule } from './modules/service_analytics/index.js';
 import { registerServiceRatingsModule } from './modules/service_ratings/index.js';
 import { registerDiagnosticLogsModule } from './modules/diagnostic_logs/index.js';
+import { registerDiagnosticBundlesModule } from './modules/diagnostic_bundles/index.js';
 import { registerKioskReleasesModule } from './modules/kiosk_releases/index.js';
 
 export function createApp(deps: AppDeps): Express {
@@ -125,6 +126,7 @@ export function createApp(deps: AppDeps): Express {
   registerServiceAnalyticsModule(v1, deps);
   registerServiceRatingsModule(v1, deps);
   registerDiagnosticLogsModule(v1, deps);
+  registerDiagnosticBundlesModule(v1, deps);
   registerKioskReleasesModule(v1, deps);
 
   // Device-authenticated PDF content for print jobs
