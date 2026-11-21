@@ -84,12 +84,18 @@ export function resolveUploadBacklogWarning(
   };
 }
 
-export type SurveillanceQueueCommandType = 'heal_queue' | 'retry_uploads' | 'prune_stubs';
+export type SurveillanceQueueCommandType =
+  | 'heal_queue'
+  | 'retry_uploads'
+  | 'prune_stubs'
+  | 'restart_recording'
+  | 'flush_queue';
 
 export const SURVEILLANCE_QUEUE_ACTIONS: {
   type: SurveillanceQueueCommandType;
   label: string;
   description: string;
+  destructive?: boolean;
 }[] = [
   {
     type: 'heal_queue',
@@ -106,6 +112,17 @@ export const SURVEILLANCE_QUEUE_ACTIONS: {
     label: 'Clear stub clips',
     description: 'Remove empty invalid_segment junk from the local queue',
   },
+  {
+    type: 'restart_recording',
+    label: 'Restart recording',
+    description: 'Stop and start the camera recorder on the kiosk',
+  },
+  {
+    type: 'flush_queue',
+    label: 'Flush queue',
+    description: 'Delete local pending clips and clear the upload queue (destructive)',
+    destructive: true,
+  },
 ];
 
 export function labelForQueueCommand(type: SurveillanceQueueCommandType): string {
@@ -113,8 +130,9 @@ export function labelForQueueCommand(type: SurveillanceQueueCommandType): string
 }
 
 /**
- * Picks the best Phase-1 maintenance action from live health.
- * Priority: stuck schedule → stub poison → upload failures/backlog.
+ * Picks the best maintenance action from live health.
+ * Priority: stuck → stubs → upload errors → camera/stale restart.
+ * Never auto-recommends flush_queue.
  */
 export function resolveRecommendedQueueAction(
   health: SurveillanceHealth | null | undefined,
@@ -141,6 +159,9 @@ export function resolveRecommendedQueueAction(
     resolveUploadBacklogWarning(health).warn
   ) {
     return 'retry_uploads';
+  }
+  if (health.state === 'camera_error' || health.state === 'stale') {
+    return 'restart_recording';
   }
   return null;
 }

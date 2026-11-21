@@ -4,6 +4,8 @@ export const surveillanceCommandTypeSchema = z.enum([
   'heal_queue',
   'retry_uploads',
   'prune_stubs',
+  'restart_recording',
+  'flush_queue',
 ]);
 
 export const createSurveillanceCommandBodySchema = z.object({

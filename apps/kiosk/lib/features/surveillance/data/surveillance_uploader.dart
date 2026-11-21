@@ -199,6 +199,24 @@ class SurveillanceUploader implements SurveillanceUploadSink {
           _lastError = null;
         }
         return {'healed': 0, 'retried': 0, 'pruned': pruned, 'scanned': 0};
+      case 'flush_queue':
+        final result = await queue.flushAll(deleteFiles: true);
+        _lastError = null;
+        AppLogger.info(
+          'SURVEILLANCE_QUEUE_FLUSHED flushed=${result.flushed} '
+          'deletedFiles=${result.deletedFiles}',
+        );
+        return {
+          'healed': 0,
+          'retried': 0,
+          'pruned': 0,
+          'scanned': 0,
+          'flushed': result.flushed,
+          'deletedFiles': result.deletedFiles,
+        };
+      case 'restart_recording':
+        // Handled by SurveillanceController via the commands poller.
+        throw ArgumentError('restart_recording must be handled by controller');
       default:
         throw ArgumentError('Unknown surveillance command: $type');
     }

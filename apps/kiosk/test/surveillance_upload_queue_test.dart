@@ -71,6 +71,26 @@ void main() {
     expect(queue.items.single.path, ok.path);
   });
 
+  test('flushAll clears queue and deletes segment files', () async {
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final ok = File(p.join(dir.path, '2026-09-03', '143052_abc.mp4'));
+    final leftover = File(p.join(dir.path, '2026-09-03', '150000_leftover.mp4'));
+    ok.parent.createSync(recursive: true);
+    ok.writeAsBytesSync(List<int>.filled(2048, 1));
+    leftover.writeAsBytesSync(List<int>.filled(2048, 1));
+    await queue.enqueue(path: ok.path, bytes: 2048);
+    expect(queue.items, hasLength(1));
+
+    final result = await queue.flushAll(deleteFiles: true);
+    expect(result.flushed, 1);
+    expect(result.deletedFiles, greaterThanOrEqualTo(2));
+    expect(queue.items, isEmpty);
+    expect(ok.existsSync(), isFalse);
+    expect(leftover.existsSync(), isFalse);
+  });
+
   test('healDueNow forces pending schedules to now', () async {
     final queue = SurveillanceUploadQueue(
       queueFile: File(p.join(dir.path, surveillanceQueueFileName)),

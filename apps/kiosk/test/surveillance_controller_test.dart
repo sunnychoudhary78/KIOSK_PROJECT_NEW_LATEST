@@ -240,6 +240,25 @@ void main() {
     expect(container.read(surveillanceControllerProvider).error, isNull);
   });
 
+  test('forceRestart clears error and starts again', () async {
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.starts, 1);
+
+    final controller = container.read(surveillanceControllerProvider.notifier);
+    controller.retryDelayFor = (_, __) => const Duration(days: 1);
+    recorder.emit(const SurveillanceNativeEvent('CAMERA_ERROR'));
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(surveillanceControllerProvider).error, 'CAMERA_ERROR');
+
+    final startsBefore = recorder.starts;
+    final result = await controller.forceRestart();
+    expect(result['restarted'], 1);
+    // Camera error already released the lease; restart may not call stop again.
+    expect(recorder.starts, greaterThan(startsBefore));
+    expect(container.read(surveillanceControllerProvider).error, isNull);
+    expect(container.read(surveillanceControllerProvider).recording, isTrue);
+  });
+
   test('camera error attempt climbs across rapid failures', () async {
     await Future<void>.delayed(Duration.zero);
     final controller = container.read(surveillanceControllerProvider.notifier);

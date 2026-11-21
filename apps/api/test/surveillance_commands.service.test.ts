@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import { SurveillanceCommandsService } from '../src/modules/surveillance_commands/surveillance_commands.service.js';
 import { SURVEILLANCE_COMMAND_PENDING_TTL_MS } from '../src/modules/surveillance_commands/surveillance_commands.constants.js';
+import { surveillanceCommandTypeSchema } from '../src/modules/surveillance_commands/surveillance_commands.schemas.js';
 import type { DbClient } from '../src/infrastructure/database/prisma.js';
 import type { AuditService } from '../src/modules/audit/audit.service.js';
 
@@ -43,6 +44,11 @@ describe('SurveillanceCommandsService', () => {
     vi.clearAllMocks();
   });
 
+  it('accepts phase-2 command types in the schema', () => {
+    expect(surveillanceCommandTypeSchema.parse('restart_recording')).toBe('restart_recording');
+    expect(surveillanceCommandTypeSchema.parse('flush_queue')).toBe('flush_queue');
+  });
+
   it('creates a pending command', async () => {
     const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) =>
       commandRow({
@@ -72,6 +78,35 @@ describe('SurveillanceCommandsService', () => {
     expect(result.command.status).toBe('pending');
     expect(create).toHaveBeenCalled();
     expect(audit.record).toHaveBeenCalled();
+  });
+
+  it('creates restart_recording and flush_queue commands', async () => {
+    const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) =>
+      commandRow({
+        type: data.type as DeviceSurveillanceCommandType,
+      }),
+    );
+    const db = {
+      device: {
+        findUnique: vi.fn(async () => ({
+          id: deviceId,
+          status: DeviceStatus.active,
+        })),
+      },
+      deviceSurveillanceCommand: {
+        findFirst: vi.fn(async () => null),
+        create,
+      },
+    };
+    const service = new SurveillanceCommandsService(
+      db as unknown as DbClient,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    );
+
+    const restart = await service.create(deviceId, adminId, { type: 'restart_recording' });
+    expect(restart.command.type).toBe('restart_recording');
+    const flush = await service.create(deviceId, adminId, { type: 'flush_queue' });
+    expect(flush.command.type).toBe('flush_queue');
   });
 
   it('rejects when another command is already open', async () => {

@@ -147,6 +147,7 @@ export function RecordingsPage() {
   const [commandBusy, setCommandBusy] = useState(false);
   const [commandNote, setCommandNote] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [flushConfirmOpen, setFlushConfirmOpen] = useState(false);
 
   const selected = devices.find((device) => device.id === deviceId) ?? null;
   const healthDisplay = selected ? resolveRecordingDisplay(selected) : null;
@@ -250,12 +251,22 @@ export function RecordingsPage() {
     throw new Error('Timed out waiting for kiosk to run the command');
   }
 
+  function requestQueueCommand(type: SurveillanceQueueCommandType) {
+    if (type === 'flush_queue') {
+      setMoreOpen(false);
+      setFlushConfirmOpen(true);
+      return;
+    }
+    void runQueueCommand(type);
+  }
+
   async function runQueueCommand(type: SurveillanceQueueCommandType) {
     if (!deviceId || commandBusy) return;
     setCommandBusy(true);
     setCommandNote('Sending to kiosk…');
     setError(null);
     setMoreOpen(false);
+    setFlushConfirmOpen(false);
     try {
       const created = await apiRequest<{ command: SurveillanceCommand }>(
         `/devices/${deviceId}/surveillance/commands`,
@@ -377,7 +388,7 @@ export function RecordingsPage() {
                     type="button"
                     variant="primary"
                     disabled={commandBusy}
-                    onClick={() => void runQueueCommand(recommendedAction)}
+                    onClick={() => requestQueueCommand(recommendedAction)}
                     title={
                       SURVEILLANCE_QUEUE_ACTIONS.find((a) => a.type === recommendedAction)
                         ?.description
@@ -396,15 +407,17 @@ export function RecordingsPage() {
                     More
                   </Button>
                   {moreOpen ? (
-                    <div className="absolute right-0 z-20 mt-1 min-w-[14rem] rounded-md border bg-white p-1 shadow-md">
+                    <div className="absolute right-0 z-20 mt-1 min-w-[16rem] rounded-md border bg-white p-1 shadow-md">
                       {SURVEILLANCE_QUEUE_ACTIONS.map((action) => (
                         <button
                           key={action.type}
                           type="button"
-                          className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50"
+                          className={`block w-full rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50 ${
+                            action.destructive ? 'text-red-700' : ''
+                          }`}
                           disabled={commandBusy}
                           title={action.description}
-                          onClick={() => void runQueueCommand(action.type)}
+                          onClick={() => requestQueueCommand(action.type)}
                         >
                           <span className="font-medium">{action.label}</span>
                           {recommendedAction === action.type ? (
@@ -509,6 +522,33 @@ export function RecordingsPage() {
           </>
         )}
       </Panel>
+
+      <Modal
+        open={flushConfirmOpen}
+        title="Flush upload queue?"
+        description="Deletes clips still on the kiosk that have not uploaded, and clears the local upload queue. This cannot be undone."
+        onClose={() => setFlushConfirmOpen(false)}
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setFlushConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={commandBusy}
+              onClick={() => void runQueueCommand('flush_queue')}
+            >
+              Flush queue
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Use this only when heal / retry / clear stubs did not recover the kiosk. Uploaded cloud
+          clips are not affected.
+        </p>
+      </Modal>
 
       <Modal
         open={playbackUrl != null}

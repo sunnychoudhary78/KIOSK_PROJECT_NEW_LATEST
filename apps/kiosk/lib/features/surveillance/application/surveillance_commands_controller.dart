@@ -104,11 +104,17 @@ class SurveillanceCommandsController extends Notifier<void> {
     required String type,
   }) async {
     final api = ref.read(apiClientProvider);
-    final sink = ref.read(surveillanceUploadSinkProvider);
     AppLogger.info('SURVEILLANCE_COMMAND_RUN id=$commandId type=$type');
     try {
-      await sink.attach(deviceId: deviceId);
-      final result = await sink.runMaintenanceCommand(type);
+      final Map<String, int> result;
+      if (type == 'restart_recording') {
+        result =
+            await ref.read(surveillanceControllerProvider.notifier).forceRestart();
+      } else {
+        final sink = ref.read(surveillanceUploadSinkProvider);
+        await sink.attach(deviceId: deviceId);
+        result = await sink.runMaintenanceCommand(type);
+      }
       await api.post(
         '/devices/$deviceId/surveillance/commands/$commandId/ack',
         body: {'ok': true, 'result': result},

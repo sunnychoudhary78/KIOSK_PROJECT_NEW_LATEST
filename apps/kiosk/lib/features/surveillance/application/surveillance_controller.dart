@@ -331,6 +331,25 @@ class SurveillanceController extends Notifier<SurveillanceState> {
     }
   }
 
+  /// Admin remote: clear backoff, stop, then start again.
+  Future<Map<String, int>> forceRestart() async {
+    AppLogger.info('SURVEILLANCE_FORCE_RESTART');
+    final lastSegmentAt = state.lastSegmentAt;
+    final lastSegmentBytes = state.lastSegmentBytes;
+    final cameraName = state.cameraName;
+    _clearRetry();
+    await _stopRecorder();
+    if (ref.mounted) {
+      state = SurveillanceState(
+        lastSegmentAt: lastSegmentAt,
+        lastSegmentBytes: lastSegmentBytes,
+        cameraName: cameraName,
+      );
+    }
+    await _sync();
+    return {'restarted': 1};
+  }
+
   Future<void> _pauseForPalm() async {
     AppLogger.info('SURVEILLANCE_PAUSED_FOR_PALM_CAPTURE');
     try {

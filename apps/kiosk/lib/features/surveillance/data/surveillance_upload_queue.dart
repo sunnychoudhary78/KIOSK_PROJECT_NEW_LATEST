@@ -284,6 +284,45 @@ class SurveillanceUploadQueue {
     return item;
   }
 
+  /// Nuclear flush: clear queue and optionally delete local segment MP4s.
+  /// Skips `.inprogress.mp4` (owned by the recorder).
+  Future<({int flushed, int deletedFiles})> flushAll({
+    required bool deleteFiles,
+  }) async {
+    final flushed = _items.length;
+    var deletedFiles = 0;
+    if (deleteFiles) {
+      for (final item in _items.values.toList()) {
+        final before = File(item.path).existsSync();
+        deleteSegmentFile(item.path);
+        if (before && !File(item.path).existsSync()) {
+          deletedFiles += 1;
+        }
+      }
+      if (root.existsSync()) {
+        await for (final entity in root.list(recursive: true, followLinks: false)) {
+          if (entity is! File) {
+            continue;
+          }
+          if (!isCompletedSegmentPath(entity.path)) {
+            continue;
+          }
+          if (p.basename(entity.path) == surveillanceQueueFileName) {
+            continue;
+          }
+          final before = entity.existsSync();
+          deleteSegmentFile(entity.path);
+          if (before && !File(entity.path).existsSync()) {
+            deletedFiles += 1;
+          }
+        }
+      }
+    }
+    _items.clear();
+    await save();
+    return (flushed: flushed, deletedFiles: deletedFiles);
+  }
+
   /// Removes sticky failed stub rows (`invalid_segment`) and their files.
   /// Returns how many items were pruned.
   Future<int> pruneInvalidSegments() async {

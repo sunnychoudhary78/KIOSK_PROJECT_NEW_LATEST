@@ -41,6 +41,8 @@ enum DeviceSurveillanceCommandType {
   heal_queue
   retry_uploads
   prune_stubs
+  restart_recording
+  flush_queue
 }
 
 enum DeviceStatus {
