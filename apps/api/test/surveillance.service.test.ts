@@ -551,3 +551,195 @@ describe('SurveillanceService.purgeOlderThan', () => {
     expect(deleteMany).toHaveBeenCalled();
   });
 });
+
+describe('SurveillanceService.dismissSegment', () => {
+  const pendingRow = {
+    id: segmentId,
+    deviceId,
+    objectKey,
+    filename: body.filename,
+    status: SurveillanceSegmentStatus.pending_upload,
+    lastUploadError: 'size_mismatch',
+  };
+
+  it('deletes storage object and DB row for pending segment', async () => {
+    const findUnique = vi.fn(async () => pendingRow);
+    const del = vi.fn(async () => pendingRow);
+    const record = vi.fn(async () => undefined);
+    const storage = storageMock();
+    const service = new SurveillanceService(
+      { surveillanceSegment: { findUnique, delete: del } } as unknown as DbClient,
+      storage,
+      { record } as unknown as AuditService,
+    );
+
+    await expect(service.dismissSegment(deviceId, segmentId, adminId)).resolves.toEqual({
+      ok: true,
+    });
+    expect(storage.deleteObject).toHaveBeenCalledWith(objectKey);
+    expect(del).toHaveBeenCalledWith({ where: { id: segmentId } });
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'surveillance.segment_dismiss',
+        resourceId: segmentId,
+        metadata: expect.objectContaining({
+          filename: body.filename,
+          objectKey,
+          lastUploadError: 'size_mismatch',
+        }),
+      }),
+    );
+  });
+
+  it('rejects uploaded segments with 409', async () => {
+    const service = new SurveillanceService(
+      {
+        surveillanceSegment: {
+          findUnique: vi.fn(async () => ({
+            ...pendingRow,
+            status: SurveillanceSegmentStatus.uploaded,
+            lastUploadError: null,
+          })),
+          delete: vi.fn(),
+        },
+      } as unknown as DbClient,
+      storageMock(),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    await expect(service.dismissSegment(deviceId, segmentId, adminId)).rejects.toMatchObject({
+      code: 'already_uploaded',
+      statusCode: 409,
+    });
+  });
+
+  it('returns 404 for missing or wrong-device segment', async () => {
+    const service = new SurveillanceService(
+      {
+        surveillanceSegment: {
+          findUnique: vi.fn(async () => ({ ...pendingRow, deviceId: otherDevice })),
+          delete: vi.fn(),
+        },
+      } as unknown as DbClient,
+      storageMock(),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    await expect(service.dismissSegment(deviceId, segmentId, adminId)).rejects.toMatchObject({
+      code: 'not_found',
+      statusCode: 404,
+    });
+  });
+
+  it('still deletes the DB row when storage delete fails', async () => {
+    const del = vi.fn(async () => pendingRow);
+    const service = new SurveillanceService(
+      {
+        surveillanceSegment: {
+          findUnique: vi.fn(async () => pendingRow),
+          delete: del,
+        },
+      } as unknown as DbClient,
+      storageMock({
+        deleteObject: vi.fn(async () => {
+          throw new Error('r2 unavailable');
+        }),
+      }),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    await expect(service.dismissSegment(deviceId, segmentId, adminId)).resolves.toEqual({
+      ok: true,
+    });
+    expect(del).toHaveBeenCalled();
+  });
+});
+
+describe('SurveillanceService.dismissOrphans', () => {
+  it('dismisses only pending rows with lastUploadError and returns count', async () => {
+    const orphanA = {
+      id: 'orphan-a',
+      objectKey: `${objectKey}.a`,
+      filename: 'a.mp4',
+      lastUploadError: 'size_mismatch',
+    };
+    const orphanB = {
+      id: 'orphan-b',
+      objectKey: `${objectKey}.b`,
+      filename: 'b.mp4',
+      lastUploadError: 'upload_incomplete',
+    };
+    const findMany = vi.fn(async () => [orphanA, orphanB]);
+    const del = vi.fn(async () => undefined);
+    const record = vi.fn(async () => undefined);
+    const storage = storageMock();
+    const service = new SurveillanceService(
+      {
+        device: { findUnique: vi.fn(async () => ({ id: deviceId })) },
+        surveillanceSegment: { findMany, delete: del },
+      } as unknown as DbClient,
+      storage,
+      { record } as unknown as AuditService,
+    );
+
+    await expect(
+      service.dismissOrphans(deviceId, { recordedOn: '2026-09-03' }, adminId),
+    ).resolves.toEqual({ ok: true, dismissed: 2 });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          deviceId,
+          status: SurveillanceSegmentStatus.pending_upload,
+          lastUploadError: { not: null },
+        }),
+      }),
+    );
+    expect(storage.deleteObject).toHaveBeenCalledTimes(2);
+    expect(del).toHaveBeenCalledTimes(2);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'surveillance.segments_dismiss_orphans',
+        metadata: expect.objectContaining({
+          recordedOn: '2026-09-03',
+          dismissed: 2,
+        }),
+      }),
+    );
+  });
+
+  it('returns dismissed 0 when no errored pending rows exist', async () => {
+    const del = vi.fn();
+    const service = new SurveillanceService(
+      {
+        device: { findUnique: vi.fn(async () => ({ id: deviceId })) },
+        surveillanceSegment: { findMany: vi.fn(async () => []), delete: del },
+      } as unknown as DbClient,
+      storageMock(),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    await expect(
+      service.dismissOrphans(deviceId, { recordedOn: '2026-09-03' }, adminId),
+    ).resolves.toEqual({ ok: true, dismissed: 0 });
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when device is missing', async () => {
+    const service = new SurveillanceService(
+      {
+        device: { findUnique: vi.fn(async () => null) },
+        surveillanceSegment: { findMany: vi.fn(), delete: vi.fn() },
+      } as unknown as DbClient,
+      storageMock(),
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    await expect(
+      service.dismissOrphans(deviceId, { recordedOn: '2026-09-03' }, adminId),
+    ).rejects.toMatchObject({
+      code: 'not_found',
+      statusCode: 404,
+    });
+  });
+});

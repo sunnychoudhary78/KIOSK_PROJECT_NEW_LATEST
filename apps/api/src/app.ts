@@ -29,6 +29,7 @@ import { registerWellBeingModule } from './modules/well_being/index.js';
 import { registerFuelStationsModule } from './modules/fuel_stations/index.js';
 import { registerWeatherModule } from './modules/weather/index.js';
 import { registerSurveillanceModule } from './modules/surveillance/index.js';
+import { registerSurveillanceCommandsModule } from './modules/surveillance_commands/index.js';
 import { registerScreenShareModule } from './modules/screen_share/index.js';
 import { registerQuickPrintModule } from './modules/quick_print/index.js';
 import { registerPrintQuotaModule } from './modules/print_quota/index.js';
@@ -119,6 +120,7 @@ export function createApp(deps: AppDeps): Express {
   registerFuelStationsModule(v1, deps);
   registerWeatherModule(v1, deps);
   registerSurveillanceModule(v1, deps);
+  registerSurveillanceCommandsModule(v1, deps);
   registerScreenShareModule(v1, deps);
   registerServiceAnalyticsModule(v1, deps);
   registerServiceRatingsModule(v1, deps);

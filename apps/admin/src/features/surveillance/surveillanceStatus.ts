@@ -84,6 +84,88 @@ export function resolveUploadBacklogWarning(
   };
 }
 
+export type SurveillanceQueueCommandType =
+  | 'heal_queue'
+  | 'retry_uploads'
+  | 'prune_stubs'
+  | 'restart_recording'
+  | 'flush_queue';
+
+export const SURVEILLANCE_QUEUE_ACTIONS: {
+  type: SurveillanceQueueCommandType;
+  label: string;
+  description: string;
+  destructive?: boolean;
+}[] = [
+  {
+    type: 'heal_queue',
+    label: 'Unstick queue',
+    description: 'Reset upload schedules so pending clips are tried now',
+  },
+  {
+    type: 'retry_uploads',
+    label: 'Retry uploads',
+    description: 'Re-queue failed uploads (size_mismatch, network, etc.)',
+  },
+  {
+    type: 'prune_stubs',
+    label: 'Clear stub clips',
+    description: 'Remove empty invalid_segment junk from the local queue',
+  },
+  {
+    type: 'restart_recording',
+    label: 'Restart recording',
+    description: 'Stop and start the camera recorder on the kiosk',
+  },
+  {
+    type: 'flush_queue',
+    label: 'Flush queue',
+    description: 'Delete local pending clips and clear the upload queue (destructive)',
+    destructive: true,
+  },
+];
+
+export function labelForQueueCommand(type: SurveillanceQueueCommandType): string {
+  return SURVEILLANCE_QUEUE_ACTIONS.find((action) => action.type === type)?.label ?? type;
+}
+
+/**
+ * Picks the best maintenance action from live health.
+ * Priority: stuck → stubs → upload errors → camera/stale restart.
+ * Never auto-recommends flush_queue.
+ */
+export function resolveRecommendedQueueAction(
+  health: SurveillanceHealth | null | undefined,
+): SurveillanceQueueCommandType | null {
+  if (!health) return null;
+  const pending = health.queuePending ?? 0;
+  const due = health.queueDue;
+  const failed = health.queueFailed ?? 0;
+  const error = health.lastErrorCode ?? '';
+
+  if (pending > 0 && due === 0) {
+    return 'heal_queue';
+  }
+  if (error === 'invalid_segment') {
+    return 'prune_stubs';
+  }
+  if (
+    error === 'size_mismatch' ||
+    error === 'upload_incomplete' ||
+    error === 'unauthorized' ||
+    error === 'upload_failed' ||
+    error === 'upload_timeout' ||
+    failed > 0 ||
+    resolveUploadBacklogWarning(health).warn
+  ) {
+    return 'retry_uploads';
+  }
+  if (health.state === 'camera_error' || health.state === 'stale') {
+    return 'restart_recording';
+  }
+  return null;
+}
+
 export function resolveRecordingDisplay(device: DeviceSurveillanceView): RecordingDisplayStatus {
   if (!device.surveillanceEnabled) {
     return {

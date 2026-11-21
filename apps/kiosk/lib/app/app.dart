@@ -15,6 +15,7 @@ import 'package:skp_kiosk/features/printer/application/printer_health_controller
 import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
 import 'package:skp_kiosk/features/service_analytics/presentation/service_analytics_route_observer.dart';
 import 'package:skp_kiosk/features/screen_share/application/screen_share_controller.dart';
+import 'package:skp_kiosk/features/surveillance/application/surveillance_commands_controller.dart';
 import 'package:skp_kiosk/features/surveillance/application/surveillance_controller.dart';
 
 class SkpKioskApp extends ConsumerStatefulWidget {
@@ -32,6 +33,7 @@ class _SkpKioskAppState extends ConsumerState<SkpKioskApp> {
   void initState() {
     super.initState();
     ref.read(surveillanceControllerProvider);
+    ref.read(surveillanceCommandsControllerProvider);
     ref.read(screenShareControllerProvider);
     ref.read(printerHealthControllerProvider);
     // Warm serial first so hardwareHeartbeatBodyBuilder is registered for fleet health.
