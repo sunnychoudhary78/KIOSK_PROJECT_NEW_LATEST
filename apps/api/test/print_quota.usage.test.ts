@@ -97,6 +97,11 @@ function setup(
     },
     phoneFreePageLedger: {
       findMany,
+      groupBy: vi.fn(async () => {
+        const keys = [...new Set(ledgerRows.map((row) => row.periodKey ?? PERIOD_KEY))];
+        keys.sort((a, b) => b.localeCompare(a));
+        return keys.map((periodKey) => ({ periodKey }));
+      }),
     },
   };
 
@@ -181,6 +186,38 @@ describe('PrintQuotaService.listUsage', () => {
 
     // newest activity first
     expect(result.items[0]?.phone).toBe(PHONE_A);
+  });
+
+  it('lists previous periods when scope=all', async () => {
+    const previousKey = '2026-04-14';
+    const { service } = setup([
+      {
+        phone: PHONE_A,
+        printColorMode: PrintColorMode.bw,
+        pages: 1,
+        periodKey: PERIOD_KEY,
+        updatedAt: new Date('2026-04-15T09:00:00.000Z'),
+      },
+      {
+        phone: PHONE_A,
+        printColorMode: PrintColorMode.bw,
+        pages: 2,
+        periodKey: previousKey,
+        updatedAt: new Date('2026-04-14T09:00:00.000Z'),
+      },
+    ]);
+
+    const all = await service.listUsage({ scope: 'all', now: NOW });
+    expect(all.scope).toBe('all');
+    expect(all.items).toHaveLength(2);
+    expect(all.availablePeriodKeys).toEqual([PERIOD_KEY, previousKey]);
+    expect(all.summary.bwPages).toBe(3);
+
+    const previous = await service.listUsage({ periodKey: previousKey, now: NOW });
+    expect(previous.scope).toBe('period');
+    expect(previous.periodKey).toBe(previousKey);
+    expect(previous.items).toHaveLength(1);
+    expect(previous.items[0]?.bwUsed).toBe(2);
   });
 
   it('keeps period summary when audience filter is applied', async () => {
@@ -296,7 +333,7 @@ describe('PrintQuotaService.getPhoneUsageDetail', () => {
       },
     ]);
 
-    const detail = await service.getPhoneUsageDetail(PHONE_A, NOW);
+    const detail = await service.getPhoneUsageDetail(PHONE_A, { now: NOW });
     expect(detail.phone).toBe(PHONE_A);
     expect(detail.periodKey).toBe(PERIOD_KEY);
     expect(detail.summary.bwUsed).toBe(2);
@@ -335,7 +372,7 @@ describe('PrintQuotaService.getPhoneUsageDetail', () => {
       },
     );
 
-    const detail = await service.getPhoneUsageDetail(PHONE_A, NOW);
+    const detail = await service.getPhoneUsageDetail(PHONE_A, { now: NOW });
     expect(detail.society).toBe(true);
     expect(detail.period).toBe('monthly');
     expect(detail.periodKey).toBe(monthlyKey);
@@ -348,6 +385,6 @@ describe('PrintQuotaService.getPhoneUsageDetail', () => {
 
   it('rejects invalid phone', async () => {
     const { service } = setup([]);
-    await expect(service.getPhoneUsageDetail('not-a-phone', NOW)).rejects.toBeInstanceOf(AppError);
+    await expect(service.getPhoneUsageDetail('not-a-phone')).rejects.toBeInstanceOf(AppError);
   });
 });

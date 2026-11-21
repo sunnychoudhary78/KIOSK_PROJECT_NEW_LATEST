@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 
 type UsageItem = {
   phone: string;
+  periodKey?: string;
   society?: boolean;
   bwUsed: number;
   bwRemaining: number;
@@ -38,10 +39,13 @@ type UsageSummary = {
 };
 
 type UsageListResponse = {
+  scope?: 'current' | 'all' | 'period';
   period: 'daily' | 'weekly' | 'monthly';
   periodKey: string;
+  currentPeriodKey?: string;
   societyPeriod?: 'daily' | 'weekly' | 'monthly';
   societyPeriodKey?: string;
+  availablePeriodKeys?: string[];
   limits: { freeBwPages: number; freeColorPages: number };
   societyLimits?: { freeBwPages: number; freeColorPages: number };
   summary?: UsageSummary;
@@ -83,6 +87,8 @@ type UsageDetailResponse = {
 type AudienceFilter = 'all' | 'society' | 'public';
 type UsageFilter = 'all' | 'has_remaining' | 'exhausted' | 'used_bw' | 'used_color';
 type SortKey = 'recent' | 'used_desc' | 'bw_left' | 'color_left';
+/** `current` | `all` | exact period key */
+type PeriodFilter = string;
 
 function periodLabel(period: string): string {
   if (period === 'weekly') return 'Weekly';
@@ -135,6 +141,7 @@ export function FreePrintUsagePage() {
   const [usageFilter, setUsageFilter] = useState<UsageFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('recent');
   const [entryStatusFilter, setEntryStatusFilter] = useState<'all' | string>('all');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('current');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -145,6 +152,11 @@ export function FreePrintUsagePage() {
       if (search.trim()) params.set('q', search.trim());
       if (audienceFilter !== 'all') params.set('audience', audienceFilter);
       if (usageFilter !== 'all') params.set('usage', usageFilter);
+      if (periodFilter === 'all') {
+        params.set('scope', 'all');
+      } else if (periodFilter !== 'current') {
+        params.set('periodKey', periodFilter);
+      }
       const result = await apiRequest<UsageListResponse>(`/print-quota/usage?${params}`, { token });
       setData(result);
     } catch (err) {
@@ -153,7 +165,7 @@ export function FreePrintUsagePage() {
     } finally {
       setLoading(false);
     }
-  }, [token, search, audienceFilter, usageFilter]);
+  }, [token, search, audienceFilter, usageFilter, periodFilter]);
 
   useEffect(() => {
     void load();
@@ -168,22 +180,32 @@ export function FreePrintUsagePage() {
     return () => window.clearTimeout(handle);
   }, [query]);
 
-  async function toggleDetail(phone: string) {
-    if (expandedPhone === phone) {
+  async function toggleDetail(phone: string, rowPeriodKey?: string) {
+    const detailKey = `${phone}::${rowPeriodKey ?? periodFilter}`;
+    if (expandedPhone === detailKey) {
       setExpandedPhone(null);
       setDetail(null);
       setDetailError(null);
       setEntryStatusFilter('all');
       return;
     }
-    setExpandedPhone(phone);
+    setExpandedPhone(detailKey);
     setDetail(null);
     setDetailError(null);
     setEntryStatusFilter('all');
     setDetailLoading(true);
     try {
+      const params = new URLSearchParams();
+      if (periodFilter === 'all') {
+        params.set('periodKey', rowPeriodKey && rowPeriodKey !== 'all' ? rowPeriodKey : 'all');
+      } else if (periodFilter !== 'current') {
+        params.set('periodKey', periodFilter);
+      } else if (rowPeriodKey) {
+        params.set('periodKey', rowPeriodKey);
+      }
+      const qs = params.toString();
       const result = await apiRequest<UsageDetailResponse>(
-        `/print-quota/usage/${encodeURIComponent(phone)}`,
+        `/print-quota/usage/${encodeURIComponent(phone)}${qs ? `?${qs}` : ''}`,
         { token },
       );
       setDetail(result);
@@ -204,7 +226,8 @@ export function FreePrintUsagePage() {
       if (sortKey === 'color_left') return a.colorRemaining - b.colorRemaining;
       const aTime = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
       const bTime = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
-      return bTime - aTime;
+      if (bTime !== aTime) return bTime - aTime;
+      return (b.periodKey ?? '').localeCompare(a.periodKey ?? '');
     });
     return items;
   }, [data, sortKey]);
@@ -224,9 +247,22 @@ export function FreePrintUsagePage() {
     };
   }, [data]);
 
+  const periodOptions = useMemo(() => {
+    const current = data?.currentPeriodKey ?? data?.periodKey;
+    const keys = data?.availablePeriodKeys ?? [];
+    const unique = Array.from(new Set([...(current ? [current] : []), ...keys]));
+    return unique;
+  }, [data]);
+
+  const showPeriodColumn = periodFilter === 'all';
+
   const subtitle = data
     ? [
-        `${periodLabel(data.period)} · ${data.periodKey}`,
+        periodFilter === 'all'
+          ? 'All history'
+          : periodFilter === 'current'
+            ? `${periodLabel(data.period)} · ${data.currentPeriodKey ?? data.periodKey}`
+            : `${periodLabel(data.period)} · ${data.periodKey}`,
         `Public free B/W ${data.limits.freeBwPages} / Color ${data.limits.freeColorPages}`,
         data.societyLimits
           ? `Society B/W ${data.societyLimits.freeBwPages} / Color ${data.societyLimits.freeColorPages}`
@@ -234,7 +270,7 @@ export function FreePrintUsagePage() {
       ]
         .filter(Boolean)
         .join(' · ')
-    : 'Phones that used free pages in the current quota period';
+    : 'Phones that used free pages — pick a period to browse history';
 
   const detailEntries = useMemo(() => {
     if (!detail) return [];
@@ -261,7 +297,10 @@ export function FreePrintUsagePage() {
           onClick={() => setAudienceFilter('all')}
         >
           <strong>{counts.phones}</strong>
-          <span>Phones this period{data?.truncated ? '+' : ''}</span>
+          <span>
+            {periodFilter === 'all' ? 'Phones in history' : 'Phones this period'}
+            {data?.truncated ? '+' : ''}
+          </span>
         </button>
         <button
           type="button"
@@ -301,6 +340,25 @@ export function FreePrintUsagePage() {
           onSearchChange={setQuery}
           searchPlaceholder="Search phone digits"
         >
+          <Select
+            aria-label="Period"
+            className="max-w-52"
+            value={periodFilter}
+            onChange={(event) => {
+              setPeriodFilter(event.target.value);
+              setExpandedPhone(null);
+              setDetail(null);
+            }}
+          >
+            <option value="current">Current period</option>
+            <option value="all">All history</option>
+            {periodOptions.map((key) => (
+              <option key={key} value={key}>
+                Period · {key}
+                {key === data?.currentPeriodKey ? ' (current)' : ''}
+              </option>
+            ))}
+          </Select>
           <FilterChips
             options={[
               { value: 'all', label: 'All phones' },
@@ -335,23 +393,29 @@ export function FreePrintUsagePage() {
           </Select>
         </Toolbar>
 
-        {data?.societyLimits ? (
-          <p className="mb-3 text-xs text-muted-foreground">
-            Society quota: {periodLabel(data.societyPeriod ?? data.period)} · {data.societyPeriodKey} ·
-            B/W {data.societyLimits.freeBwPages} · Color {data.societyLimits.freeColorPages}
-            {data.truncated ? ` · Showing first ${data.items.length} of ${data.total}` : null}
-          </p>
-        ) : null}
+        <p className="mb-3 text-xs text-muted-foreground">
+          {periodFilter === 'all'
+            ? 'Showing every stored quota period. Pick a specific period to focus one day/week/month.'
+            : periodFilter === 'current'
+              ? `Current ${periodLabel(data?.period ?? 'daily').toLowerCase()} window${
+                  data?.currentPeriodKey ? ` · ${data.currentPeriodKey}` : ''
+                }.`
+              : `Historical period · ${periodFilter}.`}
+          {data?.societyLimits
+            ? ` Society quota: ${periodLabel(data.societyPeriod ?? data.period)} · B/W ${data.societyLimits.freeBwPages} · Color ${data.societyLimits.freeColorPages}.`
+            : null}
+          {data?.truncated ? ` Showing first ${data.items.length} of ${data.total}.` : null}
+        </p>
 
         {error ? <p className="error">{error}</p> : null}
 
         {!loading && !error && visible.length === 0 ? (
           <EmptyState
-            title={data?.items.length ? 'No matches' : 'No free-page usage yet'}
+            title={data?.items.length ? 'No matches' : 'No free-page usage for this filter'}
             description={
               data?.items.length
-                ? 'Adjust audience, usage filter, or search.'
-                : 'Phones appear here after they reserve or consume free pages via OTP print or Quick Print.'
+                ? 'Adjust period, audience, usage filter, or search.'
+                : 'Try All history or another period. Phones appear after free OTP / Quick Print pages are reserved or consumed.'
             }
           />
         ) : null}
@@ -361,6 +425,7 @@ export function FreePrintUsagePage() {
             <thead>
               <tr>
                 <th>Phone</th>
+                {showPeriodColumn ? <th>Period</th> : null}
                 <th>B/W</th>
                 <th>Color</th>
                 <th>Last activity</th>
@@ -373,8 +438,9 @@ export function FreePrintUsagePage() {
                 const colorLimit = item.colorLimit ?? item.colorUsed + item.colorRemaining;
                 const exhausted =
                   item.exhausted ?? (item.bwRemaining === 0 && item.colorRemaining === 0);
+                const rowKey = `${item.phone}::${item.periodKey ?? periodFilter}`;
                 return (
-                  <Fragment key={item.phone}>
+                  <Fragment key={rowKey}>
                     <tr>
                       <td>
                         <div className="font-mono text-sm font-medium">{item.phone}</div>
@@ -385,6 +451,11 @@ export function FreePrintUsagePage() {
                           {exhausted ? <Badge variant="warning">Exhausted</Badge> : null}
                         </div>
                       </td>
+                      {showPeriodColumn ? (
+                        <td className="whitespace-nowrap text-sm text-muted-foreground">
+                          {item.periodKey ?? '—'}
+                        </td>
+                      ) : null}
                       <td>
                         <UsageBar used={item.bwUsed} limit={bwLimit} />
                       </td>
@@ -400,15 +471,15 @@ export function FreePrintUsagePage() {
                         <Button
                           type="button"
                           variant="ghost"
-                          onClick={() => void toggleDetail(item.phone)}
+                          onClick={() => void toggleDetail(item.phone, item.periodKey)}
                         >
-                          {expandedPhone === item.phone ? 'Hide activity' : 'Show activity'}
+                          {expandedPhone === rowKey ? 'Hide activity' : 'Show activity'}
                         </Button>
                       </td>
                     </tr>
-                    {expandedPhone === item.phone ? (
+                    {expandedPhone === rowKey ? (
                       <tr>
-                        <td colSpan={5} className="bg-muted/30">
+                        <td colSpan={showPeriodColumn ? 6 : 5} className="bg-muted/30">
                           {detailLoading ? (
                             <p className="text-sm text-muted-foreground">Loading activity…</p>
                           ) : null}
@@ -440,6 +511,7 @@ export function FreePrintUsagePage() {
                                   <thead>
                                     <tr>
                                       <th>When</th>
+                                      <th>Period</th>
                                       <th>Document / source</th>
                                       <th>Mode</th>
                                       <th>Pages</th>
@@ -451,6 +523,9 @@ export function FreePrintUsagePage() {
                                       <tr key={entry.id}>
                                         <td className="whitespace-nowrap text-sm text-muted-foreground">
                                           {new Date(entry.updatedAt).toLocaleString()}
+                                        </td>
+                                        <td className="whitespace-nowrap text-xs text-muted-foreground">
+                                          {entry.periodKey}
                                         </td>
                                         <td>
                                           <div className="text-sm font-medium">

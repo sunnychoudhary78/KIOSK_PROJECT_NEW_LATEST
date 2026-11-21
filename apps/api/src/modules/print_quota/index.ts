@@ -34,7 +34,12 @@ export function registerPrintQuotaModule(router: Router, deps: AppDeps): void {
           req.query.usage === 'used_color'
             ? req.query.usage
             : 'all';
-        res.json(await service.listUsage({ q, limit, audience, usage }));
+        const scope = req.query.scope === 'all' ? 'all' : 'current';
+        const periodKey =
+          typeof req.query.periodKey === 'string' && req.query.periodKey.trim()
+            ? req.query.periodKey.trim()
+            : undefined;
+        res.json(await service.listUsage({ q, limit, audience, usage, scope, periodKey }));
       } catch (error) {
         next(error);
       }
@@ -48,7 +53,11 @@ export function registerPrintQuotaModule(router: Router, deps: AppDeps): void {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const phone = requireParam(req.params.phone, 'phone');
-        res.json(await service.getPhoneUsageDetail(phone));
+        const periodKey =
+          typeof req.query.periodKey === 'string' && req.query.periodKey.trim()
+            ? req.query.periodKey.trim()
+            : undefined;
+        res.json(await service.getPhoneUsageDetail(phone, { periodKey }));
       } catch (error) {
         next(error);
       }

@@ -8,7 +8,9 @@ type AuditLog = {
   action: string;
   principalType: string;
   resourceType: string | null;
+  resourceId?: string | null;
   correlationId: string | null;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
 };
 
@@ -36,6 +38,7 @@ const ACTION_LABELS: Record<string, string> = {
   'otp.created': 'Print OTP created',
   'otp.issued': 'Print OTP issued',
   'otp.redeemed': 'Print OTP redeemed',
+  'otp.document_print_job': 'OTP document print job',
   'quick_print.session_started': 'Quick Print session started',
   'quick_print.uploaded': 'Quick Print documents uploaded',
   'quick_print.paid': 'Quick Print payment received',
@@ -50,6 +53,7 @@ const ACTION_LABELS: Record<string, string> = {
   'print_job.completed': 'Print job completed',
   'print_job.failed': 'Print job failed',
   'print_job.expired': 'Print job expired',
+  'print_job.admin_close': 'Print job cleared by admin',
   'service.enablement_updated': 'Service enablement updated',
   'surveillance.playback': 'Recording played',
   'surveillance.segment_uploaded': 'Recording uploaded',
@@ -76,6 +80,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   device: 'Kiosk',
   digilocker_session: 'DigiLocker session',
   otp_session: 'Print OTP',
+  otp_document: 'OTP document',
   quick_print_session: 'Quick Print',
   payment: 'Payment',
   platform_setting: 'Platform setting',
@@ -119,12 +124,40 @@ function resourceLabel(resourceType: string | null): string {
 
 function categoryOf(action: string): Exclude<Category, 'all'> {
   if (action.startsWith('auth.')) return 'auth';
-  if (action.startsWith('print_job.') || action.startsWith('otp.') || action.startsWith('quick_print.'))
+  if (
+    action.startsWith('print_job.') ||
+    action.startsWith('otp.') ||
+    action.startsWith('quick_print.') ||
+    action.startsWith('payment.')
+  ) {
     return 'print';
+  }
   if (action.startsWith('digilocker.')) return 'digilocker';
   if (action.startsWith('device.')) return 'device';
   if (action.startsWith('ads.')) return 'ads';
   return 'other';
+}
+
+function metaString(metadata: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = metadata?.[key];
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return null;
+}
+
+function detailLine(log: AuditLog): string | null {
+  const meta = log.metadata ?? undefined;
+  const parts = [
+    metaString(meta, 'title'),
+    metaString(meta, 'source'),
+    metaString(meta, 'printColorMode'),
+    metaString(meta, 'status'),
+    metaString(meta, 'errorMessage'),
+    metaString(meta, 'reason'),
+  ].filter(Boolean);
+  if (parts.length > 0) return parts.join(' · ');
+  if (log.resourceId) return log.resourceId.slice(0, 8);
+  return null;
 }
 
 export function AuditLogsPanel() {
@@ -162,6 +195,9 @@ export function AuditLogsPanel() {
         principalLabel(log.principalType),
         log.resourceType ?? '',
         resourceLabel(log.resourceType),
+        log.resourceId ?? '',
+        detailLine(log) ?? '',
+        JSON.stringify(log.metadata ?? {}),
       ]
         .join(' ')
         .toLowerCase();
@@ -201,17 +237,30 @@ export function AuditLogsPanel() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((log) => (
-                <tr key={log.id} title={log.correlationId ?? undefined}>
-                  <td>
-                    <div>{actionLabel(log.action)}</div>
-                    <div className="muted">{log.action}</div>
-                  </td>
-                  <td>{principalLabel(log.principalType)}</td>
-                  <td>{resourceLabel(log.resourceType)}</td>
-                  <td>{new Date(log.createdAt).toLocaleString()}</td>
-                </tr>
-              ))}
+              {filtered.map((log) => {
+                const detail = detailLine(log);
+                return (
+                  <tr key={log.id} title={log.correlationId ?? undefined}>
+                    <td>
+                      <div>{actionLabel(log.action)}</div>
+                      <div className="muted">{log.action}</div>
+                      {detail ? (
+                        <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+                      ) : null}
+                    </td>
+                    <td>{principalLabel(log.principalType)}</td>
+                    <td>
+                      <div>{resourceLabel(log.resourceType)}</div>
+                      {log.resourceId ? (
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {log.resourceId.slice(0, 8)}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>{new Date(log.createdAt).toLocaleString()}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

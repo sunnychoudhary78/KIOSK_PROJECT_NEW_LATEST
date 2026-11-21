@@ -20,6 +20,27 @@ type DiagnosticLogItem = {
   metadata: unknown;
 };
 
+function metadataSummary(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const record = metadata as Record<string, unknown>;
+  const preferred = ['jobId', 'title', 'source', 'detail', 'pagesReported', 'error', 'reason'];
+  const parts: string[] = [];
+  for (const key of preferred) {
+    const value = record[key];
+    if (value == null || value === '') continue;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      parts.push(`${key}: ${value}`);
+    }
+  }
+  if (parts.length > 0) return parts.join(' · ');
+  try {
+    const raw = JSON.stringify(record);
+    return raw === '{}' ? null : raw.length > 140 ? `${raw.slice(0, 140)}…` : raw;
+  } catch {
+    return null;
+  }
+}
+
 type DiagnosticLogsPanelProps = {
   deviceId: string;
   onDeviceIdChange: (deviceId: string) => void;
@@ -357,20 +378,27 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
                     <th>Category</th>
                     <th>Event</th>
                     <th>Message</th>
+                    <th>Details</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((row) => (
-                    <tr key={row.id}>
-                      <td className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                        {new Date(row.occurredAt).toLocaleString()}
-                      </td>
-                      <td className="text-xs font-medium uppercase">{row.level}</td>
-                      <td className="text-xs">{row.category}</td>
-                      <td className="text-xs font-mono">{row.event}</td>
-                      <td className="text-sm">{row.message}</td>
-                    </tr>
-                  ))}
+                  {items.map((row) => {
+                    const details = metadataSummary(row.metadata);
+                    return (
+                      <tr key={row.id}>
+                        <td className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                          {new Date(row.occurredAt).toLocaleString()}
+                        </td>
+                        <td className="text-xs font-medium uppercase">{row.level}</td>
+                        <td className="text-xs">{row.category}</td>
+                        <td className="text-xs font-mono">{row.event}</td>
+                        <td className="text-sm">{row.message}</td>
+                        <td className="max-w-[18rem] text-xs text-muted-foreground">
+                          {details ?? '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

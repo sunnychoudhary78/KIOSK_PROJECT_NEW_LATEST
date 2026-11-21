@@ -30,12 +30,48 @@ type PaymentSnapshot = {
   paidAt: Date | null;
 } | null;
 
-function pickPayment(job: {
+type JobPaymentRelations = {
   payment?: PaymentSnapshot;
+  /** Per-document OTP jobs link payment via the parent challenge. */
+  otpDocument?: { challenge?: { payment?: PaymentSnapshot } | null } | null;
+  /** Per-document Quick Print jobs link payment via the parent session. */
+  quickPrintDocument?: { session?: { payment?: PaymentSnapshot } | null } | null;
+  /** Legacy single-job rows may still point at challenge/session directly. */
   otpChallenge?: { payment?: PaymentSnapshot } | null;
   quickPrintSession?: { payment?: PaymentSnapshot } | null;
-}): PaymentSnapshot {
-  return job.payment ?? job.otpChallenge?.payment ?? job.quickPrintSession?.payment ?? null;
+};
+
+function pickPayment(job: JobPaymentRelations): PaymentSnapshot {
+  return (
+    job.payment ??
+    job.otpDocument?.challenge?.payment ??
+    job.quickPrintDocument?.session?.payment ??
+    job.otpChallenge?.payment ??
+    job.quickPrintSession?.payment ??
+    null
+  );
+}
+
+const PAYMENT_SELECT = {
+  status: true,
+  amountPaise: true,
+  extraPages: true,
+  freePages: true,
+  paidAt: true,
+} as const;
+
+function printJobPaymentInclude() {
+  return {
+    payment: { select: PAYMENT_SELECT },
+    otpDocument: {
+      select: { challenge: { select: { payment: { select: PAYMENT_SELECT } } } },
+    },
+    quickPrintDocument: {
+      select: { session: { select: { payment: { select: PAYMENT_SELECT } } } },
+    },
+    otpChallenge: { select: { payment: { select: PAYMENT_SELECT } } },
+    quickPrintSession: { select: { payment: { select: PAYMENT_SELECT } } },
+  } as const;
 }
 
 /** Keep free + paid equal to pageCount so Usage totals never disagree. */
@@ -107,34 +143,34 @@ function mapBilling(
   };
 }
 
-function mapJob(job: {
-  id: string;
-  status: PrintJobStatus;
-  source: PrintJobSource;
-  title: string;
-  pageCount: number;
-  copies?: number;
-  pagesExpected: number;
-  pagesReported: number | null;
-  spoolerJobId: string | null;
-  pageCounterBefore: number | null;
-  pageCounterAfter: number | null;
-  reconcileStatus: PrintJobReconcileStatus;
-  needsAdminReview: boolean;
-  reconcileDetail: string | null;
-  reconciledAt: Date | null;
-  freePagesGranted?: number | null;
-  printColorMode?: PrintColorMode | null;
-  deviceId: string | null;
-  device?: { name: string; site?: { name: string } | null } | null;
-  payloadUrl: string | null;
-  payloadPath?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  payment?: PaymentSnapshot;
-  otpChallenge?: { payment?: PaymentSnapshot } | null;
-  quickPrintSession?: { payment?: PaymentSnapshot } | null;
-}) {
+function mapJob(
+  job: {
+    id: string;
+    status: PrintJobStatus;
+    source: PrintJobSource;
+    title: string;
+    pageCount: number;
+    copies?: number;
+    pagesExpected: number;
+    pagesReported: number | null;
+    spoolerJobId: string | null;
+    pageCounterBefore: number | null;
+    pageCounterAfter: number | null;
+    reconcileStatus: PrintJobReconcileStatus;
+    needsAdminReview: boolean;
+    reconcileDetail: string | null;
+    reconciledAt: Date | null;
+    freePagesGranted?: number | null;
+    printColorMode?: PrintColorMode | null;
+    errorMessage?: string | null;
+    deviceId: string | null;
+    device?: { name: string; site?: { name: string } | null } | null;
+    payloadUrl: string | null;
+    payloadPath?: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } & JobPaymentRelations,
+) {
   const payment = pickPayment(job);
   const billing = mapBilling(job, payment);
   return {
@@ -153,6 +189,7 @@ function mapJob(job: {
     needsAdminReview: job.needsAdminReview,
     reconcileDetail: job.reconcileDetail,
     reconciledAt: job.reconciledAt?.toISOString() ?? null,
+    errorMessage: job.errorMessage ?? null,
     freePagesGranted: job.freePagesGranted ?? 0,
     printColorMode: job.printColorMode === PrintColorMode.color ? 'color' : 'bw',
     deviceId: job.deviceId,
@@ -283,34 +320,18 @@ export class PrintingService {
   }
 
   async list() {
-    const paymentSelect = {
-      status: true,
-      amountPaise: true,
-      extraPages: true,
-      freePages: true,
-      paidAt: true,
-    } as const;
     const items = await this.db.printJob.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
         device: { select: { name: true, site: { select: { name: true } } } },
-        payment: { select: paymentSelect },
-        otpChallenge: { select: { payment: { select: paymentSelect } } },
-        quickPrintSession: { select: { payment: { select: paymentSelect } } },
+        ...printJobPaymentInclude(),
       },
     });
     return { items: items.map(mapJob) };
   }
 
   async summarize(query: PrintJobsSummaryQuery) {
-    const paymentSelect = {
-      status: true,
-      amountPaise: true,
-      extraPages: true,
-      freePages: true,
-      paidAt: true,
-    } as const;
     const from = parseDayBound(query.from, false);
     const to = parseDayBound(query.to, true);
     const items = await this.db.printJob.findMany({
@@ -329,9 +350,7 @@ export class PrintingService {
       take: 5000,
       include: {
         device: { select: { name: true, site: { select: { name: true } } } },
-        payment: { select: paymentSelect },
-        otpChallenge: { select: { payment: { select: paymentSelect } } },
-        quickPrintSession: { select: { payment: { select: paymentSelect } } },
+        ...printJobPaymentInclude(),
       },
     });
 
@@ -368,20 +387,11 @@ export class PrintingService {
   }
 
   async get(jobId: string) {
-    const paymentSelect = {
-      status: true,
-      amountPaise: true,
-      extraPages: true,
-      freePages: true,
-      paidAt: true,
-    } as const;
     const job = await this.db.printJob.findUnique({
       where: { id: jobId },
       include: {
         device: { select: { name: true, site: { select: { name: true } } } },
-        payment: { select: paymentSelect },
-        otpChallenge: { select: { payment: { select: paymentSelect } } },
-        quickPrintSession: { select: { payment: { select: paymentSelect } } },
+        ...printJobPaymentInclude(),
       },
     });
     if (!job) {
@@ -517,6 +527,9 @@ export class PrintingService {
       resourceId: jobId,
       correlationId,
       metadata: {
+        title: job.title,
+        source: job.source,
+        printColorMode: job.printColorMode,
         ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
         reconcileStatus,
         pagesReported: pagesReported ?? undefined,
@@ -572,6 +585,8 @@ export class PrintingService {
       resourceId: jobId,
       correlationId,
       metadata: {
+        title: job.title,
+        source: job.source,
         previousStatus: job.status,
         deviceId: job.deviceId,
         reason: 'admin_clear_stuck',

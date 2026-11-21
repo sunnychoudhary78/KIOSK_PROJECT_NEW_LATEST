@@ -344,26 +344,61 @@ export class PrintQuotaService {
       limit?: number;
       audience?: 'all' | 'society' | 'public';
       usage?: 'all' | 'has_remaining' | 'exhausted' | 'used_bw' | 'used_color';
+      /** `current` = active quota window; `all` = every stored period. */
+      scope?: 'current' | 'all';
+      /** Exact ledger period key (e.g. 2026-11-20). Overrides scope. */
+      periodKey?: string;
       now?: Date;
     } = {},
   ) {
     const now = input.now ?? new Date();
     const limit = Math.min(1000, Math.max(1, Math.floor(input.limit ?? 500)));
     const config = await this.settings.getPrintFreeQuotaConfig();
-    const periodKey = periodKeyFor(now, config.period);
+    const currentPeriodKey = periodKeyFor(now, config.period);
     const societyRows = await this.db.societyPhone.findMany({ select: { phone: true } });
     const societySet = new Set(societyRows.map((row) => row.phone));
     const societyConfig = societySet.size
       ? await this.settings.getSocietyFreeQuotaConfig()
       : config;
-    const societyKey = societySet.size ? periodKeyFor(now, societyConfig.period) : periodKey;
-    const periodKeys = [...new Set([periodKey, societyKey])];
+    const currentSocietyKey = societySet.size
+      ? periodKeyFor(now, societyConfig.period)
+      : currentPeriodKey;
+
+    const requestedKey = input.periodKey?.trim() || null;
+    const scope: 'current' | 'all' | 'period' = requestedKey
+      ? 'period'
+      : input.scope === 'all'
+        ? 'all'
+        : 'current';
+
+    const availablePeriodKeys = await this.listAvailablePeriodKeys();
+
+    const ledgerWhere =
+      scope === 'all'
+        ? {
+            status: {
+              in: [FreePageLedgerStatus.reserved, FreePageLedgerStatus.consumed],
+            },
+          }
+        : scope === 'period'
+          ? {
+              periodKey: requestedKey!,
+              status: {
+                in: [FreePageLedgerStatus.reserved, FreePageLedgerStatus.consumed],
+              },
+            }
+          : {
+              periodKey:
+                currentPeriodKey === currentSocietyKey
+                  ? currentPeriodKey
+                  : { in: [currentPeriodKey, currentSocietyKey] },
+              status: {
+                in: [FreePageLedgerStatus.reserved, FreePageLedgerStatus.consumed],
+              },
+            };
 
     const rows = await this.db.phoneFreePageLedger.findMany({
-      where: {
-        periodKey: periodKeys.length === 1 ? (periodKeys[0] ?? periodKey) : { in: periodKeys },
-        status: { in: [FreePageLedgerStatus.reserved, FreePageLedgerStatus.consumed] },
-      },
+      where: ledgerWhere,
       select: {
         phone: true,
         printColorMode: true,
@@ -374,18 +409,37 @@ export class PrintQuotaService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    const byPhone = new Map<
-      string,
-      { bwUsed: number; colorUsed: number; lastActivityAt: Date | null; society: boolean }
-    >();
+    type Agg = {
+      phone: string;
+      periodKey: string;
+      bwUsed: number;
+      colorUsed: number;
+      lastActivityAt: Date | null;
+      society: boolean;
+    };
+
+    const byKey = new Map<string, Agg>();
 
     for (const row of rows) {
       const society = societySet.has(row.phone);
-      if (row.periodKey !== (society ? societyKey : periodKey)) continue;
-      let entry = byPhone.get(row.phone);
+      if (scope === 'current') {
+        const expected = society ? currentSocietyKey : currentPeriodKey;
+        if (row.periodKey !== expected) continue;
+      }
+      // Current/period views collapse to one row per phone; all-history keeps phone+period.
+      const mapKey =
+        scope === 'all' ? `${row.phone}::${row.periodKey}` : row.phone;
+      let entry = byKey.get(mapKey);
       if (!entry) {
-        entry = { bwUsed: 0, colorUsed: 0, lastActivityAt: null, society };
-        byPhone.set(row.phone, entry);
+        entry = {
+          phone: row.phone,
+          periodKey: scope === 'all' ? row.periodKey : requestedKey ?? (society ? currentSocietyKey : currentPeriodKey),
+          bwUsed: 0,
+          colorUsed: 0,
+          lastActivityAt: null,
+          society,
+        };
+        byKey.set(mapKey, entry);
       }
       if (row.printColorMode === PrintColorMode.color) {
         entry.colorUsed += row.pages;
@@ -398,12 +452,13 @@ export class PrintQuotaService {
     }
 
     const searchDigits = (input.q ?? '').replace(/\D/g, '');
-    const allItems = Array.from(byPhone.entries()).map(([phone, stats]) => {
+    const allItems = Array.from(byKey.values()).map((stats) => {
       const limits = stats.society ? societyConfig : config;
       const bwRemaining = Math.max(0, limits.freeBwPages - stats.bwUsed);
       const colorRemaining = Math.max(0, limits.freeColorPages - stats.colorUsed);
       return {
-        phone,
+        phone: stats.phone,
+        periodKey: stats.periodKey,
         society: stats.society,
         bwUsed: stats.bwUsed,
         bwRemaining,
@@ -422,9 +477,8 @@ export class PrintQuotaService {
       };
     });
 
-    // Period-wide KPIs stay stable even when the table is filtered.
     const summary = {
-      phones: allItems.length,
+      phones: new Set(allItems.map((item) => item.phone)).size,
       society: allItems.filter((item) => item.society).length,
       public: allItems.filter((item) => !item.society).length,
       exhausted: allItems.filter((item) => item.exhausted).length,
@@ -454,16 +508,27 @@ export class PrintQuotaService {
     items.sort((a, b) => {
       const aTime = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
       const bTime = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
-      return bTime - aTime;
+      if (bTime !== aTime) return bTime - aTime;
+      return b.periodKey.localeCompare(a.periodKey);
     });
 
     const total = items.length;
     const sliced = items.slice(0, limit);
+    const selectedPeriodKey =
+      scope === 'period'
+        ? requestedKey!
+        : scope === 'all'
+          ? 'all'
+          : currentPeriodKey;
+
     return {
+      scope,
       period: config.period,
-      periodKey,
+      periodKey: selectedPeriodKey,
+      currentPeriodKey,
       societyPeriod: societyConfig.period,
-      societyPeriodKey: societyKey,
+      societyPeriodKey: scope === 'period' ? requestedKey! : currentSocietyKey,
+      availablePeriodKeys,
       limits: {
         freeBwPages: config.freeBwPages,
         freeColorPages: config.freeColorPages,
@@ -479,17 +544,38 @@ export class PrintQuotaService {
     };
   }
 
-  async getPhoneUsageDetail(phoneRaw: string, now: Date = new Date()) {
+  private async listAvailablePeriodKeys(): Promise<string[]> {
+    const grouped = await this.db.phoneFreePageLedger.groupBy({
+      by: ['periodKey'],
+      orderBy: { periodKey: 'desc' },
+      take: 120,
+    });
+    return grouped.map((row) => row.periodKey);
+  }
+
+  async getPhoneUsageDetail(
+    phoneRaw: string,
+    input: { periodKey?: string | 'all'; now?: Date } = {},
+  ) {
+    const now = input.now ?? new Date();
     const phone = this.requireNormalizedPhone(phoneRaw);
     const [bw, color] = await Promise.all([
       this.getRemaining(phone, 'bw', now),
       this.getRemaining(phone, 'color', now),
     ]);
 
+    const requestedKey = input.periodKey?.trim();
+    const useAll = requestedKey === 'all';
+    const periodKey = useAll
+      ? 'all'
+      : requestedKey && requestedKey.length > 0
+        ? requestedKey
+        : bw.periodKey;
+
     const entries = await this.db.phoneFreePageLedger.findMany({
-      where: { phone, periodKey: bw.periodKey },
+      where: useAll ? { phone } : { phone, periodKey },
       orderBy: { updatedAt: 'desc' },
-      take: 200,
+      take: useAll ? 500 : 200,
       select: {
         id: true,
         printColorMode: true,
@@ -505,20 +591,38 @@ export class PrintQuotaService {
       },
     });
 
+    const active = entries.filter(
+      (entry) =>
+        entry.status === FreePageLedgerStatus.reserved ||
+        entry.status === FreePageLedgerStatus.consumed,
+    );
+    const bwUsed = active
+      .filter((entry) => entry.printColorMode !== PrintColorMode.color)
+      .reduce((sum, entry) => sum + entry.pages, 0);
+    const colorUsed = active
+      .filter((entry) => entry.printColorMode === PrintColorMode.color)
+      .reduce((sum, entry) => sum + entry.pages, 0);
+
     return {
       phone,
       society: bw.society,
       period: bw.period,
-      periodKey: bw.periodKey,
+      periodKey,
       limits: {
         freeBwPages: bw.periodLimit,
         freeColorPages: color.periodLimit,
       },
       summary: {
-        bwUsed: bw.used,
-        bwRemaining: bw.remaining,
-        colorUsed: color.used,
-        colorRemaining: color.remaining,
+        bwUsed: useAll || periodKey !== bw.periodKey ? bwUsed : bw.used,
+        bwRemaining:
+          useAll || periodKey !== bw.periodKey
+            ? Math.max(0, bw.periodLimit - bwUsed)
+            : bw.remaining,
+        colorUsed: useAll || periodKey !== color.periodKey ? colorUsed : color.used,
+        colorRemaining:
+          useAll || periodKey !== color.periodKey
+            ? Math.max(0, color.periodLimit - colorUsed)
+            : color.remaining,
       },
       entries: entries.map((entry) => ({
         id: entry.id,

@@ -25,6 +25,7 @@ type PrintJob = {
   siteName?: string | null;
   needsAdminReview?: boolean;
   reconcileDetail?: string | null;
+  errorMessage?: string | null;
   pageCount?: number;
   copies?: number;
   pagesExpected?: number;
@@ -40,8 +41,8 @@ type PrintJob = {
 const OPEN = new Set(['created', 'ready', 'printing']);
 
 const STATUS_FILTERS = [
-  { value: 'open', label: 'Open' },
   { value: 'all', label: 'All' },
+  { value: 'open', label: 'Open' },
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
 ];
@@ -158,7 +159,7 @@ export function PrintJobsPanel() {
   const [items, setItems] = useState<PrintJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('open');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [billingFilter, setBillingFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [colorFilter, setColorFilter] = useState('all');
@@ -223,6 +224,7 @@ export function PrintJobsPanel() {
         job.siteName ?? '',
         job.deviceId ?? '',
         job.reconcileDetail ?? '',
+        job.errorMessage ?? '',
       ]
         .join(' ')
         .toLowerCase();
@@ -422,7 +424,17 @@ export function PrintJobsPanel() {
                     </td>
                     <td className="text-sm text-muted-foreground">{pagesLabel(job)}</td>
                     <td>
-                      <StatusBadge status={job.status} />
+                      <div className="space-y-1">
+                        <StatusBadge status={job.status} />
+                        {job.errorMessage ? (
+                          <p className="max-w-[16rem] text-xs text-destructive">{job.errorMessage}</p>
+                        ) : null}
+                        {!job.errorMessage && job.reconcileDetail ? (
+                          <p className="max-w-[16rem] text-xs text-muted-foreground">
+                            {job.reconcileDetail}
+                          </p>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="whitespace-nowrap text-muted-foreground">
                       {new Date(job.createdAt).toLocaleString()}
