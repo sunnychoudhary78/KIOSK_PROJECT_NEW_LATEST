@@ -84,6 +84,67 @@ export function resolveUploadBacklogWarning(
   };
 }
 
+export type SurveillanceQueueCommandType = 'heal_queue' | 'retry_uploads' | 'prune_stubs';
+
+export const SURVEILLANCE_QUEUE_ACTIONS: {
+  type: SurveillanceQueueCommandType;
+  label: string;
+  description: string;
+}[] = [
+  {
+    type: 'heal_queue',
+    label: 'Unstick queue',
+    description: 'Reset upload schedules so pending clips are tried now',
+  },
+  {
+    type: 'retry_uploads',
+    label: 'Retry uploads',
+    description: 'Re-queue failed uploads (size_mismatch, network, etc.)',
+  },
+  {
+    type: 'prune_stubs',
+    label: 'Clear stub clips',
+    description: 'Remove empty invalid_segment junk from the local queue',
+  },
+];
+
+export function labelForQueueCommand(type: SurveillanceQueueCommandType): string {
+  return SURVEILLANCE_QUEUE_ACTIONS.find((action) => action.type === type)?.label ?? type;
+}
+
+/**
+ * Picks the best Phase-1 maintenance action from live health.
+ * Priority: stuck schedule → stub poison → upload failures/backlog.
+ */
+export function resolveRecommendedQueueAction(
+  health: SurveillanceHealth | null | undefined,
+): SurveillanceQueueCommandType | null {
+  if (!health) return null;
+  const pending = health.queuePending ?? 0;
+  const due = health.queueDue;
+  const failed = health.queueFailed ?? 0;
+  const error = health.lastErrorCode ?? '';
+
+  if (pending > 0 && due === 0) {
+    return 'heal_queue';
+  }
+  if (error === 'invalid_segment') {
+    return 'prune_stubs';
+  }
+  if (
+    error === 'size_mismatch' ||
+    error === 'upload_incomplete' ||
+    error === 'unauthorized' ||
+    error === 'upload_failed' ||
+    error === 'upload_timeout' ||
+    failed > 0 ||
+    resolveUploadBacklogWarning(health).warn
+  ) {
+    return 'retry_uploads';
+  }
+  return null;
+}
+
 export function resolveRecordingDisplay(device: DeviceSurveillanceView): RecordingDisplayStatus {
   if (!device.surveillanceEnabled) {
     return {

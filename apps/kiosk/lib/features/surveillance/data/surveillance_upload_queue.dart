@@ -235,6 +235,16 @@ class SurveillanceUploadQueue {
     await queueFile.writeAsString(payload);
   }
 
+  /// Best-effort delete of a stub/corrupt local segment file.
+  static void deleteSegmentFile(String path) {
+    try {
+      final file = File(path);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (_) {}
+  }
+
   Future<SurveillanceQueueItem?> enqueue({
     required String path,
     int? bytes,
@@ -257,6 +267,10 @@ class SurveillanceUploadQueue {
       return null;
     }
     final size = bytes != null && bytes > 0 ? bytes : file.lengthSync();
+    if (size < surveillanceMinSegmentBytes) {
+      deleteSegmentFile(path);
+      return null;
+    }
     final utc = (now ?? DateTime.now()).toUtc();
     final item = SurveillanceQueueItem(
       path: path,
@@ -268,6 +282,83 @@ class SurveillanceUploadQueue {
     _items[key] = item;
     await save();
     return item;
+  }
+
+  /// Removes sticky failed stub rows (`invalid_segment`) and their files.
+  /// Returns how many items were pruned.
+  Future<int> pruneInvalidSegments() async {
+    final doomed = _items.values
+        .where(
+          (item) => item.isFailed && item.lastError == 'invalid_segment',
+        )
+        .toList();
+    if (doomed.isEmpty) {
+      return 0;
+    }
+    for (final item in doomed) {
+      deleteSegmentFile(item.path);
+      _items.remove(_key(item.path));
+    }
+    await save();
+    return doomed.length;
+  }
+
+  /// Force all non-failed pending items due now (Admin "Unstick queue").
+  Future<int> healDueNow({DateTime? now}) async {
+    final utc = (now ?? DateTime.now()).toUtc();
+    var healed = await healSchedules(now: utc);
+    for (final item in _items.values) {
+      if (item.isFailed || item.isPendingDelete) {
+        continue;
+      }
+      if (item.nextAttemptAt.isAfter(utc)) {
+        item.nextAttemptAt = utc;
+        healed += 1;
+      }
+    }
+    if (healed > 0) {
+      await save();
+    }
+    return healed;
+  }
+
+  static bool isRecoverableUploadError(String? error) {
+    if (error == null || error.isEmpty) {
+      return true;
+    }
+    if (error == 'invalid_segment') {
+      return false;
+    }
+    return true;
+  }
+
+  /// Re-open failed (non-stub) items as pending and due now.
+  Future<int> retryRecoverableFailures({DateTime? now}) async {
+    final utc = (now ?? DateTime.now()).toUtc();
+    var retried = 0;
+    for (final item in _items.values) {
+      if (item.isPendingDelete) {
+        continue;
+      }
+      if (!item.isFailed && item.lastError == null) {
+        continue;
+      }
+      if (!isRecoverableUploadError(item.lastError)) {
+        continue;
+      }
+      // Skip stubs that somehow stayed pending with tiny size.
+      if (item.bytes > 0 && item.bytes < surveillanceMinSegmentBytes) {
+        continue;
+      }
+      item.status = surveillancePendingStatus;
+      item.lastError = null;
+      item.nextAttemptAt = utc;
+      retried += 1;
+    }
+    if (retried > 0) {
+      await save();
+    }
+    return retried;
   }
 
   /// Scans leftover MP4s into the queue and heals schedules. Returns heal count.

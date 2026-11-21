@@ -149,6 +149,8 @@ class SurveillanceController extends Notifier<SurveillanceState> {
     final delay = _delayForRetry(_retryAttempt, error);
     AppLogger.info('SURVEILLANCE_RETRY_SCHEDULED attempt=$_retryAttempt in=${delay.inSeconds}s');
     _retryTimer = Timer(delay, () {
+      // Disarm before sync so the gate does not block this legitimate retry.
+      _retryTimer = null;
       if (!ref.mounted) {
         return;
       }
@@ -174,9 +176,13 @@ class SurveillanceController extends Notifier<SurveillanceState> {
     });
   }
 
-  void _clearRetry() {
+  void _disarmRetryTimer() {
     _retryTimer?.cancel();
     _retryTimer = null;
+  }
+
+  void _clearRetry() {
+    _disarmRetryTimer();
     _retryAttempt = 0;
   }
 
@@ -230,6 +236,13 @@ class SurveillanceController extends Notifier<SurveillanceState> {
         return;
       }
 
+      // Honor backoff after CAMERA_ERROR / STORAGE_LOW / UPLOAD_BACKLOG.
+      // Lease→none (100ms) and safety/auth sync must not bypass the timer.
+      // Palm reclaim is unaffected: pause does not set state.error.
+      if (_retryTimer != null && state.error != null) {
+        return;
+      }
+
       // Pause new recording while uploads catch up; uploader keeps draining.
       if (surveillanceHasUploadBacklog(queue)) {
         await _pauseForUploadBacklog();
@@ -267,12 +280,14 @@ class SurveillanceController extends Notifier<SurveillanceState> {
         AppLogger.info('SURVEILLANCE_STARTED');
       }
       if (ref.mounted) {
-        _clearRetry();
+        // Disarm timer only — keep attempt until a real segment proves health.
+        _disarmRetryTimer();
         state = SurveillanceState(
           recording: true,
           lastSegmentAt: state.lastSegmentAt,
           lastSegmentBytes: state.lastSegmentBytes,
           cameraName: state.cameraName,
+          retryAttempt: _retryAttempt,
         );
       }
     } catch (error) {
@@ -341,6 +356,11 @@ class SurveillanceController extends Notifier<SurveillanceState> {
       final path = event.data['path']?.toString();
       if (path != null && path.isNotEmpty) {
         final bytes = (event.data['bytes'] as num?)?.toInt();
+        final usable =
+            bytes == null || bytes >= surveillanceMinSegmentBytes;
+        if (usable) {
+          _retryAttempt = 0;
+        }
         if (ref.mounted) {
           state = SurveillanceState(
             recording: state.recording,
@@ -348,7 +368,15 @@ class SurveillanceController extends Notifier<SurveillanceState> {
             lastSegmentAt: DateTime.now().toUtc(),
             lastSegmentBytes: bytes,
             cameraName: state.cameraName,
+            retryAttempt: _retryAttempt,
           );
+        }
+        // Skip known stubs early; queue also discards undersized files.
+        if (bytes != null && bytes < surveillanceMinSegmentBytes) {
+          AppLogger.info(
+            'SURVEILLANCE_SEGMENT_DISCARDED path=$path bytes=$bytes',
+          );
+          return;
         }
         unawaited(
           ref.read(surveillanceUploadSinkProvider).enqueue(path: path, bytes: bytes),

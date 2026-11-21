@@ -13,10 +13,22 @@ import {
   Toolbar,
 } from '../../core/ui/primitives';
 import {
+  labelForQueueCommand,
+  resolveRecommendedQueueAction,
   resolveRecordingDisplay,
   resolveUploadBacklogWarning,
+  SURVEILLANCE_QUEUE_ACTIONS,
   type SurveillanceHealth,
+  type SurveillanceQueueCommandType,
 } from './surveillanceStatus';
+
+type SurveillanceCommand = {
+  id: string;
+  type: SurveillanceQueueCommandType;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'expired';
+  result?: Record<string, unknown> | null;
+  lastError?: string | null;
+};
 
 type Device = {
   id: string;
@@ -132,11 +144,15 @@ export function RecordingsPage() {
   const [playingLabel, setPlayingLabel] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | Segment['status']>('all');
   const [search, setSearch] = useState('');
+  const [commandBusy, setCommandBusy] = useState(false);
+  const [commandNote, setCommandNote] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const selected = devices.find((device) => device.id === deviceId) ?? null;
   const healthDisplay = selected ? resolveRecordingDisplay(selected) : null;
   const pendingOnKiosk = selected?.surveillanceHealth?.queuePending ?? 0;
   const backlogWarning = resolveUploadBacklogWarning(selected?.surveillanceHealth);
+  const recommendedAction = resolveRecommendedQueueAction(selected?.surveillanceHealth);
 
   function applyDay(isoDate: string, preset?: DayPreset) {
     setRecordedOn(isoDate);
@@ -197,6 +213,64 @@ export function RecordingsPage() {
       }
     })();
   }, [token, deviceId, recordedOn]);
+
+  async function refreshDevices() {
+    const result = await apiRequest<{ items: Device[] }>('/devices', { token });
+    setDevices(result.items);
+  }
+
+  async function waitForCommand(commandId: string) {
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const latest = await apiRequest<{ command: SurveillanceCommand | null }>(
+        `/devices/${deviceId}/surveillance/commands/latest`,
+        { token },
+      );
+      const command = latest.command;
+      if (!command || command.id !== commandId) {
+        continue;
+      }
+      if (command.status === 'succeeded') {
+        const result = command.result ?? {};
+        const parts = Object.entries(result)
+          .filter(([, value]) => typeof value === 'number' && value > 0)
+          .map(([key, value]) => `${key}=${value}`);
+        setCommandNote(
+          parts.length
+            ? `Done: ${labelForQueueCommand(command.type)} (${parts.join(', ')})`
+            : `Done: ${labelForQueueCommand(command.type)}`,
+        );
+        return;
+      }
+      if (command.status === 'failed' || command.status === 'expired') {
+        throw new Error(command.lastError || `Command ${command.status}`);
+      }
+    }
+    throw new Error('Timed out waiting for kiosk to run the command');
+  }
+
+  async function runQueueCommand(type: SurveillanceQueueCommandType) {
+    if (!deviceId || commandBusy) return;
+    setCommandBusy(true);
+    setCommandNote('Sending to kiosk…');
+    setError(null);
+    setMoreOpen(false);
+    try {
+      const created = await apiRequest<{ command: SurveillanceCommand }>(
+        `/devices/${deviceId}/surveillance/commands`,
+        { method: 'POST', token, body: { type } },
+      );
+      setCommandNote(`Waiting for kiosk (${labelForQueueCommand(type)})…`);
+      await waitForCommand(created.command.id);
+      await refreshDevices();
+    } catch (err) {
+      setCommandNote(null);
+      setError(err instanceof Error ? err.message : 'Command failed');
+    } finally {
+      setCommandBusy(false);
+    }
+  }
 
   async function onPlay(segment: Segment) {
     if (segment.status !== 'uploaded') {
@@ -288,15 +362,68 @@ export function RecordingsPage() {
         </div>
 
         {healthDisplay ? (
-          <p className={`mb-3 text-sm font-medium ${healthDisplay.className}`} title={healthDisplay.title}>
-            Live status: {healthDisplay.label}
-            {pendingOnKiosk > 0 ? ` · ${pendingOnKiosk} clip(s) waiting on kiosk` : ''}
-            {backlogWarning.ageLabel ? ` · oldest ${backlogWarning.ageLabel}` : ''}
-            {backlogWarning.lastErrorCode ? ` · ${backlogWarning.lastErrorCode}` : ''}
-            {backlogWarning.warn ? ' · backlog warning' : ''}
-          </p>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <p className={`text-sm font-medium ${healthDisplay.className}`} title={healthDisplay.title}>
+              Live status: {healthDisplay.label}
+              {pendingOnKiosk > 0 ? ` · ${pendingOnKiosk} clip(s) waiting on kiosk` : ''}
+              {backlogWarning.ageLabel ? ` · oldest ${backlogWarning.ageLabel}` : ''}
+              {backlogWarning.lastErrorCode ? ` · ${backlogWarning.lastErrorCode}` : ''}
+              {backlogWarning.warn ? ' · backlog warning' : ''}
+            </p>
+            {selected?.surveillanceEnabled ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {recommendedAction ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={commandBusy}
+                    onClick={() => void runQueueCommand(recommendedAction)}
+                    title={
+                      SURVEILLANCE_QUEUE_ACTIONS.find((a) => a.type === recommendedAction)
+                        ?.description
+                    }
+                  >
+                    {labelForQueueCommand(recommendedAction)}
+                  </Button>
+                ) : null}
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={commandBusy}
+                    onClick={() => setMoreOpen((open) => !open)}
+                  >
+                    More
+                  </Button>
+                  {moreOpen ? (
+                    <div className="absolute right-0 z-20 mt-1 min-w-[14rem] rounded-md border bg-white p-1 shadow-md">
+                      {SURVEILLANCE_QUEUE_ACTIONS.map((action) => (
+                        <button
+                          key={action.type}
+                          type="button"
+                          className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50"
+                          disabled={commandBusy}
+                          title={action.description}
+                          onClick={() => void runQueueCommand(action.type)}
+                        >
+                          <span className="font-medium">{action.label}</span>
+                          {recommendedAction === action.type ? (
+                            <span className="ml-2 text-xs text-emerald-700">recommended</span>
+                          ) : null}
+                          <span className="mt-0.5 block text-xs text-slate-500">
+                            {action.description}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
+        {commandNote ? <p className="muted mb-3 text-sm">{commandNote}</p> : null}
         {error ? <p className="error mb-3">{error}</p> : null}
         {loading ? <p className="muted mb-3">Loading…</p> : null}
 

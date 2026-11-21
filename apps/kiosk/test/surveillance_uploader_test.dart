@@ -113,7 +113,7 @@ void main() {
     await uploader.detach();
   });
 
-  test('marks tiny segments failed without calling upload-url', () async {
+  test('discards tiny segments without calling upload-url or failing', () async {
     final tiny = File(p.join(dir.path, '2026-09-03', '143152_tiny.mp4'));
     tiny.writeAsBytesSync(List<int>.filled(16, 1));
     segment.deleteSync();
@@ -139,9 +139,56 @@ void main() {
     await uploader.attach(deviceId: 'device-1');
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(uploadUrlCalls, 0);
-    expect(queue.items.single.isFailed, isTrue);
-    expect(queue.items.single.lastError, 'invalid_segment');
-    expect(uploader.queueStats().failedCount, 1);
+    expect(queue.items, isEmpty);
+    expect(tiny.existsSync(), isFalse);
+    expect(uploader.queueStats().failedCount, 0);
+    expect(uploader.queueStats().lastError, isNull);
+    await uploader.detach();
+  });
+
+  test('attach prunes sticky invalid_segment failed rows', () async {
+    segment.deleteSync();
+    final stub = File(p.join(dir.path, '2026-09-03', '143152_stub.mp4'));
+    stub.parent.createSync(recursive: true);
+    stub.writeAsBytesSync(const []);
+
+    final queueFile = File(p.join(dir.path, surveillanceQueueFileName));
+    await queueFile.writeAsString(
+      jsonEncode({
+        'items': [
+          {
+            'path': stub.path,
+            'filename': '143152_stub.mp4',
+            'bytes': 0,
+            'recordedOn': '2026-09-03',
+            'enqueuedAt': '2026-09-03T14:31:52.000Z',
+            'attempts': 0,
+            'nextAttemptAt': '2026-09-03T14:31:52.000Z',
+            'segmentId': null,
+            'status': 'failed',
+            'lastError': 'invalid_segment',
+          },
+        ],
+      }),
+    );
+
+    final api = ApiClient(
+      config: const AppConfig(apiBaseUrl: 'http://example.test/v1', environment: 'test'),
+      httpClient: MockClient((request) async => http.Response('nope', 500)),
+    );
+    final queue = SurveillanceUploadQueue(queueFile: queueFile);
+    final uploader = SurveillanceUploader(
+      api: api,
+      recorder: _StubRecorder(),
+      tickInterval: const Duration(days: 1),
+      rootOverride: dir,
+      queue: queue,
+    );
+    await uploader.attach(deviceId: 'device-1');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(queue.items, isEmpty);
+    expect(stub.existsSync(), isFalse);
+    expect(uploader.queueStats().failedCount, 0);
     await uploader.detach();
   });
 

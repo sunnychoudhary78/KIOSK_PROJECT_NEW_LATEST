@@ -73,6 +73,11 @@ class FakeUploadSink implements SurveillanceUploadSink {
 
   @override
   SurveillanceQueueStats queueStats() => stats;
+
+  @override
+  Future<Map<String, int>> runMaintenanceCommand(String type) async {
+    return {'healed': 0, 'retried': 0, 'pruned': 0, 'scanned': 0};
+  }
 }
 
 class _DeviceAuth extends DeviceAuthNotifier {
@@ -191,32 +196,65 @@ void main() {
     recorder.emit(
       const SurveillanceNativeEvent('SEGMENT_COMPLETED', {
         'path': r'C:\ProgramData\SmartKiosk\surveillance\device-1\2026-09-03\143052_abc.mp4',
-        'bytes': 42,
+        'bytes': 2048,
       }),
     );
     await Future<void>.delayed(Duration.zero);
     expect(uploads.enqueued, hasLength(1));
     expect(uploads.enqueued.single.path, contains('143052_abc.mp4'));
-    expect(uploads.enqueued.single.bytes, 42);
+    expect(uploads.enqueued.single.bytes, 2048);
   });
 
-  test('camera error schedules retry and recovers', () async {
+  test('discards stub segments instead of enqueuing', () async {
+    await Future<void>.delayed(Duration.zero);
+    recorder.emit(
+      const SurveillanceNativeEvent('SEGMENT_COMPLETED', {
+        'path': r'C:\ProgramData\SmartKiosk\surveillance\device-1\2026-09-03\143052_stub.mp4',
+        'bytes': 0,
+      }),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(uploads.enqueued, isEmpty);
+  });
+
+  test('camera error honors backoff and ignores lease reclaim storm', () async {
     await Future<void>.delayed(Duration.zero);
     expect(recorder.starts, 1);
 
     final controller = container.read(surveillanceControllerProvider.notifier);
-    // Longer than lease→none deferred sync (100ms) so we can assert the error first.
-    controller.retryDelayFor = (_, __) => const Duration(milliseconds: 200);
+    controller.retryDelayFor = (_, __) => const Duration(milliseconds: 300);
 
     recorder.emit(const SurveillanceNativeEvent('CAMERA_ERROR'));
     await Future<void>.delayed(Duration.zero);
     expect(container.read(surveillanceControllerProvider).error, 'CAMERA_ERROR');
     expect(container.read(surveillanceControllerProvider).recording, isFalse);
 
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    // Lease→none deferred sync is 100ms; must NOT restart yet.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(recorder.starts, 1);
+    expect(container.read(surveillanceControllerProvider).error, 'CAMERA_ERROR');
+
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     expect(recorder.starts, greaterThanOrEqualTo(2));
     expect(container.read(surveillanceControllerProvider).recording, isTrue);
     expect(container.read(surveillanceControllerProvider).error, isNull);
+  });
+
+  test('camera error attempt climbs across rapid failures', () async {
+    await Future<void>.delayed(Duration.zero);
+    final controller = container.read(surveillanceControllerProvider.notifier);
+    controller.retryDelayFor = (_, __) => const Duration(milliseconds: 80);
+
+    recorder.emit(const SurveillanceNativeEvent('CAMERA_ERROR'));
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    expect(recorder.starts, greaterThanOrEqualTo(2));
+
+    recorder.emit(const SurveillanceNativeEvent('CAMERA_ERROR'));
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      container.read(surveillanceControllerProvider).retryAttempt,
+      greaterThanOrEqualTo(2),
+    );
   });
 
   test('JWT refresh loading does not detach the upload sink', () async {

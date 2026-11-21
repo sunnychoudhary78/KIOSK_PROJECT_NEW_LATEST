@@ -23,22 +23,140 @@ void main() {
       queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
     );
     final ok = File(p.join(dir.path, '2026-09-03', '143052_abc.mp4'));
-    final bad = File(p.join(dir.path, '2026-09-03', '143152_def.mp4'));
+    final failed = File(p.join(dir.path, '2026-09-03', '143152_def.mp4'));
     ok.parent.createSync(recursive: true);
     ok.writeAsBytesSync(List<int>.filled(2048, 1));
-    bad.writeAsBytesSync(List<int>.filled(16, 1));
+    failed.writeAsBytesSync(List<int>.filled(2048, 1));
 
     await queue.enqueue(path: ok.path, bytes: 2048);
-    await queue.enqueue(path: bad.path, bytes: 16);
-    await queue.markFailed(bad.path, error: 'invalid_segment');
+    await queue.enqueue(path: failed.path, bytes: 2048);
+    await queue.markFailed(failed.path, error: 'upload_failed');
 
     final stats = queue.stats();
     expect(stats.pendingCount, 1);
     expect(stats.failedCount, 1);
     expect(stats.dueCount, 1);
-    expect(stats.lastError, 'invalid_segment');
+    expect(stats.lastError, 'upload_failed');
     expect(queue.due(), hasLength(1));
     expect(queue.due().single.path, ok.path);
+  });
+
+  test('enqueue discards tiny stub segments without queueing', () async {
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final tiny = File(p.join(dir.path, '2026-09-03', '143152_tiny.mp4'));
+    tiny.parent.createSync(recursive: true);
+    tiny.writeAsBytesSync(List<int>.filled(16, 1));
+
+    final item = await queue.enqueue(path: tiny.path, bytes: 16);
+    expect(item, isNull);
+    expect(queue.items, isEmpty);
+    expect(tiny.existsSync(), isFalse);
+  });
+
+  test('scanLeftovers discards leftover tiny mp4s', () async {
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final tiny = File(p.join(dir.path, '2026-09-03', '143152_tiny.mp4'));
+    final ok = File(p.join(dir.path, '2026-09-03', '143052_ok.mp4'));
+    tiny.parent.createSync(recursive: true);
+    tiny.writeAsBytesSync(List<int>.filled(8, 1));
+    ok.writeAsBytesSync(List<int>.filled(2048, 1));
+
+    await queue.scanLeftovers();
+    expect(tiny.existsSync(), isFalse);
+    expect(queue.items, hasLength(1));
+    expect(queue.items.single.path, ok.path);
+  });
+
+  test('healDueNow forces pending schedules to now', () async {
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final ok = File(p.join(dir.path, '2026-09-03', '143052_abc.mp4'));
+    ok.parent.createSync(recursive: true);
+    ok.writeAsBytesSync(List<int>.filled(2048, 1));
+    await queue.enqueue(path: ok.path, bytes: 2048);
+
+    final now = DateTime.utc(2026, 11, 21, 12);
+    await queue.markAttempt(ok.path, now: now, error: 'unauthorized');
+    expect(queue.items.single.nextAttemptAt.isAfter(now), isTrue);
+
+    final healed = await queue.healDueNow(now: now);
+    expect(healed, greaterThan(0));
+    expect(queue.due(now: now), hasLength(1));
+  });
+
+  test('retryRecoverableFailures reopens failed non-stub items', () async {
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final ok = File(p.join(dir.path, '2026-09-03', '143052_abc.mp4'));
+    ok.parent.createSync(recursive: true);
+    ok.writeAsBytesSync(List<int>.filled(2048, 1));
+    await queue.enqueue(path: ok.path, bytes: 2048);
+    await queue.markFailed(ok.path, error: 'size_mismatch');
+
+    final now = DateTime.utc(2026, 11, 21, 12);
+    final retried = await queue.retryRecoverableFailures(now: now);
+    expect(retried, 1);
+    expect(queue.items.single.isFailed, isFalse);
+    expect(queue.due(now: now), hasLength(1));
+    expect(queue.items.single.lastError, isNull);
+  });
+
+  test('retryRecoverableFailures leaves invalid_segment failed', () async {
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final ok = File(p.join(dir.path, '2026-09-03', '143052_abc.mp4'));
+    ok.parent.createSync(recursive: true);
+    ok.writeAsBytesSync(List<int>.filled(2048, 1));
+    await queue.enqueue(path: ok.path, bytes: 2048);
+    await queue.markFailed(ok.path, error: 'invalid_segment');
+
+    final retried = await queue.retryRecoverableFailures();
+    expect(retried, 0);
+    expect(queue.items.single.isFailed, isTrue);
+  });
+
+  test('pruneInvalidSegments removes sticky stub failures', () async {
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    final stub = File(p.join(dir.path, '2026-09-03', '143152_stub.mp4'));
+    stub.parent.createSync(recursive: true);
+    stub.writeAsBytesSync(List<int>.filled(0, 0));
+
+    // Seed a failed invalid_segment row as older builds left behind.
+    final queueFile = File(p.join(dir.path, surveillanceQueueFileName));
+    await queueFile.writeAsString(
+      jsonEncode({
+        'items': [
+          {
+            'path': stub.path,
+            'filename': '143152_stub.mp4',
+            'bytes': 0,
+            'recordedOn': '2026-09-03',
+            'enqueuedAt': '2026-09-03T14:31:52.000Z',
+            'attempts': 0,
+            'nextAttemptAt': '2026-09-03T14:31:52.000Z',
+            'segmentId': null,
+            'status': 'failed',
+            'lastError': 'invalid_segment',
+          },
+        ],
+      }),
+    );
+    await queue.load();
+    expect(queue.items, hasLength(1));
+
+    final pruned = await queue.pruneInvalidSegments();
+    expect(pruned, 1);
+    expect(queue.items, isEmpty);
+    expect(stub.existsSync(), isFalse);
   });
 
   test('surveillanceBackoffFor stays at or under 300s for high attempt counts', () {

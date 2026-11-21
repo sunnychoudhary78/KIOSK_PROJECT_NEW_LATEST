@@ -29,6 +29,20 @@ enum ScreenShareSessionStatus {
   failed
 }
 
+enum DeviceSurveillanceCommandStatus {
+  pending
+  running
+  succeeded
+  failed
+  expired
+}
+
+enum DeviceSurveillanceCommandType {
+  heal_queue
+  retry_uploads
+  prune_stubs
+}
+
 enum DeviceStatus {
   provisioning
   active
@@ -199,6 +213,7 @@ model User {
   payments            Payment[]
   supportQueries      SupportQuery[]
   screenShareSessions ScreenShareSession[]
+  surveillanceCommands DeviceSurveillanceCommand[]
 
   @@map("users")
 }
@@ -296,8 +311,31 @@ model Device {
   diagnosticLogs      DeviceDiagnosticLog[]
   supportQueries      SupportQuery[]
   screenShareSessions ScreenShareSession[]
+  surveillanceCommands DeviceSurveillanceCommand[]
 
   @@map("devices")
+}
+
+/// Admin→kiosk maintenance command for local surveillance upload queue.
+model DeviceSurveillanceCommand {
+  id                  String                            @id @default(uuid()) @db.Uuid
+  deviceId            String                            @map("device_id") @db.Uuid
+  type                DeviceSurveillanceCommandType
+  status              DeviceSurveillanceCommandStatus   @default(pending)
+  requestedByUserId   String?                           @map("requested_by_user_id") @db.Uuid
+  resultJson          Json?                             @map("result_json")
+  lastError           String?                           @map("last_error") @db.VarChar(500)
+  createdAt           DateTime                          @default(now()) @map("created_at")
+  expiresAt           DateTime                          @map("expires_at")
+  ackedAt             DateTime?                         @map("acked_at")
+  updatedAt           DateTime                          @updatedAt @map("updated_at")
+
+  device      Device @relation(fields: [deviceId], references: [id])
+  requestedBy User?  @relation(fields: [requestedByUserId], references: [id])
+
+  @@index([deviceId, status])
+  @@index([expiresAt])
+  @@map("device_surveillance_commands")
 }
 
 /// On-demand LiveKit screen-share session (admin viewer ↔ kiosk publisher).

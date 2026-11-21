@@ -347,10 +347,17 @@ void SurveillanceRecorder::EmitSegmentCompleted(const std::wstring& path) {
   if (path.empty() || EndsWithInProgress(path) || !event_callback_) {
     return;
   }
+  const int64_t bytes = FileSizeBytes(path);
+  // Drop empty/stub MP4s from crash loops — never surface to Dart upload queue.
+  constexpr int64_t kMinSegmentBytes = 1024;
+  if (bytes < kMinSegmentBytes) {
+    DeleteFileW(path.c_str());
+    return;
+  }
   RecorderEvent event;
   event.type = "SEGMENT_COMPLETED";
   event.path = Utf8FromUtf16(path);
-  event.bytes = FileSizeBytes(path);
+  event.bytes = bytes;
   event_callback_(event);
 }
 

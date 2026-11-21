@@ -12,6 +12,9 @@ abstract class SurveillanceUploadSink {
   Future<void> enqueue({required String path, int? bytes});
   Future<void> detach();
   SurveillanceQueueStats queueStats();
+
+  /// Admin remote maintenance. Returns a result map for command ack.
+  Future<Map<String, int>> runMaintenanceCommand(String type);
 }
 
 /// PUT timeout for surveillance segments: assume ~100 KB/s, clamp 5–15 min.
@@ -110,9 +113,16 @@ class SurveillanceUploader implements SurveillanceUploadSink {
         );
     _queue = queue;
     final healedLoad = await queue.load();
+    final pruned = await queue.pruneInvalidSegments();
     final healedScan = await queue.scanLeftovers(now: _clock().toUtc());
     final healed = healedLoad + healedScan;
     final stats = queue.stats(now: _clock().toUtc());
+    if (pruned > 0) {
+      AppLogger.info('SURVEILLANCE_QUEUE_PRUNED invalid_segment=$pruned');
+      if (_lastError == 'invalid_segment') {
+        _lastError = null;
+      }
+    }
     if (healed > 0) {
       AppLogger.info(
         'SURVEILLANCE_QUEUE_HEALED healed=$healed '
@@ -142,7 +152,18 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     if (queue == null) {
       return;
     }
-    await queue.enqueue(path: path, bytes: bytes, now: _clock().toUtc());
+    final item =
+        await queue.enqueue(path: path, bytes: bytes, now: _clock().toUtc());
+    if (item == null) {
+      final size = bytes ??
+          (File(path).existsSync() ? File(path).lengthSync() : 0);
+      if (size < surveillanceMinSegmentBytes) {
+        AppLogger.info(
+          'SURVEILLANCE_SEGMENT_DISCARDED ${p.basename(path)} bytes=$size',
+        );
+      }
+      return;
+    }
     unawaited(_tick());
   }
 
@@ -152,6 +173,35 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     _timer = null;
     _queue = null;
     _deviceId = null;
+  }
+
+  @override
+  Future<Map<String, int>> runMaintenanceCommand(String type) async {
+    final queue = _queue;
+    if (queue == null) {
+      return {'healed': 0, 'retried': 0, 'pruned': 0, 'scanned': 0};
+    }
+    final now = _clock().toUtc();
+    switch (type) {
+      case 'heal_queue':
+        final healed = await queue.healDueNow(now: now);
+        unawaited(_tick());
+        return {'healed': healed, 'retried': 0, 'pruned': 0, 'scanned': 0};
+      case 'retry_uploads':
+        final retried = await queue.retryRecoverableFailures(now: now);
+        final scanned = await queue.scanLeftovers(now: now);
+        unawaited(_tick());
+        return {'healed': 0, 'retried': retried, 'pruned': 0, 'scanned': scanned};
+      case 'prune_stubs':
+        final pruned = await queue.pruneInvalidSegments();
+        await queue.scanLeftovers(now: now);
+        if (_lastError == 'invalid_segment') {
+          _lastError = null;
+        }
+        return {'healed': 0, 'retried': 0, 'pruned': pruned, 'scanned': 0};
+      default:
+        throw ArgumentError('Unknown surveillance command: $type');
+    }
   }
 
   Future<void> _tick() async {
@@ -209,7 +259,7 @@ class SurveillanceUploader implements SurveillanceUploadSink {
                   retryError,
                 );
                 if (surveillanceIsPermanentUploadError(retryCode)) {
-                  await queue.markFailed(item.path, error: retryCode);
+                  await _discardStub(queue, item, reason: retryCode);
                 } else {
                   await queue.markAttempt(
                     item.path,
@@ -229,7 +279,7 @@ class SurveillanceUploader implements SurveillanceUploadSink {
             error,
           );
           if (surveillanceIsPermanentUploadError(code)) {
-            await queue.markFailed(item.path, error: code);
+            await _discardStub(queue, item, reason: code);
           } else {
             await queue.markAttempt(item.path, now: _clock().toUtc(), error: code);
           }
@@ -282,12 +332,7 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     }
 
     if (item.bytes < surveillanceMinSegmentBytes) {
-      AppLogger.error(
-        'SURVEILLANCE_UPLOAD_REJECT ${item.filename} bytes=${item.bytes} '
-        'attempts=${item.attempts} errorCode=invalid_segment',
-      );
-      _lastError = 'invalid_segment';
-      await queue.markFailed(item.path, error: 'invalid_segment');
+      await _discardStub(queue, item, reason: 'invalid_segment');
       return;
     }
 
@@ -355,5 +400,22 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     } catch (error) {
       AppLogger.error('SURVEILLANCE_DELETE_PENDING ${item.filename}', error);
     }
+  }
+
+  /// Drop stub/corrupt segments instead of sticky failed queue rows.
+  Future<void> _discardStub(
+    SurveillanceUploadQueue queue,
+    SurveillanceQueueItem item, {
+    required String reason,
+  }) async {
+    AppLogger.info(
+      'SURVEILLANCE_SEGMENT_DISCARDED ${item.filename} bytes=${item.bytes} '
+      'reason=$reason',
+    );
+    if (_lastError == 'invalid_segment' || _lastError == reason) {
+      _lastError = null;
+    }
+    SurveillanceUploadQueue.deleteSegmentFile(item.path);
+    await queue.remove(item.path);
   }
 }

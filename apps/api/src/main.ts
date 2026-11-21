@@ -12,6 +12,7 @@ import { PlatformSettingsService } from './modules/platform_settings/platform_se
 import { DiagnosticLogsService } from './modules/diagnostic_logs/diagnostic_logs.service.js';
 import { SurveillanceService } from './modules/surveillance/surveillance.service.js';
 import { ScreenShareService } from './modules/screen_share/screen_share.service.js';
+import { SurveillanceCommandsService } from './modules/surveillance_commands/surveillance_commands.service.js';
 import { createApp } from './app.js';
 import type { AppDeps } from './types/deps.js';
 
@@ -77,6 +78,7 @@ async function main() {
   const diagnosticLogs = new DiagnosticLogsService(prisma);
   const surveillance = new SurveillanceService(prisma, deps.objectStorage, auditService);
   const screenShare = new ScreenShareService(prisma, auditService, config);
+  const surveillanceCommands = new SurveillanceCommandsService(prisma, auditService);
   const runPurge = async () => {
     try {
       const deleted = await diagnosticLogs.purgeOlderThan();
@@ -111,14 +113,25 @@ async function main() {
     } catch (error) {
       logger.error({ err: error }, '[ScreenShare] expire sweep failed');
     }
+    try {
+      const expired = await surveillanceCommands.expireStale();
+      if (expired > 0) {
+        logger.info({ expired }, '[SurveillanceCommands] expired stale commands');
+      }
+    } catch (error) {
+      logger.error({ err: error }, '[SurveillanceCommands] expire sweep failed');
+    }
   };
   void runPurge();
   const purgeTimer = setInterval(() => void runPurge(), 60 * 60 * 1000);
   purgeTimer.unref?.();
-  // Screen-share pending TTL is 2 minutes — sweep more often than hourly purge.
+  // Screen-share / surveillance-command pending TTL is 2 minutes — sweep often.
   const screenShareTimer = setInterval(() => {
     void screenShare.expireStale().catch((error) => {
       logger.error({ err: error }, '[ScreenShare] expire sweep failed');
+    });
+    void surveillanceCommands.expireStale().catch((error) => {
+      logger.error({ err: error }, '[SurveillanceCommands] expire sweep failed');
     });
   }, 60 * 1000);
   screenShareTimer.unref?.();
