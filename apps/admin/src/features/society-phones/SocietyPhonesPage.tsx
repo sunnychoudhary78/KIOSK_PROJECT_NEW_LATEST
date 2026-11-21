@@ -109,8 +109,12 @@ export function SocietyPhonesPage() {
         body: {
           settingValue: {
             period: quota.period,
-            freeBwPages: Number(quota.freeBwPages),
-            freeColorPages: Number(quota.freeColorPages),
+            freeBwPages: Number.isFinite(Number(quota.freeBwPages))
+              ? Math.max(0, Math.min(500, Number(quota.freeBwPages)))
+              : 5,
+            freeColorPages: Number.isFinite(Number(quota.freeColorPages))
+              ? Math.max(0, Math.min(500, Number(quota.freeColorPages)))
+              : 0,
           },
         },
       });
@@ -211,7 +215,14 @@ export function SocietyPhonesPage() {
                 min={0}
                 max={500}
                 value={quota.freeBwPages}
-                onChange={(e) => setQuota((s) => ({ ...s, freeBwPages: Number(e.target.value) }))}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setQuota((s) => ({
+                    ...s,
+                    freeBwPages:
+                      raw === '' ? s.freeBwPages : Math.max(0, Math.min(500, Number(raw) || 0)),
+                  }));
+                }}
               />
             </label>
             <label>
@@ -221,7 +232,16 @@ export function SocietyPhonesPage() {
                 min={0}
                 max={500}
                 value={quota.freeColorPages}
-                onChange={(e) => setQuota((s) => ({ ...s, freeColorPages: Number(e.target.value) }))}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setQuota((s) => ({
+                    ...s,
+                    freeColorPages:
+                      raw === ''
+                        ? s.freeColorPages
+                        : Math.max(0, Math.min(500, Number(raw) || 0)),
+                  }));
+                }}
               />
             </label>
           </div>

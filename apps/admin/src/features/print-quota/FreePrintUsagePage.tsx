@@ -28,6 +28,15 @@ type UsageItem = {
   lastActivityAt: string | null;
 };
 
+type UsageSummary = {
+  phones: number;
+  society: number;
+  public: number;
+  exhausted: number;
+  bwPages: number;
+  colorPages: number;
+};
+
 type UsageListResponse = {
   period: 'daily' | 'weekly' | 'monthly';
   periodKey: string;
@@ -35,6 +44,7 @@ type UsageListResponse = {
   societyPeriodKey?: string;
   limits: { freeBwPages: number; freeColorPages: number };
   societyLimits?: { freeBwPages: number; freeColorPages: number };
+  summary?: UsageSummary;
   total?: number;
   truncated?: boolean;
   items: UsageItem[];
@@ -84,16 +94,17 @@ function sourceLabel(source: string) {
   return source.replace(/_/g, ' ');
 }
 
-function UsageBar({ used, limit, label }: { used: number; limit: number; label: string }) {
-  const safeLimit = Math.max(limit, 0);
+function UsageBar({ used, limit }: { used: number; limit: number }) {
+  const safeLimit = Math.max(0, limit);
+  const remaining = Math.max(0, safeLimit - used);
   const pct = safeLimit > 0 ? Math.min(100, Math.round((used / safeLimit) * 100)) : used > 0 ? 100 : 0;
   return (
     <div className="min-w-[7rem]">
       <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
         <span className="font-medium text-foreground">
-          {used}/{safeLimit || '—'}
+          {used} / {safeLimit}
         </span>
-        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground">used</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div
@@ -104,6 +115,7 @@ function UsageBar({ used, limit, label }: { used: number; limit: number; label: 
           style={{ width: `${pct}%` }}
         />
       </div>
+      <p className="mt-1 text-xs text-muted-foreground">{remaining} left</p>
     </div>
   );
 }
@@ -198,20 +210,30 @@ export function FreePrintUsagePage() {
   }, [data, sortKey]);
 
   const counts = useMemo(() => {
+    if (data?.summary) return data.summary;
     const items = data?.items ?? [];
     return {
       phones: data?.total ?? items.length,
       society: items.filter((item) => item.society).length,
       public: items.filter((item) => !item.society).length,
-      exhausted: items.filter((item) => item.exhausted || (item.bwRemaining === 0 && item.colorRemaining === 0))
-        .length,
+      exhausted: items.filter(
+        (item) => item.exhausted || (item.bwRemaining === 0 && item.colorRemaining === 0),
+      ).length,
       bwPages: items.reduce((sum, item) => sum + item.bwUsed, 0),
       colorPages: items.reduce((sum, item) => sum + item.colorUsed, 0),
     };
   }, [data]);
 
   const subtitle = data
-    ? `${periodLabel(data.period)} · ${data.periodKey} · Public free B/W ${data.limits.freeBwPages} / Color ${data.limits.freeColorPages}`
+    ? [
+        `${periodLabel(data.period)} · ${data.periodKey}`,
+        `Public free B/W ${data.limits.freeBwPages} / Color ${data.limits.freeColorPages}`,
+        data.societyLimits
+          ? `Society B/W ${data.societyLimits.freeBwPages} / Color ${data.societyLimits.freeColorPages}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
     : 'Phones that used free pages in the current quota period';
 
   const detailEntries = useMemo(() => {
@@ -364,12 +386,10 @@ export function FreePrintUsagePage() {
                         </div>
                       </td>
                       <td>
-                        <UsageBar used={item.bwUsed} limit={bwLimit} label="left" />
-                        <p className="mt-1 text-xs text-muted-foreground">{item.bwRemaining} left</p>
+                        <UsageBar used={item.bwUsed} limit={bwLimit} />
                       </td>
                       <td>
-                        <UsageBar used={item.colorUsed} limit={colorLimit} label="left" />
-                        <p className="mt-1 text-xs text-muted-foreground">{item.colorRemaining} left</p>
+                        <UsageBar used={item.colorUsed} limit={colorLimit} />
                       </td>
                       <td className="whitespace-nowrap text-muted-foreground">
                         {item.lastActivityAt

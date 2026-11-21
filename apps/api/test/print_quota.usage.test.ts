@@ -112,6 +112,14 @@ describe('PrintQuotaService.listUsage', () => {
     expect(result.period).toBe('daily');
     expect(result.periodKey).toBe(PERIOD_KEY);
     expect(result.limits).toEqual({ freeBwPages: 5, freeColorPages: 2 });
+    expect(result.summary).toEqual({
+      phones: 0,
+      society: 0,
+      public: 0,
+      exhausted: 0,
+      bwPages: 0,
+      colorPages: 0,
+    });
     expect(result.items).toEqual([]);
   });
 
@@ -149,6 +157,14 @@ describe('PrintQuotaService.listUsage', () => {
 
     const result = await service.listUsage({ now: NOW });
     expect(result.items).toHaveLength(2);
+    expect(result.summary).toEqual({
+      phones: 2,
+      society: 0,
+      public: 2,
+      exhausted: 0,
+      bwPages: 3,
+      colorPages: 1,
+    });
 
     const a = result.items.find((i) => i.phone === PHONE_A)!;
     const b = result.items.find((i) => i.phone === PHONE_B)!;
@@ -165,6 +181,38 @@ describe('PrintQuotaService.listUsage', () => {
 
     // newest activity first
     expect(result.items[0]?.phone).toBe(PHONE_A);
+  });
+
+  it('keeps period summary when audience filter is applied', async () => {
+    const { service } = setup(
+      [
+        {
+          phone: PHONE_A,
+          printColorMode: PrintColorMode.bw,
+          pages: 2,
+          updatedAt: new Date('2026-04-15T09:00:00.000Z'),
+        },
+        {
+          phone: PHONE_B,
+          printColorMode: PrintColorMode.bw,
+          pages: 1,
+          updatedAt: new Date('2026-04-15T08:00:00.000Z'),
+        },
+      ],
+      { societyPhones: [PHONE_A] },
+    );
+
+    const result = await service.listUsage({ audience: 'society', now: NOW });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.phone).toBe(PHONE_A);
+    expect(result.summary).toEqual({
+      phones: 2,
+      society: 1,
+      public: 1,
+      exhausted: 0,
+      bwPages: 3,
+      colorPages: 0,
+    });
   });
 
   it('filters by phone search digits', async () => {

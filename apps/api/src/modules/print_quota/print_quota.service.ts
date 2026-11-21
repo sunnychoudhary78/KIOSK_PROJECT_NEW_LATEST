@@ -43,11 +43,21 @@ type ResolvedQuota = {
 
 type RemainingQuota = {
   remaining: number;
+  used: number;
   periodLimit: number;
   periodKey: string;
   period: PrintFreeQuotaConfig['period'];
   society: boolean;
 };
+
+function isQuotaExhausted(bwUsed: number, bwLimit: number, colorUsed: number, colorLimit: number): boolean {
+  const hasBw = bwLimit > 0;
+  const hasColor = colorLimit > 0;
+  if (!hasBw && !hasColor) {
+    return bwUsed + colorUsed > 0;
+  }
+  return (!hasBw || bwUsed >= bwLimit) && (!hasColor || colorUsed >= colorLimit);
+}
 
 export class PrintQuotaService {
   private readonly settings: PlatformSettingsService;
@@ -109,6 +119,7 @@ export class PrintQuotaService {
     const used = rows.reduce((sum, row) => sum + row.pages, 0);
     return {
       remaining: Math.max(0, periodLimit - used),
+      used,
       periodLimit,
       periodKey,
       period: config.period,
@@ -387,7 +398,7 @@ export class PrintQuotaService {
     }
 
     const searchDigits = (input.q ?? '').replace(/\D/g, '');
-    let items = Array.from(byPhone.entries()).map(([phone, stats]) => {
+    const allItems = Array.from(byPhone.entries()).map(([phone, stats]) => {
       const limits = stats.society ? societyConfig : config;
       const bwRemaining = Math.max(0, limits.freeBwPages - stats.bwUsed);
       const colorRemaining = Math.max(0, limits.freeColorPages - stats.colorUsed);
@@ -401,11 +412,27 @@ export class PrintQuotaService {
         bwLimit: limits.freeBwPages,
         colorLimit: limits.freeColorPages,
         totalUsed: stats.bwUsed + stats.colorUsed,
-        exhausted: bwRemaining === 0 && colorRemaining === 0,
+        exhausted: isQuotaExhausted(
+          stats.bwUsed,
+          limits.freeBwPages,
+          stats.colorUsed,
+          limits.freeColorPages,
+        ),
         lastActivityAt: stats.lastActivityAt?.toISOString() ?? null,
       };
     });
 
+    // Period-wide KPIs stay stable even when the table is filtered.
+    const summary = {
+      phones: allItems.length,
+      society: allItems.filter((item) => item.society).length,
+      public: allItems.filter((item) => !item.society).length,
+      exhausted: allItems.filter((item) => item.exhausted).length,
+      bwPages: allItems.reduce((sum, item) => sum + item.bwUsed, 0),
+      colorPages: allItems.reduce((sum, item) => sum + item.colorUsed, 0),
+    };
+
+    let items = allItems;
     if (searchDigits) {
       items = items.filter((item) => item.phone.replace(/\D/g, '').includes(searchDigits));
     }
@@ -445,6 +472,7 @@ export class PrintQuotaService {
         freeBwPages: societyConfig.freeBwPages,
         freeColorPages: societyConfig.freeColorPages,
       },
+      summary,
       total,
       truncated: total > sliced.length,
       items: sliced,
@@ -487,9 +515,9 @@ export class PrintQuotaService {
         freeColorPages: color.periodLimit,
       },
       summary: {
-        bwUsed: bw.periodLimit - bw.remaining,
+        bwUsed: bw.used,
         bwRemaining: bw.remaining,
-        colorUsed: color.periodLimit - color.remaining,
+        colorUsed: color.used,
         colorRemaining: color.remaining,
       },
       entries: entries.map((entry) => ({

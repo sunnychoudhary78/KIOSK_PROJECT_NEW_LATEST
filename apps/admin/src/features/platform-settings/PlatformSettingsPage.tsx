@@ -268,8 +268,12 @@ export function PlatformSettingsPage() {
     try {
       await putSetting('print_free_quota_config', {
         period: freeQuota.period,
-        freeBwPages: Number(freeQuota.freeBwPages),
-        freeColorPages: Number(freeQuota.freeColorPages),
+        freeBwPages: Number.isFinite(Number(freeQuota.freeBwPages))
+          ? Math.max(0, Math.min(500, Number(freeQuota.freeBwPages)))
+          : DEFAULT_FREE_QUOTA.freeBwPages,
+        freeColorPages: Number.isFinite(Number(freeQuota.freeColorPages))
+          ? Math.max(0, Math.min(500, Number(freeQuota.freeColorPages)))
+          : DEFAULT_FREE_QUOTA.freeColorPages,
       });
       quotaSaved = true;
     } catch (err) {
@@ -527,9 +531,16 @@ export function PlatformSettingsPage() {
                 min={0}
                 max={500}
                 value={freeQuota.freeBwPages}
-                onChange={(e) =>
-                  setFreeQuota((s) => ({ ...s, freeBwPages: Number(e.target.value) }))
-                }
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setFreeQuota((s) => ({
+                    ...s,
+                    freeBwPages:
+                      raw === ''
+                        ? s.freeBwPages
+                        : Math.max(0, Math.min(500, Number(raw) || 0)),
+                  }));
+                }}
               />
             </label>
             <label>
@@ -539,9 +550,16 @@ export function PlatformSettingsPage() {
                 min={0}
                 max={500}
                 value={freeQuota.freeColorPages}
-                onChange={(e) =>
-                  setFreeQuota((s) => ({ ...s, freeColorPages: Number(e.target.value) }))
-                }
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setFreeQuota((s) => ({
+                    ...s,
+                    freeColorPages:
+                      raw === ''
+                        ? s.freeColorPages
+                        : Math.max(0, Math.min(500, Number(raw) || 0)),
+                  }));
+                }}
               />
             </label>
           </div>
