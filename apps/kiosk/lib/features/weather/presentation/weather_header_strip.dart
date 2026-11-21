@@ -14,8 +14,10 @@ class WeatherHeaderStrip extends ConsumerWidget {
     final colors = context.athenaColors;
     final snapshot = ref.watch(weatherControllerProvider).snapshot;
     final hasData = snapshot != null && snapshot.hasDisplayableData;
+    final width = MediaQuery.sizeOf(context).width;
+    final dense = width < 1180;
+    final compact = width < 980;
 
-    // In Image 1: Kiosk 6 | 24°C | 68% | 5 km/h | UV 3 | AQI 205
     final tempStr = hasData && snapshot.temperatureC != null
         ? '${snapshot.temperatureC!.round()}°C'
         : '24°C';
@@ -30,9 +32,31 @@ class WeatherHeaderStrip extends ConsumerWidget {
         : 'UV 3';
     final aqiVal = hasData && snapshot.aqi != null ? snapshot.aqi! : 205;
 
+    Widget metric(IconData icon, String value) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: dense ? 14 : 16, color: colors.textSecondary),
+          SizedBox(width: dense ? 2 : 3),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: dense ? 13 : 15,
+              fontWeight: FontWeight.w600,
+              color: colors.textPrimary,
+            ),
+          ),
+        ],
+      );
+    }
+
     return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      height: dense ? 36 : 42,
+      padding: EdgeInsets.symmetric(
+        horizontal: dense ? 10 : 14,
+        vertical: dense ? 3 : 5,
+      ),
       decoration: BoxDecoration(
         color: colors.topBarPillBg,
         borderRadius: BorderRadius.circular(24),
@@ -51,77 +75,38 @@ class WeatherHeaderStrip extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Kiosk Location Pin
-          Icon(Icons.location_on_outlined, size: 16, color: colors.textSecondary),
+          Icon(
+            Icons.location_on_outlined,
+            size: dense ? 14 : 16,
+            color: colors.textSecondary,
+          ),
           const SizedBox(width: 4),
-          Text(
-            locationLabel ?? 'Kiosk 6',
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
+          Flexible(
+            child: Text(
+              locationLabel ?? 'Kiosk 6',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: dense ? 13 : 15,
+                fontWeight: FontWeight.w600,
+                color: colors.textPrimary,
+              ),
             ),
           ),
-          const SizedBox(width: 10),
-
-          // Temperature
-          Icon(Icons.thermostat_outlined, size: 16, color: colors.textSecondary),
-          const SizedBox(width: 3),
-          Text(
-            tempStr,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(width: 10),
-
-          // Humidity
-          Icon(Icons.water_drop_outlined, size: 15, color: colors.textSecondary),
-          const SizedBox(width: 3),
-          Text(
-            humidityStr,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(width: 10),
-
-          // Wind
-          Icon(Icons.air, size: 15, color: colors.textSecondary),
-          const SizedBox(width: 3),
-          Text(
-            windStr,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(width: 10),
-
-          // UV
-          Icon(Icons.wb_sunny_outlined, size: 15, color: colors.textSecondary),
-          const SizedBox(width: 3),
-          Text(
-            uvStr,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(width: 10),
-
-          // AQI Pill Chip — opens dedicated air quality screen
+          SizedBox(width: dense ? 8 : 10),
+          metric(Icons.thermostat_outlined, tempStr),
+          if (!compact) ...[
+            SizedBox(width: dense ? 8 : 10),
+            metric(Icons.water_drop_outlined, humidityStr),
+          ],
+          if (!dense) ...[
+            const SizedBox(width: 10),
+            metric(Icons.air, windStr),
+            const SizedBox(width: 10),
+            metric(Icons.wb_sunny_outlined, uvStr),
+          ],
+          SizedBox(width: dense ? 8 : 10),
           Material(
             color: Colors.transparent,
             child: InkWell(
@@ -129,8 +114,10 @@ class WeatherHeaderStrip extends ConsumerWidget {
                   Navigator.of(context).pushNamed(AppRoutes.airQuality),
               borderRadius: BorderRadius.circular(12),
               child: Ink(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                padding: EdgeInsets.symmetric(
+                  horizontal: dense ? 6 : 7,
+                  vertical: dense ? 2 : 2.5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE74C3C).withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(12),
@@ -141,11 +128,11 @@ class WeatherHeaderStrip extends ConsumerWidget {
                 ),
                 child: Text(
                   'AQI $aqiVal',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'PlusJakartaSans',
-                    fontSize: 14,
+                    fontSize: dense ? 12 : 14,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFFE74C3C),
+                    color: const Color(0xFFE74C3C),
                   ),
                 ),
               ),

@@ -356,169 +356,191 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
       ],
     );
 
-    // Main central layout — tuned for 1448×1086 (4:3).
+    final titleBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!layout.compactHero)
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: layout.s(12),
+              vertical: layout.s(4),
+            ),
+            margin: EdgeInsets.only(bottom: layout.s(6)),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF2E1C48) : const Color(0xFFFDF2F8),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? const Color(0xFF6B21A8) : const Color(0xFFFBCFE8),
+                width: 1.1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.auto_awesome_rounded,
+                  size: layout.s(15),
+                  color: const Color(0xFFEC4899),
+                ),
+                SizedBox(width: layout.s(6)),
+                Text(
+                  'Athena Smart Kiosk',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: layout.s(13),
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? const Color(0xFFF472B6) : const Color(0xFFBE185D),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Select a ',
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: layout.headlineSize,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.6,
+                  color: colors.textPrimary,
+                ),
+              ),
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
+                ).createShader(bounds),
+                child: Text(
+                  'Service',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: layout.headlineSize,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.6,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              SizedBox(width: layout.s(6)),
+              Text('✨', style: TextStyle(fontSize: layout.s(24))),
+            ],
+          ),
+        ),
+        SizedBox(height: layout.s(4)),
+        Container(
+          width: layout.s(56),
+          height: layout.s(4),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
+            ),
+            borderRadius: BorderRadius.circular(3),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFE11D48).withValues(alpha: 0.35),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+        ),
+        if (!layout.compactHero) ...[
+          SizedBox(height: layout.s(6)),
+          Row(
+            children: [
+              Icon(
+                Icons.touch_app_outlined,
+                size: layout.s(16),
+                color: colors.textSecondary.withValues(alpha: 0.8),
+              ),
+              SizedBox(width: layout.s(6)),
+              Flexible(
+                child: Text(
+                  'Touch any card below to start your service',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: layout.subtitleSize,
+                    fontWeight: FontWeight.w500,
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+
+    final actionChips = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _HomeActionChip(
+          height: layout.actionHeight,
+          horizontalPadding: layout.s(layout.compactHero ? 12 : 16),
+          iconSize: layout.s(20),
+          fontSize: layout.s(layout.compactHero ? 13 : 15),
+          label: 'Emergency',
+          icon: Icons.sos_rounded,
+          colors: const [Color(0xFFF43F5E), Color(0xFFE11D48)],
+          shadowColor: const Color(0xFFE11D48),
+          onTap: () => Navigator.of(context).pushNamed(AppRoutes.emergency),
+        ),
+        SizedBox(width: layout.s(8)),
+        _HomeActionChip(
+          height: layout.actionHeight,
+          horizontalPadding: layout.s(layout.compactHero ? 12 : 16),
+          iconSize: layout.s(20),
+          fontSize: layout.s(layout.compactHero ? 13 : 15),
+          label: 'Support',
+          icon: Icons.support_agent_rounded,
+          colors: const [Color(0xFF38BDF8), Color(0xFF0284C7)],
+          shadowColor: const Color(0xFF0284C7),
+          onTap: () => Navigator.of(context).pushNamed(AppRoutes.support),
+        ),
+        if (layout.showMachine) ...[
+          SizedBox(width: layout.s(10)),
+          Image.asset(
+            'assets/new_theme_icons/machine_image.png',
+            height: layout.machineSize,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) =>
+                KioskTerminalGraphic(size: layout.machineSize),
+          ),
+        ],
+      ],
+    );
+
+    final hero = Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(child: titleBlock),
+        SizedBox(width: layout.s(layout.compactHero ? 8 : 10)),
+        Flexible(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: actionChips,
+            ),
+          ),
+        ),
+      ],
+    );
+
     final contentArea = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: layout.s(12),
-                      vertical: layout.s(4),
-                    ),
-                    margin: EdgeInsets.only(bottom: layout.s(6)),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF2E1C48) : const Color(0xFFFDF2F8),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF6B21A8) : const Color(0xFFFBCFE8),
-                        width: 1.1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.auto_awesome_rounded,
-                          size: layout.s(15),
-                          color: const Color(0xFFEC4899),
-                        ),
-                        SizedBox(width: layout.s(6)),
-                        Text(
-                          'Athena Smart Kiosk',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontSize: layout.s(13),
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFFF472B6) : const Color(0xFFBE185D),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Select a ',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontSize: layout.headlineSize,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                            color: colors.textPrimary,
-                          ),
-                        ),
-                        ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
-                          ).createShader(bounds),
-                          child: Text(
-                            'Service',
-                            style: TextStyle(
-                              fontFamily: 'PlusJakartaSans',
-                              fontSize: layout.headlineSize,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.6,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: layout.s(6)),
-                        Text('✨', style: TextStyle(fontSize: layout.s(24))),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: layout.s(5)),
-                  Container(
-                    width: layout.s(56),
-                    height: layout.s(4),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
-                      ),
-                      borderRadius: BorderRadius.circular(3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFE11D48).withValues(alpha: 0.35),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: layout.s(6)),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.touch_app_outlined,
-                        size: layout.s(16),
-                        color: colors.textSecondary.withValues(alpha: 0.8),
-                      ),
-                      SizedBox(width: layout.s(6)),
-                      Flexible(
-                        child: Text(
-                          'Touch any card below to start your service',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontSize: layout.subtitleSize,
-                            fontWeight: FontWeight.w500,
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(width: layout.s(10)),
-            _HomeActionChip(
-              height: layout.actionHeight,
-              horizontalPadding: layout.s(16),
-              iconSize: layout.s(20),
-              fontSize: layout.s(15),
-              label: 'Emergency',
-              icon: Icons.sos_rounded,
-              colors: const [Color(0xFFF43F5E), Color(0xFFE11D48)],
-              shadowColor: const Color(0xFFE11D48),
-              onTap: () => Navigator.of(context).pushNamed(AppRoutes.emergency),
-            ),
-            SizedBox(width: layout.s(8)),
-            _HomeActionChip(
-              height: layout.actionHeight,
-              horizontalPadding: layout.s(16),
-              iconSize: layout.s(20),
-              fontSize: layout.s(15),
-              label: 'Support',
-              icon: Icons.support_agent_rounded,
-              colors: const [Color(0xFF38BDF8), Color(0xFF0284C7)],
-              shadowColor: const Color(0xFF0284C7),
-              onTap: () => Navigator.of(context).pushNamed(AppRoutes.support),
-            ),
-            SizedBox(width: layout.s(10)),
-            Image.asset(
-              'assets/new_theme_icons/machine_image.png',
-              height: layout.machineSize,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
-                  KioskTerminalGraphic(size: layout.machineSize),
-            ),
-          ],
-        ),
-        SizedBox(height: layout.s(10)),
+        hero,
+        SizedBox(height: layout.s(layout.compactHero ? 8 : 10)),
         Expanded(child: serviceGrid),
       ],
     );
@@ -618,20 +640,26 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
                 ),
                 const Spacer(),
                 Flexible(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: WeatherHeaderStrip(
-                          locationLabel: (widget.auth.deviceName != null &&
-                                  widget.auth.deviceName!.isNotEmpty)
-                              ? widget.auth.deviceName!
-                              : 'Kiosk 6',
-                        ),
+                  flex: 3,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          WeatherHeaderStrip(
+                            locationLabel: (widget.auth.deviceName != null &&
+                                    widget.auth.deviceName!.isNotEmpty)
+                                ? widget.auth.deviceName!
+                                : 'Kiosk 6',
+                          ),
+                          SizedBox(width: layout.s(10)),
+                          const KioskClock(showDate: true),
+                        ],
                       ),
-                      SizedBox(width: layout.s(10)),
-                      const KioskClock(showDate: true),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -644,10 +672,12 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
   }
 }
 
-/// Layout scale for the production kiosk panel (1448×1086, 4:3).
+/// Responsive home metrics for the 1448×1086 (4:3) kiosk and laptop 16:9 windows.
 class _HomeLayout {
   const _HomeLayout._({
     required this.scale,
+    required this.compactHero,
+    required this.showMachine,
     required this.headerHeight,
     required this.logoSize,
     required this.headlineSize,
@@ -662,30 +692,51 @@ class _HomeLayout {
   });
 
   factory _HomeLayout.of(Size size) {
-    // Prefer width scale: 4:3 panels are width-constrained vs 16:9 designs.
-    final widthScale = (size.width / SkpTokens.displayWidth).clamp(0.72, 1.05);
-    final heightScale = (size.height / SkpTokens.displayHeight).clamp(0.72, 1.05);
-    final scale = widthScale < heightScale ? widthScale : heightScale;
+    final width = size.width;
+    final height = size.height;
+    final aspect = width / (height <= 0 ? 1 : height);
+
+    final widthScale = width / SkpTokens.displayWidth;
+    final heightScale = height / SkpTokens.displayHeight;
+    // Laptops (16:9) are usually height-limited; kiosk 4:3 is width-limited.
+    final scale = (widthScale < heightScale ? widthScale : heightScale)
+        .clamp(0.55, 1.15);
+
+    final compact = width < 1180 || height < 820;
+    final narrow = width < 980;
+    final short = height < 720;
+    final wideLaptop = aspect > 1.5;
 
     double s(double value) => value * scale;
 
+    final sideMax = compact ? 56.0 : (wideLaptop ? 64.0 : 80.0);
+    final sideMin = short || narrow ? 40.0 : 48.0;
+    final bannerSide = (width * (wideLaptop ? 0.04 : 0.05)).clamp(sideMin, sideMax);
+
+    final bannerH = (height * (short ? 0.05 : 0.066))
+        .clamp(short ? 36.0 : 48.0, compact ? 60.0 : 80.0);
+
     return _HomeLayout._(
       scale: scale,
-      headerHeight: s(68),
-      logoSize: s(40),
-      headlineSize: s(34),
-      subtitleSize: s(16),
-      actionHeight: s(48),
-      machineSize: s(96),
-      bannerHeight: s(SkpTokens.bannerHeight),
-      bannerSideWidth: s(SkpTokens.bannerSideWidth),
-      gridGap: s(12),
-      contentPadTight: s(16),
-      contentPadWide: s(24),
+      compactHero: compact || wideLaptop,
+      showMachine: !narrow,
+      headerHeight: s(compact ? 58 : 68),
+      logoSize: s(compact ? 34 : 40),
+      headlineSize: s(compact ? 28 : 34),
+      subtitleSize: s(compact ? 14 : 16),
+      actionHeight: s(compact ? 42 : 48),
+      machineSize: s(compact ? 72 : 96),
+      bannerHeight: bannerH,
+      bannerSideWidth: bannerSide,
+      gridGap: s(compact ? 10 : 12),
+      contentPadTight: s(compact ? 12 : 16),
+      contentPadWide: s(compact ? 16 : 24),
     );
   }
 
   final double scale;
+  final bool compactHero;
+  final bool showMachine;
   final double headerHeight;
   final double logoSize;
   final double headlineSize;

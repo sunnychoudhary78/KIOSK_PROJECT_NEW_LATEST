@@ -167,142 +167,185 @@ class _KioskServiceTileState extends State<KioskServiceTile> {
                       painter: _CardBottomWavePainter(color: effectiveWaveColor),
                       size: Size.infinite,
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 68,
-                            height: 68,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: blocked
-                                    ? [
-                                        const Color(0xFF94A3B8),
-                                        const Color(0xFF64748B),
-                                      ]
-                                    : grad,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Scale tile chrome to the cell size (laptop vs 4:3 kiosk).
+                        final heightScale =
+                            (constraints.maxHeight / 155).clamp(0.62, 1.15);
+                        final widthScale =
+                            (constraints.maxWidth / 420).clamp(0.62, 1.15);
+                        final s = heightScale < widthScale ? heightScale : widthScale;
+                        final iconBox = 68.0 * s;
+                        final iconGlyph = 34.0 * s;
+                        final titleSize = 25.0 * s;
+                        final subtitleSize = 16.0 * s;
+                        final arrowBox = 42.0 * s;
+                        final hPad = 20.0 * s;
+                        final vPad = 14.0 * s;
+                        final gap = 16.0 * s;
+                        final showDivider = constraints.maxWidth > 280;
+                        final showArrow = constraints.maxWidth > 240;
+
+                        return Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: hPad,
+                            vertical: vPad,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: iconBox,
+                                height: iconBox,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20 * s),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: blocked
+                                        ? [
+                                            const Color(0xFF94A3B8),
+                                            const Color(0xFF64748B),
+                                          ]
+                                        : grad,
+                                  ),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.40),
+                                    width: 1.4,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (blocked
+                                              ? const Color(0xFF64748B)
+                                              : grad.last)
+                                          .withValues(alpha: 0.40),
+                                      blurRadius: 14 * s,
+                                      offset: Offset(0, 5 * s),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Icon(
+                                    blocked ? Icons.block_rounded : widget.icon,
+                                    size: iconGlyph,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.40),
-                                width: 1.4,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: (blocked ? const Color(0xFF64748B) : grad.last)
-                                      .withValues(alpha: 0.40),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 5),
+                              if (showDivider) ...[
+                                SizedBox(width: gap),
+                                Container(
+                                  width: 1,
+                                  height: 48 * s,
+                                  color: isDark
+                                      ? const Color(0xFF2E2452)
+                                      : const Color(0xFFE2E8F0),
                                 ),
                               ],
-                            ),
-                            child: Center(
-                              child: Icon(
-                                blocked ? Icons.block_rounded : widget.icon,
-                                size: 34,
-                                color: Colors.white,
+                              SizedBox(width: gap),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontFamily: 'PlusJakartaSans',
+                                        fontSize: titleSize,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.4,
+                                        color: titleColor,
+                                        height: 1.15,
+                                      ),
+                                    ),
+                                    SizedBox(height: 5 * s),
+                                    Text(
+                                      blocked && statusLabel != null
+                                          ? statusLabel
+                                          : widget.subtitle,
+                                      maxLines: constraints.maxHeight < 110 ? 1 : 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontFamily: 'PlusJakartaSans',
+                                        fontSize: subtitleSize,
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.35,
+                                        color: blocked
+                                            ? statusColor
+                                            : subtitleColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Container(
-                            width: 1,
-                            height: 48,
-                            color: isDark
-                                ? const Color(0xFF2E2452)
-                                : const Color(0xFFE2E8F0),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontFamily: 'PlusJakartaSans',
-                                    fontSize: 25,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.4,
-                                    color: titleColor,
-                                    height: 1.15,
+                              if (showArrow) ...[
+                                SizedBox(width: 12 * s),
+                                if (statusLabel != null && blocked)
+                                  Flexible(
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 10 * s,
+                                        vertical: 6 * s,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withValues(
+                                          alpha: isDark ? 0.22 : 0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(999),
+                                        border: Border.all(
+                                          color: statusColor.withValues(alpha: 0.45),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        statusLabel,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily: 'PlusJakartaSans',
+                                          fontSize: 12 * s,
+                                          fontWeight: FontWeight.w700,
+                                          color: statusColor,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    width: arrowBox,
+                                    height: arrowBox,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: arrowBg,
+                                      border: Border.all(
+                                        color: arrowBorderColor,
+                                        width: 1.4,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: effectiveAccent.withValues(
+                                            alpha: 0.12,
+                                          ),
+                                          blurRadius: 8 * s,
+                                          offset: Offset(0, 2 * s),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.arrow_forward_rounded,
+                                        size: 19 * s,
+                                        color: arrowIconColor,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  blocked && statusLabel != null
-                                      ? statusLabel
-                                      : widget.subtitle,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontFamily: 'PlusJakartaSans',
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    height: 1.35,
-                                    color: blocked ? statusColor : subtitleColor,
-                                  ),
-                                ),
                               ],
-                            ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          if (statusLabel != null && blocked)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: statusColor.withValues(alpha: isDark ? 0.22 : 0.12),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: statusColor.withValues(alpha: 0.45),
-                                ),
-                              ),
-                              child: Text(
-                                statusLabel,
-                                style: TextStyle(
-                                  fontFamily: 'PlusJakartaSans',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: statusColor,
-                                ),
-                              ),
-                            )
-                          else
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: arrowBg,
-                                border: Border.all(
-                                  color: arrowBorderColor,
-                                  width: 1.4,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: effectiveAccent.withValues(alpha: 0.12),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  Icons.arrow_forward_rounded,
-                                  size: 19,
-                                  color: arrowIconColor,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),
