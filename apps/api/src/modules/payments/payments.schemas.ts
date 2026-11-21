@@ -27,13 +27,27 @@ export const listSupportQueriesQuerySchema = z.object({
 
 export const openKioskSupportQuerySchema = z.object({
   category: z.enum(['print', 'charging', 'sensors', 'payment', 'other']),
-  message: z.string().trim().min(1).max(500),
-  phone: z
+  message: z
     .string()
     .trim()
+    .min(1, 'Message is required')
+    .max(500, 'Message must be 500 characters or fewer'),
+  phone: z
+    .string({ required_error: 'Phone is required' })
+    .trim()
+    .min(1, 'Phone is required')
     .max(20)
-    .regex(/^[0-9+\-\s]*$/, 'Phone must be digits')
-    .optional(),
+    .refine((value) => {
+      const digits = value.replace(/\D/g, '');
+      if (digits.length === 10) return /^[6-9]\d{9}$/.test(digits);
+      if (digits.length === 12 && digits.startsWith('91')) {
+        return /^[6-9]\d{9}$/.test(digits.slice(2));
+      }
+      if (digits.length === 11 && digits.startsWith('0')) {
+        return /^[6-9]\d{9}$/.test(digits.slice(1));
+      }
+      return false;
+    }, 'Enter a valid 10-digit mobile number'),
 });
 
 export const resolveSupportQuerySchema = z.object({

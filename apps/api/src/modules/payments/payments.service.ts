@@ -11,7 +11,7 @@ import {
 import type { AppConfig } from '../../config/index.js';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError, isAppError } from '../../shared/errors.js';
-import { hashSecret } from '../../shared/otp.js';
+import { hashSecret, normalizePhone, phoneDigits10 } from '../../shared/otp.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { OtpPrintService } from '../otp_print/otp_print.service.js';
 import {
@@ -859,7 +859,13 @@ export class PaymentsService {
       );
     }
 
-    const phone = input.phone?.trim() ?? '';
+    let phone: string;
+    try {
+      phone = phoneDigits10(normalizePhone(input.phone));
+    } catch {
+      throw new AppError('invalid_phone', 'Enter a valid 10-digit mobile number', 400);
+    }
+
     const created = await this.db.supportQuery.create({
       data: {
         deviceId,

@@ -33,8 +33,7 @@ class SupportFormState {
   final bool submitted;
   final String? error;
 
-  bool get canSubmit =>
-      !submitting && !submitted && message.trim().isNotEmpty;
+  bool get canSubmit => !submitting && !submitted;
 
   SupportFormState copyWith({
     SupportCategory? category,
@@ -117,14 +116,46 @@ class SupportController extends Notifier<SupportFormState> {
     );
   }
 
+  String? _validate() {
+    final message = state.message.trim();
+    if (message.isEmpty) {
+      return 'Please describe the issue.';
+    }
+    if (message.length > _messageMax) {
+      return 'Message must be $_messageMax characters or fewer.';
+    }
+
+    final phone = state.phone.replaceAll(RegExp(r'\D'), '');
+    if (phone.isEmpty) {
+      return 'Phone number is required.';
+    }
+    if (phone.length != _phoneMax) {
+      return 'Enter a valid 10-digit mobile number.';
+    }
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(phone)) {
+      return 'Enter a valid 10-digit mobile number.';
+    }
+    return null;
+  }
+
   Future<void> submit() async {
     if (!state.canSubmit) return;
+
+    final validationError = _validate();
+    if (validationError != null) {
+      final focus = state.message.trim().isEmpty
+          ? SupportFormFocus.message
+          : SupportFormFocus.phone;
+      state = state.copyWith(error: validationError, focus: focus);
+      return;
+    }
+
     state = state.copyWith(submitting: true, clearError: true);
     try {
       await ref.read(supportRepositoryProvider).submit(
             category: state.category,
             message: state.message.trim(),
-            phone: state.phone.trim().isEmpty ? null : state.phone.trim(),
+            phone: state.phone.replaceAll(RegExp(r'\D'), ''),
           );
       ref
           .read(serviceAnalyticsTrackerProvider)
@@ -135,7 +166,9 @@ class SupportController extends Notifier<SupportFormState> {
         submitting: false,
         error: error.code == 'rate_limited'
             ? 'Please wait a few minutes before sending another message.'
-            : error.message,
+            : error.code == 'invalid_phone'
+                ? 'Enter a valid 10-digit mobile number.'
+                : error.message,
       );
     } on SocketException {
       state = state.copyWith(

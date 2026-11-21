@@ -629,6 +629,7 @@ describe('kiosk support notes', () => {
       service.openKioskSupportQuery(deviceId, {
         category: 'other',
         message: 'Still broken',
+        phone: '9876543210',
       }),
     ).rejects.toMatchObject({
       code: 'rate_limited',

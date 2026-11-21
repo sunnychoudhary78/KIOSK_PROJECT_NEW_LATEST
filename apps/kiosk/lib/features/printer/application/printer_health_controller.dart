@@ -20,6 +20,8 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
   int? _previousUsbPages;
   int? _lastUsbStatusCode;
   String? _lastStatusSignature;
+  bool _hadReportableMaintenance = false;
+  bool _usbPublishInFlight = false;
 
   @override
   PrinterHealth build() {
@@ -31,26 +33,22 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
         printerHeartbeatBodyBuilder = null;
       }
     });
-    ref.listen(deviceAuthProvider, (_, next) {
+    // Keep USB/local polling even while cloud auth is down. Ink/pages come from
+    // HttpToUsbBridge on localhost; gating that on Wi-Fi left the admin card blank
+    // after restart until someone reconnected the network.
+    ref.listen(deviceAuthProvider, (previous, next) {
+      _ensurePolling();
       if (next.isAuthenticated) {
-        _ensurePolling();
-        unawaited(refresh());
-      } else {
-        _poll?.cancel();
-        _poll = null;
-        _refreshWatch?.cancel();
-        _refreshWatch = null;
-        _lastRefreshAck = null;
-        _previousUsbPages = null;
-        _lastUsbStatusCode = null;
-        _lastStatusSignature = null;
-        _nextFullUsbAt = null;
+        unawaited(refresh().then((_) => _publishMaintenanceIfNeeded(
+              force: previous?.isAuthenticated != true,
+            )));
       }
     });
-    if (ref.read(deviceAuthProvider).isAuthenticated) {
-      _ensurePolling();
-      Future.microtask(refresh);
-    }
+    _ensurePolling();
+    Future.microtask(() async {
+      await refresh();
+      await _publishMaintenanceIfNeeded(force: true);
+    });
     return PrinterHealth.unknown;
   }
 
@@ -99,15 +97,17 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
   }
 
   Future<void> _watchPaperOut() async {
-    if (!ref.read(deviceAuthProvider).isAuthenticated) return;
     try {
       final health = await _monitor.getHealth();
       final paper = health.noPaper || health.state == 'paper_out';
       if (!paper) _paperOutNotified = false;
-      if (_overlaidHealthChanged(state, health)) {
+      final changed = _overlaidHealthChanged(state, health);
+      if (changed) {
         state = health;
+        unawaited(_publishMaintenanceIfNeeded());
       }
       if (!paper || _paperOutNotified) return;
+      if (!ref.read(deviceAuthProvider).isAuthenticated) return;
       final sent = await ref.read(deviceAuthProvider.notifier).sendPrinterHealthHeartbeat();
       if (sent) _paperOutNotified = true;
     } catch (error) {
@@ -120,7 +120,11 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
       final health = await _monitor.getHealth();
       // Heartbeat uses toJson() which omits community / secrets.
       _logStatusIfChanged(health);
+      final changed = _overlaidHealthChanged(state, health);
       state = health;
+      if (changed) {
+        unawaited(_publishMaintenanceIfNeeded());
+      }
       return true;
     } catch (error) {
       AppLogger.error('PRINTER health refresh failed', error);
@@ -164,12 +168,36 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
 
   Map<String, dynamic> heartbeatPayload() => state.toJson();
 
-  /// Logs USB readings. Does not change [state] or the heartbeat.
+  /// Push ink/pages to the API as soon as USB has them (or after re-auth).
+  Future<void> _publishMaintenanceIfNeeded({bool force = false}) async {
+    if (!ref.read(deviceAuthProvider).isAuthenticated) return;
+    if (!_hasReportableMaintenance(state)) return;
+    final firstReport = !_hadReportableMaintenance;
+    if (!force && !firstReport) return;
+    if (_usbPublishInFlight) return;
+    _usbPublishInFlight = true;
+    try {
+      final sent =
+          await ref.read(deviceAuthProvider.notifier).sendPrinterHealthHeartbeat();
+      if (sent) {
+        _hadReportableMaintenance = true;
+        AppLogger.info(
+          'PRINTER maintenance heartbeat sent'
+          '${firstReport ? ' (first USB sample)' : force ? ' (auth recovered)' : ''}',
+        );
+      }
+    } catch (error) {
+      AppLogger.error('PRINTER maintenance heartbeat failed', error);
+    } finally {
+      _usbPublishInFlight = false;
+    }
+  }
+
+  /// USB latch for ink/pages. Runs without cloud auth so values are ready when
+  /// the network comes back after boot or an app update.
   Future<void> _compareUsb() async {
     final watch = ref.read(usbPageWatchProvider);
-    if (watch.suppress ||
-        _usbCompareBusy ||
-        !ref.read(deviceAuthProvider).isAuthenticated) {
+    if (watch.suppress || _usbCompareBusy) {
       return;
     }
     _usbCompareBusy = true;
@@ -177,6 +205,7 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
     final full = !jobLocked &&
         (_nextFullUsbAt == null || !DateTime.now().isBefore(_nextFullUsbAt!));
     try {
+      final hadUsb = watch.lastUsbOk == true;
       final snapshot = await _monitor.getUsbSnapshot(full: full);
       watch.record(snapshot);
       final statusCode = watch.statusCode;
@@ -205,12 +234,35 @@ class PrinterHealthController extends Notifier<PrinterHealth> {
       if (snapshot.ok && snapshot.pagesTotal != null) {
         _previousUsbPages = snapshot.pagesTotal;
       }
+      if (snapshot.ok) {
+        final health = await _monitor.getHealth();
+        if (_overlaidHealthChanged(state, health)) {
+          state = health;
+        }
+        // First success or recovery after bridge/USB failures — do not wait for
+        // the 1-minute keepalive before admin shows ink/pages.
+        if (!hadUsb) {
+          unawaited(_publishMaintenanceIfNeeded(force: true));
+        }
+      }
     } catch (error) {
       AppLogger.error('PRINTER usb-compare failed', error);
     } finally {
       _usbCompareBusy = false;
     }
   }
+}
+
+bool _hasReportableMaintenance(PrinterHealth health) {
+  final maintenance = health.maintenance;
+  if (maintenance == null || maintenance.available != true) return false;
+  final toner = maintenance.toner;
+  final pages = maintenance.pages;
+  return toner?.blackPercent != null ||
+      toner?.cyanPercent != null ||
+      toner?.magentaPercent != null ||
+      toner?.yellowPercent != null ||
+      pages?.total != null;
 }
 
 bool _overlaidHealthChanged(PrinterHealth current, PrinterHealth next) {

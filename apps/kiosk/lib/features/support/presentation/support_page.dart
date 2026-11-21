@@ -132,14 +132,15 @@ class _SupportPageState extends ConsumerState<SupportPage> {
                     ),
                     const SizedBox(height: 10),
                     _FieldCard(
-                      label: 'Callback phone (optional)',
+                      label: 'Callback phone',
+                      requiredMark: true,
                       selected: state.focus == SupportFormFocus.phone,
                       onTap: () => controller.setFocus(SupportFormFocus.phone),
                       child: KioskCaretText(
                         text: state.phone.isEmpty
                             ? (state.focus == SupportFormFocus.phone
                                 ? '+91 '
-                                : '+91 —')
+                                : '+91 10-digit number')
                             : '+91 ${state.phone}',
                         showCaret: state.focus == SupportFormFocus.phone,
                         caretHeight: 22,

@@ -61,6 +61,9 @@ class DeviceAuthState {
 
 class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
   static const keepaliveInterval = Duration(minutes: 1);
+  /// Faster than keepalive so a half-ready Wi-Fi after boot/update recovers
+  /// without waiting a full minute (and without a manual reconnect).
+  static const offlineRetryInterval = Duration(seconds: 15);
   static const stoppedRetryInterval = Duration(seconds: 30);
 
   DeviceCredentials? _credentials;
@@ -367,8 +370,9 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
       _loop = null;
       return;
     }
-    final interval =
-        state.stopped ? stoppedRetryInterval : keepaliveInterval;
+    final interval = state.stopped
+        ? stoppedRetryInterval
+        : (state.isAuthenticated ? keepaliveInterval : offlineRetryInterval);
     _loop = Timer.periodic(interval, (_) => unawaited(_tick()));
   }
 

@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, EmptyState, PageHeader, Panel, Select, StatusBadge, Toolbar } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  Modal,
+  PageHeader,
+  Panel,
+  Select,
+  StatusBadge,
+  Toolbar,
+} from '../../core/ui/primitives';
 
 type SupportQuery = {
   id: string;
@@ -81,6 +90,7 @@ export function SupportPage() {
   const [items, setItems] = useState<SupportQuery[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resending, setResending] = useState(false);
   const [resolution, setResolution] = useState<(typeof RESOLUTIONS)[number]['value']>('no_action');
@@ -147,6 +157,19 @@ export function SupportPage() {
     }
   }, [isKiosk, resolution]);
 
+  function closeModal() {
+    if (resolving || resending) return;
+    setSelectedId(null);
+    setModalError(null);
+    setResolution('no_action');
+  }
+
+  function openComplaint(id: string) {
+    setSelectedId(id);
+    setModalError(null);
+    setResolution('no_action');
+  }
+
   function applyUpdate(updated: SupportQuery) {
     setItems((current) => {
       const next = current.map((item) => (item.id === updated.id ? updated : item));
@@ -160,6 +183,7 @@ export function SupportPage() {
     });
     if (status !== 'all' && updated.status !== status) {
       setSelectedId(null);
+      setModalError(null);
     }
     window.dispatchEvent(new Event('skp-support-changed'));
   }
@@ -167,7 +191,7 @@ export function SupportPage() {
   async function markResolved() {
     if (!selected || selected.status === 'resolved') return;
     setResolving(true);
-    setError(null);
+    setModalError(null);
     try {
       const updated = await apiRequest<SupportQuery>(`/support-queries/${selected.id}/resolve`, {
         method: 'POST',
@@ -176,7 +200,7 @@ export function SupportPage() {
       });
       applyUpdate(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not mark this resolved');
+      setModalError(err instanceof Error ? err.message : 'Could not mark this resolved');
     } finally {
       setResolving(false);
     }
@@ -185,7 +209,7 @@ export function SupportPage() {
   async function resendOtp() {
     if (!selected) return;
     setResending(true);
-    setError(null);
+    setModalError(null);
     try {
       const updated = await apiRequest<SupportQuery>(`/support-queries/${selected.id}/resend-otp`, {
         method: 'POST',
@@ -193,11 +217,19 @@ export function SupportPage() {
       });
       applyUpdate(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not resend the OTP');
+      setModalError(err instanceof Error ? err.message : 'Could not resend the OTP');
     } finally {
       setResending(false);
     }
   }
+
+  const showResendOtp =
+    canResolve &&
+    selected?.status === 'open' &&
+    !isKiosk &&
+    selected.source !== 'print' &&
+    selected.paymentStatus === 'PAID' &&
+    Boolean(selected.challengeId);
 
   return (
     <div>
@@ -268,8 +300,8 @@ export function SupportPage() {
               {visible.map((item) => (
                 <tr
                   key={item.id}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedId(item.id)}
+                  className={`cursor-pointer ${selectedId === item.id ? 'bg-muted/50' : ''}`}
+                  onClick={() => openComplaint(item.id)}
                 >
                   <td className="text-muted-foreground whitespace-nowrap">
                     {new Date(item.createdAt).toLocaleString()}
@@ -295,76 +327,112 @@ export function SupportPage() {
           </table>
         )}
       </Panel>
-      {selected ? (
-        <Panel title="Message" className="mt-6">
-          <p className="whitespace-pre-wrap">{selected.message}</p>
-          <dl className="mt-4 grid gap-2 text-sm text-muted-foreground">
-            <div>Source: {sourceLabel(selected.source)}</div>
-            {isKiosk ? <div>Category: {categoryLabel(selected.category)}</div> : null}
-            <div>Kiosk: {selected.kioskName || '—'}</div>
-            <div>Phone: {selected.phone || '—'}</div>
-            {!isKiosk ? (
-              <>
-                <div>
-                  {selected.source === 'print' ? 'Print job' : 'Payment status:'}{' '}
-                  {selected.paymentStatus ? <StatusBadge status={selected.paymentStatus} /> : '—'}
-                  {selected.failureReason ? ` · ${selected.failureReason}` : ''}
-                </div>
-                {selected.razorpayOrderId ? (
-                  <div className="font-mono text-xs">Order: {selected.razorpayOrderId}</div>
-                ) : null}
-                {selected.paymentReference ? (
-                  <div>Payment reference: {selected.paymentReference}</div>
-                ) : null}
-                {selected.printJobId ? (
-                  <div>
-                    Job {selected.printJobStatus || '—'}
-                    {selected.pagesExpected != null
-                      ? ` · ${selected.pagesReported ?? '—'}/${selected.pagesExpected} pages`
-                      : ''}
-                    {selected.printJobError ? ` · ${selected.printJobError}` : ''}
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-            <div className="flex items-center gap-2">
-              Status: <StatusBadge status={selected.status} />
-            </div>
-            {selected.resolution ? (
-              <div>Outcome: {resolutionLabel(selected.resolution, selected.source)}</div>
-            ) : null}
-          </dl>
-          {canResolve && selected.status === 'open' ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              {!isKiosk &&
-              selected.source !== 'print' &&
-              selected.paymentStatus === 'PAID' &&
-              selected.challengeId ? (
-                <Button type="button" variant="secondary" disabled={resending} onClick={() => void resendOtp()}>
+
+      <Modal
+        open={selected != null}
+        title={
+          selected
+            ? `Support · ${sourceLabel(selected.source)}${selected.kioskName ? ` · ${selected.kioskName}` : ''}`
+            : 'Support'
+        }
+        description={
+          selected
+            ? `Opened ${new Date(selected.createdAt).toLocaleString()}`
+            : undefined
+        }
+        onClose={closeModal}
+        className="sm:max-w-xl"
+        footer={
+          selected ? (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={resolving || resending}
+                onClick={closeModal}
+              >
+                Close
+              </Button>
+              {showResendOtp ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={resending || resolving}
+                  onClick={() => void resendOtp()}
+                >
                   {resending ? 'Sending…' : 'Resend OTP'}
                 </Button>
               ) : null}
-              <Select
-                aria-label="Outcome"
-                className="max-w-56"
-                value={isKiosk ? 'no_action' : resolution}
-                onChange={(event) =>
-                  setResolution(event.target.value as (typeof RESOLUTIONS)[number]['value'])
-                }
-              >
-                {outcomeOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option> 
-                ))}
-              </Select>
-              <Button type="button" disabled={resolving} onClick={() => void markResolved()}>
-                {resolving ? 'Saving…' : 'Mark resolved'}
-              </Button>
-            </div>
-          ) : null}
-        </Panel>
-      ) : null}
+              {canResolve && selected.status === 'open' ? (
+                <>
+                  <Select
+                    aria-label="Outcome"
+                    className="max-w-56"
+                    value={isKiosk ? 'no_action' : resolution}
+                    onChange={(event) =>
+                      setResolution(event.target.value as (typeof RESOLUTIONS)[number]['value'])
+                    }
+                  >
+                    {outcomeOptions.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button type="button" disabled={resolving || resending} onClick={() => void markResolved()}>
+                    {resolving ? 'Saving…' : 'Mark resolved'}
+                  </Button>
+                </>
+              ) : null}
+            </>
+          ) : null
+        }
+      >
+        {selected ? (
+          <div className="space-y-4">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{selected.message}</p>
+            <dl className="grid gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                Status: <StatusBadge status={selected.status} />
+              </div>
+              {isKiosk ? <div>Category: {categoryLabel(selected.category)}</div> : null}
+              <div>Kiosk: {selected.kioskName || '—'}</div>
+              <div>Phone: {selected.phone || '—'}</div>
+              {!isKiosk ? (
+                <>
+                  <div>
+                    {selected.source === 'print' ? 'Print job' : 'Payment status:'}{' '}
+                    {selected.paymentStatus ? <StatusBadge status={selected.paymentStatus} /> : '—'}
+                    {selected.failureReason ? ` · ${selected.failureReason}` : ''}
+                  </div>
+                  {selected.razorpayOrderId ? (
+                    <div className="font-mono text-xs">Order: {selected.razorpayOrderId}</div>
+                  ) : null}
+                  {selected.paymentReference ? (
+                    <div>Payment reference: {selected.paymentReference}</div>
+                  ) : null}
+                  {selected.printJobId ? (
+                    <div>
+                      Job {selected.printJobStatus || '—'}
+                      {selected.pagesExpected != null
+                        ? ` · ${selected.pagesReported ?? '—'}/${selected.pagesExpected} pages`
+                        : ''}
+                      {selected.printJobError ? ` · ${selected.printJobError}` : ''}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+              {selected.resolution ? (
+                <div>Outcome: {resolutionLabel(selected.resolution, selected.source)}</div>
+              ) : null}
+              {selected.resolvedAt ? (
+                <div>Resolved: {new Date(selected.resolvedAt).toLocaleString()}</div>
+              ) : null}
+            </dl>
+            {modalError ? <p className="error">{modalError}</p> : null}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

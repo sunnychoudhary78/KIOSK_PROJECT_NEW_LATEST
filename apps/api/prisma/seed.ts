@@ -1,4 +1,10 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import {
+  DeviceStatus,
+  PrismaClient,
+  SupportQueryStatus,
+  SupportResolution,
+  UserRole,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -25,6 +31,24 @@ async function main() {
         name: 'Demo Site',
       },
     }));
+
+  const demoDeviceSecretHash = await bcrypt.hash('DemoDeviceSecret@12345', 10);
+  const demoDevice = await prisma.device.upsert({
+    where: { deviceKey: 'demo-kiosk-lobby' },
+    update: {
+      name: 'Demo Kiosk — Lobby',
+      status: DeviceStatus.active,
+    },
+    create: {
+      tenantId: tenant.id,
+      siteId: ensuredSite.id,
+      name: 'Demo Kiosk — Lobby',
+      deviceKey: 'demo-kiosk-lobby',
+      deviceSecretHash: demoDeviceSecretHash,
+      status: DeviceStatus.active,
+      address: 'Demo Site lobby',
+    },
+  });
 
   const adminHash = await bcrypt.hash('Admin@12345', 10);
   const citizenHash = await bcrypt.hash('Citizen@12345', 10);
@@ -245,7 +269,79 @@ async function main() {
     });
   }
 
-  console.info('Seed complete', { tenantId: tenant.id, siteId: ensuredSite.id });
+  const demoSupportCount = await prisma.supportQuery.count({
+    where: {
+      deviceId: demoDevice.id,
+      message: { startsWith: '[Demo]' },
+    },
+  });
+  if (demoSupportCount === 0) {
+    const now = Date.now();
+    const minutesAgo = (mins: number) => new Date(now - mins * 60_000);
+
+    await prisma.supportQuery.createMany({
+      data: [
+        {
+          deviceId: demoDevice.id,
+          category: 'print',
+          phone: '9876543210',
+          message: '[Demo] Paper jammed after the third page. Need help clearing the tray.',
+          amountPaise: 0,
+          status: SupportQueryStatus.open,
+          createdAt: minutesAgo(12),
+        },
+        {
+          deviceId: demoDevice.id,
+          category: 'payment',
+          phone: '9123456789',
+          message: '[Demo] Payment succeeded on my phone but the kiosk still shows pending.',
+          amountPaise: 2000,
+          razorpayOrderId: 'order_demo_support_pay_001',
+          paymentReference: 'pay_demo_ref_001',
+          failureReason: 'UI still pending after webhook',
+          status: SupportQueryStatus.open,
+          createdAt: minutesAgo(45),
+        },
+        {
+          deviceId: demoDevice.id,
+          category: 'charging',
+          phone: '9988776655',
+          message: '[Demo] Charging bay B is powered but my phone never starts charging.',
+          amountPaise: 0,
+          status: SupportQueryStatus.open,
+          createdAt: minutesAgo(90),
+        },
+        {
+          deviceId: demoDevice.id,
+          category: 'sensors',
+          phone: '9012345678',
+          message: '[Demo] Motion sensor keeps beeping even when the lobby is empty.',
+          amountPaise: 0,
+          status: SupportQueryStatus.resolved,
+          resolution: SupportResolution.no_action,
+          createdAt: minutesAgo(180),
+          resolvedAt: minutesAgo(120),
+        },
+        {
+          deviceId: demoDevice.id,
+          category: 'other',
+          phone: '9765432109',
+          message: '[Demo] Screen brightness is too low to read the receipt instructions.',
+          amountPaise: 0,
+          status: SupportQueryStatus.resolved,
+          resolution: SupportResolution.no_action,
+          createdAt: minutesAgo(360),
+          resolvedAt: minutesAgo(300),
+        },
+      ],
+    });
+  }
+
+  console.info('Seed complete', {
+    tenantId: tenant.id,
+    siteId: ensuredSite.id,
+    demoDeviceId: demoDevice.id,
+  });
 }
 
 main()

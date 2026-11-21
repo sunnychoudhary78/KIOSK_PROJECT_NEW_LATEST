@@ -9,16 +9,12 @@ class SupportRepository {
   Future<Map<String, dynamic>> submit({
     required SupportCategory category,
     required String message,
-    String? phone,
+    required String phone,
   }) {
-    final body = <String, dynamic>{
+    return _api.post('/support-queries/kiosk', body: {
       'category': category.apiValue,
       'message': message,
-    };
-    final trimmed = phone?.trim() ?? '';
-    if (trimmed.isNotEmpty) {
-      body['phone'] = trimmed;
-    }
-    return _api.post('/support-queries/kiosk', body: body);
+      'phone': phone.trim(),
+    });
   }
 }
