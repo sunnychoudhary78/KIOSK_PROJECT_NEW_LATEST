@@ -9,6 +9,7 @@
 #include <wrl/client.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cwctype>
 #include <vector>
 
@@ -343,6 +344,20 @@ void SurveillanceRecorder::Emit(const std::string& type) {
   }
 }
 
+void SurveillanceRecorder::EmitFailure(const char* type, const char* step, HRESULT hr) {
+  if (!event_callback_ || !type || !step) {
+    return;
+  }
+  char detail[160];
+  std::snprintf(detail, sizeof(detail), "step=%s hr=0x%08X", step,
+                static_cast<unsigned>(hr));
+  RecorderEvent event;
+  event.type = type;
+  event.detail = detail;
+  event.hr = static_cast<int32_t>(hr);
+  event_callback_(event);
+}
+
 void SurveillanceRecorder::EmitSegmentCompleted(const std::wstring& path) {
   if (path.empty() || EndsWithInProgress(path) || !event_callback_) {
     return;
@@ -387,23 +402,23 @@ HRESULT SurveillanceRecorder::Start(const RecorderConfig& config) {
   std::wstring link;
   hr = PickCamera(&link);
   if (FAILED(hr)) {
-    Emit("CAMERA_ERROR");
+    EmitFailure("CAMERA_ERROR", "PickCamera", hr);
     return hr;
   }
   hr = PrepareOutputDir(&output_dir_);
   if (FAILED(hr)) {
-    Emit("STORAGE_LOW");
+    EmitFailure("STORAGE_LOW", "PrepareOutputDir", hr);
     return hr;
   }
   hr = CheckStorage(output_dir_);
   if (FAILED(hr)) {
-    Emit("STORAGE_LOW");
+    EmitFailure("STORAGE_LOW", "CheckStorage", hr);
     return hr;
   }
   DeleteInProgress();
   hr = InitEngine(link);
   if (FAILED(hr)) {
-    Emit("CAMERA_ERROR");
+    EmitFailure("CAMERA_ERROR", "InitEngine", hr);
     return hr;
   }
   want_next_segment_ = true;
@@ -443,14 +458,19 @@ void SurveillanceRecorder::OnCaptureEvent(GUID type, HRESULT status) {
     want_next_segment_ = false;
     KillTimer(hwnd_, kSegmentTimerId);
     ShutdownEngine();
-    Emit("CAMERA_ERROR");
+    EmitFailure("CAMERA_ERROR", "CaptureEngineError", status);
     return;
   }
   if (type == MF_CAPTURE_ENGINE_INITIALIZED) {
     engine_ready_ = SUCCEEDED(status);
-    if (engine_ready_ && want_next_segment_) {
-      if (FAILED(StartSegment())) {
-        Emit("CAMERA_ERROR");
+    if (!engine_ready_) {
+      EmitFailure("CAMERA_ERROR", "CaptureEngineInitialized", status);
+      return;
+    }
+    if (want_next_segment_) {
+      const HRESULT start_hr = StartSegment();
+      if (FAILED(start_hr)) {
+        EmitFailure("CAMERA_ERROR", "InitializedStartSegment", start_hr);
       }
     }
     return;
@@ -473,13 +493,17 @@ void SurveillanceRecorder::OnCaptureEvent(GUID type, HRESULT status) {
     in_progress_path_.clear();
     pending_final_path_.clear();
     if (want_next_segment_ && engine_ready_) {
-      if (FAILED(CheckStorage(output_dir_))) {
+      const HRESULT storage_hr = CheckStorage(output_dir_);
+      if (FAILED(storage_hr)) {
         want_next_segment_ = false;
-        Emit("STORAGE_LOW");
+        EmitFailure("STORAGE_LOW", "CheckStorage", storage_hr);
         ShutdownEngine();
         return;
       }
-      StartSegment();
+      const HRESULT start_hr = StartSegment();
+      if (FAILED(start_hr)) {
+        EmitFailure("CAMERA_ERROR", "StartSegment", start_hr);
+      }
     }
   }
 }

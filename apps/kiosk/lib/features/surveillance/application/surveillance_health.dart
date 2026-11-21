@@ -30,6 +30,7 @@ class SurveillanceState {
     this.recording = false,
     this.pausedForPalm = false,
     this.error,
+    this.errorDetail,
     this.lastErrorAt,
     this.lastSegmentAt,
     this.lastSegmentBytes,
@@ -40,6 +41,8 @@ class SurveillanceState {
   final bool recording;
   final bool pausedForPalm;
   final String? error;
+  /// Native step + HRESULT when [error] is CAMERA_ERROR / STORAGE_LOW.
+  final String? errorDetail;
   final DateTime? lastErrorAt;
   final DateTime? lastSegmentAt;
   final int? lastSegmentBytes;
@@ -106,6 +109,7 @@ Map<String, dynamic> surveillanceHealthPayload({
     'queueFailed': queue.failedCount,
     'oldestQueuedAt': queue.oldestQueuedAt?.toUtc().toIso8601String(),
     'lastErrorCode': state.error ?? queue.lastError,
+    'lastErrorDetail': state.errorDetail,
     'lastErrorAt': state.lastErrorAt?.toUtc().toIso8601String(),
     'cameraName': state.cameraName,
   };

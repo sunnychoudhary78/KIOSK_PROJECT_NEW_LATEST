@@ -175,13 +175,15 @@ describe('SurveillanceCommandsService', () => {
   });
 
   it('claims pending command as running for the device', async () => {
-    const update = vi.fn(async () =>
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const findUnique = vi.fn(async () =>
       commandRow({ status: DeviceSurveillanceCommandStatus.running }),
     );
     const db = {
       deviceSurveillanceCommand: {
         findFirst: vi.fn(async () => commandRow()),
-        update,
+        updateMany,
+        findUnique,
       },
     };
     const service = new SurveillanceCommandsService(
@@ -191,7 +193,47 @@ describe('SurveillanceCommandsService', () => {
 
     const result = await service.getPendingForDevice(deviceId, deviceId);
     expect(result.command?.status).toBe('running');
-    expect(update).toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalled();
+    expect(findUnique).toHaveBeenCalled();
+  });
+
+  it('does not re-dispatch a command already running', async () => {
+    const updateMany = vi.fn();
+    const db = {
+      deviceSurveillanceCommand: {
+        findFirst: vi.fn(async () =>
+          commandRow({ status: DeviceSurveillanceCommandStatus.running }),
+        ),
+        updateMany,
+      },
+    };
+    const service = new SurveillanceCommandsService(
+      db as unknown as DbClient,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    const result = await service.getPendingForDevice(deviceId, deviceId);
+    expect(result.command).toBeNull();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('returns null when another poller wins the pending claim race', async () => {
+    const updateMany = vi.fn(async () => ({ count: 0 }));
+    const db = {
+      deviceSurveillanceCommand: {
+        findFirst: vi.fn(async () => commandRow()),
+        updateMany,
+        findUnique: vi.fn(),
+      },
+    };
+    const service = new SurveillanceCommandsService(
+      db as unknown as DbClient,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    const result = await service.getPendingForDevice(deviceId, deviceId);
+    expect(result.command).toBeNull();
+    expect(updateMany).toHaveBeenCalled();
   });
 
   it('acks success with result payload', async () => {

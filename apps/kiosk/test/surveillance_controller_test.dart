@@ -224,10 +224,17 @@ void main() {
     final controller = container.read(surveillanceControllerProvider.notifier);
     controller.retryDelayFor = (_, __) => const Duration(milliseconds: 300);
 
-    recorder.emit(const SurveillanceNativeEvent('CAMERA_ERROR'));
+    recorder.emit(
+      const SurveillanceNativeEvent('CAMERA_ERROR', {
+        'detail': 'step=InitEngine hr=0xC00D36B4',
+        'hr': -1072875820,
+      }),
+    );
     await Future<void>.delayed(Duration.zero);
-    expect(container.read(surveillanceControllerProvider).error, 'CAMERA_ERROR');
-    expect(container.read(surveillanceControllerProvider).recording, isFalse);
+    final failed = container.read(surveillanceControllerProvider);
+    expect(failed.error, 'CAMERA_ERROR');
+    expect(failed.errorDetail, contains('step=InitEngine'));
+    expect(failed.recording, isFalse);
 
     // Lease→none deferred sync is 100ms; must NOT restart yet.
     await Future<void>.delayed(const Duration(milliseconds: 150));

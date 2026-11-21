@@ -175,14 +175,29 @@ export class SurveillanceCommandsService {
     if (current.status === DeviceSurveillanceCommandStatus.expired) {
       return { command: null };
     }
+    // Already claimed by another poller/process — do not re-dispatch.
+    // Crash recovery: TTL expire + Admin re-issue.
     if (current.status === DeviceSurveillanceCommandStatus.running) {
-      return { command: mapCommand(current) };
+      return { command: null };
     }
 
-    const claimed = await this.db.deviceSurveillanceCommand.update({
-      where: { id: current.id },
+    const claim = await this.db.deviceSurveillanceCommand.updateMany({
+      where: {
+        id: current.id,
+        status: DeviceSurveillanceCommandStatus.pending,
+      },
       data: { status: DeviceSurveillanceCommandStatus.running },
     });
+    if (claim.count === 0) {
+      return { command: null };
+    }
+
+    const claimed = await this.db.deviceSurveillanceCommand.findUnique({
+      where: { id: current.id },
+    });
+    if (!claimed) {
+      return { command: null };
+    }
     return { command: mapCommand(claimed) };
   }
 

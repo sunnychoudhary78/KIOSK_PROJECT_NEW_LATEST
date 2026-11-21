@@ -49,4 +49,18 @@ void main() {
       SurveillanceHealthState.uploading,
     );
   });
+
+  test('heartbeat payload includes lastErrorDetail', () {
+    final payload = surveillanceHealthPayload(
+      enabled: true,
+      state: const SurveillanceState(
+        error: 'CAMERA_ERROR',
+        errorDetail: 'step=InitEngine hr=0xC00D36B4',
+      ),
+      queue: const SurveillanceQueueStats(pendingCount: 0, failedCount: 0),
+    );
+    expect(payload['lastErrorCode'], 'CAMERA_ERROR');
+    expect(payload['lastErrorDetail'], 'step=InitEngine hr=0xC00D36B4');
+    expect(payload['state'], 'camera_error');
+  });
 }

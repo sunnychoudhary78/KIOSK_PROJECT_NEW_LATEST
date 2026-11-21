@@ -22,7 +22,9 @@ struct RecorderConfig {
 struct RecorderEvent {
   std::string type;
   std::string path;
+  std::string detail;  // e.g. "step=InitEngine hr=0xC00D36B4"
   int64_t bytes = 0;
+  int32_t hr = 0;
 };
 
 class SurveillanceRecorder {
@@ -59,6 +61,7 @@ class SurveillanceRecorder {
   HRESULT PrepareOutputDir(std::wstring* dir);
   HRESULT CheckStorage(const std::wstring& dir);
   void Emit(const std::string& type);
+  void EmitFailure(const char* type, const char* step, HRESULT hr);
   void EmitSegmentCompleted(const std::wstring& path);
   void DeleteInProgress();
 

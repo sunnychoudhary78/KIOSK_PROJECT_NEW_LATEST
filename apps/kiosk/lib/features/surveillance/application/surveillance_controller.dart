@@ -297,8 +297,10 @@ class SurveillanceController extends Notifier<SurveillanceState> {
       }
       _lease.release(CameraHolder.surveillance);
       final code = error.toString().contains('STORAGE') ? 'STORAGE_LOW' : 'CAMERA_ERROR';
+      final detail = error.toString();
       state = SurveillanceState(
         error: code,
+        errorDetail: detail,
         lastErrorAt: DateTime.now().toUtc(),
         lastSegmentAt: state.lastSegmentAt,
         lastSegmentBytes: state.lastSegmentBytes,
@@ -370,8 +372,8 @@ class SurveillanceController extends Notifier<SurveillanceState> {
   }
 
   void _onNativeEvent(SurveillanceNativeEvent event) {
-    AppLogger.info(event.type);
     if (event.type == 'SEGMENT_COMPLETED') {
+      AppLogger.info(event.type);
       final path = event.data['path']?.toString();
       if (path != null && path.isNotEmpty) {
         final bytes = (event.data['bytes'] as num?)?.toInt();
@@ -404,10 +406,19 @@ class SurveillanceController extends Notifier<SurveillanceState> {
       return;
     }
     if (event.type == 'CAMERA_ERROR' || event.type == 'STORAGE_LOW') {
+      final detail = event.data['detail']?.toString();
+      final hr = event.data['hr'];
+      final String? errorDetail = (detail != null && detail.isNotEmpty)
+          ? detail
+          : (hr != null ? 'hr=$hr' : null);
+      AppLogger.info(
+        errorDetail == null ? event.type : '${event.type} $errorDetail',
+      );
       _lease.release(CameraHolder.surveillance);
       if (ref.mounted) {
         state = SurveillanceState(
           error: event.type,
+          errorDetail: errorDetail,
           lastErrorAt: DateTime.now().toUtc(),
           lastSegmentAt: state.lastSegmentAt,
           lastSegmentBytes: state.lastSegmentBytes,

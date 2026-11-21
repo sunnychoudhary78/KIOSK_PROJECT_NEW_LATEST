@@ -167,6 +167,12 @@ class SurveillancePlugin : public flutter::Plugin {
     if (!event.path.empty()) {
       map[EncodableValue("path")] = EncodableValue(event.path);
     }
+    if (!event.detail.empty()) {
+      map[EncodableValue("detail")] = EncodableValue(event.detail);
+    }
+    if (event.hr != 0) {
+      map[EncodableValue("hr")] = EncodableValue(static_cast<int32_t>(event.hr));
+    }
     if (event.type == "SEGMENT_COMPLETED") {
       map[EncodableValue("bytes")] = EncodableValue(event.bytes);
     }
