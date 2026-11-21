@@ -20,3 +20,9 @@ export const listSegmentsQuerySchema = z.object({
 });
 
 export type ListSegmentsQuery = z.infer<typeof listSegmentsQuerySchema>;
+
+export const dismissOrphansBodySchema = z.object({
+  recordedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export type DismissOrphansBody = z.infer<typeof dismissOrphansBodySchema>;

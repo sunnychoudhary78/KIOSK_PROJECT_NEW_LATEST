@@ -148,6 +148,9 @@ export function RecordingsPage() {
   const [commandNote, setCommandNote] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [flushConfirmOpen, setFlushConfirmOpen] = useState(false);
+  const [dismissBusy, setDismissBusy] = useState(false);
+  const [dismissTarget, setDismissTarget] = useState<Segment | null>(null);
+  const [dismissOrphansOpen, setDismissOrphansOpen] = useState(false);
 
   const selected = devices.find((device) => device.id === deviceId) ?? null;
   const healthDisplay = selected ? resolveRecordingDisplay(selected) : null;
@@ -308,9 +311,64 @@ export function RecordingsPage() {
     setPlayingLabel(null);
   }
 
+  async function dismissSegment(segment: Segment) {
+    if (!deviceId || dismissBusy) return;
+    setDismissBusy(true);
+    setError(null);
+    try {
+      await apiRequest<{ ok: true }>(
+        `/devices/${deviceId}/surveillance/segments/${segment.id}/dismiss`,
+        { method: 'POST', token },
+      );
+      setItems((current) => current.filter((row) => row.id !== segment.id));
+      if (playingId === segment.id) {
+        closePlayback();
+      }
+      setDismissTarget(null);
+      setCommandNote(`Dismissed ${segment.filename}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to dismiss clip');
+    } finally {
+      setDismissBusy(false);
+    }
+  }
+
+  async function dismissErroredPending() {
+    if (!deviceId || dismissBusy) return;
+    setDismissBusy(true);
+    setError(null);
+    try {
+      const keys = utcRecordedOnKeysForLocalDay(recordedOn);
+      let dismissed = 0;
+      for (const key of keys) {
+        const result = await apiRequest<{ ok: true; dismissed: number }>(
+          `/devices/${deviceId}/surveillance/segments/dismiss-orphans`,
+          { method: 'POST', token, body: { recordedOn: key } },
+        );
+        dismissed += result.dismissed;
+      }
+      setItems((current) =>
+        current.filter((row) => row.status === 'uploaded' || row.lastUploadError == null),
+      );
+      setDismissOrphansOpen(false);
+      setCommandNote(
+        dismissed > 0
+          ? `Dismissed ${dismissed} errored pending clip(s)`
+          : 'No errored pending clips to dismiss',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to dismiss errored pending');
+    } finally {
+      setDismissBusy(false);
+    }
+  }
+
   const uploadedCount = items.filter((item) => item.status === 'uploaded').length;
   const pendingCount = items.filter((item) => item.status === 'pending_upload').length;
   const failedCount = items.filter((item) => item.status === 'failed').length;
+  const erroredPendingCount = items.filter(
+    (item) => item.status !== 'uploaded' && item.lastUploadError != null,
+  ).length;
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -473,6 +531,16 @@ export function RecordingsPage() {
                     value={statusFilter}
                     onChange={(value) => setStatusFilter(value as typeof statusFilter)}
                   />
+                  {erroredPendingCount > 0 ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={dismissBusy}
+                      onClick={() => setDismissOrphansOpen(true)}
+                    >
+                      Dismiss errored pending ({erroredPendingCount})
+                    </Button>
+                  ) : null}
                 </Toolbar>
               </>
             ) : null}
@@ -506,13 +574,22 @@ export function RecordingsPage() {
                         </div>
                       </td>
                       <td>
-                        {segment.status === 'uploaded' ? (
-                          <Button type="button" onClick={() => void onPlay(segment)}>
-                            {playingId === segment.id ? 'Playing' : 'Play'}
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {segment.status === 'uploaded' ? (
+                            <Button type="button" onClick={() => void onPlay(segment)}>
+                              {playingId === segment.id ? 'Playing' : 'Play'}
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={dismissBusy}
+                              onClick={() => setDismissTarget(segment)}
+                            >
+                              Dismiss
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -547,6 +624,72 @@ export function RecordingsPage() {
         <p className="text-sm text-muted-foreground">
           Use this only when heal / retry / clear stubs did not recover the kiosk. Uploaded cloud
           clips are not affected.
+        </p>
+      </Modal>
+
+      <Modal
+        open={dismissTarget != null}
+        title="Dismiss this clip?"
+        description="Removes this pending recording from the cloud list. Any partial upload object is deleted when possible. This cannot be undone."
+        onClose={() => (dismissBusy ? undefined : setDismissTarget(null))}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={dismissBusy}
+              onClick={() => setDismissTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={dismissBusy || !dismissTarget}
+              onClick={() => dismissTarget && void dismissSegment(dismissTarget)}
+            >
+              Dismiss
+            </Button>
+          </>
+        }
+      >
+        {dismissTarget ? (
+          <p className="text-sm text-muted-foreground">
+            {dismissTarget.filename}
+            {dismissTarget.lastUploadError ? ` · ${dismissTarget.lastUploadError}` : ''}
+          </p>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={dismissOrphansOpen}
+        title="Dismiss errored pending clips?"
+        description={`Removes ${erroredPendingCount} pending clip(s) for this day that have an upload error. Healthy mid-upload rows without an error are left alone. This cannot be undone.`}
+        onClose={() => (dismissBusy ? undefined : setDismissOrphansOpen(false))}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={dismissBusy}
+              onClick={() => setDismissOrphansOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={dismissBusy}
+              onClick={() => void dismissErroredPending()}
+            >
+              Dismiss errored pending
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Use this for stuck Pending · size_mismatch (or similar) rows when the kiosk queue is
+          already clear.
         </p>
       </Modal>
 

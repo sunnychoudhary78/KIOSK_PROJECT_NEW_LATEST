@@ -9,7 +9,11 @@ import {
   SURVEILLANCE_PURGE_BATCH_SIZE,
   SURVEILLANCE_RETENTION_DAYS,
 } from './surveillance.constants.js';
-import type { ListSegmentsQuery, UploadUrlBody } from './surveillance.schemas.js';
+import type {
+  DismissOrphansBody,
+  ListSegmentsQuery,
+  UploadUrlBody,
+} from './surveillance.schemas.js';
 import { formatRecordedOn, parseSegmentStart, recordedOnDate } from './surveillance.time.js';
 
 /** UTC midnight of (today UTC − days). Segments with recordedOn before this are expired. */
@@ -263,6 +267,114 @@ export class SurveillanceService {
     });
 
     return { ok: true, status: updated.status };
+  }
+
+  private async deleteStorageObjectBestEffort(objectKey: string): Promise<void> {
+    if (!this.storage.isConfigured()) {
+      return;
+    }
+    try {
+      await this.storage.deleteObject(objectKey);
+    } catch (error) {
+      if (isMissingObjectError(error)) {
+        return;
+      }
+      // Best-effort: still remove the DB row so Admin is unblocked.
+    }
+  }
+
+  /**
+   * Hard-dismiss an unrecoverable pending segment (orphan cleanup).
+   * Deletes R2 object when possible, then the DB row.
+   */
+  async dismissSegment(
+    deviceId: string,
+    segmentId: string,
+    adminUserId: string,
+    correlationId?: string,
+  ) {
+    const segment = await this.db.surveillanceSegment.findUnique({ where: { id: segmentId } });
+    if (!segment || segment.deviceId !== deviceId) {
+      throw new AppError('not_found', 'Segment not found', 404);
+    }
+    if (segment.status === SurveillanceSegmentStatus.uploaded) {
+      throw new AppError('already_uploaded', 'Uploaded segments cannot be dismissed', 409);
+    }
+
+    await this.deleteStorageObjectBestEffort(segment.objectKey);
+    await this.db.surveillanceSegment.delete({ where: { id: segment.id } });
+
+    await this.audit.record({
+      action: 'surveillance.segment_dismiss',
+      principalType: PrincipalType.admin,
+      principalId: adminUserId,
+      resourceType: 'surveillance_segment',
+      resourceId: segment.id,
+      correlationId,
+      metadata: {
+        deviceId,
+        objectKey: segment.objectKey,
+        filename: segment.filename,
+        lastUploadError: segment.lastUploadError,
+      },
+    });
+
+    return { ok: true as const };
+  }
+
+  /**
+   * Dismiss all pending_upload segments for a UTC recordedOn day that have an upload error.
+   */
+  async dismissOrphans(
+    deviceId: string,
+    body: DismissOrphansBody,
+    adminUserId: string,
+    correlationId?: string,
+  ) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      select: { id: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    const day = recordedOnDate(body.recordedOn);
+    const rows = await this.db.surveillanceSegment.findMany({
+      where: {
+        deviceId,
+        recordedOn: day,
+        status: SurveillanceSegmentStatus.pending_upload,
+        lastUploadError: { not: null },
+      },
+      select: {
+        id: true,
+        objectKey: true,
+        filename: true,
+        lastUploadError: true,
+      },
+    });
+
+    for (const row of rows) {
+      await this.deleteStorageObjectBestEffort(row.objectKey);
+      await this.db.surveillanceSegment.delete({ where: { id: row.id } });
+    }
+
+    await this.audit.record({
+      action: 'surveillance.segments_dismiss_orphans',
+      principalType: PrincipalType.admin,
+      principalId: adminUserId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: {
+        recordedOn: body.recordedOn,
+        dismissed: rows.length,
+        filenames: rows.map((row) => row.filename),
+      },
+    });
+
+    return { ok: true as const, dismissed: rows.length };
   }
 
   async listSegments(deviceId: string, query: ListSegmentsQuery) {

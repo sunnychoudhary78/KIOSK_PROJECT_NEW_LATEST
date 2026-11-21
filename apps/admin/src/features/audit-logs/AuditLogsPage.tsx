@@ -53,6 +53,8 @@ const ACTION_LABELS: Record<string, string> = {
   'service.enablement_updated': 'Service enablement updated',
   'surveillance.playback': 'Recording played',
   'surveillance.segment_uploaded': 'Recording uploaded',
+  'surveillance.segment_dismiss': 'Recording dismissed',
+  'surveillance.segments_dismiss_orphans': 'Errored pending recordings dismissed',
   'surveillance.upload_url': 'Recording upload URL issued',
 };
 

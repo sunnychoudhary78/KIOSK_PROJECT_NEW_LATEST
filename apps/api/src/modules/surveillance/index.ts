@@ -6,7 +6,11 @@ import { requireDevice } from '../../shared/device-guard.js';
 import { validateBody, validateQuery } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
-import { listSegmentsQuerySchema, uploadUrlBodySchema } from './surveillance.schemas.js';
+import {
+  dismissOrphansBodySchema,
+  listSegmentsQuerySchema,
+  uploadUrlBodySchema,
+} from './surveillance.schemas.js';
 import type { ListSegmentsQuery } from './surveillance.schemas.js';
 import { SurveillanceService } from './surveillance.service.js';
 
@@ -48,6 +52,52 @@ export function registerSurveillanceModule(router: Router, deps: AppDeps): void 
           throw new AppError('unauthorized', 'Missing principal', 401);
         }
         const result = await service.createPlaybackUrl(
+          requireParam(req.params.deviceId, 'deviceId'),
+          requireParam(req.params.segmentId, 'segmentId'),
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // Static path must be registered before :segmentId routes.
+  router.post(
+    '/devices/:deviceId/surveillance/segments/dismiss-orphans',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    validateBody(dismissOrphansBodySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.dismissOrphans(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.body,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/devices/:deviceId/surveillance/segments/:segmentId/dismiss',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.dismissSegment(
           requireParam(req.params.deviceId, 'deviceId'),
           requireParam(req.params.segmentId, 'segmentId'),
           req.principal.id,
