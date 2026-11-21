@@ -43,8 +43,8 @@ desktop.ini
 **/windows/flutter/ephemeral/
 *.iml
 
-# Logs
-logs/
+# Logs (runtime files only — do not ignore source dirs like apps/admin/src/features/logs/)
+/logs/
 *.log
 npm-debug.log*
 pnpm-debug.log*
