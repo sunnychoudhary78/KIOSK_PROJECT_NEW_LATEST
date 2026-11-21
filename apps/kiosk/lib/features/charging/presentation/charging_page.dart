@@ -6,6 +6,7 @@ import 'package:skp_kiosk/core/theme/skp_tokens.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
 import 'package:skp_kiosk/features/charging/domain/charging_phase.dart';
+import 'package:skp_kiosk/features/charging/domain/charging_session_policy.dart';
 import 'package:skp_kiosk/features/charging/presentation/charging_ad_gate.dart';
 import 'package:skp_kiosk/features/service_ratings/domain/service_rating_keys.dart';
 import 'package:skp_kiosk/features/service_ratings/presentation/service_rating_page.dart';
@@ -25,6 +26,13 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
   void initState() {
     super.initState();
     Future.microtask(() {
+      if (!mounted) {
+        return;
+      }
+      final state = ref.read(chargingControllerProvider);
+      if (shouldResumeChargingUi(state)) {
+        return;
+      }
       ref.read(chargingControllerProvider.notifier).startSession();
     });
   }
@@ -35,6 +43,18 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
         .endVisitorSession(attract: false);
   }
 
+  void _softLeaveToHome() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _onHomeOrBack({required bool socketArmed}) async {
+    if (socketArmed) {
+      _softLeaveToHome();
+      return;
+    }
+    await _endSession();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(chargingControllerProvider);
@@ -42,15 +62,18 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
     final theme = Theme.of(context);
 
     final showDone = state.socketArmed || state.phase == ChargingPhase.done;
-    final canCancel =
+    final showBack =
+        state.socketArmed ||
         state.phase == ChargingPhase.connecting ||
         state.phase == ChargingPhase.watchingAd ||
         state.phase == ChargingPhase.error;
 
     return VisitorSessionPopScope(
+      // Armed socket: allow a normal pop so power keeps running in the background.
+      endSessionOnPop: !state.socketArmed,
       child: KioskShell(
         title: 'Phone Charging',
-        onHome: _endSession,
+        onHome: () => _onHomeOrBack(socketArmed: state.socketArmed),
         stepLabel: switch (state.phase) {
           ChargingPhase.connecting => 'Connect',
           ChargingPhase.watchingAd => 'Sponsored message',
@@ -59,11 +82,11 @@ class _ChargingPageState extends ConsumerState<ChargingPage> {
           ChargingPhase.done => 'Done',
           ChargingPhase.error => 'Error',
         },
-        footerLeading: canCancel
+        footerLeading: showBack
             ? KioskGhostButton(
                 label: 'Back',
                 icon: Icons.arrow_back,
-                onPressed: _endSession,
+                onPressed: () => _onHomeOrBack(socketArmed: state.socketArmed),
               )
             : null,
         footerTrailing: showDone
@@ -238,9 +261,9 @@ class _ChargingActiveView extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             if (statusMessage !=
-                (charging
-                    ? 'Phone connected'
-                    : 'Socket armed — plug in your phone') &&
+                    (charging
+                        ? 'Phone connected'
+                        : 'Socket armed — plug in your phone') &&
                 statusMessage != 'Plug in your phone') ...[
               const SizedBox(height: 8),
               Text(

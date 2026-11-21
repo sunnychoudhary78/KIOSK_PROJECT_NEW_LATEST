@@ -12,8 +12,10 @@ import 'package:skp_kiosk/features/charging/domain/charging_monitor.dart';
 import 'package:skp_kiosk/features/charging/domain/charging_phase.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 
+/// Lives beyond [ChargingPage] so an armed socket can keep charging while the
+/// visitor uses Home or another service. Tear-down still runs on invalidate.
 final chargingControllerProvider =
-    NotifierProvider.autoDispose<ChargingController, ChargingUiState>(
+    NotifierProvider<ChargingController, ChargingUiState>(
       ChargingController.new,
     );
 

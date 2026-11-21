@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:skp_kiosk/app/router.dart';
+import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/hardware/camera/camera_lease.dart';
 import 'package:skp_kiosk/core/logging/app_logger.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
@@ -13,6 +14,7 @@ import 'package:skp_kiosk/features/astrology/application/match_kundali_controlle
 import 'package:skp_kiosk/features/astrology/application/my_kundali_controller.dart';
 import 'package:skp_kiosk/features/astrology/application/today_periods_controller.dart';
 import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
+import 'package:skp_kiosk/features/charging/domain/charging_session_policy.dart';
 import 'package:skp_kiosk/features/digilocker_print/application/digilocker_controller.dart';
 import 'package:skp_kiosk/features/fuel_stations/application/fuel_stations_controller.dart';
 import 'package:skp_kiosk/features/otp_print/application/otp_print_controller.dart';
@@ -91,12 +93,20 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
       kSessionResetQuickPrintTimeout,
     );
   }
-  if (ref.exists(chargingControllerProvider)) {
+  final preserveCharging = ref.exists(chargingControllerProvider) &&
+      shouldPreserveChargingOnReset(
+        state: ref.read(chargingControllerProvider),
+        isAuthenticated: ref.read(deviceAuthProvider).isAuthenticated,
+      );
+
+  if (ref.exists(chargingControllerProvider) && !preserveCharging) {
     await bestEffortTimed(
       'charging_shutdown',
       () => ref.read(chargingControllerProvider.notifier).forceShutdown(),
       kSessionResetChargingTimeout,
     );
+  } else if (preserveCharging) {
+    AppLogger.info('session_reset_preserve_charging');
   }
 
   ref.invalidate(digilockerControllerProvider);
@@ -107,7 +117,9 @@ Future<void> resetVisitorSession(Ref ref, {required bool attract}) async {
   ref.invalidate(matchKundaliControllerProvider);
   ref.invalidate(todayPeriodsControllerProvider);
   ref.invalidate(wellBeingControllerProvider);
-  ref.invalidate(chargingControllerProvider);
+  if (!preserveCharging) {
+    ref.invalidate(chargingControllerProvider);
+  }
   ref.invalidate(fuelStationsControllerProvider);
 
   // Invalidate resets astrology to capture; clear any raced palm acquire.

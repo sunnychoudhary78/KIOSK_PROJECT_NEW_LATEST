@@ -8,6 +8,7 @@ import 'package:skp_kiosk/core/ui/ui.dart';
 import 'package:skp_kiosk/features/ads/application/ads_controller.dart';
 import 'package:skp_kiosk/features/ads/presentation/home_banner_strip.dart';
 import 'package:skp_kiosk/features/ads/presentation/idle_ad_player.dart';
+import 'package:skp_kiosk/features/charging/application/charging_controller.dart';
 import 'package:skp_kiosk/features/home/application/service_catalog_controller.dart';
 import 'package:skp_kiosk/features/home/domain/kiosk_home_service.dart';
 import 'package:skp_kiosk/features/home/presentation/stopped_kiosk_page.dart';
@@ -237,7 +238,15 @@ class _ServiceCatalogState extends ConsumerState<_ServiceCatalog> {
     final printStatus = tileStatus(KioskHomeService.printDocuments);
     final localStatus = tileStatus(KioskHomeService.localServices);
     final wellBeingStatus = tileStatus(KioskHomeService.wellBeing);
-    final chargingStatus = tileStatus(KioskHomeService.phoneCharging);
+    final chargingSocketArmed = ref.watch(
+      chargingControllerProvider.select((s) => s.socketArmed),
+    );
+    final chargingBaseStatus = tileStatus(KioskHomeService.phoneCharging);
+    final chargingStatus = chargingBaseStatus.blocked
+        ? chargingBaseStatus
+        : chargingSocketArmed
+        ? (label: 'Charging…', blocked: false)
+        : chargingBaseStatus;
     final astrologyStatus = tileStatus(KioskHomeService.astrology);
     final fuelStatus = tileStatus(KioskHomeService.fuelStations);
 
