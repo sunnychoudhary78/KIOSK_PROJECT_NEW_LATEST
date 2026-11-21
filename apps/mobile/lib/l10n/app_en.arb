@@ -83,14 +83,14 @@
   "uploadHelper": "After upload, free sessions get an OTP by SMS. Extra pages require payment first, then the OTP is sent.",
   "labelOptional": "Label (optional)",
   "labelHint": "e.g. School certificates",
-  "tapToAddPdfs": "Tap to add PDF documents",
-  "pdfsSelected": "{count} PDF(s) selected — tap to replace",
+  "tapToAddPdfs": "Tap to add PDF, JPG/PNG, or Word (.docx)",
+  "pdfsSelected": "{count} file(s) selected — tap to replace",
   "@pdfsSelected": {
     "placeholders": {
       "count": { "type": "int" }
     }
   },
-  "pdfOnlyHint": "PDF or JPG/PNG · page limits enforced by server",
+  "pdfOnlyHint": "PDF, JPG/PNG, or Word (.docx) · page limits enforced by server",
   "printColor": "Print color",
   "colorBw": "Black & white",
   "colorColor": "Color",

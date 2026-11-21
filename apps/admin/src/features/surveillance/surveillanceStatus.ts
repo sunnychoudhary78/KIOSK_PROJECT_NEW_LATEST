@@ -12,6 +12,7 @@ export type SurveillanceHealth = {
   lastSegmentAt?: string | null;
   lastSegmentBytes?: number | null;
   queuePending?: number;
+  queueDue?: number;
   queueFailed?: number;
   oldestQueuedAt?: string | null;
   lastErrorCode?: string | null;
@@ -133,17 +134,28 @@ export function resolveRecordingDisplay(device: DeviceSurveillanceView): Recordi
         className: backlog.warn ? backlogClass : 'text-emerald-700',
         title: `Camera recording${queueNote}${errorNote}`,
       };
-    case 'uploading':
+    case 'uploading': {
+      const pending = health.queuePending ?? 0;
+      const due = health.queueDue;
+      if (pending > 0 && due === 0) {
+        return {
+          key: 'queue_stuck',
+          label: 'Queue stuck',
+          className: 'text-amber-700',
+          title: `Local upload queue has ${pending} pending with none due${errorNote}`,
+        };
+      }
       return {
         key: 'uploading',
-        label: health.queuePending
+        label: pending
           ? backlog.warn
-            ? `Backlog (${health.queuePending})`
-            : `Uploading (${health.queuePending})`
+            ? `Backlog (${pending})`
+            : `Uploading (${pending})`
           : 'Uploading',
         className: backlogClass,
         title: `Upload backlog${queueNote}${errorNote}`,
       };
+    }
     case 'paused_palm':
       return {
         key: 'paused_palm',

@@ -147,6 +147,11 @@ enum AdPlaybackEventType {
   click
 }
 
+enum AstrologyContactKind {
+  astrologer
+  pandit
+}
+
 model Tenant {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
@@ -843,6 +848,21 @@ model AstrologyReading {
 
   @@index([deviceId, createdAt])
   @@map("astrology_readings")
+}
+
+model AstrologyContact {
+  id               String               @id @default(uuid()) @db.Uuid
+  kind             AstrologyContactKind
+  name             String
+  phone            String               @db.VarChar(10)
+  rating           Decimal              @db.Decimal(2, 1)
+  sortOrder        Int                  @map("sort_order")
+  showNumberClicks Int                  @default(0) @map("show_number_clicks")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  @@index([kind, sortOrder])
+  @@map("astrology_contacts")
 }
 
 model FuelStation {

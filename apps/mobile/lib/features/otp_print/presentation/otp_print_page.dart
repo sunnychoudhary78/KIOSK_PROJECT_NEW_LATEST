@@ -42,7 +42,7 @@ class _OtpPrintPageState extends ConsumerState<OtpPrintPage> {
   Future<void> _pickFiles() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'docx'],
       allowMultiple: true,
       withData: false,
     );

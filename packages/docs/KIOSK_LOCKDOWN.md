@@ -102,6 +102,10 @@ relaunches the app.
 | Frozen UI, process still in Task Manager | `liveness.txt` age; `watchdog.log` | UI hang — watchdog should kill within ~2 min |
 | "Can't reach the server" while API healthy | Device DNS/TLS/proxy; `app.log` | Client timeout / network path |
 | Only fixed by redeploying binaries | File dates under `C:\Kiosk`; DLLs in `data\` | Corrupt deploy tree or hung process cleared by replace |
+| Admin shows Uploading / Queue stuck; no new clips | `upload-queue.json` `nextAttemptAt` / `lastError`; `app.log` `SURVEILLANCE_UPLOAD_*` / `QUEUE_HEALED` | Poisoned far-future retry schedule or auth blips — fixed build heals on load |
+| Recording never resumes after palm capture | `shell_debug.log` / `app.log` for `SURVEILLANCE_RESUMED` / `RETRY_SCHEDULED reason=palm_busy` | Camera lease stuck or sync retry chain dropped (fixed in app) |
+
+**Queue stuck / year-far `nextAttemptAt`:** current builds heal absurd schedules on uploader attach (`SURVEILLANCE_QUEUE_HEALED`). If a device is still wedged after upgrade, stop the app, rename `C:\ProgramData\SmartKiosk\surveillance\<deviceId>\upload-queue.json` to `.bak`, restart, and confirm `SURVEILLANCE_UPLOAD_OK` then `SURVEILLANCE_STARTED`.
 
 ### Astrology stuck-exit checklist
 

@@ -102,6 +102,24 @@ class DeviceAuthNotifier extends Notifier<DeviceAuthState> {
     }
   }
 
+  /// Re-login with stored device credentials (used by surveillance upload on 401).
+  /// Returns true when [state] has a usable access token afterward.
+  Future<bool> refreshAccessToken() async {
+    final creds = _credentials ?? await _store.load();
+    if (creds == null) {
+      return false;
+    }
+    _credentials = creds;
+    await authenticate(
+      deviceKey: creds.deviceKey,
+      deviceSecret: creds.deviceSecret,
+      persist: false,
+    );
+    return state.isAuthenticated &&
+        state.accessToken != null &&
+        state.accessToken!.isNotEmpty;
+  }
+
   Future<void> authenticate({
     required String deviceKey,
     required String deviceSecret,

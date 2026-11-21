@@ -179,7 +179,8 @@ void main() {
     expect(container.read(cameraLeaseProvider).holder, CameraHolder.palm);
 
     container.read(cameraLeaseProvider.notifier).release(CameraHolder.palm);
-    await Future<void>.delayed(Duration.zero);
+    // Lease→none sync is deferred 100ms so palm can acquire without racing.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
     expect(recorder.resumes, 1);
     expect(container.read(cameraLeaseProvider).holder, CameraHolder.surveillance);
   });
@@ -204,14 +205,15 @@ void main() {
     expect(recorder.starts, 1);
 
     final controller = container.read(surveillanceControllerProvider.notifier);
-    controller.retryDelayFor = (_, __) => const Duration(milliseconds: 20);
+    // Longer than lease→none deferred sync (100ms) so we can assert the error first.
+    controller.retryDelayFor = (_, __) => const Duration(milliseconds: 200);
 
     recorder.emit(const SurveillanceNativeEvent('CAMERA_ERROR'));
     await Future<void>.delayed(Duration.zero);
     expect(container.read(surveillanceControllerProvider).error, 'CAMERA_ERROR');
     expect(container.read(surveillanceControllerProvider).recording, isFalse);
 
-    await Future<void>.delayed(const Duration(milliseconds: 60));
+    await Future<void>.delayed(const Duration(milliseconds: 350));
     expect(recorder.starts, greaterThanOrEqualTo(2));
     expect(container.read(surveillanceControllerProvider).recording, isTrue);
     expect(container.read(surveillanceControllerProvider).error, isNull);
@@ -261,6 +263,7 @@ void main() {
 
     uploads.stats = SurveillanceQueueStats(
       pendingCount: surveillanceBacklogPendingLimit + 1,
+      dueCount: surveillanceBacklogPendingLimit + 1,
       failedCount: 0,
       oldestQueuedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
     );
@@ -278,5 +281,57 @@ void main() {
     expect(container.read(surveillanceControllerProvider).error, 'UPLOAD_BACKLOG');
     expect(container.read(surveillanceControllerProvider).recording, isFalse);
     expect(uploads.attachedDeviceId, 'device-1');
+  });
+
+  test('does not pause when pending is high but nothing is due', () async {
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.starts, 1);
+
+    uploads.stats = const SurveillanceQueueStats(
+      pendingCount: 30,
+      dueCount: 0,
+      failedCount: 0,
+    );
+    auth.emit(
+      DeviceAuthState(
+        accessToken: 'token-refresh-2',
+        deviceId: 'device-1',
+        provisioned: true,
+        surveillanceEnabled: true,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(surveillanceControllerProvider).error, isNull);
+    expect(container.read(surveillanceControllerProvider).recording, isTrue);
+  });
+
+  test('sync while palm holds camera arms retry then resumes after release', () async {
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.starts, 1);
+
+    final controller = container.read(surveillanceControllerProvider.notifier);
+    controller.retryDelayFor = (_, __) => const Duration(milliseconds: 30);
+
+    await container.read(cameraLeaseProvider.notifier).acquire(CameraHolder.palm);
+    expect(container.read(cameraLeaseProvider).holder, CameraHolder.palm);
+
+    // Simulate backlog retry firing while palm still holds the camera.
+    auth.emit(
+      DeviceAuthState(
+        accessToken: 'token-palm-sync',
+        deviceId: 'device-1',
+        provisioned: true,
+        surveillanceEnabled: true,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    container.read(cameraLeaseProvider.notifier).release(CameraHolder.palm);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(recorder.resumes, greaterThanOrEqualTo(1));
+    expect(container.read(cameraLeaseProvider).holder, CameraHolder.surveillance);
+    expect(container.read(surveillanceControllerProvider).recording, isTrue);
   });
 }

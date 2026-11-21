@@ -16,7 +16,7 @@ import {
   type AstrologyPrintCheckout,
   type QuickPrintSession,
 } from './api';
-import { countUploadPages, isPdf } from './count_pages';
+import { countUploadPages, isAcceptedUploadFile, isDocx, isPdf } from './count_pages';
 
 const PLAY_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.imt.skp_mobile';
@@ -290,45 +290,40 @@ function SessionPage() {
   }
 
   function addFiles(list: FileList | null) {
-    const incoming = Array.from(list ?? []).filter((file) => {
-      const name = file.name.toLowerCase();
-      const type = file.type.toLowerCase();
-      return (
-        type === 'application/pdf' ||
-        type === 'image/jpeg' ||
-        type === 'image/png' ||
-        name.endsWith('.pdf') ||
-        name.endsWith('.jpg') ||
-        name.endsWith('.jpeg') ||
-        name.endsWith('.png')
-      );
-    });
+    const incoming = Array.from(list ?? []).filter(isAcceptedUploadFile);
     if (incoming.length === 0) {
       return;
     }
     setError(null);
 
-    const additions: UploadFile[] = [];
+    const existing = new Set(files.map((item) => fileKey(item.file)));
+    const nextAdditions: UploadFile[] = [];
+    for (const file of incoming) {
+      const key = fileKey(file);
+      if (existing.has(key)) continue;
+      existing.add(key);
+      nextAdditions.push({
+        file,
+        copies: 1,
+        pageCount: null,
+        pageStatus: isDocx(file) ? 'ready' : 'pending',
+      });
+    }
+    if (nextAdditions.length === 0) {
+      return;
+    }
+
     setFiles((prev) => {
-      const existing = new Set(prev.map((item) => fileKey(item.file)));
-      const nextAdditions: UploadFile[] = [];
-      for (const file of incoming) {
-        const key = fileKey(file);
-        if (existing.has(key)) continue;
-        existing.add(key);
-        nextAdditions.push({
-          file,
-          copies: 1,
-          pageCount: null,
-          pageStatus: 'pending',
-        });
-      }
-      additions.splice(0, additions.length, ...nextAdditions);
-      if (nextAdditions.length === 0) return prev;
-      return [...prev, ...nextAdditions];
+      const seen = new Set(prev.map((item) => fileKey(item.file)));
+      const unique = nextAdditions.filter((item) => !seen.has(fileKey(item.file)));
+      if (unique.length === 0) return prev;
+      return [...prev, ...unique];
     });
 
-    for (const item of additions) {
+    for (const item of nextAdditions) {
+      if (isDocx(item.file)) {
+        continue;
+      }
       const key = fileKey(item.file);
       void (async () => {
         try {
@@ -371,8 +366,11 @@ function SessionPage() {
   const billablePreview = useMemo(() => {
     if (files.length === 0) return null;
     if (files.some((f) => f.pageStatus === 'pending')) return 'counting' as const;
-    if (files.some((f) => f.pageStatus !== 'ready' || f.pageCount == null)) {
-      return null;
+    if (files.some((f) => f.pageStatus === 'error')) return null;
+    if (files.some((f) => f.pageStatus !== 'ready')) return null;
+    // Word (.docx) pages are known only after server convert.
+    if (files.some((f) => f.pageCount == null)) {
+      return 'after_upload' as const;
     }
     return files.reduce((sum, f) => sum + (f.pageCount ?? 0) * f.copies, 0);
   }, [files]);
@@ -563,7 +561,7 @@ function SessionPage() {
             </span>
             <span className="choice-copy">
               <span className="choice-title">Print from this phone</span>
-              <span className="choice-sub">Upload PDF or JPG/PNG in the browser and send them to the machine</span>
+              <span className="choice-sub">Upload PDF, JPG/PNG, or Word (.docx) in the browser and send them to the machine</span>
             </span>
             <span className="choice-arrow">
               <IconArrow />
@@ -918,9 +916,11 @@ function SessionPage() {
             <p className="upload-total" aria-live="polite">
               {billablePreview === 'counting'
                 ? 'Counting pages…'
-                : typeof billablePreview === 'number'
-                  ? `Total: ${billablePreview} billable page${billablePreview === 1 ? '' : 's'}`
-                  : 'Page totals will be confirmed after upload'}
+                : billablePreview === 'after_upload'
+                  ? 'Final page count after upload'
+                  : typeof billablePreview === 'number'
+                    ? `Total: ${billablePreview} billable page${billablePreview === 1 ? '' : 's'}`
+                    : 'Page totals will be confirmed after upload'}
             </p>
           ) : null}
           <button className="primary" type="button" disabled={busy || files.length === 0} onClick={() => void onUpload()}>
@@ -958,24 +958,27 @@ function SessionPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png"
+          accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
           multiple
           onChange={(event) => addFiles(event.target.files)}
         />
-        <strong>Tap to add PDF or JPG/PNG</strong>
+        <strong>Tap to add PDF, JPG/PNG, or Word (.docx)</strong>
         <small>You can attach more than one file</small>
       </label>
       {files.length > 0 ? (
         <ul className="files">
           {files.map((item, index) => {
             const pdf = isPdf(item.file);
+            const word = isDocx(item.file);
             const sizeLabel = formatBytes(item.file.size);
             const metaLabel =
               item.pageStatus === 'pending'
                 ? `Counting… · ${sizeLabel}`
-                : item.pageStatus === 'ready' && item.pageCount != null
-                  ? `${item.pageCount} page${item.pageCount === 1 ? '' : 's'} · ${sizeLabel}`
-                  : `Pages unknown · ${sizeLabel}`;
+                : word && item.pageStatus === 'ready'
+                  ? `Word · pages after upload · ${sizeLabel}`
+                  : item.pageStatus === 'ready' && item.pageCount != null
+                    ? `${item.pageCount} page${item.pageCount === 1 ? '' : 's'} · ${sizeLabel}`
+                    : `Pages unknown · ${sizeLabel}`;
             const billable =
               item.pageStatus === 'ready' && item.pageCount != null
                 ? item.pageCount * item.copies
@@ -983,7 +986,7 @@ function SessionPage() {
             return (
               <li className="file-card" key={`${item.file.name}-${item.file.size}-${index}`}>
                 <div className="file-card-top">
-                  <span className="file-thumb">{pdf ? 'PDF' : 'IMG'}</span>
+                  <span className="file-thumb">{pdf ? 'PDF' : word ? 'DOC' : 'IMG'}</span>
                   <div className="file-meta">
                     <strong title={item.file.name}>{item.file.name}</strong>
                     <span className="file-card-meta">{metaLabel}</span>

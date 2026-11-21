@@ -34,6 +34,7 @@ import { registerQuickPrintModule } from './modules/quick_print/index.js';
 import { registerPrintQuotaModule } from './modules/print_quota/index.js';
 import { registerSocietyPhonesModule } from './modules/society_phones/index.js';
 import { registerEmergencyContactsModule } from './modules/emergency_contacts/index.js';
+import { registerAstrologyContactsModule } from './modules/astrology_contacts/index.js';
 import { registerLocalServicesModule } from './modules/local_services/index.js';
 import { registerServiceAnalyticsModule } from './modules/service_analytics/index.js';
 import { registerServiceRatingsModule } from './modules/service_ratings/index.js';
@@ -107,6 +108,7 @@ export function createApp(deps: AppDeps): Express {
   registerPrintQuotaModule(v1, deps);
   registerSocietyPhonesModule(v1, deps);
   registerEmergencyContactsModule(v1, deps);
+  registerAstrologyContactsModule(v1, deps);
   registerLocalServicesModule(v1, deps);
   registerPaymentsModule(v1, deps);
   registerDigiLockerModule(v1, deps);

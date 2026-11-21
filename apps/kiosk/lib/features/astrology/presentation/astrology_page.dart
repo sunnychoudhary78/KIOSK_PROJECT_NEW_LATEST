@@ -43,6 +43,8 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   bool _cameraReady = false;
   bool _sampling = false;
   int _cameraSession = 0;
+  /// Set when leaving the page so invalidate→capture cannot reopen the camera.
+  bool _pageClosed = false;
 
   final _name = TextEditingController();
   final _place = TextEditingController();
@@ -62,6 +64,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
 
   @override
   void dispose() {
+    _pageClosed = true;
     _cameraSession++;
     _name.dispose();
     _place.dispose();
@@ -70,6 +73,9 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   }
 
   Future<void> _endSession() async {
+    _pageClosed = true;
+    _cameraSession++;
+    _releasePalmCamera();
     if (ref.read(astrologyControllerProvider).phase == AstrologyPhase.result) {
       await promptServiceRatingIfNeeded(
         context,
@@ -85,6 +91,8 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   }
 
   Future<void> _goBack() async {
+    _pageClosed = true;
+    _cameraSession++;
     _releasePalmCamera();
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -100,6 +108,9 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
   }
 
   Future<void> _openCamera() async {
+    if (_pageClosed || !mounted) {
+      return;
+    }
     final session = ++_cameraSession;
     setState(() {
       _cameraError = null;
@@ -109,24 +120,28 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
     try {
       await lease.acquire(CameraHolder.palm);
     } catch (_) {
-      if (mounted && session == _cameraSession) {
+      if (!_pageClosed && mounted && session == _cameraSession) {
         setState(() => _cameraError = 'Could not open the camera. Check Windows camera privacy settings.');
       }
       return;
     }
-    if (!mounted || session != _cameraSession) {
-      if (!mounted) {
-        lease.release(CameraHolder.palm);
-      }
+    // Always release if this open was aborted (dispose, session bump, or close).
+    if (shouldAbortPalmCameraOpen(
+      pageClosed: _pageClosed,
+      isMounted: mounted,
+      openSession: session,
+      currentSession: _cameraSession,
+    )) {
+      lease.release(CameraHolder.palm);
       return;
     }
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        if (session == _cameraSession && _camera == null) {
+        if (session == _cameraSession) {
           lease.release(CameraHolder.palm);
         }
-        if (mounted && session == _cameraSession) {
+        if (!_pageClosed && mounted && session == _cameraSession) {
           setState(() => _cameraError = 'No camera found. Connect the USB camera and retry.');
         }
         return;
@@ -138,11 +153,14 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
         enableAudio: false,
       );
       await controller.initialize();
-      if (!mounted || session != _cameraSession) {
+      if (shouldAbortPalmCameraOpen(
+        pageClosed: _pageClosed,
+        isMounted: mounted,
+        openSession: session,
+        currentSession: _cameraSession,
+      )) {
         await controller.dispose();
-        if (!mounted && _camera == null) {
-          lease.release(CameraHolder.palm);
-        }
+        lease.release(CameraHolder.palm);
         return;
       }
       await _camera?.dispose();
@@ -153,7 +171,7 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
       if (session == _cameraSession && _camera == null) {
         lease.release(CameraHolder.palm);
       }
-      if (mounted && session == _cameraSession) {
+      if (!_pageClosed && mounted && session == _cameraSession) {
         setState(() => _cameraError = 'Could not open the camera. Check Windows camera privacy settings.');
       }
     }
@@ -417,6 +435,11 @@ class _AstrologyPageState extends ConsumerState<AstrologyPage> {
         }
       }
       if (previous?.phase != AstrologyPhase.capture && next.phase == AstrologyPhase.capture) {
+        // Invalidate during session reset resets phase to capture; do not reopen
+        // the camera while the page is closing or already disposed.
+        if (_pageClosed || !mounted) {
+          return;
+        }
         unawaited(_openCamera());
       }
     });

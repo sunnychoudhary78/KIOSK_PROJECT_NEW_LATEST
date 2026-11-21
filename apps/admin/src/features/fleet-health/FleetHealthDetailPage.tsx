@@ -271,6 +271,7 @@ export function FleetHealthDetailPage() {
           <DetailRow label="Recording" value={formatMaybe(camera?.recording)} />
           <DetailRow label="Camera name" value={camera?.cameraName ?? '—'} />
           <DetailRow label="Queue pending" value={formatMaybe(camera?.queuePending)} />
+          <DetailRow label="Queue due" value={formatMaybe(camera?.queueDue)} />
           <DetailRow label="Queue failed" value={formatMaybe(camera?.queueFailed)} />
           <DetailRow label="Oldest queued" value={formatWhen(camera?.oldestQueuedAt)} />
           <DetailRow

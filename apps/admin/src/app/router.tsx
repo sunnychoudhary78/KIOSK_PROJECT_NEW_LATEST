@@ -14,6 +14,7 @@ import { FreePrintUsagePage } from '../features/print-quota/FreePrintUsagePage';
 import { UsagePage } from '../features/usage/UsagePage';
 import { SocietyPhonesPage } from '../features/society-phones/SocietyPhonesPage';
 import { EmergencyContactsPage } from '../features/emergency-contacts/EmergencyContactsPage';
+import { AstrologyContactsPage } from '../features/astrology-contacts/AstrologyContactsPage';
 import { FindServicesPage } from '../features/find-services/FindServicesPage';
 import { CabinetLightPage } from '../features/cabinet-light/CabinetLightPage';
 import { DigiLockerPage } from '../features/digilocker/DigiLockerPage';
@@ -57,6 +58,7 @@ export function AppRouter() {
             <Route path="print-quota" element={<FreePrintUsagePage />} />
             <Route path="society-phones" element={<SocietyPhonesPage />} />
             <Route path="emergency-contacts" element={<EmergencyContactsPage />} />
+            <Route path="astrology-contacts" element={<AstrologyContactsPage />} />
             <Route path="digilocker" element={<DigiLockerPage />} />
             <Route path="recordings" element={<RecordingsPage />} />
             <Route path="audit-logs" element={<AuditLogsPage />} />

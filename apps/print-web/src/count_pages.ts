@@ -1,5 +1,8 @@
 import { PDFDocument } from 'pdf-lib';
 
+const DOCX_MIME =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
 export function isPdf(file: File): boolean {
   const name = file.name.toLowerCase();
   const type = file.type.toLowerCase();
@@ -18,8 +21,21 @@ export function isImage(file: File): boolean {
   );
 }
 
-/** Client-side page count for upload preview. Images are 1 page. */
-export async function countUploadPages(file: File): Promise<number> {
+export function isDocx(file: File): boolean {
+  const name = file.name.toLowerCase();
+  const type = file.type.toLowerCase();
+  return type === DOCX_MIME || name.endsWith('.docx');
+}
+
+export function isAcceptedUploadFile(file: File): boolean {
+  return isPdf(file) || isImage(file) || isDocx(file);
+}
+
+/** Client-side page count for upload preview. Images are 1 page. DOCX is unknown until server convert. */
+export async function countUploadPages(file: File): Promise<number | null> {
+  if (isDocx(file)) {
+    return null;
+  }
   if (isImage(file)) {
     return 1;
   }

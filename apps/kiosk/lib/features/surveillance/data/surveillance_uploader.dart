@@ -23,8 +23,15 @@ Duration surveillancePutTimeoutForBytes(int bytes) {
   return Duration(seconds: estimated.clamp(minSeconds, maxSeconds));
 }
 
+/// Wall timeout slightly above PUT timeout so hung requests cannot wedge the tick.
+Duration surveillanceProcessTimeoutForBytes(int bytes) {
+  return surveillancePutTimeoutForBytes(bytes) + const Duration(minutes: 1);
+}
+
 /// Errors that should never leave the queue (corrupt/stub only).
 bool surveillanceIsPermanentUploadError(String code) => code == 'invalid_segment';
+
+typedef SurveillanceUnauthorizedHandler = Future<bool> Function();
 
 class SurveillanceUploader implements SurveillanceUploadSink {
   SurveillanceUploader({
@@ -34,11 +41,13 @@ class SurveillanceUploader implements SurveillanceUploadSink {
     DateTime Function()? clock,
     Directory? rootOverride,
     SurveillanceUploadQueue? queue,
+    SurveillanceUnauthorizedHandler? onUnauthorized,
   })  : _api = api,
         _recorder = recorder,
         _clock = clock ?? DateTime.now,
         _rootOverride = rootOverride,
-        _queueOverride = queue;
+        _queueOverride = queue,
+        _onUnauthorized = onUnauthorized;
 
   final ApiClient _api;
   final SurveillanceRecorder _recorder;
@@ -46,6 +55,7 @@ class SurveillanceUploader implements SurveillanceUploadSink {
   final DateTime Function() _clock;
   final Directory? _rootOverride;
   final SurveillanceUploadQueue? _queueOverride;
+  final SurveillanceUnauthorizedHandler? _onUnauthorized;
 
   SurveillanceUploadQueue? _queue;
   String? _deviceId;
@@ -62,13 +72,15 @@ class SurveillanceUploader implements SurveillanceUploadSink {
       return SurveillanceQueueStats(
         pendingCount: 0,
         failedCount: 0,
+        dueCount: 0,
         lastError: _lastError,
       );
     }
-    final stats = queue.stats();
+    final stats = queue.stats(now: _clock().toUtc());
     return SurveillanceQueueStats(
       pendingCount: stats.pendingCount,
       failedCount: stats.failedCount,
+      dueCount: stats.dueCount,
       oldestQueuedAt: stats.oldestQueuedAt,
       lastError: stats.lastError ?? _lastError,
     );
@@ -97,8 +109,16 @@ class SurveillanceUploader implements SurveillanceUploadSink {
           queueFile: File(p.join(root!.path, surveillanceQueueFileName)),
         );
     _queue = queue;
-    await queue.load();
-    await queue.scanLeftovers(now: _clock().toUtc());
+    final healedLoad = await queue.load();
+    final healedScan = await queue.scanLeftovers(now: _clock().toUtc());
+    final healed = healedLoad + healedScan;
+    final stats = queue.stats(now: _clock().toUtc());
+    if (healed > 0) {
+      AppLogger.info(
+        'SURVEILLANCE_QUEUE_HEALED healed=$healed '
+        'pending=${stats.pendingCount} due=${stats.dueCount}',
+      );
+    }
     _timer = Timer.periodic(tickInterval, (_) {
       unawaited(_tick());
     });
@@ -144,37 +164,99 @@ class SurveillanceUploader implements SurveillanceUploadSink {
       return;
     }
     _tickInFlight = true;
+    var unauthorizedRetried = false;
     try {
-      // One item per tick so a large backlog cannot monopolize the timer and
-      // so JWT refresh / attach stays responsive.
-      final due = queue.due(now: _clock().toUtc());
-      if (due.isEmpty) {
-        return;
-      }
-      final item = due.first;
-      final started = _clock().toUtc();
-      try {
-        await _process(queue, deviceId, item);
-      } catch (error) {
-        final code = error is ApiException ? error.code : 'upload_failed';
-        _lastError = code;
-        final durationMs = _clock().toUtc().difference(started).inMilliseconds;
-        AppLogger.error(
-          'SURVEILLANCE_UPLOAD_RETRY ${item.filename} '
-          'attempts=${item.attempts + 1} errorCode=$code '
-          'bytes=${item.bytes} durationMs=$durationMs',
-          error,
-        );
-        if (surveillanceIsPermanentUploadError(code)) {
-          await queue.markFailed(item.path, error: code);
-        } else {
-          // Transient (network, timeout, incomplete, size_mismatch, 401, 5xx,
-          // storage_not_configured, device_inactive): retry forever with backoff.
-          await queue.markAttempt(item.path, now: _clock().toUtc(), error: code);
+      final stats = queue.stats(now: _clock().toUtc());
+      final batchSize = stats.pendingCount > surveillanceBacklogPendingLimit &&
+              stats.dueCount > 0
+          ? 3
+          : 1;
+
+      for (var i = 0; i < batchSize; i++) {
+        final due = queue.due(now: _clock().toUtc());
+        if (due.isEmpty) {
+          return;
+        }
+        final item = due.first;
+        final started = _clock().toUtc();
+        try {
+          await _processWithTimeout(queue, deviceId, item);
+        } catch (error) {
+          final code = error is ApiException ? error.code : 'upload_failed';
+          _lastError = code;
+          final durationMs = _clock().toUtc().difference(started).inMilliseconds;
+
+          if (code == 'unauthorized' &&
+              !unauthorizedRetried &&
+              _onUnauthorized != null) {
+            unauthorizedRetried = true;
+            final refreshed = await _onUnauthorized!();
+            if (refreshed) {
+              AppLogger.info(
+                'SURVEILLANCE_UPLOAD_AUTH_REFRESHED ${item.filename}',
+              );
+              try {
+                await _processWithTimeout(queue, deviceId, item);
+                continue;
+              } catch (retryError) {
+                final retryCode =
+                    retryError is ApiException ? retryError.code : 'upload_failed';
+                _lastError = retryCode;
+                AppLogger.error(
+                  'SURVEILLANCE_UPLOAD_RETRY ${item.filename} '
+                  'attempts=${item.attempts + 1} errorCode=$retryCode '
+                  'bytes=${item.bytes} durationMs=$durationMs',
+                  retryError,
+                );
+                if (surveillanceIsPermanentUploadError(retryCode)) {
+                  await queue.markFailed(item.path, error: retryCode);
+                } else {
+                  await queue.markAttempt(
+                    item.path,
+                    now: _clock().toUtc(),
+                    error: retryCode,
+                  );
+                }
+                continue;
+              }
+            }
+          }
+
+          AppLogger.error(
+            'SURVEILLANCE_UPLOAD_RETRY ${item.filename} '
+            'attempts=${item.attempts + 1} errorCode=$code '
+            'bytes=${item.bytes} durationMs=$durationMs',
+            error,
+          );
+          if (surveillanceIsPermanentUploadError(code)) {
+            await queue.markFailed(item.path, error: code);
+          } else {
+            await queue.markAttempt(item.path, now: _clock().toUtc(), error: code);
+          }
         }
       }
     } finally {
       _tickInFlight = false;
+    }
+  }
+
+  Future<void> _processWithTimeout(
+    SurveillanceUploadQueue queue,
+    String deviceId,
+    SurveillanceQueueItem item,
+  ) async {
+    final timeout = surveillanceProcessTimeoutForBytes(item.bytes);
+    try {
+      await _process(queue, deviceId, item).timeout(timeout);
+    } on TimeoutException {
+      AppLogger.error(
+        'SURVEILLANCE_UPLOAD_STUCK ${item.filename} '
+        'bytes=${item.bytes} timeoutSec=${timeout.inSeconds}',
+      );
+      throw ApiException(
+        code: 'upload_timeout',
+        message: 'Upload exceeded ${timeout.inSeconds}s',
+      );
     }
   }
 

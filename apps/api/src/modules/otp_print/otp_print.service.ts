@@ -182,7 +182,7 @@ export class OtpPrintService {
       if (!isAcceptedPrintUpload(file.mimetype, file.originalname)) {
         throw new AppError(
           'invalid_file_type',
-          'Only PDF or image files (JPG/PNG) are allowed',
+          'Only PDF, image files (JPG/PNG), or Word (.docx) are allowed',
           400,
         );
       }

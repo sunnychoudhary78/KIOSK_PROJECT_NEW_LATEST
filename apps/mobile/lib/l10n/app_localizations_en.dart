@@ -196,15 +196,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get labelHint => 'e.g. School certificates';
 
   @override
-  String get tapToAddPdfs => 'Tap to add PDF documents';
+  String get tapToAddPdfs => 'Tap to add PDF, JPG/PNG, or Word (.docx)';
 
   @override
   String pdfsSelected(int count) {
-    return '$count PDF(s) selected — tap to replace';
+    return '$count file(s) selected — tap to replace';
   }
 
   @override
-  String get pdfOnlyHint => 'PDF or JPG/PNG · page limits enforced by server';
+  String get pdfOnlyHint =>
+      'PDF, JPG/PNG, or Word (.docx) · page limits enforced by server';
 
   @override
   String get printColor => 'Print color';

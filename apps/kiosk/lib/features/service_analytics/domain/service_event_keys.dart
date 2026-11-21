@@ -26,6 +26,11 @@ abstract final class ServiceEventKeys {
   static const astrologyPalm = 'astrology.palm';
   static const astrologyMatch = 'astrology.match';
   static const astrologyToday = 'astrology.today';
+  static const astrologyAstrologer = 'astrology.contact_astrologer';
+  static const astrologyPandit = 'astrology.contact_pandit';
+  static const astrologyAstrologerShowNumber =
+      'astrology.astrologer.show_number';
+  static const astrologyPanditShowNumber = 'astrology.pandit.show_number';
 
   static const wellBeingOxygen = 'well_being.path.oxygen';
   static const wellBeingTemperature = 'well_being.path.temperature';
@@ -76,6 +81,10 @@ abstract final class ServiceEventKeys {
         return astrologyMatch;
       case AppRoutes.astrologyToday:
         return astrologyToday;
+      case AppRoutes.astrologyAstrologer:
+        return astrologyAstrologer;
+      case AppRoutes.astrologyPandit:
+        return astrologyPandit;
       case AppRoutes.localServiceContacts:
         final args = settings.arguments;
         if (args is LocalServiceCategory && args.slug.isNotEmpty) {

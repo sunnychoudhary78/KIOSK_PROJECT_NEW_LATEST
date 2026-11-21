@@ -16,6 +16,8 @@ void main() {
       AppRoutes.astrologyPalm,
       AppRoutes.astrologyMatch,
       AppRoutes.astrologyToday,
+      AppRoutes.astrologyAstrologer,
+      AppRoutes.astrologyPandit,
       AppRoutes.localServices,
       AppRoutes.wellBeing,
       AppRoutes.charging,

@@ -19,11 +19,23 @@ const surveillanceBacklogPendingLimit = 20;
 /// Pause new recording when the oldest pending item is older than this.
 const surveillanceBacklogMaxAge = Duration(hours: 2);
 
+/// Max backoff from [surveillanceBackoffFor] (5 * 3^5 = 1215 → capped at 300).
+const surveillanceMaxBackoff = Duration(seconds: 300);
+
+/// Schedules more than this ahead of now are treated as poisoned and healed.
+const surveillanceHealScheduleHorizon = Duration(minutes: 10);
+
 /// True when the upload queue is large/old enough to pause new recording.
+///
+/// High pending with [SurveillanceQueueStats.dueCount] == 0 does **not** pause
+/// (poisoned far-future schedules); heal-on-load must make items due first.
 bool surveillanceHasUploadBacklog(
   SurveillanceQueueStats stats, {
   DateTime? now,
 }) {
+  if (stats.dueCount <= 0) {
+    return false;
+  }
   if (stats.pendingCount > surveillanceBacklogPendingLimit) {
     return true;
   }
@@ -41,12 +53,14 @@ class SurveillanceQueueStats {
   const SurveillanceQueueStats({
     required this.pendingCount,
     required this.failedCount,
+    this.dueCount = 0,
     this.oldestQueuedAt,
     this.lastError,
   });
 
   final int pendingCount;
   final int failedCount;
+  final int dueCount;
   final DateTime? oldestQueuedAt;
   final String? lastError;
 }
@@ -110,8 +124,10 @@ class SurveillanceQueueItem {
   }
 }
 
+/// Exponential backoff capped at 300s. Exponent is capped before pow so large
+/// attempt counts can never produce century-scale [Duration]s.
 Duration surveillanceBackoffFor(int attempts) {
-  final exp = math.max(0, attempts - 1);
+  final exp = math.min(5, math.max(0, attempts - 1));
   final seconds = math.min(300, 5 * math.pow(3, exp).toInt());
   return Duration(seconds: seconds);
 }
@@ -149,16 +165,17 @@ class SurveillanceUploadQueue {
 
   String _key(String path) => p.normalize(path);
 
-  Future<void> load() async {
+  /// Loads durable queue JSON and heals poisoned schedules. Returns heal count.
+  Future<int> load() async {
     _items.clear();
     if (!queueFile.existsSync()) {
-      return;
+      return 0;
     }
     try {
       final decoded = jsonDecode(await queueFile.readAsString());
       final list = decoded is Map ? decoded['items'] : decoded;
       if (list is! List) {
-        return;
+        return 0;
       }
       for (final raw in list) {
         if (raw is! Map) {
@@ -169,7 +186,45 @@ class SurveillanceUploadQueue {
       }
     } on FormatException {
       _items.clear();
+      return 0;
     }
+    return healSchedules();
+  }
+
+  /// Resets absurd far-future [SurveillanceQueueItem.nextAttemptAt] values.
+  /// Returns how many items were healed.
+  Future<int> healSchedules({DateTime? now}) async {
+    final utc = (now ?? DateTime.now()).toUtc();
+    final horizon = utc.add(surveillanceHealScheduleHorizon);
+    var healed = 0;
+    for (final item in _items.values) {
+      if (item.isFailed) {
+        continue;
+      }
+      if (item.nextAttemptAt.isAfter(horizon)) {
+        item.nextAttemptAt = utc;
+        healed += 1;
+      }
+    }
+
+    // Pending but nothing due after clamp → force all pending schedules to now.
+    final after = stats(now: utc);
+    if (after.pendingCount > 0 && after.dueCount == 0) {
+      for (final item in _items.values) {
+        if (item.isFailed || item.isPendingDelete) {
+          continue;
+        }
+        if (item.nextAttemptAt.isAfter(utc)) {
+          item.nextAttemptAt = utc;
+          healed += 1;
+        }
+      }
+    }
+
+    if (healed > 0) {
+      await save();
+    }
+    return healed;
   }
 
   Future<void> save() async {
@@ -215,9 +270,10 @@ class SurveillanceUploadQueue {
     return item;
   }
 
-  Future<void> scanLeftovers({DateTime? now}) async {
+  /// Scans leftover MP4s into the queue and heals schedules. Returns heal count.
+  Future<int> scanLeftovers({DateTime? now}) async {
     if (!root.existsSync()) {
-      return;
+      return 0;
     }
     await for (final entity in root.list(recursive: true, followLinks: false)) {
       if (entity is! File) {
@@ -238,6 +294,7 @@ class SurveillanceUploadQueue {
       _items.remove(key);
     }
     await save();
+    return healSchedules(now: now);
   }
 
   List<SurveillanceQueueItem> due({DateTime? now}) {
@@ -247,9 +304,11 @@ class SurveillanceUploadQueue {
         .toList();
   }
 
-  SurveillanceQueueStats stats() {
+  SurveillanceQueueStats stats({DateTime? now}) {
+    final utc = (now ?? DateTime.now()).toUtc();
     final pending = items.where((item) => !item.isFailed && !item.isPendingDelete);
     final failed = items.where((item) => item.isFailed);
+    final dueItems = due(now: utc);
     DateTime? oldest;
     String? lastError;
     for (final item in items) {
@@ -269,6 +328,7 @@ class SurveillanceUploadQueue {
     return SurveillanceQueueStats(
       pendingCount: pending.length,
       failedCount: failed.length,
+      dueCount: dueItems.length,
       oldestQueuedAt: oldest,
       lastError: lastError ?? (failed.isEmpty ? null : failed.last.lastError),
     );
@@ -281,7 +341,8 @@ class SurveillanceUploadQueue {
     }
     item.attempts += 1;
     item.lastError = error ?? item.lastError;
-    item.nextAttemptAt = (now ?? DateTime.now()).toUtc().add(surveillanceBackoffFor(item.attempts));
+    item.nextAttemptAt =
+        (now ?? DateTime.now()).toUtc().add(surveillanceBackoffFor(item.attempts));
     await save();
   }
 

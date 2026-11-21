@@ -58,6 +58,7 @@ export const surveillanceHealthSchema = z.object({
   lastSegmentAt: z.string().min(1).nullable().optional(),
   lastSegmentBytes: z.number().int().nonnegative().nullable().optional(),
   queuePending: z.number().int().nonnegative().optional(),
+  queueDue: z.number().int().nonnegative().optional(),
   queueFailed: z.number().int().nonnegative().optional(),
   oldestQueuedAt: z.string().min(1).nullable().optional(),
   lastErrorCode: z.string().max(64).nullable().optional(),
