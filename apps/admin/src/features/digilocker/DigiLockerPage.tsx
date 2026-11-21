@@ -21,7 +21,7 @@ export function DigiLockerPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Link
-                to="/print-jobs"
+                to="/logs?tab=print-jobs"
                 className="flex items-center gap-3 rounded-lg border border-border px-3 py-3 text-sm hover:bg-muted/60"
               >
                 <Printer className="h-4 w-4 text-primary" />
@@ -31,7 +31,7 @@ export function DigiLockerPage() {
                 </div>
               </Link>
               <Link
-                to="/audit-logs"
+                to="/logs?tab=audit"
                 className="flex items-center gap-3 rounded-lg border border-border px-3 py-3 text-sm hover:bg-muted/60"
               >
                 <ScrollText className="h-4 w-4 text-primary" />

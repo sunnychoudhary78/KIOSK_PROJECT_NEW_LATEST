@@ -7,7 +7,6 @@ import { FleetHealthDetailPage } from '../features/fleet-health/FleetHealthDetai
 import { KiosksPage } from '../features/kiosks/KiosksPage';
 import { ServicesPage } from '../features/services/ServicesPage';
 import { FuelStationsPage } from '../features/fuel_stations/FuelStationsPage';
-import { PrintJobsPage } from '../features/print-jobs/PrintJobsPage';
 import { PaymentsPage } from '../features/payments/PaymentsPage';
 import { SupportPage } from '../features/support/SupportPage';
 import { FreePrintUsagePage } from '../features/print-quota/FreePrintUsagePage';
@@ -18,7 +17,7 @@ import { AstrologyContactsPage } from '../features/astrology-contacts/AstrologyC
 import { FindServicesPage } from '../features/find-services/FindServicesPage';
 import { CabinetLightPage } from '../features/cabinet-light/CabinetLightPage';
 import { DigiLockerPage } from '../features/digilocker/DigiLockerPage';
-import { AuditLogsPage } from '../features/audit-logs/AuditLogsPage';
+import { LogsPage } from '../features/logs/LogsPage';
 import { RecordingsPage } from '../features/surveillance/RecordingsPage';
 import { UsersPage } from '../features/users/UsersPage';
 import { PlatformSettingsPage } from '../features/platform-settings/PlatformSettingsPage';
@@ -51,7 +50,10 @@ export function AppRouter() {
             <Route path="find-services" element={<FindServicesPage />} />
             <Route path="cabinet-light" element={<CabinetLightPage />} />
             <Route path="fuel-stations" element={<FuelStationsPage />} />
-            <Route path="print-jobs" element={<PrintJobsPage />} />
+            <Route
+              path="print-jobs"
+              element={<Navigate to="/logs?tab=print-jobs" replace />}
+            />
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="support" element={<SupportPage />} />
             <Route path="usage" element={<UsagePage />} />
@@ -61,7 +63,8 @@ export function AppRouter() {
             <Route path="astrology-contacts" element={<AstrologyContactsPage />} />
             <Route path="digilocker" element={<DigiLockerPage />} />
             <Route path="recordings" element={<RecordingsPage />} />
-            <Route path="audit-logs" element={<AuditLogsPage />} />
+            <Route path="logs" element={<LogsPage />} />
+            <Route path="audit-logs" element={<Navigate to="/logs?tab=audit" replace />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="platform-settings" element={<PlatformSettingsPage />} />
           </Route>

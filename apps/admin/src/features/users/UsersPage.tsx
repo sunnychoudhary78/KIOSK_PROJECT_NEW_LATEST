@@ -25,7 +25,7 @@ export function UsersPage() {
             </div>
             <p className="text-sm text-muted-foreground">
               Sign-in activity appears in{' '}
-              <Link to="/audit-logs" className="font-medium text-primary hover:underline">
+              <Link to="/logs?tab=audit" className="font-medium text-primary hover:underline">
                 Audit logs
               </Link>
               .
