@@ -11,29 +11,17 @@ namespace SkpPrinterUsb
     /// </summary>
     sealed class HttpBridgeSession : IDisposable
     {
-        const string BaseUrl = "http://127.0.0.1:60910";
         const string MaintenancePath = "/general/information.html?kind=item";
         const int CallTimeoutMs = 15000;
 
         readonly CookieContainer _cookies = new CookieContainer();
-        readonly HttpClient _http;
+        HttpClient _http;
+        string _baseUrl;
         string _password;
 
         public HttpBridgeSession()
         {
-            var handler = new HttpClientHandler
-            {
-                CookieContainer = _cookies,
-                UseCookies = true,
-                AllowAutoRedirect = true,
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-            };
-            _http = new HttpClient(handler)
-            {
-                BaseAddress = new Uri(BaseUrl),
-                Timeout = TimeSpan.FromMilliseconds(CallTimeoutMs),
-            };
-            _http.DefaultRequestHeaders.ExpectContinue = false;
+            RecreateClient(BridgeEnsure.BaseUrl);
         }
 
         public void SetPassword(string password)
@@ -56,8 +44,23 @@ namespace SkpPrinterUsb
                     return Snapshot.Fail("password_missing");
                 }
 
+                BridgeEnsure.EnsureRunning();
+                EnsureClientMatchesBridge();
+
                 var snapshot = new Snapshot { Ok = true, Connected = true };
-                EnsureLoggedIn();
+                try
+                {
+                    EnsureLoggedIn();
+                }
+                catch (HttpRequestException)
+                {
+                    // Bridge just started or kadmin session died — relaunch once.
+                    BridgeEnsure.EnsureRunning();
+                    EnsureClientMatchesBridge();
+                    ClearSession();
+                    EnsureLoggedIn();
+                }
+
                 var monitor = GetString("/home/monitor.html");
                 BridgeHtml.ApplyMonitor(monitor, snapshot);
 
@@ -109,6 +112,37 @@ namespace SkpPrinterUsb
             }
         }
 
+        void EnsureClientMatchesBridge()
+        {
+            var next = BridgeEnsure.BaseUrl;
+            if (string.Equals(next, _baseUrl, StringComparison.OrdinalIgnoreCase)) return;
+            ClearSession();
+            RecreateClient(next);
+        }
+
+        void RecreateClient(string baseUrl)
+        {
+            if (_http != null)
+            {
+                _http.Dispose();
+                _http = null;
+            }
+            _baseUrl = baseUrl;
+            var handler = new HttpClientHandler
+            {
+                CookieContainer = _cookies,
+                UseCookies = true,
+                AllowAutoRedirect = true,
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+            };
+            _http = new HttpClient(handler)
+            {
+                BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/"),
+                Timeout = TimeSpan.FromMilliseconds(CallTimeoutMs),
+            };
+            _http.DefaultRequestHeaders.ExpectContinue = false;
+        }
+
         void EnsureLoggedIn()
         {
             if (HasAuthCookie()) return;
@@ -124,7 +158,7 @@ namespace SkpPrinterUsb
             }))
             {
                 // Do not log form body — contains the printer password.
-                var response = _http.PostAsync("/home/status.html", content).GetAwaiter().GetResult();
+                var response = _http.PostAsync("home/status.html", content).GetAwaiter().GetResult();
                 var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                 if (!HasAuthCookie() || LooksLikePasswordError(body) || IsLoginErrorLocation(response))
                 {
@@ -136,7 +170,8 @@ namespace SkpPrinterUsb
 
         string GetString(string path)
         {
-            var response = _http.GetAsync(path).GetAwaiter().GetResult();
+            var relative = path.StartsWith("/") ? path.Substring(1) : path;
+            var response = _http.GetAsync(relative).GetAwaiter().GetResult();
             if ((int)response.StatusCode == 302 || (int)response.StatusCode == 301)
             {
                 var location = response.Headers.Location != null
@@ -159,7 +194,7 @@ namespace SkpPrinterUsb
 
         bool HasAuthCookie()
         {
-            var cookies = _cookies.GetCookies(new Uri(BaseUrl));
+            var cookies = _cookies.GetCookies(new Uri(_baseUrl));
             foreach (Cookie cookie in cookies)
             {
                 if (cookie != null &&
@@ -174,7 +209,7 @@ namespace SkpPrinterUsb
 
         void ClearSession()
         {
-            var cookies = _cookies.GetCookies(new Uri(BaseUrl));
+            var cookies = _cookies.GetCookies(new Uri(_baseUrl));
             foreach (Cookie cookie in cookies)
             {
                 if (cookie == null) continue;
@@ -219,7 +254,11 @@ namespace SkpPrinterUsb
 
         public void Dispose()
         {
-            _http.Dispose();
+            if (_http != null)
+            {
+                _http.Dispose();
+                _http = null;
+            }
         }
     }
 

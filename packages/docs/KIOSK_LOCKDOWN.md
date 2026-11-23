@@ -22,6 +22,7 @@ Use before production fleet rollout.
 - [ ] Local print spooler permissions limited to required printers
 - [ ] Deploy `tooling/scripts/kiosk/kiosk_shell.bat` → `C:\Kiosk\kiosk_shell.bat`
 - [ ] Deploy `tooling/scripts/kiosk/kiosk_watchdog.ps1` → `C:\Kiosk\kiosk_watchdog.ps1`
+- [ ] Brother `HttpToUsbBridge.exe` + `BrLauncher\HttpToUsbBridge.NetFramework.dll` installed; deploy latest `kiosk_shell.bat` and `skp_printer_usb.exe` so the **kiosk** session starts the bridge and opens USB EWS via `BridgeClient.GetDeviceUrl` (do not rely on logging into `kadmin` then switching users)
 
 ## Network
 

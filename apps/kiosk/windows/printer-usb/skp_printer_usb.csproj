@@ -40,6 +40,7 @@
     <Reference Include="System.Net.Http" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BridgeEnsure.cs" />
     <Compile Include="BridgeHtml.cs" />
     <Compile Include="HttpBridgeSession.cs" />
     <Compile Include="Program.cs" />
