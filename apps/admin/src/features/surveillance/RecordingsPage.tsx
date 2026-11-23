@@ -206,7 +206,7 @@ export function RecordingsPage() {
           }
         }
         const merged = [...byId.values()].sort(
-          (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+          (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
         );
         setItems(merged);
         setError(null);
