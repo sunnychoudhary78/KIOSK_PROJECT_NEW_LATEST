@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
+import { pickDefaultKioskName } from '../../core/kiosk/defaultKiosk';
 import {
   Button,
   EmptyState,
@@ -96,7 +97,7 @@ export function SupportPage() {
   const [resolution, setResolution] = useState<(typeof RESOLUTIONS)[number]['value']>('no_action');
   const [status, setStatus] = useState<'open' | 'resolved' | 'all'>('open');
   const [source, setSource] = useState<'all' | 'payment' | 'print' | 'kiosk'>('all');
-  const [kiosk, setKiosk] = useState('all');
+  const [kiosk, setKiosk] = useState('pending');
   const [search, setSearch] = useState('');
   const role = roleFromToken(token);
   const canResolve = role === 'admin' || role === 'operator' || role === 'viewer';
@@ -106,7 +107,12 @@ export function SupportPage() {
   const kiosks = Array.from(
     new Set(items.map((item) => item.kioskName).filter((name): name is string => Boolean(name))),
   ).sort();
-  const kioskFilter = kiosks.includes(kiosk) ? kiosk : 'all';
+  const kioskFilter =
+    kiosk === 'pending'
+      ? pickDefaultKioskName(kiosks)
+      : kiosks.includes(kiosk) || kiosk === 'all'
+        ? kiosk
+        : pickDefaultKioskName(kiosks);
   const visible = items.filter((item) => {
     if (kioskFilter !== 'all' && item.kioskName !== kioskFilter) return false;
     const q = search.trim().toLowerCase();
