@@ -10,6 +10,7 @@ class SkpOtpPinField extends StatelessWidget {
     this.focusNode,
     this.length = 6,
     this.enabled = true,
+    this.useNativeKeyboard = true,
     this.onCompleted,
     this.onChanged,
   });
@@ -18,6 +19,7 @@ class SkpOtpPinField extends StatelessWidget {
   final FocusNode? focusNode;
   final int length;
   final bool enabled;
+  final bool useNativeKeyboard;
   final ValueChanged<String>? onCompleted;
   final ValueChanged<String>? onChanged;
 
@@ -31,9 +33,16 @@ class SkpOtpPinField extends StatelessWidget {
             color: SkpColors.ink,
           ),
       decoration: BoxDecoration(
-        color: SkpColors.panel,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: SkpColors.line),
+        border: Border.all(color: SkpColors.line.withValues(alpha: 0.85)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
     );
 
@@ -43,14 +52,23 @@ class SkpOtpPinField extends StatelessWidget {
         focusNode: focusNode,
         length: length,
         enabled: enabled,
-        autofocus: true,
+        autofocus: useNativeKeyboard,
+        useNativeKeyboard: useNativeKeyboard,
+        showCursor: true,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         autofillHints: const [AutofillHints.oneTimeCode],
         defaultPinTheme: base,
         focusedPinTheme: base.copyWith(
           decoration: base.decoration!.copyWith(
-            border: Border.all(color: SkpColors.accent, width: 1.6),
+            border: Border.all(color: SkpColors.accent, width: 1.8),
+            boxShadow: [
+              BoxShadow(
+                color: SkpColors.accent.withValues(alpha: 0.18),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
         ),
         submittedPinTheme: base.copyWith(

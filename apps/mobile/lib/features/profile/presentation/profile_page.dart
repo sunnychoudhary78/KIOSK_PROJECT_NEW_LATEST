@@ -34,6 +34,7 @@ class ProfilePage extends ConsumerWidget {
                 SkpPageHeader(
                   title: l10n.profileTitle,
                   showBack: !embedded,
+                  trailing: embedded ? const SkpAppMenuButton() : null,
                 ),
                 const SizedBox(height: 24),
                 SkpPanelCard(

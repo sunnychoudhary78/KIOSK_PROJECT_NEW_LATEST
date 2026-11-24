@@ -61,15 +61,20 @@ class _NearbyKiosksPageState extends ConsumerState<NearbyKiosksPage> {
             title: l10n.nearestKiosks,
             subtitle: l10n.nearestHelper,
             showBack: !widget.embedded,
-            trailing: !state.loading &&
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!state.loading &&
                     state.error == null &&
-                    state.items.isNotEmpty
-                ? IconButton(
+                    state.items.isNotEmpty)
+                  IconButton(
                     tooltip: l10n.viewOnMap,
                     onPressed: () => _openMap(state.items),
                     icon: const Icon(Icons.map_outlined),
-                  )
-                : null,
+                  ),
+                if (widget.embedded) const SkpAppMenuButton(),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
           if (state.loading)

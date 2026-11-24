@@ -34,7 +34,6 @@ class AppRoutes {
   static const findServiceContacts = '/find-services/contacts';
   static const fuelStations = '/fuel-stations';
   static const astrologyPandit = '/astrology/contact-pandit';
-  static const astrologyAstrologer = '/astrology/contact-astrologer';
   static const profile = '/profile';
   static const howItWorks = '/how-it-works';
   static const about = '/about';
@@ -113,14 +112,6 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (_) => const _AuthGate(
             child: AstrologyContactsPage(kind: AstrologyContactKind.pandit),
-          ),
-        );
-      case AppRoutes.astrologyAstrologer:
-        return MaterialPageRoute(
-          builder: (_) => const _AuthGate(
-            child: AstrologyContactsPage(
-              kind: AstrologyContactKind.astrologer,
-            ),
           ),
         );
       case AppRoutes.profile:
