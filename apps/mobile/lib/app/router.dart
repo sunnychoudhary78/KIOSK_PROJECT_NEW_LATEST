@@ -14,6 +14,8 @@ import 'package:skp_mobile/features/otp_print/presentation/otp_print_success_pag
 import 'package:skp_mobile/features/find_services/domain/local_service.dart';
 import 'package:skp_mobile/features/find_services/presentation/find_service_contacts_page.dart';
 import 'package:skp_mobile/features/find_services/presentation/find_services_page.dart';
+import 'package:skp_mobile/features/astrology_contacts/domain/astrology_contact.dart';
+import 'package:skp_mobile/features/astrology_contacts/presentation/astrology_contacts_page.dart';
 import 'package:skp_mobile/features/fuel_stations/presentation/fuel_stations_page.dart';
 import 'package:skp_mobile/features/profile/presentation/about_page.dart';
 import 'package:skp_mobile/features/profile/presentation/how_it_works_page.dart';
@@ -31,6 +33,8 @@ class AppRoutes {
   static const findServices = '/find-services';
   static const findServiceContacts = '/find-services/contacts';
   static const fuelStations = '/fuel-stations';
+  static const astrologyPandit = '/astrology/contact-pandit';
+  static const astrologyAstrologer = '/astrology/contact-astrologer';
   static const profile = '/profile';
   static const howItWorks = '/how-it-works';
   static const about = '/about';
@@ -104,6 +108,20 @@ class AppRouter {
       case AppRoutes.fuelStations:
         return MaterialPageRoute(
           builder: (_) => const _AuthGate(child: FuelStationsPage()),
+        );
+      case AppRoutes.astrologyPandit:
+        return MaterialPageRoute(
+          builder: (_) => const _AuthGate(
+            child: AstrologyContactsPage(kind: AstrologyContactKind.pandit),
+          ),
+        );
+      case AppRoutes.astrologyAstrologer:
+        return MaterialPageRoute(
+          builder: (_) => const _AuthGate(
+            child: AstrologyContactsPage(
+              kind: AstrologyContactKind.astrologer,
+            ),
+          ),
         );
       case AppRoutes.profile:
         return MaterialPageRoute(

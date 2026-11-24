@@ -128,6 +128,22 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           ),
           const SizedBox(height: 14),
           SkpActionTile(
+            icon: Icons.auto_awesome_outlined,
+            title: l10n.astrologyPanditTileTitle,
+            subtitle: l10n.astrologyPanditTileSubtitle,
+            onTap: () =>
+                Navigator.of(context).pushNamed(AppRoutes.astrologyPandit),
+          ),
+          const SizedBox(height: 14),
+          SkpActionTile(
+            icon: Icons.nightlight_round,
+            title: l10n.astrologyAstrologerTileTitle,
+            subtitle: l10n.astrologyAstrologerTileSubtitle,
+            onTap: () => Navigator.of(context)
+                .pushNamed(AppRoutes.astrologyAstrologer),
+          ),
+          const SizedBox(height: 14),
+          SkpActionTile(
             icon: Icons.location_on_outlined,
             title: l10n.nearbyTileTitle,
             subtitle: l10n.nearbyTileSubtitle,

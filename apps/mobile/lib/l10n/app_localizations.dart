@@ -356,6 +356,72 @@ abstract class AppLocalizations {
   /// **'EV'**
   String get fuelKindEv;
 
+  /// No description provided for @astrologyPanditTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Pandit'**
+  String get astrologyPanditTileTitle;
+
+  /// No description provided for @astrologyPanditTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name, rating, and phone when you need a pandit.'**
+  String get astrologyPanditTileSubtitle;
+
+  /// No description provided for @astrologyAstrologerTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Astrologer'**
+  String get astrologyAstrologerTileTitle;
+
+  /// No description provided for @astrologyAstrologerTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name, rating, and phone for astrology guidance.'**
+  String get astrologyAstrologerTileSubtitle;
+
+  /// No description provided for @astrologyPanditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Pandit'**
+  String get astrologyPanditTitle;
+
+  /// No description provided for @astrologyAstrologerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Astrologer'**
+  String get astrologyAstrologerTitle;
+
+  /// No description provided for @astrologyPanditHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Show number to reveal the phone.'**
+  String get astrologyPanditHelper;
+
+  /// No description provided for @astrologyAstrologerHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Show number to reveal the phone.'**
+  String get astrologyAstrologerHelper;
+
+  /// No description provided for @astrologyShowNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Show number'**
+  String get astrologyShowNumber;
+
+  /// No description provided for @astrologyContactHint.
+  ///
+  /// In en, this message translates to:
+  /// **'To contact this person, you can call them directly.'**
+  String get astrologyContactHint;
+
+  /// No description provided for @astrologyContactsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts available right now.'**
+  String get astrologyContactsEmpty;
+
   /// No description provided for @activeSessionTitle.
   ///
   /// In en, this message translates to:

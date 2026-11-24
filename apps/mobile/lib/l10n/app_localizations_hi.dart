@@ -152,6 +152,43 @@ class AppLocalizationsHi extends AppLocalizations {
   String get fuelKindEv => 'ईवी';
 
   @override
+  String get astrologyPanditTileTitle => 'पंडित से संपर्क';
+
+  @override
+  String get astrologyPanditTileSubtitle =>
+      'नाम, रेटिंग और फ़ोन — जब पंडित जी की ज़रूरत हो।';
+
+  @override
+  String get astrologyAstrologerTileTitle => 'ज्योतिषी से संपर्क';
+
+  @override
+  String get astrologyAstrologerTileSubtitle =>
+      'ज्योतिष सलाह के लिए नाम, रेटिंग और फ़ोन।';
+
+  @override
+  String get astrologyPanditTitle => 'पंडित से संपर्क';
+
+  @override
+  String get astrologyAstrologerTitle => 'ज्योतिषी से संपर्क';
+
+  @override
+  String get astrologyPanditHelper => 'फ़ोन देखने के लिए Show number टैप करें।';
+
+  @override
+  String get astrologyAstrologerHelper =>
+      'फ़ोन देखने के लिए Show number टैप करें।';
+
+  @override
+  String get astrologyShowNumber => 'नंबर दिखाएँ';
+
+  @override
+  String get astrologyContactHint =>
+      'इस व्यक्ति से संपर्क करने के लिए आप सीधे कॉल कर सकते हैं।';
+
+  @override
+  String get astrologyContactsEmpty => 'अभी कोई संपर्क उपलब्ध नहीं है।';
+
+  @override
   String get activeSessionTitle => 'सक्रिय प्रिंट सत्र';
 
   @override

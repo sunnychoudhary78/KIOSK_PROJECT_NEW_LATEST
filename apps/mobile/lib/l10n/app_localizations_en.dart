@@ -152,6 +152,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fuelKindEv => 'EV';
 
   @override
+  String get astrologyPanditTileTitle => 'Contact Pandit';
+
+  @override
+  String get astrologyPanditTileSubtitle =>
+      'Name, rating, and phone when you need a pandit.';
+
+  @override
+  String get astrologyAstrologerTileTitle => 'Contact Astrologer';
+
+  @override
+  String get astrologyAstrologerTileSubtitle =>
+      'Name, rating, and phone for astrology guidance.';
+
+  @override
+  String get astrologyPanditTitle => 'Contact Pandit';
+
+  @override
+  String get astrologyAstrologerTitle => 'Contact Astrologer';
+
+  @override
+  String get astrologyPanditHelper => 'Tap Show number to reveal the phone.';
+
+  @override
+  String get astrologyAstrologerHelper =>
+      'Tap Show number to reveal the phone.';
+
+  @override
+  String get astrologyShowNumber => 'Show number';
+
+  @override
+  String get astrologyContactHint =>
+      'To contact this person, you can call them directly.';
+
+  @override
+  String get astrologyContactsEmpty => 'No contacts available right now.';
+
+  @override
   String get activeSessionTitle => 'Active print session';
 
   @override
