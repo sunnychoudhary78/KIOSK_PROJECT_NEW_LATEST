@@ -1,5 +1,5 @@
-// Auto-derived from API local_services seed (same directory kiosk shows).
-// Used when UAT rejects citizen GET /local-services.
+// Synced from UAT GET /local-services (admin).
+// Used when citizen GET /local-services is forbidden on UAT.
 import 'package:skp_mobile/features/find_services/domain/local_service.dart';
 
 abstract final class FindServicesCatalog {
@@ -16,6 +16,9 @@ abstract final class FindServicesCatalog {
         LocalServiceContact(name: 'Singla RO Mark', phone: '9711569405'),
         LocalServiceContact(name: 'Hare Ram Washing Machine Fridge', phone: '9289350388'),
         LocalServiceContact(name: 'Universal Refrigerator', phone: '9911663298'),
+        LocalServiceContact(name: 'Gaur city ac services', phone: '8218935430'),
+        LocalServiceContact(name: 'Kanak AC Repair', phone: '8792910820'),
+        LocalServiceContact(name: 'Rakesh', phone: '9220505159'),
       ],
     ),
     LocalServiceCategory(
@@ -115,6 +118,8 @@ abstract final class FindServicesCatalog {
         LocalServiceContact(name: 'Ramesh', phone: '9971490113'),
         LocalServiceContact(name: 'Dev', phone: '7393074982'),
         LocalServiceContact(name: 'Ashwani', phone: '7204543928'),
+        LocalServiceContact(name: 'DEERAJ KUMAR', phone: '8506850863'),
+        LocalServiceContact(name: 'Vikrant Singh', phone: '9211998205'),
       ],
     ),
     LocalServiceCategory(
@@ -129,6 +134,9 @@ abstract final class FindServicesCatalog {
         LocalServiceContact(name: 'Manmohan', phone: '9244639501'),
         LocalServiceContact(name: 'Sumit', phone: '8821973573'),
         LocalServiceContact(name: 'Mahesh', phone: '9310798321'),
+        LocalServiceContact(name: 'kapil', phone: '9289592326'),
+        LocalServiceContact(name: 'S.r pigeon Net services', phone: '9643070503'),
+        LocalServiceContact(name: 'Pigeon Net', phone: '9193277450'),
       ],
     ),
     LocalServiceCategory(
@@ -159,16 +167,9 @@ abstract final class FindServicesCatalog {
         LocalServiceContact(name: 'JS Painting Contractor', phone: '7947132876'),
         LocalServiceContact(name: 'Ganga Paint Service', phone: '7801889934'),
         LocalServiceContact(name: 'Ashwani', phone: '7204543928'),
-      ],
-    ),
-    LocalServiceCategory(
-      id: 'a0000000-0000-4000-8000-000000000011',
-      slug: 'mason',
-      name: 'Mason',
-      contacts: [
-        LocalServiceContact(name: 'Javed', phone: '9711012090'),
-        LocalServiceContact(name: 'Farukh', phone: '7830826379'),
-        LocalServiceContact(name: 'Ashwani', phone: '7204543928'),
+        LocalServiceContact(name: 'Pradeep', phone: '8460520099'),
+        LocalServiceContact(name: 'DMAPENTER', phone: '8867917109'),
+        LocalServiceContact(name: 'Namo paints', phone: '8401334547'),
       ],
     ),
     LocalServiceCategory(
@@ -177,6 +178,14 @@ abstract final class FindServicesCatalog {
       name: 'Interior',
       contacts: [
         LocalServiceContact(name: 'Amir Khan', phone: '9205105071'),
+        LocalServiceContact(name: 'SASHI INTERIOR', phone: '9212402153'),
+        LocalServiceContact(name: 'DECOORY INTERIOR', phone: '9821545511'),
+        LocalServiceContact(name: 'Sky intiriors', phone: '9911144962'),
+        LocalServiceContact(name: 'Decory', phone: '9821545511'),
+        LocalServiceContact(name: 'Royal', phone: '8130720245'),
+        LocalServiceContact(name: 'Ashish', phone: '9717160781'),
+        LocalServiceContact(name: 'interospace', phone: '9315145672'),
+        LocalServiceContact(name: 'creative', phone: '9319983962'),
       ],
     ),
     LocalServiceCategory(
@@ -189,6 +198,12 @@ abstract final class FindServicesCatalog {
         LocalServiceContact(name: 'GSS Car Service', phone: '8305688428'),
         LocalServiceContact(name: 'Go Mechanic', phone: '8882504086'),
         LocalServiceContact(name: 'Singla Motor', phone: '8460405690'),
+        LocalServiceContact(name: 'AID4 WHEELS', phone: '9911913397'),
+        LocalServiceContact(name: 'MUKUL GARAG', phone: '8700132657'),
+        LocalServiceContact(name: 'GOUR CITY MOTOR& CAR', phone: '9891412143'),
+        LocalServiceContact(name: 'ALPHA AUTOMOBILE', phone: '9582348361'),
+        LocalServiceContact(name: 'GOUR GENNIES AUTOMOBILES', phone: '8882504086'),
+        LocalServiceContact(name: 'SINGLA MOTOR', phone: '8460405690'),
       ],
     ),
     LocalServiceCategory(
@@ -216,6 +231,12 @@ abstract final class FindServicesCatalog {
         LocalServiceContact(name: 'Saifi', phone: '9910576459'),
         LocalServiceContact(name: 'Babar Khan Aluminium', phone: '7351938778'),
         LocalServiceContact(name: 'Rihan Khan', phone: '9193084146'),
+        LocalServiceContact(name: 'banti', phone: '9891507411'),
+        LocalServiceContact(name: 'Qulity fabricater', phone: '9027036957'),
+        LocalServiceContact(name: 'N.S', phone: '9811488056'),
+        LocalServiceContact(name: 'A.n aluminume', phone: '8123606964'),
+        LocalServiceContact(name: 'National steel', phone: '9811464999'),
+        LocalServiceContact(name: 'J.s', phone: '8218814151'),
       ],
     ),
     LocalServiceCategory(
@@ -227,6 +248,46 @@ abstract final class FindServicesCatalog {
         LocalServiceContact(name: 'Farukh', phone: '7830826379'),
         LocalServiceContact(name: 'Ashwani Kumar', phone: '7204543928'),
         LocalServiceContact(name: 'M.D. Arsaf', phone: '9012474055'),
+        LocalServiceContact(name: 'Plumber  service', phone: '7906243201'),
+        LocalServiceContact(name: 'Bala ji', phone: '8700458164'),
+        LocalServiceContact(name: 'Ato z', phone: '7048831976'),
+        LocalServiceContact(name: 'Arshad', phone: '8123987714'),
+        LocalServiceContact(name: 'RA', phone: '8460209168'),
+        LocalServiceContact(name: 'Chand', phone: '8147959543'),
+      ],
+    ),
+    LocalServiceCategory(
+      id: '69cf0e39-abc1-4386-a928-98c6730df7c5',
+      slug: 'gas-stove-repair-2',
+      name: 'Gas Stove  Repair',
+      contacts: [
+        LocalServiceContact(name: 'SHOUKIN', phone: '7703949167'),
+        LocalServiceContact(name: 'RUMMA GAS STOVE REPAIR', phone: '9650960165'),
+        LocalServiceContact(name: 'SK GAS REPAIER', phone: '8123785579'),
+        LocalServiceContact(name: 'URBAN GAS STOVE REPAIRE', phone: '9540370395'),
+        LocalServiceContact(name: 'JK GAS STOVE REPAIRE', phone: '9690759169'),
+        LocalServiceContact(name: 'ISHU GAS STOVE REPAIRE', phone: '9675737573'),
+        LocalServiceContact(name: 'STAR  GAS REPAIRE', phone: '9582914702'),
+        LocalServiceContact(name: 'JANTA KITCHIN GAS REPAIRE', phone: '8791814702'),
+        LocalServiceContact(name: 'GAS AND KITCHEN REPAIRE', phone: '9289642385'),
+        LocalServiceContact(name: 'KITCHEN GAS REPAIRE', phone: '9582914702'),
+      ],
+    ),
+    LocalServiceCategory(
+      id: 'b285cba2-e33e-42df-9914-478fe077e134',
+      slug: 'tempo-driver',
+      name: 'Tempo&Driver',
+      contacts: [
+        LocalServiceContact(name: 'PRADEEP', phone: '8800562984'),
+        LocalServiceContact(name: 'CHARAN SINGH', phone: '9560252591'),
+        LocalServiceContact(name: 'Gaur city pakesrs Movers', phone: '9711267842'),
+        LocalServiceContact(name: 'Pakesrs and movers  noida', phone: '7617641337'),
+        LocalServiceContact(name: 'guicker packers and movers', phone: '9718001399'),
+        LocalServiceContact(name: 'guicker packers and movers', phone: '9718001399'),
+        LocalServiceContact(name: 'Avadh Tempo service', phone: '9585703623'),
+        LocalServiceContact(name: 'Varma lagestricts', phone: '8920131094'),
+        LocalServiceContact(name: 'Noida home  Movers', phone: '9310316295'),
+        LocalServiceContact(name: 'Ayush Tempo', phone: '8826766083'),
       ],
     ),
   ];

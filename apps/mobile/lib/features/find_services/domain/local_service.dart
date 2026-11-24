@@ -85,6 +85,7 @@ IconData localServiceIconFor(String slug) {
     case 'carpenter':
       return Icons.carpenter_outlined;
     case 'gas-stove-repair':
+    case 'gas-stove-repair-2':
       return Icons.local_fire_department_outlined;
     case 'electrician':
       return Icons.electrical_services_outlined;
@@ -106,7 +107,17 @@ IconData localServiceIconFor(String slug) {
       return Icons.construction_outlined;
     case 'plumber':
       return Icons.plumbing_outlined;
+    case 'tempo-driver':
+    case 'tempodriver':
+    case 'tempo&driver':
+      return Icons.local_shipping_outlined;
     default:
+      if (slug.contains('tempo') || slug.contains('driver')) {
+        return Icons.local_shipping_outlined;
+      }
+      if (slug.contains('gas')) {
+        return Icons.local_fire_department_outlined;
+      }
       return Icons.handyman_outlined;
   }
 }
@@ -124,6 +135,7 @@ Color localServiceAccentFor(String slug) {
     case 'carpenter':
       return const Color(0xFFE65100);
     case 'gas-stove-repair':
+    case 'gas-stove-repair-2':
       return const Color(0xFF00838F);
     case 'electrician':
       return const Color(0xFFF57F17);
@@ -145,7 +157,17 @@ Color localServiceAccentFor(String slug) {
       return const Color(0xFF1A237E);
     case 'plumber':
       return const Color(0xFF0091EA);
+    case 'tempo-driver':
+    case 'tempodriver':
+    case 'tempo&driver':
+      return const Color(0xFF455A64);
     default:
+      if (slug.contains('tempo') || slug.contains('driver')) {
+        return const Color(0xFF455A64);
+      }
+      if (slug.contains('gas')) {
+        return const Color(0xFF00838F);
+      }
       return SkpColors.accent;
   }
 }
