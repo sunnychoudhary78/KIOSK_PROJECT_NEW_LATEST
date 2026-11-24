@@ -31,7 +31,7 @@
   "findServicesHelper": "Choose a trade to see names and phone numbers.",
   "findServicesEmpty": "No services available",
   "findServicesEmptyHelper": "Pull to refresh, or try again later.",
-  "findServicesContactsHelper": "Tap a contact to call.",
+  "findServicesContactsHelper": "Tap a name for more info.",
   "findServicesNoContacts": "No numbers in this list.",
   "findServicesContactCount": "{count} contacts",
   "@findServicesContactCount": {
@@ -39,6 +39,9 @@
       "count": { "type": "int" }
     }
   },
+  "findServicesMoreInfo": "More info",
+  "findServicesContactHint": "To contact this person, you can call them directly.",
+  "findServicesCall": "Call",
   "couldNotPlaceCall": "Could not place the call.",
   "activeSessionTitle": "Active print session",
   "statusPayNow": "Pay now",

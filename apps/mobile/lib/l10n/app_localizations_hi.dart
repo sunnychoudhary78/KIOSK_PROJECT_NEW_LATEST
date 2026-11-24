@@ -96,7 +96,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get findServicesContactsHelper =>
-      'कॉल करने के लिए संपर्क पर टैप करें।';
+      'ज़्यादा जानकारी के लिए नाम पर टैप करें।';
 
   @override
   String get findServicesNoContacts => 'इस सूची में कोई नंबर नहीं है।';
@@ -105,6 +105,16 @@ class AppLocalizationsHi extends AppLocalizations {
   String findServicesContactCount(int count) {
     return '$count संपर्क';
   }
+
+  @override
+  String get findServicesMoreInfo => 'और जानकारी';
+
+  @override
+  String get findServicesContactHint =>
+      'इस व्यक्ति से संपर्क करने के लिए आप सीधे कॉल कर सकते हैं।';
+
+  @override
+  String get findServicesCall => 'कॉल करें';
 
   @override
   String get couldNotPlaceCall => 'कॉल नहीं हो सकी।';

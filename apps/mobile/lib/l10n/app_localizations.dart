@@ -257,7 +257,7 @@ abstract class AppLocalizations {
   /// No description provided for @findServicesContactsHelper.
   ///
   /// In en, this message translates to:
-  /// **'Tap a contact to call.'**
+  /// **'Tap a name for more info.'**
   String get findServicesContactsHelper;
 
   /// No description provided for @findServicesNoContacts.
@@ -271,6 +271,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} contacts'**
   String findServicesContactCount(int count);
+
+  /// No description provided for @findServicesMoreInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'More info'**
+  String get findServicesMoreInfo;
+
+  /// No description provided for @findServicesContactHint.
+  ///
+  /// In en, this message translates to:
+  /// **'To contact this person, you can call them directly.'**
+  String get findServicesContactHint;
+
+  /// No description provided for @findServicesCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get findServicesCall;
 
   /// No description provided for @couldNotPlaceCall.
   ///

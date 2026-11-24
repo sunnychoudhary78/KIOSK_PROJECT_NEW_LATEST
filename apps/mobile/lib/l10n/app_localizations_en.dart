@@ -95,7 +95,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get findServicesEmptyHelper => 'Pull to refresh, or try again later.';
 
   @override
-  String get findServicesContactsHelper => 'Tap a contact to call.';
+  String get findServicesContactsHelper => 'Tap a name for more info.';
 
   @override
   String get findServicesNoContacts => 'No numbers in this list.';
@@ -104,6 +104,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String findServicesContactCount(int count) {
     return '$count contacts';
   }
+
+  @override
+  String get findServicesMoreInfo => 'More info';
+
+  @override
+  String get findServicesContactHint =>
+      'To contact this person, you can call them directly.';
+
+  @override
+  String get findServicesCall => 'Call';
 
   @override
   String get couldNotPlaceCall => 'Could not place the call.';
