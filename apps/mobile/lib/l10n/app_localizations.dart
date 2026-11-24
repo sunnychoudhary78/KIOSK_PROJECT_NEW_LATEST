@@ -218,6 +218,66 @@ abstract class AppLocalizations {
   /// **'See active kiosks sorted by distance from you.'**
   String get nearbyTileSubtitle;
 
+  /// No description provided for @findServicesTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find services'**
+  String get findServicesTileTitle;
+
+  /// No description provided for @findServicesTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mechanics, tailors, plumbers, and more near you.'**
+  String get findServicesTileSubtitle;
+
+  /// No description provided for @findServicesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find services'**
+  String get findServicesTitle;
+
+  /// No description provided for @findServicesHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a trade to see names and phone numbers.'**
+  String get findServicesHelper;
+
+  /// No description provided for @findServicesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No services available'**
+  String get findServicesEmpty;
+
+  /// No description provided for @findServicesEmptyHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull to refresh, or try again later.'**
+  String get findServicesEmptyHelper;
+
+  /// No description provided for @findServicesContactsHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a contact to call.'**
+  String get findServicesContactsHelper;
+
+  /// No description provided for @findServicesNoContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'No numbers in this list.'**
+  String get findServicesNoContacts;
+
+  /// No description provided for @findServicesContactCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} contacts'**
+  String findServicesContactCount(int count);
+
+  /// No description provided for @couldNotPlaceCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not place the call.'**
+  String get couldNotPlaceCall;
+
   /// No description provided for @activeSessionTitle.
   ///
   /// In en, this message translates to:

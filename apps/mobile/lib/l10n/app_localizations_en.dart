@@ -75,6 +75,40 @@ class AppLocalizationsEn extends AppLocalizations {
       'See active kiosks sorted by distance from you.';
 
   @override
+  String get findServicesTileTitle => 'Find services';
+
+  @override
+  String get findServicesTileSubtitle =>
+      'Mechanics, tailors, plumbers, and more near you.';
+
+  @override
+  String get findServicesTitle => 'Find services';
+
+  @override
+  String get findServicesHelper =>
+      'Choose a trade to see names and phone numbers.';
+
+  @override
+  String get findServicesEmpty => 'No services available';
+
+  @override
+  String get findServicesEmptyHelper => 'Pull to refresh, or try again later.';
+
+  @override
+  String get findServicesContactsHelper => 'Tap a contact to call.';
+
+  @override
+  String get findServicesNoContacts => 'No numbers in this list.';
+
+  @override
+  String findServicesContactCount(int count) {
+    return '$count contacts';
+  }
+
+  @override
+  String get couldNotPlaceCall => 'Could not place the call.';
+
+  @override
   String get activeSessionTitle => 'Active print session';
 
   @override

@@ -112,6 +112,14 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           ),
           const SizedBox(height: 14),
           SkpActionTile(
+            icon: Icons.handyman_outlined,
+            title: l10n.findServicesTileTitle,
+            subtitle: l10n.findServicesTileSubtitle,
+            onTap: () =>
+                Navigator.of(context).pushNamed(AppRoutes.findServices),
+          ),
+          const SizedBox(height: 14),
+          SkpActionTile(
             icon: Icons.location_on_outlined,
             title: l10n.nearbyTileTitle,
             subtitle: l10n.nearbyTileSubtitle,

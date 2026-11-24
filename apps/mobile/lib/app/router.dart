@@ -11,6 +11,9 @@ import 'package:skp_mobile/features/otp_print/presentation/otp_print_page.dart';
 import 'package:skp_mobile/features/otp_print/presentation/otp_print_payment_page.dart';
 import 'package:skp_mobile/features/otp_print/presentation/payment_support_page.dart';
 import 'package:skp_mobile/features/otp_print/presentation/otp_print_success_page.dart';
+import 'package:skp_mobile/features/find_services/domain/local_service.dart';
+import 'package:skp_mobile/features/find_services/presentation/find_service_contacts_page.dart';
+import 'package:skp_mobile/features/find_services/presentation/find_services_page.dart';
 import 'package:skp_mobile/features/profile/presentation/about_page.dart';
 import 'package:skp_mobile/features/profile/presentation/how_it_works_page.dart';
 import 'package:skp_mobile/features/profile/presentation/profile_page.dart';
@@ -24,6 +27,8 @@ class AppRoutes {
   static const otpPrintSuccess = '/otp-print/success';
   static const nearbyKiosks = '/nearby-kiosks';
   static const nearbyKiosksMap = '/nearby-kiosks/map';
+  static const findServices = '/find-services';
+  static const findServiceContacts = '/find-services/contacts';
   static const profile = '/profile';
   static const howItWorks = '/how-it-works';
   static const about = '/about';
@@ -73,6 +78,25 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (_) => _AuthGate(
             child: NearbyKiosksMapPage(kiosks: kiosks),
+          ),
+        );
+      case AppRoutes.findServices:
+        return MaterialPageRoute(
+          builder: (_) => const _AuthGate(child: FindServicesPage()),
+        );
+      case AppRoutes.findServiceContacts:
+        final contactArgs = settings.arguments;
+        final category = contactArgs is LocalServiceCategory
+            ? contactArgs
+            : const LocalServiceCategory(
+                id: '',
+                slug: '',
+                name: 'Service',
+                contacts: [],
+              );
+        return MaterialPageRoute(
+          builder: (_) => _AuthGate(
+            child: FindServiceContactsPage(category: category),
           ),
         );
       case AppRoutes.profile:

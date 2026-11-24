@@ -74,6 +74,42 @@ class AppLocalizationsHi extends AppLocalizations {
   String get nearbyTileSubtitle => 'आपसे दूरी के अनुसार सक्रिय कियोस्क देखें।';
 
   @override
+  String get findServicesTileTitle => 'सेवाएँ खोजें';
+
+  @override
+  String get findServicesTileSubtitle =>
+      'मैकेनिक, दर्ज़ी, प्लंबर और अन्य स्थानीय सेवाएँ।';
+
+  @override
+  String get findServicesTitle => 'सेवाएँ खोजें';
+
+  @override
+  String get findServicesHelper =>
+      'नाम और फ़ोन नंबर देखने के लिए कोई सेवा चुनें।';
+
+  @override
+  String get findServicesEmpty => 'कोई सेवा उपलब्ध नहीं';
+
+  @override
+  String get findServicesEmptyHelper =>
+      'रिफ़्रेश करें, या बाद में फिर कोशिश करें।';
+
+  @override
+  String get findServicesContactsHelper =>
+      'कॉल करने के लिए संपर्क पर टैप करें।';
+
+  @override
+  String get findServicesNoContacts => 'इस सूची में कोई नंबर नहीं है।';
+
+  @override
+  String findServicesContactCount(int count) {
+    return '$count संपर्क';
+  }
+
+  @override
+  String get couldNotPlaceCall => 'कॉल नहीं हो सकी।';
+
+  @override
   String get activeSessionTitle => 'सक्रिय प्रिंट सत्र';
 
   @override

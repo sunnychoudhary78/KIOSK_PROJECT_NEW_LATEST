@@ -25,6 +25,21 @@
   "uploadTileSubtitle": "Select documents and receive your kiosk OTP by SMS.",
   "nearbyTileTitle": "Find nearest kiosk",
   "nearbyTileSubtitle": "See active kiosks sorted by distance from you.",
+  "findServicesTileTitle": "Find services",
+  "findServicesTileSubtitle": "Mechanics, tailors, plumbers, and more near you.",
+  "findServicesTitle": "Find services",
+  "findServicesHelper": "Choose a trade to see names and phone numbers.",
+  "findServicesEmpty": "No services available",
+  "findServicesEmptyHelper": "Pull to refresh, or try again later.",
+  "findServicesContactsHelper": "Tap a contact to call.",
+  "findServicesNoContacts": "No numbers in this list.",
+  "findServicesContactCount": "{count} contacts",
+  "@findServicesContactCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "couldNotPlaceCall": "Could not place the call.",
   "activeSessionTitle": "Active print session",
   "statusPayNow": "Pay now",
   "statusOtpSent": "OTP sent",

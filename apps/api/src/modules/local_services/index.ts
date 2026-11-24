@@ -18,7 +18,7 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
 
   router.get(
     '/local-services',
-    authRequired(deps.config, ['admin', 'device']),
+    authRequired(deps.config, ['admin', 'device', 'citizen']),
     assertActiveDevice(deps.db),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
