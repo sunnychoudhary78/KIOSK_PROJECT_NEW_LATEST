@@ -1,5 +1,4 @@
-// Synced from UAT GET /local-services (admin).
-// Used when citizen GET /local-services is forbidden on UAT.
+// Synced from live UAT. Used only if citizen GET still returns 403.
 import 'package:skp_mobile/features/find_services/domain/local_service.dart';
 
 abstract final class FindServicesCatalog {

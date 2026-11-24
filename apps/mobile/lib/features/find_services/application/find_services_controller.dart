@@ -26,8 +26,8 @@ class FindServicesNotifier extends Notifier<FindServicesState> {
       final result = await ref.read(apiClientProvider).get('/local-services');
       state = FindServicesState(categories: _parseCategories(result));
     } on ApiException catch (error) {
-      // UAT still allows only admin/device for this route. Citizen gets 403.
-      // Show the same seeded directory the kiosk ships with until UAT allows citizen.
+      // Prefer live API so admin panel changes show up. Bundle only if UAT
+      // still rejects citizen (403) before that deploy lands.
       if (_shouldUseBundledCatalog(error)) {
         state = const FindServicesState(
           categories: FindServicesCatalog.categories,

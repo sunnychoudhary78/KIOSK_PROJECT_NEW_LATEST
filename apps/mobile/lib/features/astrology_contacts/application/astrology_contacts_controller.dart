@@ -43,11 +43,11 @@ class AstrologyContactsNotifier extends Notifier<AstrologyContactsState> {
   }
 
   bool _shouldUseCatalog(ApiException error) {
-    if (error.statusCode == 401 || error.statusCode == 403) return true;
+    // Prefer live API. Bundle only when UAT still blocks citizen.
+    if (error.statusCode == 403) return true;
     final message = error.message.toLowerCase();
-    return message.contains('principal') ||
-        error.code == 'forbidden' ||
-        error.code == 'unauthorized';
+    return message.contains('principal type not allowed') ||
+        error.code == 'forbidden';
   }
 
   List<AstrologyContact> _parseItems(
