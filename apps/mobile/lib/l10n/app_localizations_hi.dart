@@ -120,6 +120,38 @@ class AppLocalizationsHi extends AppLocalizations {
   String get couldNotPlaceCall => 'कॉल नहीं हो सकी।';
 
   @override
+  String get fuelStationsTileTitle => 'ईंधन स्टेशन';
+
+  @override
+  String get fuelStationsTileSubtitle =>
+      'आपके पास पेट्रोल, डीज़ल, सीएनजी और ईवी स्टेशन।';
+
+  @override
+  String get fuelStationsTitle => 'ईंधन स्टेशन';
+
+  @override
+  String get fuelStationsHelper => '5 किमी के अंदर स्टेशन, दूरी के अनुसार।';
+
+  @override
+  String get fuelStationsEmpty => 'आसपास कोई स्टेशन नहीं';
+
+  @override
+  String get fuelStationsEmptyHelper =>
+      'दूसरा फ़िल्टर आज़माएँ, या स्टेशन के करीब जाएँ।';
+
+  @override
+  String get fuelKindAll => 'सभी';
+
+  @override
+  String get fuelKindPetrolDiesel => 'पेट्रोल/डीज़ल';
+
+  @override
+  String get fuelKindCng => 'सीएनजी';
+
+  @override
+  String get fuelKindEv => 'ईवी';
+
+  @override
   String get activeSessionTitle => 'सक्रिय प्रिंट सत्र';
 
   @override

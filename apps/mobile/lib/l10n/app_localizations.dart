@@ -296,6 +296,66 @@ abstract class AppLocalizations {
   /// **'Could not place the call.'**
   String get couldNotPlaceCall;
 
+  /// No description provided for @fuelStationsTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel stations'**
+  String get fuelStationsTileTitle;
+
+  /// No description provided for @fuelStationsTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Petrol, diesel, CNG, and EV stations near you.'**
+  String get fuelStationsTileSubtitle;
+
+  /// No description provided for @fuelStationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel stations'**
+  String get fuelStationsTitle;
+
+  /// No description provided for @fuelStationsHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Nearby stations within 5 km, sorted by distance.'**
+  String get fuelStationsHelper;
+
+  /// No description provided for @fuelStationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No stations nearby'**
+  String get fuelStationsEmpty;
+
+  /// No description provided for @fuelStationsEmptyHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another fuel type, or move closer to a station.'**
+  String get fuelStationsEmptyHelper;
+
+  /// No description provided for @fuelKindAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get fuelKindAll;
+
+  /// No description provided for @fuelKindPetrolDiesel.
+  ///
+  /// In en, this message translates to:
+  /// **'Petrol/Diesel'**
+  String get fuelKindPetrolDiesel;
+
+  /// No description provided for @fuelKindCng.
+  ///
+  /// In en, this message translates to:
+  /// **'CNG'**
+  String get fuelKindCng;
+
+  /// No description provided for @fuelKindEv.
+  ///
+  /// In en, this message translates to:
+  /// **'EV'**
+  String get fuelKindEv;
+
   /// No description provided for @activeSessionTitle.
   ///
   /// In en, this message translates to:

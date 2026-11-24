@@ -119,6 +119,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get couldNotPlaceCall => 'Could not place the call.';
 
   @override
+  String get fuelStationsTileTitle => 'Fuel stations';
+
+  @override
+  String get fuelStationsTileSubtitle =>
+      'Petrol, diesel, CNG, and EV stations near you.';
+
+  @override
+  String get fuelStationsTitle => 'Fuel stations';
+
+  @override
+  String get fuelStationsHelper =>
+      'Nearby stations within 5 km, sorted by distance.';
+
+  @override
+  String get fuelStationsEmpty => 'No stations nearby';
+
+  @override
+  String get fuelStationsEmptyHelper =>
+      'Try another fuel type, or move closer to a station.';
+
+  @override
+  String get fuelKindAll => 'All';
+
+  @override
+  String get fuelKindPetrolDiesel => 'Petrol/Diesel';
+
+  @override
+  String get fuelKindCng => 'CNG';
+
+  @override
+  String get fuelKindEv => 'EV';
+
+  @override
   String get activeSessionTitle => 'Active print session';
 
   @override

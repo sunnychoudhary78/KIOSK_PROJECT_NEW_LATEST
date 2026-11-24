@@ -45,6 +45,8 @@ dependency_overrides:
 flutter:
   generate: true
   uses-material-design: true
+  assets:
+    - assets/fuel_stations/catalog.json
   fonts:
     - family: PlusJakartaSans
       fonts:

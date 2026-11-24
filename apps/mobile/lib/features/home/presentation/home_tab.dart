@@ -120,6 +120,14 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           ),
           const SizedBox(height: 14),
           SkpActionTile(
+            icon: Icons.local_gas_station_outlined,
+            title: l10n.fuelStationsTileTitle,
+            subtitle: l10n.fuelStationsTileSubtitle,
+            onTap: () =>
+                Navigator.of(context).pushNamed(AppRoutes.fuelStations),
+          ),
+          const SizedBox(height: 14),
+          SkpActionTile(
             icon: Icons.location_on_outlined,
             title: l10n.nearbyTileTitle,
             subtitle: l10n.nearbyTileSubtitle,
