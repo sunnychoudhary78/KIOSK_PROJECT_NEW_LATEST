@@ -6,6 +6,9 @@ class LocalServiceContact {
     this.rating = 0,
     this.pinned = false,
     this.address,
+    this.latitude,
+    this.longitude,
+    this.distanceKm,
     this.photoUrl,
   });
 
@@ -15,6 +18,9 @@ class LocalServiceContact {
   final double rating;
   final bool pinned;
   final String? address;
+  final double? latitude;
+  final double? longitude;
+  final double? distanceKm;
   final String? photoUrl;
 
   factory LocalServiceContact.fromJson(Map<String, dynamic> json) {
@@ -29,9 +35,17 @@ class LocalServiceContact {
       rating: rating.clamp(0, 5),
       pinned: json['pinned'] == true,
       address: json['address']?.toString(),
+      latitude: _asDouble(json['latitude']),
+      longitude: _asDouble(json['longitude']),
+      distanceKm: _asDouble(json['distanceKm']),
       photoUrl: json['photoUrl']?.toString(),
     );
   }
+}
+
+double? _asDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '');
 }
 
 class LocalServiceCategory {
@@ -55,9 +69,13 @@ class LocalServiceCategory {
         }
       }
     }
-    // Defensive client sort: pinned → rating → name (API already sorts this way).
+    // Defensive client sort: pinned → distance → rating → name (API already sorts this way).
     contacts.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      final da = a.distanceKm ?? double.infinity;
+      final db = b.distanceKm ?? double.infinity;
+      final byDistance = da.compareTo(db);
+      if (byDistance != 0) return byDistance;
       final byRating = b.rating.compareTo(a.rating);
       if (byRating != 0) return byRating;
       return a.name.toLowerCase().compareTo(b.name.toLowerCase());

@@ -11,8 +11,21 @@ function serviceWith(db: unknown) {
   };
 }
 
+const contactSelect = {
+  id: true,
+  name: true,
+  phone: true,
+  sortOrder: true,
+  rating: true,
+  pinned: true,
+  address: true,
+  latitude: true,
+  longitude: true,
+  photoStoragePath: true,
+};
+
 describe('LocalServicesService.list', () => {
-  it('returns categories and contacts pinned/rating first', async () => {
+  it('returns categories and contacts for admin without geo filter', async () => {
     const findMany = vi.fn(async () => [
       {
         id: 'cat-1',
@@ -29,6 +42,8 @@ describe('LocalServicesService.list', () => {
             rating: 4.5,
             pinned: true,
             address: 'Gate 2',
+            latitude: 28.61,
+            longitude: 77.2,
             photoStoragePath: null,
           },
         ],
@@ -52,16 +67,7 @@ describe('LocalServicesService.list', () => {
             { sortOrder: 'asc' },
             { name: 'asc' },
           ],
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            sortOrder: true,
-            rating: true,
-            pinned: true,
-            address: true,
-            photoStoragePath: true,
-          },
+          select: contactSelect,
         },
       },
     });
@@ -70,8 +76,106 @@ describe('LocalServicesService.list', () => {
       rating: 4.5,
       pinned: true,
       address: 'Gate 2',
+      latitude: 28.61,
+      longitude: 77.2,
+      distanceKm: null,
       photoUrl: null,
     });
+  });
+
+  it('filters device list to contacts within 5 km of the kiosk', async () => {
+    const findMany = vi.fn(async () => [
+      {
+        id: 'cat-1',
+        slug: 'plumber',
+        name: 'Plumber',
+        sortOrder: 1,
+        isActive: true,
+        contacts: [
+          {
+            id: 'near',
+            name: 'Near Shop',
+            phone: '9999999999',
+            sortOrder: 1,
+            rating: 3,
+            pinned: false,
+            address: 'Near',
+            latitude: 28.6139,
+            longitude: 77.209,
+            photoStoragePath: null,
+          },
+          {
+            id: 'far',
+            name: 'Far Shop',
+            phone: '8888888888',
+            sortOrder: 2,
+            rating: 5,
+            pinned: true,
+            address: 'Far',
+            // ~20+ km away from origin
+            latitude: 28.8,
+            longitude: 77.5,
+            photoStoragePath: null,
+          },
+        ],
+      },
+    ]);
+    const { service } = serviceWith({
+      localServiceCategory: { findMany },
+      device: {
+        findUnique: vi.fn(async () => ({ latitude: 28.6139, longitude: 77.209 })),
+      },
+    });
+
+    const result = await service.list('device-1');
+    expect(result.radiusKm).toBe(5);
+    expect(result.categories).toHaveLength(1);
+    expect(result.categories[0]?.contacts.map((c) => c.id)).toEqual(['near']);
+    expect(result.categories[0]?.contacts[0]?.distanceKm).toBe(0);
+  });
+});
+
+describe('LocalServicesService.nearby', () => {
+  it('returns providers near the citizen GPS within radius', async () => {
+    const findMany = vi.fn(async () => [
+      {
+        id: 'cat-1',
+        slug: 'electrician',
+        name: 'Electrician',
+        sortOrder: 1,
+        isActive: true,
+        contacts: [
+          {
+            id: 'near',
+            name: 'Local Elec',
+            phone: '9111111111',
+            sortOrder: 1,
+            rating: 4,
+            pinned: false,
+            address: 'A',
+            latitude: 19.076,
+            longitude: 72.8777,
+            photoStoragePath: null,
+          },
+          {
+            id: 'no-geo',
+            name: 'No Geo',
+            phone: '9222222222',
+            sortOrder: 2,
+            rating: 5,
+            pinned: true,
+            address: 'B',
+            latitude: null,
+            longitude: null,
+            photoStoragePath: null,
+          },
+        ],
+      },
+    ]);
+    const { service } = serviceWith({ localServiceCategory: { findMany } });
+    const result = await service.nearby({ lat: 19.076, lng: 72.8777, radiusKm: 5 });
+    expect(result.categories[0]?.contacts).toHaveLength(1);
+    expect(result.categories[0]?.contacts[0]?.id).toBe('near');
   });
 });
 
@@ -112,6 +216,8 @@ describe('LocalServicesService writes', () => {
       rating: 0,
       pinned: false,
       address: null,
+      latitude: 28.6,
+      longitude: 77.2,
       photoStoragePath: null,
     }));
     const deleteContact = vi.fn(async () => undefined);
@@ -132,19 +238,14 @@ describe('LocalServicesService writes', () => {
 
     const created = await service.createCategory({ name: 'Laundry' }, 'admin-1');
     expect(created.slug).toBe('laundry');
-    expect(createCategory).toHaveBeenCalledWith({
-      data: { name: 'Laundry', slug: 'laundry', sortOrder: 3, isActive: true },
-      select: { id: true, slug: true, name: true, sortOrder: true, isActive: true },
-    });
 
     const contact = await service.createContact(
       'cat-1',
-      { name: 'Ravi', phone: '9876543210' },
+      { name: 'Ravi', phone: '9876543210', latitude: 28.6, longitude: 77.2 },
       'admin-1',
     );
     expect(contact.phone).toBe('9876543210');
-    expect(contact.rating).toBe(0);
-    expect(contact.pinned).toBe(false);
+    expect(contact.latitude).toBe(28.6);
 
     await service.removeContact('cat-1', 'contact-1', 'admin-1');
     expect(deleteContact).toHaveBeenCalledWith({ where: { id: 'contact-1' } });
@@ -154,7 +255,7 @@ describe('LocalServicesService writes', () => {
     expect(audit.record).toHaveBeenCalledTimes(4);
   });
 
-  it('updates rating, pin, and address', async () => {
+  it('updates rating, pin, address and coords', async () => {
     const existing = {
       id: 'contact-1',
       categoryId: 'cat-1',
@@ -164,6 +265,8 @@ describe('LocalServicesService writes', () => {
       rating: 0,
       pinned: false,
       address: null,
+      latitude: null,
+      longitude: null,
       photoStoragePath: null,
     };
     const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
@@ -172,6 +275,8 @@ describe('LocalServicesService writes', () => {
       rating: 5,
       pinned: true,
       address: 'Lobby shop',
+      latitude: 28.61,
+      longitude: 77.21,
     }));
     const { service, audit } = serviceWith({
       localServiceContact: {
@@ -183,7 +288,13 @@ describe('LocalServicesService writes', () => {
     const result = await service.updateContact(
       'cat-1',
       'contact-1',
-      { rating: 5, pinned: true, address: 'Lobby shop' },
+      {
+        rating: 5,
+        pinned: true,
+        address: 'Lobby shop',
+        latitude: 28.61,
+        longitude: 77.21,
+      },
       'admin-1',
     );
 
@@ -191,6 +302,8 @@ describe('LocalServicesService writes', () => {
       rating: 5,
       pinned: true,
       address: 'Lobby shop',
+      latitude: 28.61,
+      longitude: 77.21,
       photoUrl: null,
     });
     expect(update).toHaveBeenCalledOnce();

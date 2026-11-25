@@ -3,16 +3,18 @@ import multer from 'multer';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired } from '../../shared/auth.js';
 import { assertActiveDevice } from '../../shared/device-guard.js';
-import { validateBody } from '../../infrastructure/http/validate.js';
+import { validateBody, validateQuery } from '../../infrastructure/http/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { requireParam } from '../../shared/params.js';
 import { ServicesCatalogService } from '../services/services.service.js';
 import {
   createLocalServiceCategorySchema,
   createLocalServiceContactSchema,
+  nearbyLocalServicesQuerySchema,
   setLocalServiceCategoryStatusSchema,
   updateLocalServiceContactSchema,
 } from './local_services.schemas.js';
+import type { NearbyLocalServicesQuery } from './local_services.schemas.js';
 import { LocalServicesService } from './local_services.service.js';
 
 const upload = multer({
@@ -40,8 +42,22 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
   );
 
   router.get(
+    '/local-services/nearby',
+    authRequired(deps.config, ['citizen']),
+    validateQuery(nearbyLocalServicesQuerySchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const query = req.query as unknown as NearbyLocalServicesQuery;
+        res.json(await service.nearby(query));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
     '/local-services/contacts/:contactId/photo',
-    authRequired(deps.config, ['admin', 'device']),
+    authRequired(deps.config, ['admin', 'device', 'citizen']),
     assertActiveDevice(deps.db),
     async (req: Request, res: Response, next: NextFunction) => {
       try {

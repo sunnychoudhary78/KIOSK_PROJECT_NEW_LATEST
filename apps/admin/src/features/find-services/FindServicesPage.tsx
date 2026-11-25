@@ -29,6 +29,9 @@ type LocalContact = {
   rating: number;
   pinned: boolean;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  distanceKm?: number | null;
   photoUrl: string | null;
 };
 
@@ -210,6 +213,8 @@ export function FindServicesPage() {
   const [contactRating, setContactRating] = useState(0);
   const [contactPinned, setContactPinned] = useState(false);
   const [contactAddress, setContactAddress] = useState('');
+  const [contactLat, setContactLat] = useState('');
+  const [contactLng, setContactLng] = useState('');
   const [contactPhotoFile, setContactPhotoFile] = useState<File | null>(null);
   const [savingContact, setSavingContact] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
@@ -222,6 +227,8 @@ export function FindServicesPage() {
   const [editRating, setEditRating] = useState(0);
   const [editPinned, setEditPinned] = useState(false);
   const [editAddress, setEditAddress] = useState('');
+  const [editLat, setEditLat] = useState('');
+  const [editLng, setEditLng] = useState('');
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
   const [editClearPhoto, setEditClearPhoto] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -279,7 +286,16 @@ export function FindServicesPage() {
     setContactRating(0);
     setContactPinned(false);
     setContactAddress('');
+    setContactLat('');
+    setContactLng('');
     setContactPhotoFile(null);
+  }
+
+  function parseOptionalCoord(raw: string): number | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const value = Number(trimmed);
+    return Number.isFinite(value) ? value : Number.NaN;
   }
 
   async function addService(event: FormEvent) {
@@ -328,6 +344,16 @@ export function FindServicesPage() {
   async function addContact(event: FormEvent) {
     event.preventDefault();
     if (!selected) return;
+    const latitude = parseOptionalCoord(contactLat);
+    const longitude = parseOptionalCoord(contactLng);
+    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      setContactError('Latitude and longitude must be valid numbers');
+      return;
+    }
+    if ((latitude == null) !== (longitude == null)) {
+      setContactError('Set both latitude and longitude (needed for 5 km kiosk / app filtering)');
+      return;
+    }
     setSavingContact(true);
     setContactError(null);
     try {
@@ -340,6 +366,8 @@ export function FindServicesPage() {
           rating: contactRating,
           pinned: contactPinned,
           address: contactAddress.trim() || null,
+          latitude,
+          longitude,
         },
       });
       if (contactPhotoFile) {
@@ -366,6 +394,8 @@ export function FindServicesPage() {
     setEditRating(contact.rating ?? 0);
     setEditPinned(Boolean(contact.pinned));
     setEditAddress(contact.address ?? '');
+    setEditLat(contact.latitude != null ? String(contact.latitude) : '');
+    setEditLng(contact.longitude != null ? String(contact.longitude) : '');
     setEditPhotoFile(null);
     setEditClearPhoto(false);
     setEditPhotoPreview(null);
@@ -400,6 +430,16 @@ export function FindServicesPage() {
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
     if (!selected || !editContact) return;
+    const latitude = parseOptionalCoord(editLat);
+    const longitude = parseOptionalCoord(editLng);
+    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      setEditError('Latitude and longitude must be valid numbers');
+      return;
+    }
+    if ((latitude == null) !== (longitude == null)) {
+      setEditError('Set both latitude and longitude (or clear both)');
+      return;
+    }
     setEditSaving(true);
     setEditError(null);
     try {
@@ -412,6 +452,8 @@ export function FindServicesPage() {
           rating: editRating,
           pinned: editPinned,
           address: editAddress.trim() || null,
+          latitude,
+          longitude,
           clearPhoto: editClearPhoto && !editPhotoFile ? true : undefined,
         },
       });
@@ -456,7 +498,7 @@ export function FindServicesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Find services"
-        subtitle="Manage trades and providers shown on the kiosk. Pinned numbers stay on top; highest rating follows."
+        subtitle="Providers with lat/lng show within 5 km of each kiosk (and nearby on the mobile app). Pinned + rating still apply inside that radius."
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
@@ -594,7 +636,29 @@ export function FindServicesPage() {
                         placeholder="Shop 12, Main Market"
                       />
                     </label>
+                    <label className="flex flex-col gap-1.5 text-sm font-medium">
+                      Latitude
+                      <Input
+                        value={contactLat}
+                        onChange={(event) => setContactLat(event.target.value)}
+                        placeholder="28.613900"
+                        inputMode="decimal"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-sm font-medium">
+                      Longitude
+                      <Input
+                        value={contactLng}
+                        onChange={(event) => setContactLng(event.target.value)}
+                        placeholder="77.209000"
+                        inputMode="decimal"
+                      />
+                    </label>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Lat/lng required for 5 km filtering on kiosks and the mobile app. Without them,
+                    the provider will not appear in nearby results.
+                  </p>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <StarRatingInput value={contactRating} onChange={setContactRating} />
@@ -688,6 +752,15 @@ export function FindServicesPage() {
                                     <span className="line-clamp-2">{contact.address}</span>
                                   </div>
                                 ) : null}
+                                {contact.latitude != null && contact.longitude != null ? (
+                                  <div className="text-[11px] tabular-nums text-muted-foreground">
+                                    {contact.latitude.toFixed(5)}, {contact.longitude.toFixed(5)}
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] font-medium text-amber-700">
+                                    No map location — hidden from 5 km lists
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="flex shrink-0 gap-2 self-end sm:self-center">
@@ -773,6 +846,24 @@ export function FindServicesPage() {
                   value={editAddress}
                   onChange={(event) => setEditAddress(event.target.value)}
                   placeholder="Shop 12, Main Market"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Latitude
+                <Input
+                  value={editLat}
+                  onChange={(event) => setEditLat(event.target.value)}
+                  placeholder="28.613900"
+                  inputMode="decimal"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Longitude
+                <Input
+                  value={editLng}
+                  onChange={(event) => setEditLng(event.target.value)}
+                  placeholder="77.209000"
+                  inputMode="decimal"
                 />
               </label>
             </div>

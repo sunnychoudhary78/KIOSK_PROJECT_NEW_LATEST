@@ -212,47 +212,41 @@ class _TradeGrid extends StatelessWidget {
       return const Center(child: Text('No services available.'));
     }
 
-    const columns = 4;
-    const gap = 12.0;
-    final rowCount = (categories.length / columns).ceil();
+    const columns = 3;
+    const gap = 14.0;
 
-    Widget rowAt(int row) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var col = 0; col < columns; col++) ...[
-            if (col > 0) const SizedBox(width: gap),
-            Expanded(
-              child: Builder(
-                builder: (ctx) {
-                  final idx = row * columns + col;
-                  if (idx >= categories.length) {
-                    return const SizedBox.expand();
-                  }
-                  final cat = categories[idx];
-                  return _TradeCard(
-                    category: cat,
-                    count: cat.contacts.length,
-                    onTap: () => Navigator.of(ctx).pushNamed(
-                      AppRoutes.localServiceContacts,
-                      arguments: cat,
-                    ),
-                  );
-                },
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileWidth =
+            (constraints.maxWidth - (gap * (columns - 1))) / columns;
+        // Keep cards short so a sparse grid never stretches into empty towers.
+        final tileHeight = (tileWidth * 0.42).clamp(108.0, 128.0);
+
+        return Align(
+          alignment: Alignment.topCenter,
+          child: GridView.builder(
+            padding: const EdgeInsets.only(bottom: 8),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              crossAxisSpacing: gap,
+              mainAxisSpacing: gap,
+              mainAxisExtent: tileHeight,
             ),
-          ],
-        ],
-      );
-    }
-
-    return Column(
-      children: [
-        for (var row = 0; row < rowCount; row++) ...[
-          if (row > 0) const SizedBox(height: gap),
-          Expanded(child: rowAt(row)),
-        ],
-      ],
+            itemCount: categories.length,
+            itemBuilder: (ctx, index) {
+              final cat = categories[index];
+              return _TradeCard(
+                category: cat,
+                count: cat.contacts.length,
+                onTap: () => Navigator.of(ctx).pushNamed(
+                  AppRoutes.localServiceContacts,
+                  arguments: cat,
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
@@ -274,51 +268,63 @@ class _TradeCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final meta = _metaFor(category.slug);
 
-    // Clean card styling: white in light mode, dark purple in dark mode.
-    // Thin uniform border (NO rainbow border!).
     final cardDecoration = BoxDecoration(
-      color: isDark ? const Color(0xFF1C143F) : Colors.white,
-      borderRadius: BorderRadius.circular(20),
+      gradient: isDark
+          ? const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF24184A), Color(0xFF1C143F)],
+            )
+          : LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.white, meta.accent.withValues(alpha: 0.06)],
+            ),
+      borderRadius: BorderRadius.circular(22),
       border: Border.all(
         color: isDark ? const Color(0xFF7445BD) : const Color(0xFFE2EBF5),
-        width: 1.0,
+        width: 1.2,
       ),
       boxShadow: [
         BoxShadow(
-          color: isDark ? const Color(0x2E8B35FF) : const Color(0x0A1B2B4F),
-          blurRadius: isDark ? 16 : 10,
-          offset: const Offset(0, 2),
+          color: isDark ? const Color(0x2E8B35FF) : const Color(0x121B2B4F),
+          blurRadius: isDark ? 16 : 12,
+          offset: const Offset(0, 4),
         ),
       ],
     );
-
-    final arrowBorderColor =
-        isDark ? const Color(0xFF7445BD) : const Color(0xFFD6C8F0);
-    final arrowBg = isDark ? const Color(0xFF1C143F) : Colors.white;
-    final arrowIconColor = isDark ? Colors.white : const Color(0xFF7445BD);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         splashColor: (isDark ? const Color(0xFF7445BD) : meta.accent)
-            .withValues(alpha: 0.12),
+            .withValues(alpha: 0.14),
         child: Ink(
           decoration: cardDecoration,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
             child: Row(
               children: [
-                // 3D icon image (52x52 container)
-                SizedBox(
-                  width: 52,
-                  height: 52,
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF2A1D55)
+                        : meta.accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF7445BD)
+                          : meta.accent.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(10),
                   child: _TradeIcon(meta: meta),
                 ),
-                const SizedBox(width: 12),
-
-                // Title & contact count
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -330,49 +336,58 @@ class _TradeCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.1,
-                          height: 1.2,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                          height: 1.15,
                           color: colors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        count == 1 ? '1 number' : '$count numbers',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'PlusJakartaSans',
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w500,
-                          color: colors.textSecondary,
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF2A1D55)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          count == 1 ? '1 nearby' : '$count nearby',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: colors.textSecondary,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(width: 6),
-
-                // Accent-colored circular arrow button (Images 2 & 3)
+                const SizedBox(width: 8),
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: arrowBg,
+                    color: isDark ? const Color(0xFF2A1D55) : Colors.white,
                     border: Border.all(
-                      color: arrowBorderColor,
+                      color: isDark
+                          ? const Color(0xFF7445BD)
+                          : meta.accent.withValues(alpha: 0.35),
                       width: 1.4,
                     ),
                   ),
-                  child: Center(
-                    child: Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 16,
-                      color: arrowIconColor,
-                    ),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: isDark ? Colors.white : meta.accent,
                   ),
                 ),
               ],

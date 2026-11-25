@@ -907,6 +907,8 @@ model LocalServiceContact {
   /// When true, contact stays at the top of its category list.
   pinned           Boolean              @default(false)
   address          String?
+  latitude         Float?
+  longitude        Float?
   photoStoragePath String?              @map("photo_storage_path")
   category         LocalServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 

@@ -41,6 +41,9 @@ async function main() {
       status: DeviceStatus.active,
       deviceSecret: demoDeviceSecret,
       deviceSecretHash: demoDeviceSecretHash,
+      latitude: 28.606,
+      longitude: 77.43,
+      address: 'Gaur City 2, Greater Noida West',
     },
     create: {
       tenantId: tenant.id,
@@ -50,7 +53,9 @@ async function main() {
       deviceSecretHash: demoDeviceSecretHash,
       deviceSecret: demoDeviceSecret,
       status: DeviceStatus.active,
-      address: 'Demo Site lobby',
+      latitude: 28.606,
+      longitude: 77.43,
+      address: 'Gaur City 2, Greater Noida West',
     },
   });
 

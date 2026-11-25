@@ -2,13 +2,16 @@ import { extname, join } from 'node:path';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
+import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type { ServicesCatalogService } from '../services/services.service.js';
 import type {
   CreateLocalServiceCategoryBody,
   CreateLocalServiceContactBody,
+  NearbyLocalServicesQuery,
   UpdateLocalServiceContactBody,
 } from './local_services.schemas.js';
+import { DEFAULT_LOCAL_SERVICE_RADIUS_KM } from './local_services.schemas.js';
 
 const PHOTO_UPLOAD_DIR = join(process.cwd(), 'uploads', 'local-services');
 
@@ -20,8 +23,23 @@ const CONTACT_SELECT = {
   rating: true,
   pinned: true,
   address: true,
+  latitude: true,
+  longitude: true,
   photoStoragePath: true,
 } as const;
+
+type ContactRow = {
+  id: string;
+  name: string;
+  phone: string;
+  sortOrder: number;
+  rating: number;
+  pinned: boolean;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  photoStoragePath: string | null;
+};
 
 function slugify(name: string): string {
   const base = name
@@ -33,16 +51,7 @@ function slugify(name: string): string {
   return base || 'service';
 }
 
-function mapContact(row: {
-  id: string;
-  name: string;
-  phone: string;
-  sortOrder: number;
-  rating: number;
-  pinned: boolean;
-  address: string | null;
-  photoStoragePath: string | null;
-}) {
+function mapContact(row: ContactRow, distanceKm?: number | null) {
   return {
     id: row.id,
     name: row.name,
@@ -51,6 +60,9 @@ function mapContact(row: {
     rating: row.rating,
     pinned: row.pinned,
     address: row.address,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    distanceKm: distanceKm ?? null,
     photoUrl: row.photoStoragePath ? `/local-services/contacts/${row.id}/photo` : null,
   };
 }
@@ -70,6 +82,52 @@ function extensionFor(mimeType: string | undefined, originalName: string): strin
   }
 }
 
+function withDistance(
+  contacts: ContactRow[],
+  origin: { lat: number; lng: number } | null,
+  radiusKm: number | null,
+) {
+  if (!origin) {
+    return contacts.map((row) => mapContact(row, null));
+  }
+
+  const scored = contacts
+    .map((row) => {
+      if (row.latitude == null || row.longitude == null) {
+        return null;
+      }
+      const distanceKm = roundDistanceKm(
+        haversineKm(origin.lat, origin.lng, row.latitude, row.longitude),
+      );
+      if (radiusKm != null && distanceKm > radiusKm) {
+        return null;
+      }
+      return mapContact(row, distanceKm);
+    })
+    .filter((row): row is NonNullable<typeof row> => row != null);
+
+  scored.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
+    const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
+    if (da !== db) return da - db;
+    if (b.rating !== a.rating) return b.rating - a.rating;
+    return a.name.localeCompare(b.name);
+  });
+
+  return scored;
+}
+
+function parseCoords(
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+): { latitude: number | null; longitude: number | null } {
+  if (latitude == null || longitude == null) {
+    return { latitude: null, longitude: null };
+  }
+  return { latitude, longitude };
+}
+
 export class LocalServicesService {
   constructor(
     private readonly db: DbClient,
@@ -81,6 +139,20 @@ export class LocalServicesService {
     if (deviceId && this.services) {
       await this.services.assertEnabled(deviceId, 'local_services');
     }
+
+    let origin: { lat: number; lng: number } | null = null;
+    let radiusKm: number | null = null;
+    if (deviceId) {
+      const device = await this.db.device.findUnique({
+        where: { id: deviceId },
+        select: { latitude: true, longitude: true },
+      });
+      if (device?.latitude != null && device.longitude != null) {
+        origin = { lat: device.latitude, lng: device.longitude };
+        radiusKm = DEFAULT_LOCAL_SERVICE_RADIUS_KM;
+      }
+    }
+
     const categories = await this.db.localServiceCategory.findMany({
       where: deviceId ? { isActive: true } : undefined,
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -101,15 +173,71 @@ export class LocalServicesService {
         },
       },
     });
+
     return {
-      categories: categories.map((category) => ({
-        id: category.id,
-        slug: category.slug,
-        name: category.name,
-        sortOrder: category.sortOrder,
-        isActive: category.isActive,
-        contacts: category.contacts.map(mapContact),
-      })),
+      radiusKm: deviceId ? radiusKm : null,
+      origin: origin,
+      categories: categories
+        .map((category) => {
+          const contacts =
+            deviceId && origin
+              ? withDistance(category.contacts, origin, radiusKm)
+              : deviceId
+                ? // Kiosk has no coords: show all (no distance) so machines still work.
+                  category.contacts.map((row) => mapContact(row, null))
+                : // Admin: full list, no geo filter.
+                  category.contacts.map((row) => mapContact(row, null));
+          return {
+            id: category.id,
+            slug: category.slug,
+            name: category.name,
+            sortOrder: category.sortOrder,
+            isActive: category.isActive,
+            contacts,
+          };
+        })
+        .filter((category) => (deviceId ? category.contacts.length > 0 : true)),
+    };
+  }
+
+  async nearby(query: NearbyLocalServicesQuery) {
+    const origin = { lat: query.lat, lng: query.lng };
+    const radiusKm = query.radiusKm ?? DEFAULT_LOCAL_SERVICE_RADIUS_KM;
+
+    const categories = await this.db.localServiceCategory.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        sortOrder: true,
+        isActive: true,
+        contacts: {
+          orderBy: [
+            { pinned: 'desc' },
+            { rating: 'desc' },
+            { sortOrder: 'asc' },
+            { name: 'asc' },
+          ],
+          select: CONTACT_SELECT,
+        },
+      },
+    });
+
+    return {
+      radiusKm,
+      origin,
+      categories: categories
+        .map((category) => ({
+          id: category.id,
+          slug: category.slug,
+          name: category.name,
+          sortOrder: category.sortOrder,
+          isActive: category.isActive,
+          contacts: withDistance(category.contacts, origin, radiusKm),
+        }))
+        .filter((category) => category.contacts.length > 0),
     };
   }
 
@@ -233,6 +361,7 @@ export class LocalServicesService {
 
     const address =
       input.address === undefined ? null : input.address?.trim() ? input.address.trim() : null;
+    const coords = parseCoords(input.latitude, input.longitude);
 
     const row = await this.db.localServiceContact.create({
       data: {
@@ -243,6 +372,8 @@ export class LocalServicesService {
         rating: input.rating ?? 0,
         pinned: input.pinned ?? false,
         address,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
       },
       select: CONTACT_SELECT,
     });
@@ -260,6 +391,8 @@ export class LocalServicesService {
         phone: row.phone,
         rating: row.rating,
         pinned: row.pinned,
+        latitude: row.latitude,
+        longitude: row.longitude,
       },
     });
 
@@ -287,6 +420,8 @@ export class LocalServicesService {
       rating?: number;
       pinned?: boolean;
       address?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
       photoStoragePath?: string | null;
     } = {};
 
@@ -296,6 +431,20 @@ export class LocalServicesService {
     if (input.pinned !== undefined) data.pinned = input.pinned;
     if (input.address !== undefined) {
       data.address = input.address?.trim() ? input.address.trim() : null;
+    }
+    if (input.latitude !== undefined || input.longitude !== undefined) {
+      const coords = parseCoords(
+        input.latitude === undefined ? existing.latitude : input.latitude,
+        input.longitude === undefined ? existing.longitude : input.longitude,
+      );
+      // Explicit null pair clears geo; mixed undefined handled by schema.
+      if (input.latitude === null && input.longitude === null) {
+        data.latitude = null;
+        data.longitude = null;
+      } else {
+        data.latitude = coords.latitude;
+        data.longitude = coords.longitude;
+      }
     }
     if (input.clearPhoto) {
       if (existing.photoStoragePath) {
@@ -324,6 +473,8 @@ export class LocalServicesService {
           rating: existing.rating,
           pinned: existing.pinned,
           address: existing.address,
+          latitude: existing.latitude,
+          longitude: existing.longitude,
           hasPhoto: Boolean(existing.photoStoragePath),
         },
         after: {
@@ -332,6 +483,8 @@ export class LocalServicesService {
           rating: row.rating,
           pinned: row.pinned,
           address: row.address,
+          latitude: row.latitude,
+          longitude: row.longitude,
           hasPhoto: Boolean(row.photoStoragePath),
         },
       },
