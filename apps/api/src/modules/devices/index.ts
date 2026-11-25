@@ -93,6 +93,48 @@ export function registerDevicesModule(router: Router, deps: AppDeps): void {
     },
   );
 
+  router.get(
+    '/devices/:deviceId/credentials',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.getCredentials(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/devices/:deviceId/rotate-secret',
+    authRequired(deps.config, ['admin']),
+    requireAdminRole(UserRole.admin, UserRole.operator),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.rotateSecret(
+          requireParam(req.params.deviceId, 'deviceId'),
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.patch(
     '/devices/:deviceId/status',
     authRequired(deps.config, ['admin']),

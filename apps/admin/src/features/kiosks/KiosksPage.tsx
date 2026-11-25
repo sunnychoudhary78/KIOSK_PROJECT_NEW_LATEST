@@ -5,6 +5,7 @@ import {
   AppWindow,
   BarChart3,
   CloudUpload,
+  KeyRound,
   MoreHorizontal,
   PauseCircle,
   Pencil,
@@ -648,9 +649,11 @@ function printLimitsFromDevice(device: Device): PrintLimitsForm {
 }
 
 type CreatedCredentials = {
+  deviceId: string;
   name: string;
   deviceKey: string;
-  deviceSecret: string;
+  /** Present after register or rotate; null when only viewing the key. */
+  deviceSecret: string | null;
 };
 
 function formatLocation(device: Device): string {
@@ -693,6 +696,8 @@ export function KiosksPage() {
   const [submitting, setSubmitting] = useState(false);
   const [credentials, setCredentials] = useState<CreatedCredentials | null>(null);
   const [copiedField, setCopiedField] = useState<'key' | 'secret' | null>(null);
+  const [rotatingSecret, setRotatingSecret] = useState(false);
+  const [credentialsError, setCredentialsError] = useState<string | null>(null);
   const [settingsDevice, setSettingsDevice] = useState<Device | null>(null);
   const [printLimits, setPrintLimits] = useState<PrintLimitsForm>(DEFAULT_PRINT_LIMITS);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -815,6 +820,7 @@ export function KiosksPage() {
         },
       });
       setCredentials({
+        deviceId: result.id,
         name: result.name,
         deviceKey: result.deviceKey,
         deviceSecret: result.deviceSecret,
@@ -827,6 +833,75 @@ export function KiosksPage() {
       setFormError(err instanceof Error ? err.message : 'Failed to register device');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function openCredentials(device: Device) {
+    setCopiedField(null);
+    setCredentialsError(null);
+    // Defer so the dropdown can close before the dialog opens (Radix focus/pointer trap).
+    window.setTimeout(() => {
+      setCredentials({
+        deviceId: device.id,
+        name: device.name,
+        deviceKey: device.deviceKey,
+        deviceSecret: null,
+      });
+      void loadCredentials(device.id, device.name, device.deviceKey);
+    }, 0);
+  }
+
+  async function loadCredentials(deviceId: string, fallbackName: string, fallbackKey: string) {
+    setRotatingSecret(true);
+    setCredentialsError(null);
+    try {
+      const result = await apiRequest<Device & { deviceSecret: string }>(
+        `/devices/${deviceId}/credentials`,
+        { token },
+      );
+      setCredentials({
+        deviceId: result.id,
+        name: result.name || fallbackName,
+        deviceKey: result.deviceKey || fallbackKey,
+        deviceSecret: result.deviceSecret,
+      });
+      setCopiedField(null);
+    } catch (err) {
+      setCredentialsError(
+        err instanceof Error ? err.message : 'Failed to load device credentials',
+      );
+    } finally {
+      setRotatingSecret(false);
+    }
+  }
+
+  async function onRotateSecret() {
+    if (!credentials) return;
+    const ok = window.confirm(
+      `Reset the device secret for “${credentials.name}”? Only do this if the old secret was lost or compromised. The current secret will stop working immediately.`,
+    );
+    if (!ok) return;
+
+    setRotatingSecret(true);
+    setCredentialsError(null);
+    try {
+      const result = await apiRequest<Device & { deviceSecret: string }>(
+        `/devices/${credentials.deviceId}/rotate-secret`,
+        { method: 'POST', token },
+      );
+      setCredentials({
+        deviceId: result.id,
+        name: result.name,
+        deviceKey: result.deviceKey,
+        deviceSecret: result.deviceSecret,
+      });
+      setCopiedField(null);
+    } catch (err) {
+      setCredentialsError(
+        err instanceof Error ? err.message : 'Failed to reset device secret',
+      );
+    } finally {
+      setRotatingSecret(false);
     }
   }
 
@@ -1360,44 +1435,6 @@ export function KiosksPage() {
 
       {error ? <p className="error mb-4">{error}</p> : null}
 
-      {credentials ? (
-        <Panel title={`Device credentials for ${credentials.name}`}>
-          <div className="credentials-panel">
-            <p className="warning">
-              The device secret is shown only once. Copy both values now and paste them into the
-              Windows kiosk Activate screen.
-            </p>
-
-            <div className="credential-row">
-              <label>
-                Device key
-                <Input readOnly value={credentials.deviceKey} />
-              </label>
-              <Button type="button" onClick={() => void copyValue('key', credentials.deviceKey)}>
-                {copiedField === 'key' ? 'Copied' : 'Copy key'}
-              </Button>
-            </div>
-
-            <div className="credential-row">
-              <label>
-                Device secret
-                <Input readOnly value={credentials.deviceSecret} />
-              </label>
-              <Button
-                type="button"
-                onClick={() => void copyValue('secret', credentials.deviceSecret)}
-              >
-                {copiedField === 'secret' ? 'Copied' : 'Copy secret'}
-              </Button>
-            </div>
-
-            <Button type="button" variant="secondary" onClick={() => setCredentials(null)}>
-              Dismiss
-            </Button>
-          </div>
-        </Panel>
-      ) : null}
-
       <Panel title="Registered kiosks">
         {items.length === 0 ? (
           <EmptyState
@@ -1567,6 +1604,14 @@ export function KiosksPage() {
                           </UiButton>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              openCredentials(device);
+                            }}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                            Credentials
+                          </DropdownMenuItem>
                           {canEnablePrinting ? (
                             <DropdownMenuItem onClick={() => openEdit(device)}>
                               <Pencil className="h-4 w-4" />
@@ -1678,6 +1723,76 @@ export function KiosksPage() {
           onClose={() => setScreenShareDevice(null)}
         />
       ) : null}
+
+      <Modal
+        open={credentials != null}
+        title={credentials ? `Desktop login · ${credentials.name}` : 'Desktop login'}
+        description="These credentials stay the same. Copy them into the Windows kiosk Activate screen. Use Reset secret only if this kiosk must get a new secret."
+        onClose={() => {
+          if (!rotatingSecret) {
+            setCredentials(null);
+            setCredentialsError(null);
+          }
+        }}
+        footer={
+          <>
+            {canEnablePrinting ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={rotatingSecret || !credentials?.deviceSecret}
+                onClick={() => void onRotateSecret()}
+              >
+                {rotatingSecret ? 'Working…' : 'Reset secret'}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              disabled={rotatingSecret}
+              onClick={() => {
+                setCredentials(null);
+                setCredentialsError(null);
+              }}
+            >
+              Close
+            </Button>
+          </>
+        }
+      >
+        {credentials ? (
+          <div className="credentials-panel space-y-4">
+            <div className="credential-row">
+              <label>
+                Device key
+                <Input readOnly value={credentials.deviceKey} />
+              </label>
+              <Button type="button" onClick={() => void copyValue('key', credentials.deviceKey)}>
+                {copiedField === 'key' ? 'Copied' : 'Copy key'}
+              </Button>
+            </div>
+
+            {credentials.deviceSecret ? (
+              <div className="credential-row">
+                <label>
+                  Device secret
+                  <Input readOnly value={credentials.deviceSecret} />
+                </label>
+                <Button
+                  type="button"
+                  onClick={() => void copyValue('secret', credentials.deviceSecret!)}
+                >
+                  {copiedField === 'secret' ? 'Copied' : 'Copy secret'}
+                </Button>
+              </div>
+            ) : rotatingSecret ? (
+              <p className="text-sm text-muted-foreground">Loading credentials…</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Device secret unavailable.</p>
+            )}
+            {credentialsError ? <p className="error">{credentialsError}</p> : null}
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={addOpen}

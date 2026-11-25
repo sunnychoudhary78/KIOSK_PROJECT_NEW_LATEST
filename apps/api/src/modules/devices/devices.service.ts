@@ -264,6 +264,7 @@ export class DevicesService {
         name: input.name,
         deviceKey,
         deviceSecretHash,
+        deviceSecret,
         status: DeviceStatus.provisioning,
         latitude: input.latitude,
         longitude: input.longitude,
@@ -365,6 +366,62 @@ export class DevicesService {
     });
 
     return mapDeviceWithTray(this.db, updated);
+  }
+
+  async getCredentials(deviceId: string, adminId: string, correlationId?: string) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    // Legacy devices only have a hash — mint a stable plaintext secret once.
+    if (!device.deviceSecret) {
+      return this.rotateSecret(deviceId, adminId, correlationId);
+    }
+
+    return {
+      ...(await mapDeviceWithTray(this.db, device)),
+      deviceKey: device.deviceKey,
+      deviceSecret: device.deviceSecret,
+    };
+  }
+
+  async rotateSecret(deviceId: string, adminId: string, correlationId?: string) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true },
+    });
+    if (!device) {
+      throw new AppError('not_found', 'Device not found', 404);
+    }
+
+    const deviceSecret = `ds_${randomBytes(24).toString('hex')}`;
+    const deviceSecretHash = await bcrypt.hash(deviceSecret, 10);
+
+    const updated = await this.db.device.update({
+      where: { id: deviceId },
+      data: { deviceSecretHash, deviceSecret },
+      include: { site: true },
+    });
+
+    await this.audit.record({
+      action: 'device.secret_rotated',
+      principalType: 'admin',
+      principalId: adminId,
+      resourceType: 'device',
+      resourceId: deviceId,
+      correlationId,
+      metadata: { name: updated.name },
+    });
+
+    return {
+      ...(await mapDeviceWithTray(this.db, updated)),
+      deviceKey: updated.deviceKey,
+      deviceSecret,
+    };
   }
 
   async setStatus(

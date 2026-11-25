@@ -5,7 +5,6 @@ import 'package:skp_kiosk/core/ui/kiosk_buttons.dart';
 import 'package:skp_kiosk/core/ui/kiosk_clock.dart';
 import 'package:skp_kiosk/core/ui/kiosk_scaffold.dart';
 import 'package:skp_kiosk/core/ui/theme_mode_toggle_pill.dart';
-import 'package:skp_kiosk/features/surveillance/presentation/surveillance_status_chip.dart';
 
 /// Persistent shell chrome: brand lockup | section title | clock + home.
 /// Exactly matches reference images 2, 3, 4, 5.
@@ -103,7 +102,7 @@ class KioskShell extends StatelessWidget {
 
                 const Spacer(),
 
-                // Right action cluster: headerExtra, surveillance, theme mode, clock, home
+                // Right action cluster: headerExtra, theme mode, clock, home
                 Flexible(
                   flex: 3,
                   fit: FlexFit.loose,
@@ -120,12 +119,6 @@ class KioskShell extends StatelessWidget {
                             child: headerExtra!,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                      ],
-
-                      // Surveillance chip
-                      if (!cosmic) ...[
-                        const SurveillanceStatusChip(),
                         const SizedBox(width: 8),
                       ],
 

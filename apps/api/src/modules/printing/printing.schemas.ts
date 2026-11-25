@@ -21,9 +21,28 @@ export const updatePrintJobStatusSchema = z.object({
   holdForRetry: z.boolean().optional(),
 });
 
-export const printJobSupportSchema = z.object({
-  message: z.string().trim().min(1).max(500),
-});
+export const printJobSupportSchema = z
+  .object({
+    /** Required with phone for “didn’t receive print” complaints. */
+    name: z.string().trim().min(1).max(80).optional(),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^\d{10}$/, 'Phone must be a 10-digit mobile number')
+      .optional(),
+    message: z.string().trim().min(1).max(500),
+  })
+  .superRefine((value, ctx) => {
+    const hasName = Boolean(value.name?.trim());
+    const hasPhone = Boolean(value.phone);
+    if (hasName !== hasPhone) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Name and phone are both required for print complaints',
+        path: hasName ? ['phone'] : ['name'],
+      });
+    }
+  });
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 

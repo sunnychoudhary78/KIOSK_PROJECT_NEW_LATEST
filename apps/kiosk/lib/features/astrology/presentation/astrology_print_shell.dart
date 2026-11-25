@@ -34,7 +34,11 @@ class AstrologyPrintShell extends StatelessWidget {
   final Future<void> Function() onConfirmPrint;
   final Future<void> Function() onTellStaff;
   final VoidCallback onClearResult;
-  final Future<void> Function() onReportMissing;
+  final Future<void> Function({
+    required String name,
+    required String phone,
+    required String message,
+  }) onReportMissing;
   final Future<void> Function()? onChoosePhoneQuota;
   final Future<void> Function()? onChoosePayDirect;
   final ValueChanged<String>? onPhoneChanged;

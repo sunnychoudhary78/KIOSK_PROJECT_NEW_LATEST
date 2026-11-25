@@ -1103,12 +1103,18 @@ class DigilockerController extends Notifier<DigilockerUiState> {
     );
   }
 
-  Future<void> reportPagesMissing() async {
+  Future<void> reportPagesMissing({
+    required String name,
+    required String phone,
+    required String message,
+  }) async {
     final jobId = state.previewJobId;
     if (jobId == null || jobId.isEmpty) return;
     await PrintJobSupport(ref.read(apiClientProvider)).send(
       jobId: jobId,
-      message: 'Visitor says the pages were not received.',
+      name: name,
+      phone: phone,
+      message: message,
     );
   }
 

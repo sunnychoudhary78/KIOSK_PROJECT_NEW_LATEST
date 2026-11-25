@@ -28,7 +28,9 @@ class HomeBannerStrip extends ConsumerStatefulWidget {
 
 class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
   final Map<String, Uint8List> _bytes = {};
+  final Set<String> _failed = {};
   final Set<String> _impressed = {};
+  final Set<String> _loading = {};
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +42,31 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
       return const SizedBox.shrink();
     }
 
+    for (final ad in banners) {
+      unawaited(_ensureLoaded(ad));
+    }
+
+    final visible = banners
+        .where((ad) => _bytes.containsKey(ad.id) || !_failed.contains(ad.id))
+        .toList();
+    // Every creative failed (or had no URL) — hide the strip instead of a stuck spinner.
+    if (visible.isEmpty || banners.every((ad) => _failed.contains(ad.id))) {
+      return const SizedBox.shrink();
+    }
+
+    final ready = banners.where((ad) => _bytes.containsKey(ad.id)).toList();
     final isHorizontal = widget.axis == HomeBannerAxis.horizontal;
+
+    // Still fetching — reserve space quietly (no spinner “loading windows”).
+    if (ready.isEmpty) {
+      return ColoredBox(
+        color: SkpColors.raised.withValues(alpha: 0.35),
+        child: SizedBox(
+          height: isHorizontal ? widget.height : null,
+          width: isHorizontal ? null : widget.width,
+        ),
+      );
+    }
 
     return ColoredBox(
       color: SkpColors.raised,
@@ -49,18 +75,11 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
         width: isHorizontal ? null : widget.width,
         child: PageView.builder(
           scrollDirection: isHorizontal ? Axis.horizontal : Axis.vertical,
-          itemCount: banners.length,
+          itemCount: ready.length,
           itemBuilder: (context, index) {
-            final ad = banners[index];
-            unawaited(_ensureLoaded(ad));
+            final ad = ready[index];
             _reportImpression(ad);
-            final data = _bytes[ad.id];
-            if (data == null) {
-              return const ColoredBox(
-                color: SkpColors.raised,
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
+            final data = _bytes[ad.id]!;
             return Image.memory(
               data,
               fit: BoxFit.cover,
@@ -75,16 +94,41 @@ class _HomeBannerStripState extends ConsumerState<HomeBannerStrip> {
   }
 
   Future<void> _ensureLoaded(AdPlaylistItem ad) async {
-    if (_bytes.containsKey(ad.id) || ad.mediaUrl == null) {
+    if (_bytes.containsKey(ad.id) ||
+        _failed.contains(ad.id) ||
+        _loading.contains(ad.id)) {
       return;
     }
+    final url = ad.mediaUrl;
+    if (url == null || url.isEmpty) {
+      if (mounted) {
+        setState(() => _failed.add(ad.id));
+      } else {
+        _failed.add(ad.id);
+      }
+      return;
+    }
+
+    _loading.add(ad.id);
     try {
       final api = ref.read(apiClientProvider);
-      final bytes = await api.getBytes(ad.mediaUrl!);
-      if (mounted) {
-        setState(() => _bytes[ad.id] = bytes);
-      }
-    } catch (_) {}
+      final bytes = await api.getBytes(url);
+      if (!mounted) return;
+      setState(() {
+        _loading.remove(ad.id);
+        if (bytes.isEmpty) {
+          _failed.add(ad.id);
+        } else {
+          _bytes[ad.id] = bytes;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading.remove(ad.id);
+        _failed.add(ad.id);
+      });
+    }
   }
 
   void _reportImpression(AdPlaylistItem ad) {

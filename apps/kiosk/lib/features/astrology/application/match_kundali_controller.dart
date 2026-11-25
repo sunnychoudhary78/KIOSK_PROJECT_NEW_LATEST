@@ -283,8 +283,18 @@ class MatchKundaliController extends Notifier<MatchKundaliUiState> {
     state = state.copyWith(print: next);
   }
 
-  Future<void> reportPrintPagesMissing() async {
-    await _printSupport.reportPagesMissing(state.print, ref.read(apiClientProvider));
+  Future<void> reportPrintPagesMissing({
+    required String name,
+    required String phone,
+    required String message,
+  }) async {
+    await _printSupport.reportPagesMissing(
+      state.print,
+      ref.read(apiClientProvider),
+      name: name,
+      phone: phone,
+      message: message,
+    );
   }
 
   void clearPrintResult() {

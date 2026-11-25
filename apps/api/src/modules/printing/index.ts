@@ -90,7 +90,11 @@ export function registerPrintingModule(router: Router, deps: AppDeps): void {
         const result = await service.openJobSupportNote(
           requireParam(req.params.jobId, 'jobId'),
           req.principal.deviceId,
-          req.body.message,
+          {
+            name: req.body.name as string | undefined,
+            phone: req.body.phone as string | undefined,
+            message: req.body.message as string,
+          },
           req.correlationId,
         );
         res.status(201).json(result);

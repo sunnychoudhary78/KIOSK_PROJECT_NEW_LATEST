@@ -630,7 +630,7 @@ export class PrintingService {
   async openJobSupportNote(
     jobId: string,
     deviceId: string,
-    message: string,
+    input: { name?: string; phone?: string; message: string },
     correlationId?: string,
   ) {
     const job = await this.db.printJob.findUnique({ where: { id: jobId } });
@@ -639,13 +639,27 @@ export class PrintingService {
     }
     const existing = await this.db.supportQuery.findUnique({ where: { printJobId: jobId } });
     if (existing) {
-      return { id: existing.id, status: existing.status, message: existing.message };
+      return {
+        id: existing.id,
+        status: existing.status,
+        message: existing.message,
+        phone: existing.phone,
+      };
     }
+    const name = input.name?.trim() ?? '';
+    const phone = input.phone?.trim() ?? '';
+    const detail = input.message.trim();
+    const message = (
+      name && phone
+        ? `Name: ${name}\nPhone: ${phone}\nDid not receive print.\n${detail}`
+        : detail
+    ).slice(0, 500);
     const created = await this.db.supportQuery.create({
       data: {
         printJobId: jobId,
         message,
-        phone: '',
+        phone,
+        category: 'print',
         amountPaise: 0,
         failureReason: job.errorMessage,
         status: SupportQueryStatus.open,
@@ -658,8 +672,13 @@ export class PrintingService {
       resourceType: 'support_query',
       resourceId: created.id,
       correlationId,
-      metadata: { printJobId: jobId },
+      metadata: { printJobId: jobId, phone: phone || undefined, name: name || undefined },
     });
-    return { id: created.id, status: created.status, message: created.message };
+    return {
+      id: created.id,
+      status: created.status,
+      message: created.message,
+      phone: created.phone,
+    };
   }
 }
