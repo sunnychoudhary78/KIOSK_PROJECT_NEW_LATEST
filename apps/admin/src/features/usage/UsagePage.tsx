@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
+import { pickDefaultDeviceId } from '../../core/kiosk/defaultKiosk';
 import {
   Button,
   EmptyState,
@@ -931,7 +932,7 @@ export function UsagePage() {
       try {
         const result = await apiRequest<{ items: DeviceOption[] }>('/devices', { token });
         setDevices(result.items);
-        setDeviceId((current) => current || result.items[0]?.id || '');
+        setDeviceId((current) => pickDefaultDeviceId(result.items, current));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load kiosks');
       }

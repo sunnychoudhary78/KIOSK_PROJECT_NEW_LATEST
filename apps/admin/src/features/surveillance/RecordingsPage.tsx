@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
+import { pickDefaultDeviceId } from '../../core/kiosk/defaultKiosk';
 import {
   Button,
   EmptyState,
@@ -168,7 +169,7 @@ export function RecordingsPage() {
       try {
         const result = await apiRequest<{ items: Device[] }>('/devices', { token });
         setDevices(result.items);
-        setDeviceId((current) => current || result.items[0]?.id || '');
+        setDeviceId((current) => pickDefaultDeviceId(result.items, current));
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load kiosks');
@@ -205,7 +206,7 @@ export function RecordingsPage() {
           }
         }
         const merged = [...byId.values()].sort(
-          (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+          (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
         );
         setItems(merged);
         setError(null);

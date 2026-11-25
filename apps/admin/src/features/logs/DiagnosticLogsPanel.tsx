@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
+import { pickDefaultDeviceId } from '../../core/kiosk/defaultKiosk';
 import { Button, EmptyState, Panel, Select } from '../../core/ui/primitives';
 
 type DeviceOption = {
@@ -80,7 +81,7 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
   useEffect(() => {
     if (devices.length === 0) return;
     if (!deviceId || !devices.some((device) => device.id === deviceId)) {
-      onDeviceIdChange(devices[0].id);
+      onDeviceIdChange(pickDefaultDeviceId(devices, deviceId));
     }
   }, [devices, deviceId, onDeviceIdChange]);
 
