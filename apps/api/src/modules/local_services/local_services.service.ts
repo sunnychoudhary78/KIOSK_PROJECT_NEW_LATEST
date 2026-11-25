@@ -135,15 +135,10 @@ export class LocalServicesService {
     private readonly services?: ServicesCatalogService,
   ) {}
 
-  async list(
-    deviceId?: string,
-    options?: { includeInactive?: boolean },
-  ) {
+  async list(deviceId?: string) {
     if (deviceId && this.services) {
       await this.services.assertEnabled(deviceId, 'local_services');
     }
-
-    const includeInactive = options?.includeInactive === true;
 
     let origin: { lat: number; lng: number } | null = null;
     let radiusKm: number | null = null;
@@ -159,7 +154,8 @@ export class LocalServicesService {
     }
 
     const categories = await this.db.localServiceCategory.findMany({
-      where: includeInactive ? undefined : { isActive: true },
+      // Admin (no deviceId): full list including inactive. Kiosk: active only.
+      where: deviceId ? { isActive: true } : undefined,
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: {
         id: true,

@@ -28,14 +28,13 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
 
   router.get(
     '/local-services',
-    authRequired(deps.config, ['admin', 'device', 'citizen']),
+    authRequired(deps.config, ['admin', 'device']),
     assertActiveDevice(deps.db),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const deviceId =
           req.principal?.type === 'device' ? req.principal.deviceId : undefined;
-        const includeInactive = req.principal?.type === 'admin';
-        res.json(await service.list(deviceId, { includeInactive }));
+        res.json(await service.list(deviceId));
       } catch (error) {
         next(error);
       }

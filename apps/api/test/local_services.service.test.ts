@@ -52,7 +52,7 @@ describe('LocalServicesService.list', () => {
     const { service } = serviceWith({ localServiceCategory: { findMany } });
     const result = await service.list();
     expect(findMany).toHaveBeenCalledWith({
-      where: { isActive: true },
+      where: undefined,
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: {
         id: true,
@@ -134,14 +134,6 @@ describe('LocalServicesService.list', () => {
     expect(result.categories[0]?.contacts[0]?.distanceKm).toBe(0);
   });
 
-  it('includes inactive categories when requested (admin)', async () => {
-    const findMany = vi.fn(async () => []);
-    const { service } = serviceWith({ localServiceCategory: { findMany } });
-    await service.list(undefined, { includeInactive: true });
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: undefined }),
-    );
-  });
 });
 
 describe('LocalServicesService.nearby', () => {

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:skp_mobile/core/network/api_client.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 import 'package:skp_mobile/features/find_services/data/find_services_catalog.dart';
@@ -23,11 +24,18 @@ class FindServicesNotifier extends Notifier<FindServicesState> {
   Future<void> load() async {
     state = const FindServicesState(loading: true);
     try {
-      final result = await ref.read(apiClientProvider).get('/local-services');
+      final position = await _resolvePosition();
+      final result = await ref.read(apiClientProvider).get(
+        '/local-services/nearby',
+        query: {
+          'lat': position.latitude.toString(),
+          'lng': position.longitude.toString(),
+          'radiusKm': '5',
+        },
+      );
       state = FindServicesState(categories: _parseCategories(result));
     } on ApiException catch (error) {
-      // Prefer live API so admin panel changes show up. Bundle only if UAT
-      // still rejects citizen (403) before that deploy lands.
+      // Offline / API gap: use bundled catalog so the feature still works.
       if (_shouldUseBundledCatalog(error)) {
         state = const FindServicesState(
           categories: FindServicesCatalog.categories,
@@ -36,12 +44,39 @@ class FindServicesNotifier extends Notifier<FindServicesState> {
       }
       state = FindServicesState(error: error.toString());
     } catch (error) {
-      state = FindServicesState(error: error.toString());
+      // Location denied or unavailable → bundled catalog.
+      state = const FindServicesState(
+        categories: FindServicesCatalog.categories,
+      );
     }
   }
 
+  Future<Position> _resolvePosition() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      throw StateError('location_services_disabled');
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever ||
+        permission == LocationPermission.unableToDetermine) {
+      throw StateError('location_permission_denied');
+    }
+
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 20),
+      ),
+    );
+  }
+
   bool _shouldUseBundledCatalog(ApiException error) {
-    if (error.statusCode == 403) return true;
+    if (error.statusCode == 403 || error.statusCode == 404) return true;
     final message = error.message.toLowerCase();
     return message.contains('principal type not allowed') ||
         error.code == 'forbidden';

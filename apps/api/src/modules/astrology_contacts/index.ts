@@ -29,7 +29,7 @@ export function registerAstrologyContactsModule(router: Router, deps: AppDeps): 
 
   router.get(
     '/astrology-contacts',
-    authRequired(deps.config, ['admin', 'device', 'citizen']),
+    authRequired(deps.config, ['admin', 'device']),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const kind = parseKindQuery(req.query.kind);
