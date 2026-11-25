@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response, Router } from 'express';
+import multer from 'multer';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired } from '../../shared/auth.js';
 import { assertActiveDevice } from '../../shared/device-guard.js';
@@ -9,8 +10,15 @@ import { ServicesCatalogService } from '../services/services.service.js';
 import {
   createLocalServiceCategorySchema,
   createLocalServiceContactSchema,
+  setLocalServiceCategoryStatusSchema,
+  updateLocalServiceContactSchema,
 } from './local_services.schemas.js';
 import { LocalServicesService } from './local_services.service.js';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+});
 
 export function registerLocalServicesModule(router: Router, deps: AppDeps): void {
   const services = new ServicesCatalogService(deps.db, deps.auditService);
@@ -31,6 +39,24 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
     },
   );
 
+  router.get(
+    '/local-services/contacts/:contactId/photo',
+    authRequired(deps.config, ['admin', 'device']),
+    assertActiveDevice(deps.db),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const photo = await service.readContactPhoto(
+          requireParam(req.params.contactId, 'contactId'),
+        );
+        res.setHeader('Content-Type', photo.contentType);
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.send(photo.bytes);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.post(
     '/local-services',
     authRequired(deps.config, ['admin']),
@@ -42,6 +68,28 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
         }
         const result = await service.createCategory(req.body, req.principal.id, req.correlationId);
         res.status(201).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.patch(
+    '/local-services/:id/status',
+    authRequired(deps.config, ['admin']),
+    validateBody(setLocalServiceCategoryStatusSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.setCategoryStatus(
+          requireParam(req.params.id, 'id'),
+          req.body.isActive === true,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
       } catch (error) {
         next(error);
       }
@@ -84,6 +132,60 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
           req.correlationId,
         );
         res.status(201).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.patch(
+    '/local-services/:id/contacts/:contactId',
+    authRequired(deps.config, ['admin']),
+    validateBody(updateLocalServiceContactSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const result = await service.updateContact(
+          requireParam(req.params.id, 'id'),
+          requireParam(req.params.contactId, 'contactId'),
+          req.body,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/local-services/:id/contacts/:contactId/photo',
+    authRequired(deps.config, ['admin']),
+    upload.single('photo'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        const file = req.file;
+        if (!file) {
+          throw new AppError('invalid_file', 'Photo file is required', 400);
+        }
+        const result = await service.setContactPhoto(
+          requireParam(req.params.id, 'id'),
+          requireParam(req.params.contactId, 'contactId'),
+          {
+            buffer: file.buffer,
+            mimetype: file.mimetype,
+            originalname: file.originalname,
+          },
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
       } catch (error) {
         next(error);
       }

@@ -421,12 +421,20 @@ class ReportPrintSupport {
     return current.copyWith(message: 'We received this. Staff will review.');
   }
 
-  Future<void> reportPagesMissing(ReportPrintSnapshot current, ApiClient api) async {
+  Future<void> reportPagesMissing(
+    ReportPrintSnapshot current,
+    ApiClient api, {
+    required String name,
+    required String phone,
+    required String message,
+  }) async {
     final jobId = current.previewJobId;
     if (jobId == null || jobId.isEmpty) return;
     await PrintJobSupport(api).send(
       jobId: jobId,
-      message: 'Visitor says the pages were not received.',
+      name: name,
+      phone: phone,
+      message: message,
     );
   }
 }

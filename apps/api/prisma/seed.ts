@@ -32,12 +32,15 @@ async function main() {
       },
     }));
 
-  const demoDeviceSecretHash = await bcrypt.hash('DemoDeviceSecret@12345', 10);
+  const demoDeviceSecret = 'DemoDeviceSecret@12345';
+  const demoDeviceSecretHash = await bcrypt.hash(demoDeviceSecret, 10);
   const demoDevice = await prisma.device.upsert({
     where: { deviceKey: 'demo-kiosk-lobby' },
     update: {
       name: 'Demo Kiosk — Lobby',
       status: DeviceStatus.active,
+      deviceSecret: demoDeviceSecret,
+      deviceSecretHash: demoDeviceSecretHash,
     },
     create: {
       tenantId: tenant.id,
@@ -45,6 +48,7 @@ async function main() {
       name: 'Demo Kiosk — Lobby',
       deviceKey: 'demo-kiosk-lobby',
       deviceSecretHash: demoDeviceSecretHash,
+      deviceSecret: demoDeviceSecret,
       status: DeviceStatus.active,
       address: 'Demo Site lobby',
     },

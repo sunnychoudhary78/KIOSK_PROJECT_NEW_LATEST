@@ -329,8 +329,14 @@ describe('PrintingService.updateStatus reconciliation', () => {
       db as unknown as DbClient,
       { record: vi.fn(async () => undefined) } as unknown as AuditService,
     );
-    const first = await service.openJobSupportNote(jobId, deviceId, note.message);
-    const second = await service.openJobSupportNote(jobId, deviceId, 'another note');
+    const first = await service.openJobSupportNote(jobId, deviceId, {
+      name: 'Ravi',
+      phone: '9876543210',
+      message: note.message,
+    });
+    const second = await service.openJobSupportNote(jobId, deviceId, {
+      message: 'another note',
+    });
     expect(first.id).toBe(note.id);
     expect(second).toEqual({ id: note.id, status: note.status, message: note.message });
     expect(create).toHaveBeenCalledTimes(1);

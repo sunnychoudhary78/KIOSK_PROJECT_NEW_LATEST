@@ -258,6 +258,8 @@ model Device {
   name             String
   deviceKey        String       @unique @map("device_key")
   deviceSecretHash String       @map("device_secret_hash")
+  /// Plaintext secret for admin desktop-login display. Auth still uses deviceSecretHash.
+  deviceSecret     String?      @map("device_secret")
   status           DeviceStatus @default(provisioning)
   latitude         Float?
   longitude        Float?
@@ -887,20 +889,29 @@ model LocalServiceCategory {
   slug      String                @unique
   name      String
   sortOrder Int                   @map("sort_order")
+  /// When false, the trade is hidden from kiosks but kept in admin.
+  isActive  Boolean               @default(true) @map("is_active")
   contacts  LocalServiceContact[]
 
   @@map("local_service_categories")
 }
 
 model LocalServiceContact {
-  id         String               @id @default(uuid()) @db.Uuid
-  categoryId String               @map("category_id") @db.Uuid
-  name       String
-  phone      String               @db.VarChar(10)
-  sortOrder  Int                  @map("sort_order")
-  category   LocalServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  id               String               @id @default(uuid()) @db.Uuid
+  categoryId       String               @map("category_id") @db.Uuid
+  name             String
+  phone            String               @db.VarChar(10)
+  sortOrder        Int                  @map("sort_order")
+  /// Admin-set star rating 0–5. Higher ranks first on the kiosk (after pinned).
+  rating           Float                @default(0)
+  /// When true, contact stays at the top of its category list.
+  pinned           Boolean              @default(false)
+  address          String?
+  photoStoragePath String?              @map("photo_storage_path")
+  category         LocalServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@index([categoryId, sortOrder])
+  @@index([categoryId, pinned, rating])
   @@map("local_service_contacts")
 }
 
