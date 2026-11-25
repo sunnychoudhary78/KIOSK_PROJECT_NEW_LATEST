@@ -26,7 +26,7 @@
   "findServicesHelper": "नाम और फ़ोन नंबर देखने के लिए कोई सेवा चुनें।",
   "findServicesEmpty": "कोई सेवा उपलब्ध नहीं",
   "findServicesEmptyHelper": "रिफ़्रेश करें, या बाद में फिर कोशिश करें।",
-  "findServicesContactsHelper": "ज़्यादा जानकारी के लिए नाम पर टैप करें।",
+  "findServicesContactsHelper": "पहले पिन · फिर ऊँची रेटिंग। फ़ोन के लिए टैप करें।",
   "findServicesNoContacts": "इस सूची में कोई नंबर नहीं है।",
   "findServicesContactCount": "{count} संपर्क",
   "findServicesMoreInfo": "और जानकारी",

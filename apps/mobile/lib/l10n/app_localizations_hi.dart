@@ -96,7 +96,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get findServicesContactsHelper =>
-      'ज़्यादा जानकारी के लिए नाम पर टैप करें।';
+      'पहले पिन · फिर ऊँची रेटिंग। फ़ोन के लिए टैप करें।';
 
   @override
   String get findServicesNoContacts => 'इस सूची में कोई नंबर नहीं है।';

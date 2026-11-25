@@ -95,7 +95,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get findServicesEmptyHelper => 'Pull to refresh, or try again later.';
 
   @override
-  String get findServicesContactsHelper => 'Tap a name for more info.';
+  String get findServicesContactsHelper =>
+      'Pinned first · highest rating next. Tap for phone.';
 
   @override
   String get findServicesNoContacts => 'No numbers in this list.';

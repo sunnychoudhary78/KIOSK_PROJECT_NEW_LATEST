@@ -53,9 +53,12 @@ class FindServicesNotifier extends Notifier<FindServicesState> {
     if (raw is List) {
       for (final item in raw) {
         if (item is Map) {
-          categories.add(
-            LocalServiceCategory.fromJson(Map<String, dynamic>.from(item)),
+          final category = LocalServiceCategory.fromJson(
+            Map<String, dynamic>.from(item),
           );
+          if (category.isActive) {
+            categories.add(category);
+          }
         }
       }
     }

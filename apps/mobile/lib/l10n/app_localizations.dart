@@ -257,7 +257,7 @@ abstract class AppLocalizations {
   /// No description provided for @findServicesContactsHelper.
   ///
   /// In en, this message translates to:
-  /// **'Tap a name for more info.'**
+  /// **'Pinned first · highest rating next. Tap for phone.'**
   String get findServicesContactsHelper;
 
   /// No description provided for @findServicesNoContacts.

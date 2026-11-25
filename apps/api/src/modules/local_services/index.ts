@@ -32,7 +32,8 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
       try {
         const deviceId =
           req.principal?.type === 'device' ? req.principal.deviceId : undefined;
-        res.json(await service.list(deviceId));
+        const includeInactive = req.principal?.type === 'admin';
+        res.json(await service.list(deviceId, { includeInactive }));
       } catch (error) {
         next(error);
       }
@@ -41,7 +42,7 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
 
   router.get(
     '/local-services/contacts/:contactId/photo',
-    authRequired(deps.config, ['admin', 'device']),
+    authRequired(deps.config, ['admin', 'device', 'citizen']),
     assertActiveDevice(deps.db),
     async (req: Request, res: Response, next: NextFunction) => {
       try {

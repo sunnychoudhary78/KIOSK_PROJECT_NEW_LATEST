@@ -31,7 +31,7 @@
   "findServicesHelper": "Choose a trade to see names and phone numbers.",
   "findServicesEmpty": "No services available",
   "findServicesEmptyHelper": "Pull to refresh, or try again later.",
-  "findServicesContactsHelper": "Tap a name for more info.",
+  "findServicesContactsHelper": "Pinned first · highest rating next. Tap for phone.",
   "findServicesNoContacts": "No numbers in this list.",
   "findServicesContactCount": "{count} contacts",
   "@findServicesContactCount": {
