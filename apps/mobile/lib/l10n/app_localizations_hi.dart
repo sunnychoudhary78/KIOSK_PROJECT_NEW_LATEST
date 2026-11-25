@@ -74,6 +74,121 @@ class AppLocalizationsHi extends AppLocalizations {
   String get nearbyTileSubtitle => 'आपसे दूरी के अनुसार सक्रिय कियोस्क देखें।';
 
   @override
+  String get findServicesTileTitle => 'सेवाएँ खोजें';
+
+  @override
+  String get findServicesTileSubtitle =>
+      'मैकेनिक, दर्ज़ी, प्लंबर और अन्य स्थानीय सेवाएँ।';
+
+  @override
+  String get findServicesTitle => 'सेवाएँ खोजें';
+
+  @override
+  String get findServicesHelper =>
+      'नाम और फ़ोन नंबर देखने के लिए कोई सेवा चुनें।';
+
+  @override
+  String get findServicesEmpty => 'कोई सेवा उपलब्ध नहीं';
+
+  @override
+  String get findServicesEmptyHelper =>
+      'रिफ़्रेश करें, या बाद में फिर कोशिश करें।';
+
+  @override
+  String get findServicesContactsHelper =>
+      'पहले पिन · फिर ऊँची रेटिंग। फ़ोन के लिए टैप करें।';
+
+  @override
+  String get findServicesNoContacts => 'इस सूची में कोई नंबर नहीं है।';
+
+  @override
+  String findServicesContactCount(int count) {
+    return '$count संपर्क';
+  }
+
+  @override
+  String get findServicesMoreInfo => 'और जानकारी';
+
+  @override
+  String get findServicesContactHint =>
+      'इस व्यक्ति से संपर्क करने के लिए आप सीधे कॉल कर सकते हैं।';
+
+  @override
+  String get findServicesCall => 'कॉल करें';
+
+  @override
+  String get couldNotPlaceCall => 'कॉल नहीं हो सकी।';
+
+  @override
+  String get fuelStationsTileTitle => 'ईंधन स्टेशन';
+
+  @override
+  String get fuelStationsTileSubtitle =>
+      'आपके पास पेट्रोल, डीज़ल, सीएनजी और ईवी स्टेशन।';
+
+  @override
+  String get fuelStationsTitle => 'ईंधन स्टेशन';
+
+  @override
+  String get fuelStationsHelper => '5 किमी के अंदर स्टेशन, दूरी के अनुसार।';
+
+  @override
+  String get fuelStationsEmpty => 'आसपास कोई स्टेशन नहीं';
+
+  @override
+  String get fuelStationsEmptyHelper =>
+      'दूसरा फ़िल्टर आज़माएँ, या स्टेशन के करीब जाएँ।';
+
+  @override
+  String get fuelKindAll => 'सभी';
+
+  @override
+  String get fuelKindPetrolDiesel => 'पेट्रोल/डीज़ल';
+
+  @override
+  String get fuelKindCng => 'सीएनजी';
+
+  @override
+  String get fuelKindEv => 'ईवी';
+
+  @override
+  String get astrologyPanditTileTitle => 'पंडित से संपर्क';
+
+  @override
+  String get astrologyPanditTileSubtitle =>
+      'नाम, रेटिंग और फ़ोन — जब पंडित जी की ज़रूरत हो।';
+
+  @override
+  String get astrologyAstrologerTileTitle => 'ज्योतिषी से संपर्क';
+
+  @override
+  String get astrologyAstrologerTileSubtitle =>
+      'ज्योतिष सलाह के लिए नाम, रेटिंग और फ़ोन।';
+
+  @override
+  String get astrologyPanditTitle => 'पंडित से संपर्क';
+
+  @override
+  String get astrologyAstrologerTitle => 'ज्योतिषी से संपर्क';
+
+  @override
+  String get astrologyPanditHelper => 'फ़ोन देखने के लिए Show number टैप करें।';
+
+  @override
+  String get astrologyAstrologerHelper =>
+      'फ़ोन देखने के लिए Show number टैप करें।';
+
+  @override
+  String get astrologyShowNumber => 'नंबर दिखाएँ';
+
+  @override
+  String get astrologyContactHint =>
+      'इस व्यक्ति से संपर्क करने के लिए आप सीधे कॉल कर सकते हैं।';
+
+  @override
+  String get astrologyContactsEmpty => 'अभी कोई संपर्क उपलब्ध नहीं है।';
+
+  @override
   String get activeSessionTitle => 'सक्रिय प्रिंट सत्र';
 
   @override

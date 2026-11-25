@@ -1,4 +1,5 @@
 export 'skp_action_tile.dart';
+export 'skp_app_menu.dart';
 export 'skp_back_button.dart';
 export 'skp_brand_header.dart';
 export 'skp_buttons.dart';

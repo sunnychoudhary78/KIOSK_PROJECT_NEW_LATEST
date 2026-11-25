@@ -9,10 +9,10 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_webrtc
   livekit_client
   media_kit_libs_windows_video
+  media_kit_video
   printing
   screen_retriever_windows
   volume_controller
-  media_kit_video
   webview_windows
   window_manager
 )

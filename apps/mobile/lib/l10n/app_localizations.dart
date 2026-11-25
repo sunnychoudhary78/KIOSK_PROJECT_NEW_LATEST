@@ -218,6 +218,210 @@ abstract class AppLocalizations {
   /// **'See active kiosks sorted by distance from you.'**
   String get nearbyTileSubtitle;
 
+  /// No description provided for @findServicesTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find services'**
+  String get findServicesTileTitle;
+
+  /// No description provided for @findServicesTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mechanics, tailors, plumbers, and more near you.'**
+  String get findServicesTileSubtitle;
+
+  /// No description provided for @findServicesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find services'**
+  String get findServicesTitle;
+
+  /// No description provided for @findServicesHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a trade to see names and phone numbers.'**
+  String get findServicesHelper;
+
+  /// No description provided for @findServicesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No services available'**
+  String get findServicesEmpty;
+
+  /// No description provided for @findServicesEmptyHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull to refresh, or try again later.'**
+  String get findServicesEmptyHelper;
+
+  /// No description provided for @findServicesContactsHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned first · highest rating next. Tap for phone.'**
+  String get findServicesContactsHelper;
+
+  /// No description provided for @findServicesNoContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'No numbers in this list.'**
+  String get findServicesNoContacts;
+
+  /// No description provided for @findServicesContactCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} contacts'**
+  String findServicesContactCount(int count);
+
+  /// No description provided for @findServicesMoreInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'More info'**
+  String get findServicesMoreInfo;
+
+  /// No description provided for @findServicesContactHint.
+  ///
+  /// In en, this message translates to:
+  /// **'To contact this person, you can call them directly.'**
+  String get findServicesContactHint;
+
+  /// No description provided for @findServicesCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get findServicesCall;
+
+  /// No description provided for @couldNotPlaceCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not place the call.'**
+  String get couldNotPlaceCall;
+
+  /// No description provided for @fuelStationsTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel stations'**
+  String get fuelStationsTileTitle;
+
+  /// No description provided for @fuelStationsTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Petrol, diesel, CNG, and EV stations near you.'**
+  String get fuelStationsTileSubtitle;
+
+  /// No description provided for @fuelStationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel stations'**
+  String get fuelStationsTitle;
+
+  /// No description provided for @fuelStationsHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Nearby stations within 5 km, sorted by distance.'**
+  String get fuelStationsHelper;
+
+  /// No description provided for @fuelStationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No stations nearby'**
+  String get fuelStationsEmpty;
+
+  /// No description provided for @fuelStationsEmptyHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another fuel type, or move closer to a station.'**
+  String get fuelStationsEmptyHelper;
+
+  /// No description provided for @fuelKindAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get fuelKindAll;
+
+  /// No description provided for @fuelKindPetrolDiesel.
+  ///
+  /// In en, this message translates to:
+  /// **'Petrol/Diesel'**
+  String get fuelKindPetrolDiesel;
+
+  /// No description provided for @fuelKindCng.
+  ///
+  /// In en, this message translates to:
+  /// **'CNG'**
+  String get fuelKindCng;
+
+  /// No description provided for @fuelKindEv.
+  ///
+  /// In en, this message translates to:
+  /// **'EV'**
+  String get fuelKindEv;
+
+  /// No description provided for @astrologyPanditTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Pandit'**
+  String get astrologyPanditTileTitle;
+
+  /// No description provided for @astrologyPanditTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name, rating, and phone when you need a pandit.'**
+  String get astrologyPanditTileSubtitle;
+
+  /// No description provided for @astrologyAstrologerTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Astrologer'**
+  String get astrologyAstrologerTileTitle;
+
+  /// No description provided for @astrologyAstrologerTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name, rating, and phone for astrology guidance.'**
+  String get astrologyAstrologerTileSubtitle;
+
+  /// No description provided for @astrologyPanditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Pandit'**
+  String get astrologyPanditTitle;
+
+  /// No description provided for @astrologyAstrologerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Astrologer'**
+  String get astrologyAstrologerTitle;
+
+  /// No description provided for @astrologyPanditHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Show number to reveal the phone.'**
+  String get astrologyPanditHelper;
+
+  /// No description provided for @astrologyAstrologerHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Show number to reveal the phone.'**
+  String get astrologyAstrologerHelper;
+
+  /// No description provided for @astrologyShowNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Show number'**
+  String get astrologyShowNumber;
+
+  /// No description provided for @astrologyContactHint.
+  ///
+  /// In en, this message translates to:
+  /// **'To contact this person, you can call them directly.'**
+  String get astrologyContactHint;
+
+  /// No description provided for @astrologyContactsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts available right now.'**
+  String get astrologyContactsEmpty;
+
   /// No description provided for @activeSessionTitle.
   ///
   /// In en, this message translates to:

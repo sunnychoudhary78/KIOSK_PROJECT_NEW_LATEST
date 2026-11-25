@@ -75,6 +75,121 @@ class AppLocalizationsEn extends AppLocalizations {
       'See active kiosks sorted by distance from you.';
 
   @override
+  String get findServicesTileTitle => 'Find services';
+
+  @override
+  String get findServicesTileSubtitle =>
+      'Mechanics, tailors, plumbers, and more near you.';
+
+  @override
+  String get findServicesTitle => 'Find services';
+
+  @override
+  String get findServicesHelper =>
+      'Choose a trade to see names and phone numbers.';
+
+  @override
+  String get findServicesEmpty => 'No services available';
+
+  @override
+  String get findServicesEmptyHelper => 'Pull to refresh, or try again later.';
+
+  @override
+  String get findServicesContactsHelper =>
+      'Pinned first · highest rating next. Tap for phone.';
+
+  @override
+  String get findServicesNoContacts => 'No numbers in this list.';
+
+  @override
+  String findServicesContactCount(int count) {
+    return '$count contacts';
+  }
+
+  @override
+  String get findServicesMoreInfo => 'More info';
+
+  @override
+  String get findServicesContactHint =>
+      'To contact this person, you can call them directly.';
+
+  @override
+  String get findServicesCall => 'Call';
+
+  @override
+  String get couldNotPlaceCall => 'Could not place the call.';
+
+  @override
+  String get fuelStationsTileTitle => 'Fuel stations';
+
+  @override
+  String get fuelStationsTileSubtitle =>
+      'Petrol, diesel, CNG, and EV stations near you.';
+
+  @override
+  String get fuelStationsTitle => 'Fuel stations';
+
+  @override
+  String get fuelStationsHelper =>
+      'Nearby stations within 5 km, sorted by distance.';
+
+  @override
+  String get fuelStationsEmpty => 'No stations nearby';
+
+  @override
+  String get fuelStationsEmptyHelper =>
+      'Try another fuel type, or move closer to a station.';
+
+  @override
+  String get fuelKindAll => 'All';
+
+  @override
+  String get fuelKindPetrolDiesel => 'Petrol/Diesel';
+
+  @override
+  String get fuelKindCng => 'CNG';
+
+  @override
+  String get fuelKindEv => 'EV';
+
+  @override
+  String get astrologyPanditTileTitle => 'Contact Pandit';
+
+  @override
+  String get astrologyPanditTileSubtitle =>
+      'Name, rating, and phone when you need a pandit.';
+
+  @override
+  String get astrologyAstrologerTileTitle => 'Contact Astrologer';
+
+  @override
+  String get astrologyAstrologerTileSubtitle =>
+      'Name, rating, and phone for astrology guidance.';
+
+  @override
+  String get astrologyPanditTitle => 'Contact Pandit';
+
+  @override
+  String get astrologyAstrologerTitle => 'Contact Astrologer';
+
+  @override
+  String get astrologyPanditHelper => 'Tap Show number to reveal the phone.';
+
+  @override
+  String get astrologyAstrologerHelper =>
+      'Tap Show number to reveal the phone.';
+
+  @override
+  String get astrologyShowNumber => 'Show number';
+
+  @override
+  String get astrologyContactHint =>
+      'To contact this person, you can call them directly.';
+
+  @override
+  String get astrologyContactsEmpty => 'No contacts available right now.';
+
+  @override
   String get activeSessionTitle => 'Active print session';
 
   @override
