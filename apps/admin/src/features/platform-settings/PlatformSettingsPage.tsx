@@ -30,8 +30,8 @@ type CitizenAuthForm = {
 
 type FreeQuotaForm = {
   period: 'daily' | 'weekly' | 'monthly';
-  freeBwPages: number;
-  freeColorPages: number;
+  freeBwPages: number | '';
+  freeColorPages: number | '';
 };
 
 type AdsForm = {
@@ -535,10 +535,7 @@ export function PlatformSettingsPage() {
                   const raw = e.target.value;
                   setFreeQuota((s) => ({
                     ...s,
-                    freeBwPages:
-                      raw === ''
-                        ? s.freeBwPages
-                        : Math.max(0, Math.min(500, Number(raw) || 0)),
+                    freeBwPages: raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
                   }));
                 }}
               />
@@ -555,9 +552,7 @@ export function PlatformSettingsPage() {
                   setFreeQuota((s) => ({
                     ...s,
                     freeColorPages:
-                      raw === ''
-                        ? s.freeColorPages
-                        : Math.max(0, Math.min(500, Number(raw) || 0)),
+                      raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
                   }));
                 }}
               />
@@ -566,7 +561,8 @@ export function PlatformSettingsPage() {
           <p className="muted" style={{ margin: '0.75rem 0 0' }}>
             Shared across mobile OTP print and Quick Print web for the same phone. Each kiosk still
             has its own per-session free cap and optional night free-disabled window. Society numbers
-            use a separate limit on the <Link to="/society-phones">Society phones</Link> page.
+            use a separate limit on the{' '}
+            <Link to="/free-print?tab=limits">Free print</Link> page.
           </p>
         </Panel>
 

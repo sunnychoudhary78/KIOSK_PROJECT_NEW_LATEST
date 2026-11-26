@@ -13,7 +13,9 @@ function memoryService(initial: string[] = []) {
         const rows = [...phones].filter((phone) => !allowed || allowed.includes(phone));
         return rows.map((phone) => ({ phone }));
       }),
-      createMany: vi.fn(async (args: { data: Array<{ phone: string }> }) => {
+      createMany: vi.fn(async (args: {
+        data: Array<{ phone: string; name?: string; color?: string }>;
+      }) => {
         let count = 0;
         for (const item of args.data) {
           if (phones.has(item.phone)) continue;

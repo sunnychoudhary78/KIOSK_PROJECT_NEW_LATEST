@@ -865,10 +865,15 @@ model PhoneFreePageLedger {
 }
 
 model SocietyPhone {
-  id        String   @id @default(uuid()) @db.Uuid
-  phone     String   @unique @db.VarChar(20)
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid()) @db.Uuid
+  phone       String   @unique @db.VarChar(20)
+  name        String   @default("") @db.VarChar(120)
+  societyName String   @default("") @map("society_name") @db.VarChar(160)
+  color       String   @default("blue") @db.VarChar(32)
+  createdAt   DateTime @default(now()) @map("created_at")
 
+  @@index([name])
+  @@index([societyName])
   @@map("society_phones")
 }
 

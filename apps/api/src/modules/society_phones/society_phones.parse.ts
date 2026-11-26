@@ -1,31 +1,70 @@
 import ExcelJS from 'exceljs';
 import { AppError } from '../../shared/errors.js';
+import { normalizeSocietyColor, type SocietyPhoneColor } from './society_phones.schemas.js';
 
 export const SOCIETY_IMPORT_MAX_ROWS = 5_000;
 export const SOCIETY_IMPORT_MAX_INVALID = 50;
 
-const HEADER_NAMES = new Set(['phone', 'mobile', 'number', 'phonenumber', 'mobilenumber']);
+const PHONE_HEADERS = new Set(['phone', 'mobile', 'number', 'phonenumber', 'mobilenumber']);
+const NAME_HEADERS = new Set(['name', 'fullname', 'resident', 'residentname', 'member', 'membername']);
+const SOCIETY_NAME_HEADERS = new Set([
+  'society',
+  'societyname',
+  'building',
+  'buildingname',
+  'complex',
+  'complexname',
+  'apartment',
+  'apartmentname',
+]);
+const COLOR_HEADERS = new Set(['color', 'colour', 'tag', 'tagcolor']);
+
+export type ParsedSocietyRow = {
+  row: number;
+  phoneRaw: string;
+  name: string;
+  societyName: string;
+  color: SocietyPhoneColor;
+};
 
 export type ParsedPhoneCell = {
   row: number;
   raw: string;
 };
 
-function headerIndex(cells: string[]): number {
-  return cells.findIndex((cell) => HEADER_NAMES.has(cell.trim().toLowerCase().replace(/[\s_-]+/g, '')));
+function normalizeHeader(cell: string): string {
+  return cell.trim().toLowerCase().replace(/[\s_-]+/g, '');
 }
 
-function rowsToCells(rows: string[][]): ParsedPhoneCell[] {
+function findHeader(cells: string[], names: Set<string>): number {
+  return cells.findIndex((cell) => names.has(normalizeHeader(cell)));
+}
+
+function mapRowsToSociety(
+  rows: Array<{ rowNumber: number; cells: string[] }>,
+): ParsedSocietyRow[] {
   if (rows.length === 0) return [];
-  const first = rows[0] ?? [];
-  const header = headerIndex(first);
-  const column = header >= 0 ? header : 0;
-  const start = header >= 0 ? 1 : 0;
-  const values: ParsedPhoneCell[] = [];
+  const first = rows[0]?.cells ?? [];
+  const phoneHeader = findHeader(first, PHONE_HEADERS);
+  const nameHeader = findHeader(first, NAME_HEADERS);
+  const societyNameHeader = findHeader(first, SOCIETY_NAME_HEADERS);
+  const colorHeader = findHeader(first, COLOR_HEADERS);
+  const hasHeader =
+    phoneHeader >= 0 || nameHeader >= 0 || societyNameHeader >= 0 || colorHeader >= 0;
+  const phoneColumn = phoneHeader >= 0 ? phoneHeader : 0;
+  const start = hasHeader ? 1 : 0;
+  const values: ParsedSocietyRow[] = [];
   for (let index = start; index < rows.length; index += 1) {
-    const raw = (rows[index]?.[column] ?? '').trim();
-    if (!raw) continue;
-    values.push({ row: index + 1, raw });
+    const sheetRow = rows[index];
+    if (!sheetRow) continue;
+    const phoneRaw = (sheetRow.cells[phoneColumn] ?? '').trim();
+    if (!phoneRaw) continue;
+    const name = nameHeader >= 0 ? (sheetRow.cells[nameHeader] ?? '').trim() : '';
+    const societyName =
+      societyNameHeader >= 0 ? (sheetRow.cells[societyNameHeader] ?? '').trim() : '';
+    const color =
+      colorHeader >= 0 ? normalizeSocietyColor(sheetRow.cells[colorHeader]) : 'blue';
+    values.push({ row: sheetRow.rowNumber, phoneRaw, name, societyName, color });
   }
   if (values.length > SOCIETY_IMPORT_MAX_ROWS) {
     throw new AppError(
@@ -67,10 +106,18 @@ function splitCsvLine(line: string): string[] {
   return cells;
 }
 
-export function parseCsvPhones(text: string): ParsedPhoneCell[] {
+export function parseCsvSocietyRows(text: string): ParsedSocietyRow[] {
   const cleaned = text.replace(/^\uFEFF/, '');
   const lines = cleaned.split(/\r?\n/);
-  return rowsToCells(lines.map((line) => splitCsvLine(line).map((cell) => cell.trim())));
+  const rows = lines.map((line, index) => ({
+    rowNumber: index + 1,
+    cells: splitCsvLine(line).map((cell) => cell.trim()),
+  }));
+  return mapRowsToSociety(rows);
+}
+
+export function parseCsvPhones(text: string): ParsedPhoneCell[] {
+  return parseCsvSocietyRows(text).map((row) => ({ row: row.row, raw: row.phoneRaw }));
 }
 
 function cellToString(value: unknown): string {
@@ -100,7 +147,7 @@ function cellToString(value: unknown): string {
   return '';
 }
 
-export async function parseXlsxPhones(buffer: Buffer): Promise<ParsedPhoneCell[]> {
+export async function parseXlsxSocietyRows(buffer: Buffer): Promise<ParsedSocietyRow[]> {
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
@@ -122,24 +169,10 @@ export async function parseXlsxPhones(buffer: Buffer): Promise<ParsedPhoneCell[]
       rows.push({ rowNumber: row.number, cells });
     }
   });
-  if (rows.length === 0) return [];
-  const header = headerIndex(rows[0]?.cells ?? []);
-  const column = header >= 0 ? header : 0;
-  const start = header >= 0 ? 1 : 0;
-  const values: ParsedPhoneCell[] = [];
-  for (let index = start; index < rows.length; index += 1) {
-    const sheetRow = rows[index];
-    if (!sheetRow) continue;
-    const raw = (sheetRow.cells[column] ?? '').trim();
-    if (!raw) continue;
-    values.push({ row: sheetRow.rowNumber, raw });
-  }
-  if (values.length > SOCIETY_IMPORT_MAX_ROWS) {
-    throw new AppError(
-      'too_many_rows',
-      `Upload has more than ${SOCIETY_IMPORT_MAX_ROWS} phone numbers`,
-      400,
-    );
-  }
-  return values;
+  return mapRowsToSociety(rows);
+}
+
+export async function parseXlsxPhones(buffer: Buffer): Promise<ParsedPhoneCell[]> {
+  const rows = await parseXlsxSocietyRows(buffer);
+  return rows.map((row) => ({ row: row.row, raw: row.phoneRaw }));
 }

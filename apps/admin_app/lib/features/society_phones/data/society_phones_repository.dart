@@ -50,8 +50,16 @@ class SocietyPhonesRepository {
     );
   }
 
-  Future<void> add(String phone) async {
-    await _api.post('/society-phones', body: {'phone': phone.trim()});
+  Future<void> add({
+    required String phone,
+    required String name,
+    required String societyName,
+  }) async {
+    await _api.post('/society-phones', body: {
+      'phone': phone.trim(),
+      'name': name.trim(),
+      'societyName': societyName.trim(),
+    });
   }
 
   Future<void> remove(String id) async {

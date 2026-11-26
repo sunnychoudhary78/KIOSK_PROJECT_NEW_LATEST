@@ -56,7 +56,16 @@ export function registerSocietyPhonesModule(router: Router, deps: AppDeps): void
         if (!req.principal) {
           throw new AppError('unauthorized', 'Missing principal', 401);
         }
-        const result = await service.add(req.body.phone, req.principal.id, req.correlationId);
+        const result = await service.add(
+          {
+            phone: req.body.phone,
+            name: req.body.name,
+            societyName: req.body.societyName,
+            color: req.body.color,
+          },
+          req.principal.id,
+          req.correlationId,
+        );
         res.status(201).json(result);
       } catch (error) {
         next(error);

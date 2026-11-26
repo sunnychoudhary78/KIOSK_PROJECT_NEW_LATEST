@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import { Button, EmptyState, Input, PageHeader, Panel, Select } from '../../core/ui/primitives';
@@ -7,13 +8,15 @@ type QuotaPeriod = 'daily' | 'weekly' | 'monthly';
 
 type FreeQuotaForm = {
   period: QuotaPeriod;
-  freeBwPages: number;
-  freeColorPages: number;
+  freeBwPages: number | '';
+  freeColorPages: number | '';
 };
 
 type SocietyPhone = {
   id: string;
   phone: string;
+  name: string;
+  societyName: string;
   createdAt: string;
 };
 
@@ -40,7 +43,17 @@ const DEFAULT_QUOTA: FreeQuotaForm = {
   freeColorPages: 0,
 };
 
-export function SocietyPhonesPage() {
+type SocietyPhonesPageProps = {
+  /** Hide page chrome when nested inside Free Print hub */
+  embedded?: boolean;
+  /** When false, quota editor is omitted (hub Limits tab owns it) */
+  showQuota?: boolean;
+};
+
+export function SocietyPhonesPage({
+  embedded = false,
+  showQuota = true,
+}: SocietyPhonesPageProps = {}) {
   const { token } = useAuth();
   const [quota, setQuota] = useState<FreeQuotaForm>(DEFAULT_QUOTA);
   const [quotaError, setQuotaError] = useState<string | null>(null);
@@ -48,6 +61,8 @@ export function SocietyPhonesPage() {
   const [savingQuota, setSavingQuota] = useState(false);
 
   const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [societyName, setSocietyName] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -88,10 +103,11 @@ export function SocietyPhonesPage() {
   }, [token, search]);
 
   useEffect(() => {
+    if (!showQuota) return;
     void loadQuota().catch((err: unknown) => {
       setQuotaError(err instanceof Error ? err.message : 'Failed to load society quota');
     });
-  }, [loadQuota]);
+  }, [loadQuota, showQuota]);
 
   useEffect(() => {
     void loadList();
@@ -128,15 +144,29 @@ export function SocietyPhonesPage() {
 
   async function addPhone(event: FormEvent) {
     event.preventDefault();
+    if (!name.trim()) {
+      setAddError('Enter the person name');
+      return;
+    }
+    if (!societyName.trim()) {
+      setAddError('Enter the society name');
+      return;
+    }
     setAdding(true);
     setAddError(null);
     try {
       await apiRequest('/society-phones', {
         method: 'POST',
         token,
-        body: { phone: phone.trim() },
+        body: {
+          phone: phone.trim(),
+          name: name.trim(),
+          societyName: societyName.trim(),
+        },
       });
       setPhone('');
+      setName('');
+      setSocietyName('');
       await loadList();
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Failed to add number');
@@ -174,7 +204,10 @@ export function SocietyPhonesPage() {
   }
 
   async function removePhone(item: SocietyPhone) {
-    if (!window.confirm(`Remove ${item.phone} from the society list?`)) return;
+    const person = item.name?.trim() || item.phone;
+    const society = item.societyName?.trim();
+    const label = society ? `${person} · ${society} (${item.phone})` : `${person} (${item.phone})`;
+    if (!window.confirm(`Remove ${label} from the society list?`)) return;
     setRemovingId(item.id);
     setListError(null);
     try {
@@ -189,130 +222,177 @@ export function SocietyPhonesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Society phones"
-        subtitle="Listed numbers use this free limit. The kiosk session cap and night free-disabled window still apply."
-      />
+      {embedded ? null : (
+        <PageHeader
+          title="Society phones"
+          subtitle="Listed numbers use this free limit. The kiosk session cap and night free-disabled window still apply."
+        />
+      )}
 
-      <Panel title="Society free limit">
-        <form onSubmit={(event) => void saveQuota(event)}>
-          <div className="settings-row">
-            <label>
-              Period
-              <Select
-                value={quota.period}
-                onChange={(e) => setQuota((s) => ({ ...s, period: e.target.value as QuotaPeriod }))}
-              >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </Select>
-            </label>
-            <label>
-              Free B/W pages
-              <Input
-                type="number"
-                min={0}
-                max={500}
-                value={quota.freeBwPages}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setQuota((s) => ({
-                    ...s,
-                    freeBwPages:
-                      raw === '' ? s.freeBwPages : Math.max(0, Math.min(500, Number(raw) || 0)),
-                  }));
-                }}
-              />
-            </label>
-            <label>
-              Free color pages
-              <Input
-                type="number"
-                min={0}
-                max={500}
-                value={quota.freeColorPages}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setQuota((s) => ({
-                    ...s,
-                    freeColorPages:
-                      raw === ''
-                        ? s.freeColorPages
-                        : Math.max(0, Math.min(500, Number(raw) || 0)),
-                  }));
-                }}
-              />
-            </label>
-          </div>
-          {quotaError ? <p className="error">{quotaError}</p> : null}
-          {quotaSaved ? <p className="text-sm text-muted-foreground">{quotaSaved}</p> : null}
-          <div className="mt-4">
-            <Button type="submit" disabled={savingQuota}>
-              {savingQuota ? 'Saving…' : 'Save limit'}
-            </Button>
-          </div>
-        </form>
-      </Panel>
+      {showQuota ? (
+        <Panel title="Society free limit">
+          <form onSubmit={(event) => void saveQuota(event)}>
+            <div className="settings-row">
+              <label>
+                Period
+                <Select
+                  value={quota.period}
+                  onChange={(e) => setQuota((s) => ({ ...s, period: e.target.value as QuotaPeriod }))}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </Select>
+              </label>
+              <label>
+                Free B/W pages
+                <Input
+                  type="number"
+                  min={0}
+                  max={500}
+                  value={quota.freeBwPages}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setQuota((s) => ({
+                      ...s,
+                      freeBwPages: raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
+                    }));
+                  }}
+                />
+              </label>
+              <label>
+                Free color pages
+                <Input
+                  type="number"
+                  min={0}
+                  max={500}
+                  value={quota.freeColorPages}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setQuota((s) => ({
+                      ...s,
+                      freeColorPages:
+                        raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
+                    }));
+                  }}
+                />
+              </label>
+            </div>
+            {quotaError ? <p className="error">{quotaError}</p> : null}
+            {quotaSaved ? <p className="text-sm text-muted-foreground">{quotaSaved}</p> : null}
+            <div className="mt-4">
+              <Button type="submit" disabled={savingQuota}>
+                {savingQuota ? 'Saving…' : 'Save limit'}
+              </Button>
+            </div>
+          </form>
+        </Panel>
+      ) : null}
 
-      <Panel title="Add one number">
-        <form className="flex flex-col gap-2 sm:flex-row sm:items-center" onSubmit={(event) => void addPhone(event)}>
-          <Input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="10-digit mobile number"
-            className="sm:max-w-xs"
-          />
-          <Button type="submit" disabled={adding || phone.trim().length === 0}>
-            {adding ? 'Adding…' : 'Add number'}
-          </Button>
-        </form>
-        {addError ? <p className="error">{addError}</p> : null}
-      </Panel>
-
-      <Panel title="Upload CSV or Excel">
-        <form className="space-y-3" onSubmit={(event) => void importFile(event)}>
-          <p className="text-sm text-muted-foreground">
-            Use a column named phone, mobile, or number. Without a header, the first column is used.
-            Upload adds numbers and does not remove ones already on the list. .xls files need to be saved as .xlsx.
+      {embedded ? (
+        <div className="rounded-xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/10 via-card to-card px-4 py-3 text-sm">
+          <p className="font-medium text-emerald-900 dark:text-emerald-100">
+            {list
+              ? `${list.total} number${list.total === 1 ? '' : 's'} on the society free list`
+              : 'Society free list'}
           </p>
-          <input
-            key={fileKey}
-            type="file"
-            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null);
-              setImportResult(null);
-              setImportError(null);
-            }}
-          />
-          <div>
-            <Button type="submit" disabled={importing || !file}>
-              {importing ? 'Uploading…' : 'Upload'}
-            </Button>
-          </div>
-        </form>
-        {importError ? <p className="error">{importError}</p> : null}
-        {importResult ? (
-          <div className="mt-3 text-sm">
-            <p>
-              Added {importResult.added}. Already listed or repeated in the file: {importResult.duplicate}.
-              Invalid: {importResult.invalidCount}.
-            </p>
-            {importResult.invalid.length > 0 ? (
-              <ul className="mt-2 list-disc pl-5 text-muted-foreground">
-                {importResult.invalid.map((row) => (
-                  <li key={`${row.row}-${row.value}`}>
-                    Row {row.row}: {row.value}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
-      </Panel>
+          <p className="mt-1 text-muted-foreground">
+            Add person name, society name, and mobile — or upload CSV / Excel. Removing a number
+            does not erase past ledger history.
+          </p>
+        </div>
+      ) : null}
 
-      <Panel title="Society list">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Add one number">
+          <form className="space-y-3" onSubmit={(event) => void addPhone(event)}>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Person name"
+              required
+            />
+            <Input
+              value={societyName}
+              onChange={(e) => setSocietyName(e.target.value)}
+              placeholder="Society name"
+              required
+            />
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="10-digit mobile number"
+              required
+            />
+            <Button
+              type="submit"
+              disabled={
+                adding ||
+                phone.trim().length === 0 ||
+                name.trim().length === 0 ||
+                societyName.trim().length === 0
+              }
+            >
+              {adding ? 'Adding…' : 'Add number'}
+            </Button>
+          </form>
+          {addError ? <p className="error">{addError}</p> : null}
+        </Panel>
+
+        <Panel title="Upload CSV or Excel">
+          <form className="space-y-3" onSubmit={(event) => void importFile(event)}>
+            <p className="text-sm text-muted-foreground">
+              Columns: phone (required), optional name and society / societyName. Upload adds only —
+              it does not remove existing numbers. Save .xls as .xlsx.
+            </p>
+            <input
+              key={fileKey}
+              type="file"
+              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null);
+                setImportResult(null);
+                setImportError(null);
+              }}
+            />
+            <div>
+              <Button type="submit" disabled={importing || !file}>
+                {importing ? 'Uploading…' : 'Upload'}
+              </Button>
+            </div>
+          </form>
+          {importError ? <p className="error">{importError}</p> : null}
+          {importResult ? (
+            <div className="mt-3 text-sm">
+              <p>
+                Added {importResult.added}. Already listed or repeated in the file:{' '}
+                {importResult.duplicate}. Invalid: {importResult.invalidCount}.
+              </p>
+              {importResult.invalid.length > 0 ? (
+                <ul className="mt-2 list-disc pl-5 text-muted-foreground">
+                  {importResult.invalid.map((row) => (
+                    <li key={`${row.row}-${row.value}`}>
+                      Row {row.row}: {row.value}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </Panel>
+      </div>
+
+      <Panel
+        title="Society list"
+        actions={
+          list ? (
+            <span className="text-xs text-muted-foreground">
+              {list.items.length} shown
+              {list.total > list.items.length ? ` of ${list.total}` : ''}
+            </span>
+          ) : null
+        }
+      >
         <form
           className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center"
           onSubmit={(e) => {
@@ -321,7 +401,7 @@ export function SocietyPhonesPage() {
           }}
         >
           <Input
-            placeholder="Search by phone digits"
+            placeholder="Search by person, society, or phone"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="sm:max-w-xs"
@@ -334,13 +414,15 @@ export function SocietyPhonesPage() {
         {!loading && !listError && (list?.items.length ?? 0) === 0 ? (
           <EmptyState
             title="No society numbers yet"
-            description="Add a mobile number or upload a CSV or Excel file."
+            description="Add person name, society name, and mobile — or upload a CSV or Excel file."
           />
         ) : null}
         {list && list.items.length > 0 ? (
           <table className="table">
             <thead>
               <tr>
+                <th>Person</th>
+                <th>Society</th>
                 <th>Phone</th>
                 <th>Added</th>
                 <th />
@@ -349,17 +431,29 @@ export function SocietyPhonesPage() {
             <tbody>
               {list.items.map((item) => (
                 <tr key={item.id}>
-                  <td className="font-medium font-mono text-sm">{item.phone}</td>
-                  <td className="text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</td>
+                  <td className="font-medium">{item.name?.trim() || '—'}</td>
+                  <td>{item.societyName?.trim() || '—'}</td>
+                  <td className="font-mono text-sm font-medium">{item.phone}</td>
+                  <td className="text-muted-foreground">
+                    {new Date(item.createdAt).toLocaleString()}
+                  </td>
                   <td>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={removingId === item.id}
-                      onClick={() => void removePhone(item)}
-                    >
-                      {removingId === item.id ? 'Removing…' : 'Remove'}
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Link
+                        to={`/free-print?tab=usage&q=${encodeURIComponent(item.phone)}`}
+                        className="text-sm font-medium text-primary hover:underline"
+                      >
+                        Track usage
+                      </Link>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={removingId === item.id}
+                        onClick={() => void removePhone(item)}
+                      >
+                        {removingId === item.id ? 'Removing…' : 'Remove'}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

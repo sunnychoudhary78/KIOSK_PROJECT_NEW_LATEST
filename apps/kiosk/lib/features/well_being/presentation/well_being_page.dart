@@ -15,6 +15,7 @@ import 'package:skp_kiosk/features/well_being/application/well_being_controller.
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
+import 'package:skp_kiosk/features/well_being/presentation/widgets/oxi_monitor_panel.dart';
 import 'package:skp_kiosk/features/well_being/presentation/widgets/well_being_marks.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
@@ -1332,23 +1333,22 @@ class _OxiMeasuringView extends StatelessWidget {
     return SingleChildScrollView(
       child: Column(
         children: [
-          Text('Keep your finger still', style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Keep your finger still',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 6),
           Text(
-            state.statusMessage ?? 'Do not move or press too hard during measurement.',
+            state.statusMessage ??
+                'Do not move or press too hard during measurement.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+            style: Theme.of(context)
+                .textTheme
+                .bodyLarge
+                ?.copyWith(color: SkpColors.muted),
           ),
-          const SizedBox(height: 24),
-          _TimerRing(seconds: state.secondsRemaining, progress: state.measureProgress),
-          const SizedBox(height: 24),
-          const Row(
-            children: [
-              Expanded(child: _MetricCard(title: 'Heart Rate', value: '…', unit: 'BPM')),
-              SizedBox(width: 12),
-              Expanded(child: _MetricCard(title: 'Blood Oxygen', value: '…', unit: 'SpO₂')),
-            ],
-          ),
+          const SizedBox(height: 16),
+          OxiMonitorPanel(state: state),
         ],
       ),
     );
@@ -1390,37 +1390,27 @@ class _OxiCompleteView extends StatelessWidget {
     return SingleChildScrollView(
       child: Column(
         children: [
-          const Icon(Icons.check_circle_outline, size: 64, color: SkpColors.accentBright),
-          const SizedBox(height: 12),
-          Text('Measurement Complete', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 6),
+          const Icon(
+            Icons.check_circle_outline,
+            size: 56,
+            color: SkpColors.accentBright,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Measurement Complete',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 4),
           Text(
             'You may now remove your finger',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: SkpColors.muted),
+            style: Theme.of(context)
+                .textTheme
+                .bodyLarge
+                ?.copyWith(color: SkpColors.muted),
           ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricCard(
-                  title: 'Heart Rate',
-                  value: state.finalHeartRate == null ? '—' : '${state.finalHeartRate!.round()}',
-                  unit: 'BPM',
-                  caption: state.heartRateInterpretation,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _MetricCard(
-                  title: 'Blood Oxygen',
-                  value: state.finalSpO2 == null ? '—' : '${state.finalSpO2!.round()}',
-                  unit: 'SpO₂',
-                  caption: state.spo2Interpretation,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          OxiMonitorPanel(state: state, complete: true),
+          const SizedBox(height: 14),
           const _ReferenceCard(
             lines: [
               'Heart rate (adult): 60 – 100 BPM',

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import {
@@ -100,7 +101,15 @@ function sourceLabel(source: string) {
   return source.replace(/_/g, ' ');
 }
 
-function UsageBar({ used, limit }: { used: number; limit: number }) {
+function UsageBar({
+  used,
+  limit,
+  tone = 'bw',
+}: {
+  used: number;
+  limit: number;
+  tone?: 'bw' | 'color';
+}) {
   const safeLimit = Math.max(0, limit);
   const remaining = Math.max(0, safeLimit - used);
   const pct = safeLimit > 0 ? Math.min(100, Math.round((used / safeLimit) * 100)) : used > 0 ? 100 : 0;
@@ -116,7 +125,13 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
         <div
           className={cn(
             'h-full rounded-full transition-all',
-            pct >= 100 ? 'bg-destructive' : pct >= 70 ? 'bg-warning' : 'bg-primary',
+            pct >= 100
+              ? 'bg-rose-500'
+              : pct >= 70
+                ? 'bg-amber-500'
+                : tone === 'color'
+                  ? 'bg-rose-400'
+                  : 'bg-slate-500',
           )}
           style={{ width: `${pct}%` }}
         />
@@ -126,10 +141,34 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
   );
 }
 
-export function FreePrintUsagePage() {
+type FreePrintUsagePageProps = {
+  /** Hide page chrome when nested inside Free Print hub */
+  embedded?: boolean;
+};
+
+function parseAudience(value: string | null): AudienceFilter {
+  if (value === 'society' || value === 'public') return value;
+  return 'all';
+}
+
+function parseUsage(value: string | null): UsageFilter {
+  if (
+    value === 'has_remaining' ||
+    value === 'exhausted' ||
+    value === 'used_bw' ||
+    value === 'used_color'
+  ) {
+    return value;
+  }
+  return 'all';
+}
+
+export function FreePrintUsagePage({ embedded = false }: FreePrintUsagePageProps = {}) {
   const { token } = useAuth();
-  const [query, setQuery] = useState('');
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const initialQ = searchParams.get('q')?.trim() ?? '';
+  const [query, setQuery] = useState(initialQ);
+  const [search, setSearch] = useState(initialQ);
   const [data, setData] = useState<UsageListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -137,11 +176,27 @@ export function FreePrintUsagePage() {
   const [detail, setDetail] = useState<UsageDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>('all');
-  const [usageFilter, setUsageFilter] = useState<UsageFilter>('all');
+  const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>(() =>
+    parseAudience(searchParams.get('audience')),
+  );
+  const [usageFilter, setUsageFilter] = useState<UsageFilter>(() =>
+    parseUsage(searchParams.get('usage')),
+  );
   const [sortKey, setSortKey] = useState<SortKey>('recent');
   const [entryStatusFilter, setEntryStatusFilter] = useState<'all' | string>('all');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('current');
+
+  useEffect(() => {
+    const nextQ = searchParams.get('q')?.trim() ?? '';
+    const nextAudience = parseAudience(searchParams.get('audience'));
+    const nextUsage = parseUsage(searchParams.get('usage'));
+    setQuery(nextQ);
+    setSearch(nextQ);
+    setAudienceFilter(nextAudience);
+    setUsageFilter(nextUsage);
+    setExpandedPhone(null);
+    setDetail(null);
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -280,23 +335,35 @@ export function FreePrintUsagePage() {
 
   return (
     <div>
-      <PageHeader
-        title="Free print usage"
-        subtitle={subtitle}
-        actions={
+      {embedded ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
           <Button type="button" variant="secondary" disabled={loading} onClick={() => void load()}>
             {loading ? 'Loading…' : 'Refresh'}
           </Button>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Free print usage"
+          subtitle={subtitle}
+          actions={
+            <Button type="button" variant="secondary" disabled={loading} onClick={() => void load()}>
+              {loading ? 'Loading…' : 'Refresh'}
+            </Button>
+          }
+        />
+      )}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <button
           type="button"
-          className={cn('stat-card text-left', audienceFilter === 'all' && 'border-primary/30 ring-1 ring-primary/20')}
+          className={cn(
+            'stat-card text-left border-teal-500/25 bg-gradient-to-br from-teal-500/10 via-card to-card',
+            audienceFilter === 'all' && 'ring-1 ring-teal-500/30',
+          )}
           onClick={() => setAudienceFilter('all')}
         >
-          <strong>{counts.phones}</strong>
+          <strong className="text-teal-800 dark:text-teal-200">{counts.phones}</strong>
           <span>
             {periodFilter === 'all' ? 'Phones in history' : 'Phones this period'}
             {data?.truncated ? '+' : ''}
@@ -305,30 +372,32 @@ export function FreePrintUsagePage() {
         <button
           type="button"
           className={cn(
-            'stat-card text-left',
-            audienceFilter === 'society' && 'border-primary/30 ring-1 ring-primary/20',
+            'stat-card text-left border-emerald-500/25 bg-gradient-to-br from-emerald-500/10 via-card to-card',
+            audienceFilter === 'society' && 'ring-1 ring-emerald-500/30',
           )}
           onClick={() => setAudienceFilter((current) => (current === 'society' ? 'all' : 'society'))}
         >
-          <strong>{counts.society}</strong>
+          <strong className="text-emerald-800 dark:text-emerald-200">{counts.society}</strong>
           <span>Society phones</span>
         </button>
         <button
           type="button"
           className={cn(
-            'stat-card text-left',
-            usageFilter === 'exhausted' && 'border-primary/30 ring-1 ring-primary/20',
+            'stat-card text-left border-rose-500/30 bg-gradient-to-br from-rose-500/12 via-card to-card',
+            usageFilter === 'exhausted' && 'ring-1 ring-rose-500/30',
           )}
           onClick={() =>
             setUsageFilter((current) => (current === 'exhausted' ? 'all' : 'exhausted'))
           }
         >
-          <strong>{counts.exhausted}</strong>
+          <strong className="text-rose-800 dark:text-rose-200">{counts.exhausted}</strong>
           <span>Quota exhausted</span>
         </button>
-        <div className="stat-card">
+        <div className="stat-card border-amber-500/30 bg-gradient-to-br from-amber-500/12 via-card to-card">
           <strong>
-            {counts.bwPages} / {counts.colorPages}
+            <span className="text-slate-800 dark:text-slate-200">{counts.bwPages}</span>
+            <span className="mx-1 text-muted-foreground">/</span>
+            <span className="text-rose-700 dark:text-rose-300">{counts.colorPages}</span>
           </strong>
           <span>B/W · Color pages used</span>
         </div>
@@ -457,10 +526,10 @@ export function FreePrintUsagePage() {
                         </td>
                       ) : null}
                       <td>
-                        <UsageBar used={item.bwUsed} limit={bwLimit} />
+                        <UsageBar used={item.bwUsed} limit={bwLimit} tone="bw" />
                       </td>
                       <td>
-                        <UsageBar used={item.colorUsed} limit={colorLimit} />
+                        <UsageBar used={item.colorUsed} limit={colorLimit} tone="color" />
                       </td>
                       <td className="whitespace-nowrap text-muted-foreground">
                         {item.lastActivityAt

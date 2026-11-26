@@ -17,6 +17,8 @@ class SocietyPhonesPage extends ConsumerStatefulWidget {
 class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
   final _search = TextEditingController();
   final _phone = TextEditingController();
+  final _name = TextEditingController();
+  final _societyName = TextEditingController();
   final _bw = TextEditingController();
   final _color = TextEditingController();
   var _period = SocietyQuota.defaults.period;
@@ -33,6 +35,8 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
   void dispose() {
     _search.dispose();
     _phone.dispose();
+    _name.dispose();
+    _societyName.dispose();
     _bw.dispose();
     _color.dispose();
     super.dispose();
@@ -146,6 +150,18 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
                       Text('Add a number', style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 12),
                       TextField(
+                        controller: _name,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(labelText: 'Person name'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _societyName,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(labelText: 'Society name'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
                         controller: _phone,
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(labelText: 'Mobile number'),
@@ -157,8 +173,16 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
                             : () async {
                                 final added = await ref
                                     .read(societyPhonesProvider.notifier)
-                                    .addPhone(_phone.text);
-                                if (added) _phone.clear();
+                                    .addPhone(
+                                      phone: _phone.text,
+                                      name: _name.text,
+                                      societyName: _societyName.text,
+                                    );
+                                if (added) {
+                                  _phone.clear();
+                                  _name.clear();
+                                  _societyName.clear();
+                                }
                               },
                         child: Text(state.adding ? 'Adding…' : 'Add number'),
                       ),
@@ -171,7 +195,7 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
               controller: _search,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                labelText: 'Search by digits',
+                labelText: 'Search by person, society, or phone',
                 suffixIcon: IconButton(
                   tooltip: 'Search',
                   onPressed: () => ref.read(societyPhonesProvider.notifier).search(_search.text),
@@ -198,7 +222,13 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
               (item) => Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  title: Text(item.phone),
+                  title: Text(item.name.trim().isEmpty ? item.phone : item.name),
+                  subtitle: Text(
+                    [
+                      if (item.societyName.trim().isNotEmpty) item.societyName.trim(),
+                      if (item.name.trim().isNotEmpty) item.phone,
+                    ].join(' · '),
+                  ),
                   trailing: canWrite
                       ? IconButton(
                           tooltip: 'Remove',
@@ -224,11 +254,16 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
   }
 
   Future<void> _confirmRemove(SocietyPhone item) async {
+    final person = item.name.trim().isEmpty ? item.phone : item.name.trim();
+    final society = item.societyName.trim();
+    final label = society.isEmpty
+        ? '$person (${item.phone})'
+        : '$person · $society (${item.phone})';
     final remove = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove number'),
-        content: Text('Remove ${item.phone} from the society list?'),
+        content: Text('Remove $label from the society list?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),

@@ -9,9 +9,8 @@ import { ServicesPage } from '../features/services/ServicesPage';
 import { FuelStationsPage } from '../features/fuel_stations/FuelStationsPage';
 import { PaymentsPage } from '../features/payments/PaymentsPage';
 import { SupportPage } from '../features/support/SupportPage';
-import { FreePrintUsagePage } from '../features/print-quota/FreePrintUsagePage';
+import { FreePrintHubPage } from '../features/print-quota/FreePrintHubPage';
 import { UsagePage } from '../features/usage/UsagePage';
-import { SocietyPhonesPage } from '../features/society-phones/SocietyPhonesPage';
 import { EmergencyContactsPage } from '../features/emergency-contacts/EmergencyContactsPage';
 import { AstrologyContactsPage } from '../features/astrology-contacts/AstrologyContactsPage';
 import { FindServicesPage } from '../features/find-services/FindServicesPage';
@@ -57,8 +56,15 @@ export function AppRouter() {
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="support" element={<SupportPage />} />
             <Route path="usage" element={<UsagePage />} />
-            <Route path="print-quota" element={<FreePrintUsagePage />} />
-            <Route path="society-phones" element={<SocietyPhonesPage />} />
+            <Route path="free-print" element={<FreePrintHubPage />} />
+            <Route
+              path="print-quota"
+              element={<Navigate to="/free-print?tab=usage" replace />}
+            />
+            <Route
+              path="society-phones"
+              element={<Navigate to="/free-print?tab=society" replace />}
+            />
             <Route path="emergency-contacts" element={<EmergencyContactsPage />} />
             <Route path="astrology-contacts" element={<AstrologyContactsPage />} />
             <Route path="digilocker" element={<DigiLockerPage />} />

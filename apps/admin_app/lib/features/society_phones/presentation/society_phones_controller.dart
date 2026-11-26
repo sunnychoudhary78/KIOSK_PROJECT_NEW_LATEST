@@ -121,15 +121,29 @@ class SocietyPhonesNotifier extends Notifier<SocietyPhonesState> {
     }
   }
 
-  Future<bool> addPhone(String raw) async {
-    final invalid = validateSocietyPhone(raw);
-    if (invalid != null) {
-      state = state.copyWith(error: invalid, clearNotice: true);
+  Future<bool> addPhone({
+    required String phone,
+    required String name,
+    required String societyName,
+  }) async {
+    final invalidPhone = validateSocietyPhone(phone);
+    if (invalidPhone != null) {
+      state = state.copyWith(error: invalidPhone, clearNotice: true);
+      return false;
+    }
+    final invalidPerson = validateSocietyPersonName(name);
+    if (invalidPerson != null) {
+      state = state.copyWith(error: invalidPerson, clearNotice: true);
+      return false;
+    }
+    final invalidSociety = validateSocietyName(societyName);
+    if (invalidSociety != null) {
+      state = state.copyWith(error: invalidSociety, clearNotice: true);
       return false;
     }
     state = state.copyWith(adding: true, clearError: true, clearNotice: true);
     try {
-      await _repo.add(raw);
+      await _repo.add(phone: phone, name: name, societyName: societyName);
       state = state.copyWith(adding: false, notice: 'Number added.');
       await load();
       return true;

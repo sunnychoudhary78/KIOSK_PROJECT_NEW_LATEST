@@ -46,17 +46,23 @@ class SocietyPhone {
   const SocietyPhone({
     required this.id,
     required this.phone,
+    required this.name,
+    required this.societyName,
     required this.createdAt,
   });
 
   final String id;
   final String phone;
+  final String name;
+  final String societyName;
   final String createdAt;
 
   factory SocietyPhone.fromJson(Map<String, dynamic> json) {
     return SocietyPhone(
       id: json['id']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      societyName: json['societyName']?.toString() ?? '',
       createdAt: json['createdAt']?.toString() ?? '',
     );
   }
@@ -80,6 +86,20 @@ String? validateSocietyPhone(String raw) {
   if (phone.length < 8 || phone.length > 20) {
     return 'Enter a phone number (8–20 characters).';
   }
+  return null;
+}
+
+String? validateSocietyPersonName(String raw) {
+  final name = raw.trim();
+  if (name.isEmpty) return 'Enter the person name.';
+  if (name.length > 120) return 'Person name must be 120 characters or fewer.';
+  return null;
+}
+
+String? validateSocietyName(String raw) {
+  final name = raw.trim();
+  if (name.isEmpty) return 'Enter the society name.';
+  if (name.length > 160) return 'Society name must be 160 characters or fewer.';
   return null;
 }
 
