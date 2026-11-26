@@ -157,6 +157,21 @@ describe('report PDF builders', () => {
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
   });
 
+  it('builds a BMI report', async () => {
+    const bytes = await buildHealthReportPdf({
+      mode: 'bmi',
+      colorMode: 'bw',
+      bmiValue: 22.5,
+      bmiCategory: 'normal',
+      bmiHeightCm: 170,
+      bmiWeightKg: 65,
+      bmiTitle: 'BMI in normal range',
+      bmiSummary: 'Your BMI is 22.5, within the common healthy adult range.',
+      bmiAdvice: 'BMI is a screening tool only.',
+    });
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
   it('rasterizes SVG text with system fonts and builds a one-page kundali PDF', async () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f5e6c8"/><text x="20" y="100" font-size="28">Mars</text></svg>';

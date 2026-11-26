@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { EmptyState, FilterChips, Panel, Toolbar } from '../../core/ui/primitives';
+import {
+  EmptyState,
+  FilterChips,
+  PaginationBar,
+  Panel,
+  Toolbar,
+  paginateItems,
+} from '../../core/ui/primitives';
 
 type AuditLog = {
   id: string;
@@ -95,11 +102,22 @@ const CATEGORY_FILTERS = [
   { value: 'print', label: 'Print' },
   { value: 'digilocker', label: 'DigiLocker' },
   { value: 'device', label: 'Device' },
+  { value: 'surveillance', label: 'Recordings' },
+  { value: 'diagnostics', label: 'Diagnostics' },
   { value: 'ads', label: 'Ads' },
   { value: 'other', label: 'Other' },
 ] as const;
 
+const PRINCIPAL_FILTERS = [
+  { value: 'all', label: 'All actors' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'citizen', label: 'Citizen' },
+  { value: 'device', label: 'Device' },
+  { value: 'system', label: 'System' },
+] as const;
+
 type Category = (typeof CATEGORY_FILTERS)[number]['value'];
+type PrincipalFilter = (typeof PRINCIPAL_FILTERS)[number]['value'];
 
 function humanize(value: string): string {
   return value
@@ -134,6 +152,8 @@ function categoryOf(action: string): Exclude<Category, 'all'> {
   }
   if (action.startsWith('digilocker.')) return 'digilocker';
   if (action.startsWith('device.')) return 'device';
+  if (action.startsWith('surveillance.')) return 'surveillance';
+  if (action.startsWith('diagnostics.')) return 'diagnostics';
   if (action.startsWith('ads.')) return 'ads';
   return 'other';
 }
@@ -165,12 +185,17 @@ export function AuditLogsPanel() {
   const [items, setItems] = useState<AuditLog[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<Category>('all');
+  const [principal, setPrincipal] = useState<PrincipalFilter>('all');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   useEffect(() => {
     void (async () => {
       try {
-        const result = await apiRequest<{ items: AuditLog[] }>('/audit-logs', { token });
+        const result = await apiRequest<{ items: AuditLog[] }>('/audit-logs?limit=200', {
+          token,
+        });
         setItems(result.items);
         setError(null);
       } catch (err) {
@@ -183,6 +208,9 @@ export function AuditLogsPanel() {
     const q = search.trim().toLowerCase();
     return items.filter((log) => {
       if (category !== 'all' && categoryOf(log.action) !== category) {
+        return false;
+      }
+      if (principal !== 'all' && log.principalType !== principal) {
         return false;
       }
       if (!q) {
@@ -203,7 +231,16 @@ export function AuditLogsPanel() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [items, category, search]);
+  }, [items, category, principal, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [category, principal, search, pageSize]);
+
+  const paged = useMemo(
+    () => paginateItems(filtered, page, pageSize),
+    [filtered, page, pageSize],
+  );
 
   return (
     <div>
@@ -214,6 +251,11 @@ export function AuditLogsPanel() {
             options={[...CATEGORY_FILTERS]}
             value={category}
             onChange={(value) => setCategory(value as Category)}
+          />
+          <FilterChips
+            options={[...PRINCIPAL_FILTERS]}
+            value={principal}
+            onChange={(value) => setPrincipal(value as PrincipalFilter)}
           />
         </Toolbar>
 
@@ -227,42 +269,51 @@ export function AuditLogsPanel() {
             }
           />
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Action</th>
-                <th>Who</th>
-                <th>Resource</th>
-                <th>When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((log) => {
-                const detail = detailLine(log);
-                return (
-                  <tr key={log.id} title={log.correlationId ?? undefined}>
-                    <td>
-                      <div>{actionLabel(log.action)}</div>
-                      <div className="muted">{log.action}</div>
-                      {detail ? (
-                        <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
-                      ) : null}
-                    </td>
-                    <td>{principalLabel(log.principalType)}</td>
-                    <td>
-                      <div>{resourceLabel(log.resourceType)}</div>
-                      {log.resourceId ? (
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {log.resourceId.slice(0, 8)}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td>{new Date(log.createdAt).toLocaleString()}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Who</th>
+                  <th>Resource</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paged.items.map((log) => {
+                  const detail = detailLine(log);
+                  return (
+                    <tr key={log.id} title={log.correlationId ?? undefined}>
+                      <td>
+                        <div>{actionLabel(log.action)}</div>
+                        <div className="muted">{log.action}</div>
+                        {detail ? (
+                          <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+                        ) : null}
+                      </td>
+                      <td>{principalLabel(log.principalType)}</td>
+                      <td>
+                        <div>{resourceLabel(log.resourceType)}</div>
+                        {log.resourceId ? (
+                          <div className="font-mono text-xs text-muted-foreground">
+                            {log.resourceId.slice(0, 8)}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>{new Date(log.createdAt).toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <PaginationBar
+              page={paged.page}
+              pageSize={pageSize}
+              total={filtered.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
       </Panel>
     </div>

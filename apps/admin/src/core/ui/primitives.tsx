@@ -314,3 +314,100 @@ export function FilterChips({
     </div>
   );
 }
+
+export const DEFAULT_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+
+/** Slice a filtered list for client-side page controls. */
+export function paginateItems<T>(
+  items: T[],
+  page: number,
+  pageSize: number,
+): { page: number; totalPages: number; total: number; items: T[]; from: number; to: number } {
+  const total = items.length;
+  const size = Math.max(1, pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / size));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * size;
+  const slice = items.slice(start, start + size);
+  return {
+    page: safePage,
+    totalPages,
+    total,
+    items: slice,
+    from: total === 0 ? 0 : start + 1,
+    to: start + slice.length,
+  };
+}
+
+export function PaginationBar({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = [...DEFAULT_PAGE_SIZE_OPTIONS],
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+  pageSizeOptions?: number[];
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / Math.max(1, pageSize)));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const from = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const to = Math.min(total, safePage * pageSize);
+
+  if (total === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 flex flex-col gap-2 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs text-muted-foreground">
+        Showing {from}–{to} of {total}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {onPageSizeChange ? (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            Per page
+            <select
+              className="h-8 rounded-md border border-input bg-card px-2 text-sm"
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              aria-label="Rows per page"
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          className="h-8 px-3"
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(safePage - 1)}
+        >
+          Previous
+        </Button>
+        <span className="min-w-[5.5rem] text-center text-xs tabular-nums text-muted-foreground">
+          Page {safePage} / {totalPages}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          className="h-8 px-3"
+          disabled={safePage >= totalPages}
+          onClick={() => onPageChange(safePage + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}

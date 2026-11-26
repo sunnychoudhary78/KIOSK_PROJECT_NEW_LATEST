@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-export const wellBeingPrintModeSchema = z.enum(['oxi', 'temp', 'color_vision']);
+export const wellBeingPrintModeSchema = z.enum([
+  'oxi',
+  'temp',
+  'color_vision',
+  'bmi',
+]);
 export const wellBeingColorModeSchema = z.enum(['bw', 'color']);
 export type WellBeingColorMode = z.infer<typeof wellBeingColorModeSchema>;
 
@@ -22,6 +27,13 @@ export const wellBeingPrintBodySchema = z.object({
   colorVisionTitle: z.string().trim().max(120).optional(),
   colorVisionSummary: z.string().trim().max(400).optional(),
   colorVisionAdvice: z.string().trim().max(400).optional(),
+  bmiValue: z.number().finite().min(5).max(100).optional(),
+  bmiCategory: z.enum(['underweight', 'normal', 'overweight', 'obese']).optional(),
+  bmiHeightCm: z.number().finite().min(50).max(300).optional(),
+  bmiWeightKg: z.number().finite().min(10).max(400).optional(),
+  bmiTitle: z.string().trim().max(120).optional(),
+  bmiSummary: z.string().trim().max(400).optional(),
+  bmiAdvice: z.string().trim().max(400).optional(),
   measuredAt: z.string().datetime().optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
   phoneProofToken: z.string().trim().min(1).max(800).optional(),

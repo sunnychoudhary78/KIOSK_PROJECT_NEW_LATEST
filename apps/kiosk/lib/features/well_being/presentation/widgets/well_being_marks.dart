@@ -347,6 +347,157 @@ class _Thermometer3DPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+/// Circular BMI / body-scale graphic with glowing dial and weight readout.
+class BmiScale3DGraphic extends StatelessWidget {
+  const BmiScale3DGraphic({super.key, this.size = 96});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _BmiScale3DPainter(),
+      ),
+    );
+  }
+}
+
+class _BmiScale3DPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide * 0.46;
+
+    // Soft purple glow pedestal
+    canvas.drawCircle(
+      Offset(center.dx, center.dy + radius * 0.55),
+      radius * 0.55,
+      Paint()
+        ..color = const Color(0xFF7C3AED).withValues(alpha: 0.14)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+
+    // Outer dial ring
+    final dialRect = Rect.fromCircle(center: center, radius: radius * 0.88);
+    canvas.drawCircle(
+      center,
+      radius * 0.88,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [Color(0xFFEDE9FE), Color(0xFFDDD6FE), Color(0xFFC4B5FD)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(dialRect),
+    );
+
+    // Inner face
+    canvas.drawCircle(
+      center,
+      radius * 0.72,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0xFFFFFFFF), Color(0xFFF5F3FF)],
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 0.72)),
+    );
+
+    // Progress arc
+    final arcPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFFA78BFA), Color(0xFF7C3AED), Color(0xFF5B21B6)],
+      ).createShader(dialRect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = radius * 0.12
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius * 0.78),
+      -math.pi * 0.85,
+      math.pi * 1.2,
+      false,
+      arcPaint,
+    );
+
+    // Tick marks
+    final tickPaint = Paint()
+      ..color = const Color(0xFF8B5CF6)
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 7; i++) {
+      final t = i / 6;
+      final angle = -math.pi * 0.85 + math.pi * 1.2 * t;
+      final outer = Offset(
+        center.dx + radius * 0.64 * math.cos(angle),
+        center.dy + radius * 0.64 * math.sin(angle),
+      );
+      final inner = Offset(
+        center.dx + radius * 0.52 * math.cos(angle),
+        center.dy + radius * 0.52 * math.sin(angle),
+      );
+      canvas.drawLine(inner, outer, tickPaint);
+    }
+
+    // Needle
+    final needleAngle = -math.pi * 0.85 + math.pi * 0.72;
+    final needleTip = Offset(
+      center.dx + radius * 0.48 * math.cos(needleAngle),
+      center.dy + radius * 0.48 * math.sin(needleAngle),
+    );
+    canvas.drawLine(
+      center,
+      needleTip,
+      Paint()
+        ..color = const Color(0xFF7C3AED)
+        ..strokeWidth = 2.4
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawCircle(center, radius * 0.08, Paint()..color = const Color(0xFF5B21B6));
+    canvas.drawCircle(center, radius * 0.045, Paint()..color = Colors.white);
+
+    // BMI badge
+    final badgeRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(center.dx, center.dy + radius * 0.28),
+        width: radius * 0.72,
+        height: radius * 0.32,
+      ),
+      Radius.circular(radius * 0.12),
+    );
+    canvas.drawRRect(
+      badgeRect,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+        ).createShader(badgeRect.outerRect),
+    );
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: 'BMI',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: radius * 0.22,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.6,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        center.dx - textPainter.width / 2,
+        center.dy + radius * 0.28 - textPainter.height / 2,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 /// 3D Health Hero Illustration: Glossy Red Heart + ECG Pulse Wave + Athena Kiosk Terminal.
 class HealthHeroIllustration extends StatelessWidget {
   const HealthHeroIllustration({super.key});

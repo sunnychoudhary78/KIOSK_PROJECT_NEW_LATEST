@@ -38,6 +38,7 @@ abstract final class ServiceEventKeys {
   static const wellBeingOxygen = 'well_being.path.oxygen';
   static const wellBeingTemperature = 'well_being.path.temperature';
   static const wellBeingColorVision = 'well_being.path.color_vision';
+  static const wellBeingBmi = 'well_being.path.bmi';
 
   static const fuelDirections = 'fuel_stations.directions';
 

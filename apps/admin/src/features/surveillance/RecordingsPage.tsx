@@ -9,9 +9,11 @@ import {
   Input,
   Modal,
   PageHeader,
+  PaginationBar,
   Panel,
   Select,
   Toolbar,
+  paginateItems,
 } from '../../core/ui/primitives';
 import {
   labelForQueueCommand,
@@ -145,6 +147,8 @@ export function RecordingsPage() {
   const [playingLabel, setPlayingLabel] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | Segment['status']>('all');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [commandBusy, setCommandBusy] = useState(false);
   const [commandNote, setCommandNote] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -371,7 +375,7 @@ export function RecordingsPage() {
     (item) => item.status !== 'uploaded' && item.lastUploadError != null,
   ).length;
 
-  const visible = useMemo(() => {
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((segment) => {
       if (statusFilter !== 'all' && segment.status !== statusFilter) return false;
@@ -382,6 +386,15 @@ export function RecordingsPage() {
         .includes(q);
     });
   }, [items, statusFilter, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [deviceId, recordedOn, statusFilter, search, pageSize]);
+
+  const paged = useMemo(
+    () => paginateItems(filtered, page, pageSize),
+    [filtered, page, pageSize],
+  );
 
   return (
     <div>
@@ -520,14 +533,14 @@ export function RecordingsPage() {
                 <Toolbar
                   search={search}
                   onSearchChange={setSearch}
-                  searchPlaceholder="Search filename"
+                  searchPlaceholder="Search filename or error"
                 >
                   <FilterChips
                     options={[
-                      { value: 'all', label: 'All' },
-                      { value: 'uploaded', label: 'Uploaded' },
-                      { value: 'pending_upload', label: 'Pending' },
-                      { value: 'failed', label: 'Failed' },
+                      { value: 'all', label: `All (${items.length})` },
+                      { value: 'uploaded', label: `Uploaded (${uploadedCount})` },
+                      { value: 'pending_upload', label: `Pending (${pendingCount})` },
+                      { value: 'failed', label: `Failed (${failedCount})` },
                     ]}
                     value={statusFilter}
                     onChange={(value) => setStatusFilter(value as typeof statusFilter)}
@@ -545,57 +558,66 @@ export function RecordingsPage() {
                 </Toolbar>
               </>
             ) : null}
-            {!loading && items.length > 0 && visible.length === 0 ? (
+            {!loading && items.length > 0 && filtered.length === 0 ? (
               <EmptyState title="No matches" description="Adjust status filter or search." />
             ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Started</th>
-                    <th>Filename</th>
-                    <th>Size</th>
-                    <th>Status</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((segment) => (
-                    <tr key={segment.id}>
-                      <td>{new Date(segment.startedAt).toLocaleString()}</td>
-                      <td>{segment.filename}</td>
-                      <td>{formatBytes(segment.byteSize)}</td>
-                      <td>
-                        <div className="flex flex-col gap-1">
-                          {statusBadge(segment.status)}
-                          {segment.lastUploadError ? (
-                            <span className="text-xs text-muted-foreground">
-                              {segment.lastUploadError}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {segment.status === 'uploaded' ? (
-                            <Button type="button" onClick={() => void onPlay(segment)}>
-                              {playingId === segment.id ? 'Playing' : 'Play'}
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              disabled={dismissBusy}
-                              onClick={() => setDismissTarget(segment)}
-                            >
-                              Dismiss
-                            </Button>
-                          )}
-                        </div>
-                      </td>
+              <>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Started</th>
+                      <th>Filename</th>
+                      <th>Size</th>
+                      <th>Status</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {paged.items.map((segment) => (
+                      <tr key={segment.id}>
+                        <td>{new Date(segment.startedAt).toLocaleString()}</td>
+                        <td>{segment.filename}</td>
+                        <td>{formatBytes(segment.byteSize)}</td>
+                        <td>
+                          <div className="flex flex-col gap-1">
+                            {statusBadge(segment.status)}
+                            {segment.lastUploadError ? (
+                              <span className="text-xs text-muted-foreground">
+                                {segment.lastUploadError}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {segment.status === 'uploaded' ? (
+                              <Button type="button" onClick={() => void onPlay(segment)}>
+                                {playingId === segment.id ? 'Playing' : 'Play'}
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={dismissBusy}
+                                onClick={() => setDismissTarget(segment)}
+                              >
+                                Dismiss
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <PaginationBar
+                  page={paged.page}
+                  pageSize={pageSize}
+                  total={filtered.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                />
+              </>
             )}
           </>
         )}

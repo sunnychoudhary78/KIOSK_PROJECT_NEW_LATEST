@@ -303,4 +303,24 @@ void main() {
     expect(next.difference(now) <= surveillanceMaxBackoff, isTrue);
     expect(next.year, lessThan(2100));
   });
+
+  test('recordedOn comes from UTC day folder in path, not wall-clock now', () async {
+    final queue = SurveillanceUploadQueue(
+      queueFile: File(p.join(dir.path, surveillanceQueueFileName)),
+    );
+    // After midnight the filename HHmmss rolls over; folder date must still win
+    // so admin startedAt stays aligned with the segment's real UTC day.
+    final clip = File(p.join(dir.path, '2026-11-26', '000001_post_midnight.mp4'));
+    clip.parent.createSync(recursive: true);
+    clip.writeAsBytesSync(List<int>.filled(2048, 1));
+
+    final item = await queue.enqueue(
+      path: clip.path,
+      bytes: 2048,
+      now: DateTime.utc(2026, 11, 26, 0, 0, 15),
+    );
+    expect(item, isNotNull);
+    expect(item!.recordedOn, '2026-11-26');
+    expect(recordedOnFromPath(clip.path), '2026-11-26');
+  });
 }

@@ -1,6 +1,6 @@
-/// UI phases for the dual-sensor + color vision Well Being flow.
+/// UI phases for Well Being vitals + wellness screenings.
 enum WellBeingPhase {
-  /// Hub: pick Oxygen, Temperature, or Color Vision.
+  /// Hub: pick a check.
   choose,
 
   /// Oximeter: waiting for finger after start max30102.
@@ -32,4 +32,10 @@ enum WellBeingPhase {
 
   /// Color vision: screening result ready.
   colorVisionComplete,
+
+  /// BMI: height + weight entry.
+  bmiInput,
+
+  /// BMI: calculated result ready.
+  bmiComplete,
 }

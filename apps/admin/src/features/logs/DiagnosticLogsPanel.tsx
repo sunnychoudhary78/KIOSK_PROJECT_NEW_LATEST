@@ -1,8 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import { pickDefaultDeviceId } from '../../core/kiosk/defaultKiosk';
-import { Button, EmptyState, Panel, Select } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  PaginationBar,
+  Panel,
+  Select,
+  Toolbar,
+  paginateItems,
+} from '../../core/ui/primitives';
 
 type DeviceOption = {
   id: string;
@@ -51,9 +60,10 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
   const { token } = useAuth();
   const [devices, setDevices] = useState<DeviceOption[]>([]);
   const [devicesError, setDevicesError] = useState<string | null>(null);
-  const [hours, setHours] = useState<24 | 168>(24);
+  const [hours, setHours] = useState<'24' | '168'>('24');
   const [levelMode, setLevelMode] = useState<'problems' | 'all'>('problems');
   const [category, setCategory] = useState('');
+  const [search, setSearch] = useState('');
   const [items, setItems] = useState<DiagnosticLogItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -61,6 +71,8 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
   const [hasMore, setHasMore] = useState(false);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [nextBeforeId, setNextBeforeId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [collectBusy, setCollectBusy] = useState(false);
   const [collectNote, setCollectNote] = useState<string | null>(null);
   const [bundleId, setBundleId] = useState<string | null>(null);
@@ -87,7 +99,7 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
 
   const loadLogs = useCallback(
     async (opts: {
-      hours: 24 | 168;
+      hours: '24' | '168';
       levelMode: 'problems' | 'all';
       category: string;
       append?: boolean;
@@ -104,10 +116,12 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
       } else {
         setLoading(true);
         setError(null);
+        setPage(1);
       }
       try {
+        const hoursNum = Number(opts.hours);
         const to = new Date();
-        const from = new Date(to.getTime() - opts.hours * 60 * 60 * 1000);
+        const from = new Date(to.getTime() - hoursNum * 60 * 60 * 1000);
         const params = new URLSearchParams({
           from: from.toISOString(),
           to: to.toISOString(),
@@ -152,16 +166,45 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
 
   useEffect(() => {
     if (!deviceId) return;
-    setHours(24);
+    setHours('24');
     setLevelMode('problems');
     setCategory('');
+    setSearch('');
+    setPage(1);
     setHasMore(false);
     setNextBefore(null);
     setNextBeforeId(null);
     setBundleId(null);
     setCollectNote(null);
-    void loadLogs({ hours: 24, levelMode: 'problems', category: '' });
+    void loadLogs({ hours: '24', levelMode: 'problems', category: '' });
   }, [deviceId, loadLogs]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((row) => {
+      const haystack = [
+        row.level,
+        row.category,
+        row.event,
+        row.message,
+        row.correlationId ?? '',
+        metadataSummary(row.metadata) ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [items, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, pageSize, hours, levelMode, category]);
+
+  const paged = useMemo(
+    () => paginateItems(filtered, page, pageSize),
+    [filtered, page, pageSize],
+  );
 
   async function waitForCollectCommand(commandId: string) {
     const deadline = Date.now() + 10 * 60 * 1000;
@@ -285,79 +328,62 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
         </div>
         {collectNote ? <p className="muted mb-3 text-sm">{collectNote}</p> : null}
 
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Range</span>
-          <Button
-            type="button"
-            variant={hours === 24 ? 'primary' : 'secondary'}
-            className="h-8 px-3"
-            disabled={loading || !deviceId}
-            onClick={() => {
-              setHours(24);
-              void loadLogs({ hours: 24, levelMode, category });
-            }}
-          >
-            Last 24h
-          </Button>
-          <Button
-            type="button"
-            variant={hours === 168 ? 'primary' : 'secondary'}
-            className="h-8 px-3"
-            disabled={loading || !deviceId}
-            onClick={() => {
-              setHours(168);
-              void loadLogs({ hours: 168, levelMode, category });
-            }}
-          >
-            Last 7 days
-          </Button>
-          <span className="ml-2 text-sm text-muted-foreground">Level</span>
-          <Button
-            type="button"
-            variant={levelMode === 'problems' ? 'primary' : 'secondary'}
-            className="h-8 px-3"
-            disabled={loading || !deviceId}
-            onClick={() => {
-              setLevelMode('problems');
-              void loadLogs({ hours, levelMode: 'problems', category });
-            }}
-          >
-            Errors + warnings
-          </Button>
-          <Button
-            type="button"
-            variant={levelMode === 'all' ? 'primary' : 'secondary'}
-            className="h-8 px-3"
-            disabled={loading || !deviceId}
-            onClick={() => {
-              setLevelMode('all');
-              void loadLogs({ hours, levelMode: 'all', category });
-            }}
-          >
-            All levels
-          </Button>
-          <span className="ml-2 text-sm text-muted-foreground">Category</span>
-          <select
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-            value={category}
-            disabled={loading || !deviceId}
-            onChange={(e) => {
-              const next = e.target.value;
-              setCategory(next);
-              void loadLogs({ hours, levelMode, category: next });
-            }}
-          >
-            <option value="">All</option>
-            <option value="printer">Printer</option>
-            <option value="astrology">Astrology</option>
-            <option value="well_being">Well-being</option>
-            <option value="shutter">Shutter</option>
-            <option value="cabinet_light">Cabinet light</option>
-            <option value="charging">Charging</option>
-            <option value="serial">Serial</option>
-            <option value="app">App</option>
-          </select>
-        </div>
+        <Toolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search message, event, category"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Range</span>
+            <FilterChips
+              options={[
+                { value: '24', label: 'Last 24h' },
+                { value: '168', label: 'Last 7 days' },
+              ]}
+              value={hours}
+              onChange={(value) => {
+                const next = value as '24' | '168';
+                setHours(next);
+                void loadLogs({ hours: next, levelMode, category });
+              }}
+            />
+            <span className="text-xs text-muted-foreground">Level</span>
+            <FilterChips
+              options={[
+                { value: 'problems', label: 'Errors + warnings' },
+                { value: 'all', label: 'All levels' },
+              ]}
+              value={levelMode}
+              onChange={(value) => {
+                const next = value as 'problems' | 'all';
+                setLevelMode(next);
+                void loadLogs({ hours, levelMode: next, category });
+              }}
+            />
+            <span className="text-xs text-muted-foreground">Category</span>
+            <select
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+              value={category}
+              disabled={loading || !deviceId}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCategory(next);
+                void loadLogs({ hours, levelMode, category: next });
+              }}
+            >
+              <option value="">All</option>
+              <option value="printer">Printer</option>
+              <option value="astrology">Astrology</option>
+              <option value="well_being">Well-being</option>
+              <option value="shutter">Shutter</option>
+              <option value="cabinet_light">Cabinet light</option>
+              <option value="charging">Charging</option>
+              <option value="serial">Serial</option>
+              <option value="app">App</option>
+              <option value="surveillance">Surveillance</option>
+            </select>
+          </div>
+        </Toolbar>
 
         {devicesError ? <p className="error mb-3">{devicesError}</p> : null}
         {error ? <p className="error mb-3">{error}</p> : null}
@@ -368,6 +394,8 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
             title="No diagnostic logs yet"
             description="Errors and warnings from this kiosk appear here (kept for 7 days)."
           />
+        ) : filtered.length === 0 ? (
+          <EmptyState title="No matches" description="Adjust search or filters." />
         ) : (
           <div className="space-y-3">
             <div className="overflow-x-auto">
@@ -383,7 +411,7 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((row) => {
+                  {paged.items.map((row) => {
                     const details = metadataSummary(row.metadata);
                     return (
                       <tr key={row.id}>
@@ -403,6 +431,13 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
                 </tbody>
               </table>
             </div>
+            <PaginationBar
+              page={paged.page}
+              pageSize={pageSize}
+              total={filtered.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
             {hasMore ? (
               <Button
                 type="button"
@@ -420,7 +455,7 @@ export function DiagnosticLogsPanel({ deviceId, onDeviceIdChange }: DiagnosticLo
                   });
                 }}
               >
-                {loadingMore ? 'Loading…' : 'Load more'}
+                {loadingMore ? 'Loading…' : 'Load more from server'}
               </Button>
             ) : null}
           </div>

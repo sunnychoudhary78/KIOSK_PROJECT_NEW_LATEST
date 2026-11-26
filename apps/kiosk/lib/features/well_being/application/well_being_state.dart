@@ -1,10 +1,13 @@
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
+import 'package:skp_kiosk/features/well_being/domain/bmi_calculator.dart';
 import 'package:skp_kiosk/features/well_being/domain/color_vision_plate.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
 
-/// UI state for the dual-sensor Well Being measurement flow.
+enum BmiInputField { height, weight }
+
+/// UI state for the Well Being measurement + screening flow.
 class WellBeingUiState {
   const WellBeingUiState({
     this.phase = WellBeingPhase.choose,
@@ -30,6 +33,11 @@ class WellBeingUiState {
     this.colorVisionSessionPlates = const [],
     this.colorVisionAnswers = const [],
     this.colorVisionResult,
+    this.bmiInputField = BmiInputField.height,
+    this.bmiHeightDigits = '',
+    this.bmiWeightDigits = '',
+    this.bmiInputError,
+    this.bmiResult,
     this.statusMessage,
     this.print = const ReportPrintSnapshot(),
   });
@@ -54,15 +62,26 @@ class WellBeingUiState {
   final double? finalTempC;
   final double? finalTempF;
   final int colorVisionPlateIndex;
-  /// Shuffled plate order for the active screening run.
   final List<ColorVisionPlate> colorVisionSessionPlates;
   final List<String> colorVisionAnswers;
   final ColorVisionResult? colorVisionResult;
+  final BmiInputField bmiInputField;
+  final String bmiHeightDigits;
+  final String bmiWeightDigits;
+  final String? bmiInputError;
+  final BmiResult? bmiResult;
   final String? statusMessage;
   final ReportPrintSnapshot print;
 
   bool get isConnected =>
       connectionStatus == SerialConnectionStatus.connected;
+
+  bool get isSoftwareFlow =>
+      phase == WellBeingPhase.colorVisionIntro ||
+      phase == WellBeingPhase.colorVisionTesting ||
+      phase == WellBeingPhase.colorVisionComplete ||
+      phase == WellBeingPhase.bmiInput ||
+      phase == WellBeingPhase.bmiComplete;
 
   bool get isColorVisionFlow =>
       phase == WellBeingPhase.colorVisionIntro ||
@@ -72,7 +91,8 @@ class WellBeingUiState {
   bool get isMeasurementComplete =>
       phase == WellBeingPhase.oxiComplete ||
       phase == WellBeingPhase.tempComplete ||
-      phase == WellBeingPhase.colorVisionComplete;
+      phase == WellBeingPhase.colorVisionComplete ||
+      phase == WellBeingPhase.bmiComplete;
 
   ColorVisionPlate? get currentColorVisionPlate {
     if (phase != WellBeingPhase.colorVisionTesting) return null;
@@ -82,6 +102,10 @@ class WellBeingUiState {
     }
     return plates[colorVisionPlateIndex];
   }
+
+  double? get bmiHeightCm => double.tryParse(bmiHeightDigits);
+
+  double? get bmiWeightKg => double.tryParse(bmiWeightDigits);
 
   String get connectionLabel => switch (connectionStatus) {
         SerialConnectionStatus.disconnected => 'No sensor',
@@ -173,6 +197,13 @@ class WellBeingUiState {
     List<String>? colorVisionAnswers,
     ColorVisionResult? colorVisionResult,
     bool clearColorVisionResult = false,
+    BmiInputField? bmiInputField,
+    String? bmiHeightDigits,
+    String? bmiWeightDigits,
+    String? bmiInputError,
+    bool clearBmiInputError = false,
+    BmiResult? bmiResult,
+    bool clearBmiResult = false,
     String? statusMessage,
     bool clearStatusMessage = false,
     ReportPrintSnapshot? print,
@@ -208,6 +239,12 @@ class WellBeingUiState {
       colorVisionResult: clearColorVisionResult
           ? null
           : (colorVisionResult ?? this.colorVisionResult),
+      bmiInputField: bmiInputField ?? this.bmiInputField,
+      bmiHeightDigits: bmiHeightDigits ?? this.bmiHeightDigits,
+      bmiWeightDigits: bmiWeightDigits ?? this.bmiWeightDigits,
+      bmiInputError:
+          clearBmiInputError ? null : (bmiInputError ?? this.bmiInputError),
+      bmiResult: clearBmiResult ? null : (bmiResult ?? this.bmiResult),
       statusMessage:
           clearStatusMessage ? null : (statusMessage ?? this.statusMessage),
       print: print ?? this.print,

@@ -4,4 +4,5 @@ enum WellBeingMode {
   oxi,
   temp,
   colorVision,
+  bmi,
 }

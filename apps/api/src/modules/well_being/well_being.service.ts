@@ -232,7 +232,9 @@ export class WellBeingService {
         ? 'Health Report — Pulse oximetry'
         : input.mode === 'temp'
           ? 'Health Report — Temperature'
-          : 'Color Vision Screening Report';
+          : input.mode === 'color_vision'
+            ? 'Color Vision Screening Report'
+            : 'BMI Report';
     const printColorMode = toPrismaColorMode(colorMode);
 
     let freePhone: string | null = null;

@@ -6,10 +6,12 @@ import {
   EmptyState,
   FilterChips,
   Modal,
+  PaginationBar,
   Panel,
   Select,
   StatusBadge,
   Toolbar,
+  paginateItems,
 } from '../../core/ui/primitives';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -164,6 +166,8 @@ export function PrintJobsPanel() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [colorFilter, setColorFilter] = useState('all');
   const [reviewOnly, setReviewOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [clearJob, setClearJob] = useState<PrintJob | null>(null);
 
@@ -204,7 +208,7 @@ export function PrintJobsPanel() {
     return { open, free, paid, awaiting, review };
   }, [items]);
 
-  const visible = useMemo(() => {
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((job) => {
       if (statusFilter === 'open' && !OPEN.has(job.status)) return false;
@@ -231,6 +235,15 @@ export function PrintJobsPanel() {
       return haystack.includes(q);
     });
   }, [items, search, statusFilter, billingFilter, sourceFilter, colorFilter, reviewOnly]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, billingFilter, sourceFilter, colorFilter, reviewOnly, pageSize]);
+
+  const paged = useMemo(
+    () => paginateItems(filtered, page, pageSize),
+    [filtered, page, pageSize],
+  );
 
   async function confirmClearStuck() {
     if (!canClose || !clearJob || closingId) return;
@@ -366,7 +379,7 @@ export function PrintJobsPanel() {
 
         {error ? <p className="error">{error}</p> : null}
 
-        {visible.length === 0 && !error ? (
+        {filtered.length === 0 && !error ? (
           <EmptyState
             title={items.length === 0 ? 'No print jobs yet' : 'No matches'}
             description={
@@ -376,87 +389,98 @@ export function PrintJobsPanel() {
             }
           />
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Document</th>
-                <th>Kiosk</th>
-                <th>Billing</th>
-                <th>Pages</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((job) => {
-                const billing = billingBadge(job);
-                return (
-                  <tr key={job.id}>
-                    <td>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{job.title}</span>
-                          {(job.copies ?? 1) > 1 ? (
-                            <span className="text-xs font-medium text-muted-foreground">
-                              ×{job.copies}
-                            </span>
-                          ) : null}
-                          {job.needsAdminReview ? (
-                            <Badge variant="warning">Review</Badge>
+          <>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Document</th>
+                  <th>Kiosk</th>
+                  <th>Billing</th>
+                  <th>Pages</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {paged.items.map((job) => {
+                  const billing = billingBadge(job);
+                  return (
+                    <tr key={job.id}>
+                      <td>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{job.title}</span>
+                            {(job.copies ?? 1) > 1 ? (
+                              <span className="text-xs font-medium text-muted-foreground">
+                                ×{job.copies}
+                              </span>
+                            ) : null}
+                            {job.needsAdminReview ? (
+                              <Badge variant="warning">Review</Badge>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {sourceLabel(job.source)}
+                          </p>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="min-w-0">
+                          <div className="font-medium">{kioskLabel(job)}</div>
+                          {job.siteName ? (
+                            <p className="text-xs text-muted-foreground">{job.siteName}</p>
                           ) : null}
                         </div>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {sourceLabel(job.source)}
-                        </p>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="min-w-0">
-                        <div className="font-medium">{kioskLabel(job)}</div>
-                        {job.siteName ? (
-                          <p className="text-xs text-muted-foreground">{job.siteName}</p>
+                      </td>
+                      <td>
+                        <Badge variant={billing.variant}>{billing.label}</Badge>
+                      </td>
+                      <td className="text-sm text-muted-foreground">{pagesLabel(job)}</td>
+                      <td>
+                        <div className="space-y-1">
+                          <StatusBadge status={job.status} />
+                          {job.errorMessage ? (
+                            <p className="max-w-[16rem] text-xs text-destructive">
+                              {job.errorMessage}
+                            </p>
+                          ) : null}
+                          {!job.errorMessage && job.reconcileDetail ? (
+                            <p className="max-w-[16rem] text-xs text-muted-foreground">
+                              {job.reconcileDetail}
+                            </p>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap text-muted-foreground">
+                        {new Date(job.createdAt).toLocaleString()}
+                      </td>
+                      <td>
+                        {canClose && OPEN.has(job.status) ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            title="Clear a stuck job so the kiosk can print again"
+                            disabled={closingId === job.id}
+                            onClick={() => setClearJob(job)}
+                          >
+                            Clear stuck
+                          </Button>
                         ) : null}
-                      </div>
-                    </td>
-                    <td>
-                      <Badge variant={billing.variant}>{billing.label}</Badge>
-                    </td>
-                    <td className="text-sm text-muted-foreground">{pagesLabel(job)}</td>
-                    <td>
-                      <div className="space-y-1">
-                        <StatusBadge status={job.status} />
-                        {job.errorMessage ? (
-                          <p className="max-w-[16rem] text-xs text-destructive">{job.errorMessage}</p>
-                        ) : null}
-                        {!job.errorMessage && job.reconcileDetail ? (
-                          <p className="max-w-[16rem] text-xs text-muted-foreground">
-                            {job.reconcileDetail}
-                          </p>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap text-muted-foreground">
-                      {new Date(job.createdAt).toLocaleString()}
-                    </td>
-                    <td>
-                      {canClose && OPEN.has(job.status) ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          title="Clear a stuck job so the kiosk can print again"
-                          disabled={closingId === job.id}
-                          onClick={() => setClearJob(job)}
-                        >
-                          Clear stuck
-                        </Button>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <PaginationBar
+              page={paged.page}
+              pageSize={pageSize}
+              total={filtered.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
       </Panel>
 

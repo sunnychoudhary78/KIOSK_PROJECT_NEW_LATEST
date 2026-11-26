@@ -493,6 +493,15 @@ void SurveillanceRecorder::OnCaptureEvent(GUID type, HRESULT status) {
     in_progress_path_.clear();
     pending_final_path_.clear();
     if (want_next_segment_ && engine_ready_) {
+      // Resolve today's UTC folder before storage check / next segment so a
+      // midnight rollover does not keep using yesterday's path.
+      const HRESULT dir_hr = PrepareOutputDir(&output_dir_);
+      if (FAILED(dir_hr)) {
+        want_next_segment_ = false;
+        EmitFailure("STORAGE_LOW", "PrepareOutputDir", dir_hr);
+        ShutdownEngine();
+        return;
+      }
       const HRESULT storage_hr = CheckStorage(output_dir_);
       if (FAILED(storage_hr)) {
         want_next_segment_ = false;
@@ -605,6 +614,13 @@ HRESULT SurveillanceRecorder::StartSegment() {
   if (!impl_->engine) {
     return E_FAIL;
   }
+  // Refresh the UTC day folder on every segment so continuous recording across
+  // midnight does not keep writing into yesterday's directory (which would make
+  // recordedOn/startedAt wrong in admin by ~24h).
+  HRESULT hr = PrepareOutputDir(&output_dir_);
+  if (FAILED(hr)) {
+    return hr;
+  }
   SYSTEMTIME utc;
   GetSystemTime(&utc);
   wchar_t stamp[16];
@@ -614,7 +630,7 @@ HRESULT SurveillanceRecorder::StartSegment() {
   DeleteFileW(in_progress_path_.c_str());
 
   ComPtr<IMFCaptureSink> sink;
-  HRESULT hr = impl_->engine->GetSink(MF_CAPTURE_ENGINE_SINK_TYPE_RECORD, &sink);
+  hr = impl_->engine->GetSink(MF_CAPTURE_ENGINE_SINK_TYPE_RECORD, &sink);
   if (FAILED(hr)) {
     return hr;
   }

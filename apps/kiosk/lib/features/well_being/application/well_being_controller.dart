@@ -13,6 +13,7 @@ import 'package:skp_kiosk/features/service_analytics/application/service_analyti
 import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
 import 'package:skp_kiosk/features/well_being/application/vitals_line_parser.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
+import 'package:skp_kiosk/features/well_being/domain/bmi_calculator.dart';
 import 'package:skp_kiosk/features/well_being/domain/color_vision_plate.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
@@ -282,6 +283,11 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       colorVisionSessionPlates: const [],
       colorVisionAnswers: const [],
       clearColorVisionResult: true,
+      bmiInputField: BmiInputField.height,
+      bmiHeightDigits: '',
+      bmiWeightDigits: '',
+      clearBmiInputError: true,
+      clearBmiResult: true,
       print: const ReportPrintSnapshot(),
       clearError: true,
       statusMessage: 'Color vision screening',
@@ -333,6 +339,133 @@ class WellBeingController extends Notifier<WellBeingUiState> {
     );
   }
 
+  Future<void> startBmi() async {
+    if (!ref.mounted || !state.sessionActive) return;
+    // ignore: discarded_futures
+    ref
+        .read(serviceAnalyticsTrackerProvider)
+        .track(ServiceEventKeys.wellBeingBmi);
+    await _sendCommand(_cmdStop, silent: true);
+    if (!ref.mounted || !state.sessionActive) return;
+    state = state.copyWith(
+      activeMode: WellBeingMode.bmi,
+      phase: WellBeingPhase.bmiInput,
+      fingerDetected: false,
+      objectDetected: false,
+      measurePct: 0,
+      clearLiveHeartRate: true,
+      clearLiveSpO2: true,
+      clearFinalHeartRate: true,
+      clearFinalSpO2: true,
+      clearLiveTempC: true,
+      clearLiveTempF: true,
+      clearFinalTempC: true,
+      clearFinalTempF: true,
+      colorVisionPlateIndex: 0,
+      colorVisionSessionPlates: const [],
+      colorVisionAnswers: const [],
+      clearColorVisionResult: true,
+      bmiInputField: BmiInputField.height,
+      bmiHeightDigits: '',
+      bmiWeightDigits: '',
+      clearBmiInputError: true,
+      clearBmiResult: true,
+      print: const ReportPrintSnapshot(),
+      clearError: true,
+      statusMessage: 'Enter height and weight',
+    );
+  }
+
+  void setBmiInputField(BmiInputField field) {
+    if (!ref.mounted || !state.sessionActive) return;
+    if (state.phase != WellBeingPhase.bmiInput) return;
+    state = state.copyWith(
+      bmiInputField: field,
+      clearBmiInputError: true,
+    );
+  }
+
+  void appendBmiDigit(String digit) {
+    if (!ref.mounted || !state.sessionActive) return;
+    if (state.phase != WellBeingPhase.bmiInput) return;
+    if (!RegExp(r'^[0-9]$').hasMatch(digit)) return;
+    if (state.bmiInputField == BmiInputField.height) {
+      final next = '${state.bmiHeightDigits}$digit';
+      if (next.length > 3) return;
+      state = state.copyWith(
+        bmiHeightDigits: next,
+        bmiInputField:
+            next.length >= 3 ? BmiInputField.weight : BmiInputField.height,
+        clearBmiInputError: true,
+      );
+    } else {
+      final next = '${state.bmiWeightDigits}$digit';
+      if (next.length > 3) return;
+      state = state.copyWith(bmiWeightDigits: next, clearBmiInputError: true);
+    }
+  }
+
+  void backspaceBmiDigit() {
+    if (!ref.mounted || !state.sessionActive) return;
+    if (state.phase != WellBeingPhase.bmiInput) return;
+    if (state.bmiInputField == BmiInputField.height) {
+      final cur = state.bmiHeightDigits;
+      if (cur.isEmpty) return;
+      state = state.copyWith(
+        bmiHeightDigits: cur.substring(0, cur.length - 1),
+        clearBmiInputError: true,
+      );
+    } else {
+      final cur = state.bmiWeightDigits;
+      if (cur.isEmpty) return;
+      state = state.copyWith(
+        bmiWeightDigits: cur.substring(0, cur.length - 1),
+        clearBmiInputError: true,
+      );
+    }
+  }
+
+  void clearBmiDigits() {
+    if (!ref.mounted || !state.sessionActive) return;
+    if (state.phase != WellBeingPhase.bmiInput) return;
+    if (state.bmiInputField == BmiInputField.height) {
+      state = state.copyWith(bmiHeightDigits: '', clearBmiInputError: true);
+    } else {
+      state = state.copyWith(bmiWeightDigits: '', clearBmiInputError: true);
+    }
+  }
+
+  void submitBmi() {
+    if (!ref.mounted || !state.sessionActive) return;
+    if (state.phase != WellBeingPhase.bmiInput) return;
+    final heightErr = BmiCalculator.validateHeightCm(state.bmiHeightCm);
+    if (heightErr != null) {
+      state = state.copyWith(
+        bmiInputField: BmiInputField.height,
+        bmiInputError: heightErr,
+      );
+      return;
+    }
+    final weightErr = BmiCalculator.validateWeightKg(state.bmiWeightKg);
+    if (weightErr != null) {
+      state = state.copyWith(
+        bmiInputField: BmiInputField.weight,
+        bmiInputError: weightErr,
+      );
+      return;
+    }
+    final result = BmiCalculator.calculate(
+      heightCm: state.bmiHeightCm!,
+      weightKg: state.bmiWeightKg!,
+    );
+    state = state.copyWith(
+      phase: WellBeingPhase.bmiComplete,
+      bmiResult: result,
+      clearBmiInputError: true,
+      statusMessage: result.title,
+    );
+  }
+
   Future<void> returnToHub() async {
     if (!ref.mounted || !state.sessionActive) {
       return;
@@ -361,6 +494,11 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       colorVisionSessionPlates: const [],
       colorVisionAnswers: const [],
       clearColorVisionResult: true,
+      bmiInputField: BmiInputField.height,
+      bmiHeightDigits: '',
+      bmiWeightDigits: '',
+      clearBmiInputError: true,
+      clearBmiResult: true,
       print: const ReportPrintSnapshot(),
       statusMessage: state.isConnected
           ? 'Choose a measurement'
@@ -628,12 +766,14 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       WellBeingPhase.oxiComplete => 'oxi',
       WellBeingPhase.tempComplete => 'temp',
       WellBeingPhase.colorVisionComplete => 'color_vision',
+      WellBeingPhase.bmiComplete => 'bmi',
       _ => null,
     };
     if (mode == null) return;
     final colorMode = state.print.colorMode;
     final token = phoneProofToken ?? state.print.phoneProofToken;
     final cv = state.colorVisionResult;
+    final bmi = state.bmiResult;
     _stopPaymentPoll();
     state = state.copyWith(
       print: state.print.copyWith(
@@ -669,6 +809,15 @@ class WellBeingController extends Notifier<WellBeingUiState> {
           'colorVisionTitle': cv.title,
           'colorVisionSummary': cv.summary,
           'colorVisionAdvice': cv.advice,
+        },
+        if (bmi != null) ...{
+          'bmiValue': double.parse(bmi.bmi.toStringAsFixed(1)),
+          'bmiCategory': bmi.categoryApi,
+          'bmiHeightCm': bmi.heightCm,
+          'bmiWeightKg': bmi.weightKg,
+          'bmiTitle': bmi.title,
+          'bmiSummary': bmi.summary,
+          'bmiAdvice': bmi.advice,
         },
         'measuredAt': DateTime.now().toUtc().toIso8601String(),
       },

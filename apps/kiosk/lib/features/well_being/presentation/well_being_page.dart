@@ -18,6 +18,7 @@ import 'package:skp_kiosk/features/well_being/application/well_being_state.dart'
 import 'package:skp_kiosk/features/well_being/domain/color_vision_plate.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
+import 'package:skp_kiosk/features/well_being/presentation/widgets/bmi_views.dart';
 import 'package:skp_kiosk/features/well_being/presentation/widgets/color_vision_plate_view.dart';
 import 'package:skp_kiosk/features/well_being/presentation/widgets/oxi_monitor_panel.dart';
 import 'package:skp_kiosk/features/well_being/presentation/widgets/well_being_marks.dart';
@@ -44,7 +45,8 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
     final phase = ref.read(wellBeingControllerProvider).phase;
     final complete = phase == WellBeingPhase.oxiComplete ||
         phase == WellBeingPhase.tempComplete ||
-        phase == WellBeingPhase.colorVisionComplete;
+        phase == WellBeingPhase.colorVisionComplete ||
+        phase == WellBeingPhase.bmiComplete;
     if (!complete || !mounted) {
       return;
     }
@@ -335,7 +337,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
     }
 
     final showBack = state.phase != WellBeingPhase.choose &&
-        (state.isColorVisionFlow ||
+        (state.isSoftwareFlow ||
             state.connectionStatus != SerialConnectionStatus.connecting);
     final complete = state.isMeasurementComplete;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -348,11 +350,13 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
       WellBeingPhase.tempIdle ||
       WellBeingPhase.tempMeasuring ||
       WellBeingPhase.colorVisionIntro ||
-      WellBeingPhase.colorVisionTesting =>
+      WellBeingPhase.colorVisionTesting ||
+      WellBeingPhase.bmiInput =>
         2,
       WellBeingPhase.oxiComplete ||
       WellBeingPhase.tempComplete ||
-      WellBeingPhase.colorVisionComplete =>
+      WellBeingPhase.colorVisionComplete ||
+      WellBeingPhase.bmiComplete =>
         3,
     };
 
@@ -474,7 +478,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (state.phase != WellBeingPhase.choose &&
-                  !state.isColorVisionFlow &&
+                  !state.isSoftwareFlow &&
                   (state.connectionStatus == SerialConnectionStatus.error ||
                       state.connectionStatus == SerialConnectionStatus.disconnected))
                 Padding(
@@ -500,6 +504,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                         onOxygen: () => controller.startOxygen(),
                         onTemperature: () => controller.startTemperature(),
                         onColorVision: () => controller.startColorVision(),
+                        onBmi: () => controller.startBmi(),
                       ),
                     WellBeingPhase.oxiIdle => _OxiIdleView(
                         key: const ValueKey('oxiIdle'),
@@ -539,6 +544,15 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                       ),
                     WellBeingPhase.colorVisionComplete => _ColorVisionCompleteView(
                         key: const ValueKey('colorVisionComplete'),
+                        state: state,
+                      ),
+                    WellBeingPhase.bmiInput => BmiInputView(
+                        key: const ValueKey('bmiInput'),
+                        state: state,
+                        controller: controller,
+                      ),
+                    WellBeingPhase.bmiComplete => BmiCompleteView(
+                        key: const ValueKey('bmiComplete'),
                         state: state,
                       ),
                   },
@@ -595,6 +609,7 @@ class _ConnectionBanner extends StatelessWidget {
             WellBeingMode.temp =>
               objectDetected ? 'Forehead detected' : 'No forehead detected',
             WellBeingMode.colorVision => 'Color vision screening',
+            WellBeingMode.bmi => 'BMI calculator',
             WellBeingMode.none => 'Ready',
           };
 
@@ -608,6 +623,7 @@ class _ConnectionBanner extends StatelessWidget {
                 objectDetected ? Icons.thermostat : Icons.sensors,
               WellBeingMode.oxi => fingerDetected ? Icons.back_hand : Icons.sensors,
               WellBeingMode.colorVision => Icons.visibility_outlined,
+              WellBeingMode.bmi => Icons.monitor_weight_outlined,
               WellBeingMode.none => Icons.favorite_outline,
             }
           : Icons.sensors_off,
@@ -628,12 +644,14 @@ class _ChooseView extends StatelessWidget {
     required this.onOxygen,
     required this.onTemperature,
     required this.onColorVision,
+    required this.onBmi,
   });
 
   final bool connected;
   final VoidCallback onOxygen;
   final VoidCallback onTemperature;
   final VoidCallback onColorVision;
+  final VoidCallback onBmi;
 
   @override
   Widget build(BuildContext context) {
@@ -693,8 +711,6 @@ class _ChooseView extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-
-                    // Glowing Underline Accent Bar
                     Container(
                       width: 44,
                       height: 4,
@@ -705,17 +721,14 @@ class _ChooseView extends StatelessWidget {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFF43F5E).withValues(alpha: 0.5),
+                            color: const Color(0xFFF43F5E).withValues(alpha: 0.45),
                             blurRadius: 8,
                             offset: const Offset(0, 1),
                           ),
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 12),
-
-                    // 3 Feature highlight pills
                     Row(
                       children: [
                         _FeaturePill(
@@ -753,114 +766,166 @@ class _ChooseView extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // 2. Privacy Banner (Matching Reference Image)
           const _WellBeingPrivacyBanner(),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // 3. Section Header
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(width: 32, height: 1.5, color: const Color(0xFFF43F5E)),
-              const SizedBox(width: 10),
+              Container(width: 36, height: 1.5, color: const Color(0xFFF43F5E)),
+              const SizedBox(width: 12),
               Text(
-                'Choose a Health Check',
+                'Choose a Measurement',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 17,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.2,
                   color: isDark ? Colors.white : const Color(0xFF0F172A),
                 ),
               ),
-              const SizedBox(width: 10),
-              Container(width: 32, height: 1.5, color: const Color(0xFFF43F5E)),
+              const SizedBox(width: 12),
+              Container(width: 36, height: 1.5, color: const Color(0xFFF43F5E)),
             ],
           ),
-          const SizedBox(height: 3),
-          Text(
-            'Select a vital check or color vision screening. Sensor tests run one at a time.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+
+          const SizedBox(height: 12),
+
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _MeasurementCard(
+                    title: 'Blood Oxygen',
+                    subtitle: 'Measure SpO2 and heart rate with your fingertip.',
+                    graphic: const Oximeter3DGraphic(size: 64),
+                    accentColor: const Color(0xFF0284C7),
+                    cardGradient: isDark
+                        ? const LinearGradient(
+                            colors: [Color(0xFF131D33), Color(0xFF172554)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : const LinearGradient(
+                            colors: [Color(0xFFFFFFFF), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
+                            stops: [0.35, 0.75, 1.0],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    borderColor: isDark ? const Color(0xFF0369A1) : const Color(0xFFBAE6FD),
+                    shadowColor: const Color(0xFF0284C7),
+                    tags: const [
+                      (icon: Icons.water_drop_outlined, label: 'SpO₂ (Oxygen Level)'),
+                      (icon: Icons.favorite_border_rounded, label: 'Heart Rate'),
+                    ],
+                    onTap: onOxygen,
+                    isDark: isDark,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _MeasurementCard(
+                    title: 'Temperature',
+                    subtitle: 'Quick contactless body temperature reading.',
+                    graphic: const Thermometer3DGraphic(size: 64),
+                    accentColor: const Color(0xFFE11D48),
+                    cardGradient: isDark
+                        ? const LinearGradient(
+                            colors: [Color(0xFF241523), Color(0xFF3B1832)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : const LinearGradient(
+                            colors: [Color(0xFFFFFFFF), Color(0xFFFDF2F8), Color(0xFFFCE7F3)],
+                            stops: [0.35, 0.75, 1.0],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    borderColor: isDark ? const Color(0xFF9F1239) : const Color(0xFFFBCFE8),
+                    shadowColor: const Color(0xFFE11D48),
+                    tags: const [
+                      (icon: Icons.thermostat_outlined, label: 'Forehead'),
+                    ],
+                    onTap: onTemperature,
+                    isDark: isDark,
+                  ),
+                ),
+              ],
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          // 4. Measurement Cards
-          Row(
-            children: [
-              Expanded(
-                child: _MeasurementCard(
-                  title: 'Blood Oxygen',
-                  subtitle: 'Measure your oxygen level (SpO2)\nand heart rate with your fingertip.',
-                  graphic: const Oximeter3DGraphic(size: 88),
-                  accentColor: const Color(0xFF0284C7),
-                  cardGradient: isDark
-                      ? const LinearGradient(
-                          colors: [Color(0xFF131D33), Color(0xFF172554)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : const LinearGradient(
-                          colors: [Color(0xFFFFFFFF), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
-                          stops: [0.35, 0.75, 1.0],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  borderColor: isDark ? const Color(0xFF0369A1) : const Color(0xFFBAE6FD),
-                  shadowColor: const Color(0xFF0284C7),
-                  tags: const [
-                    (icon: '🫁', label: 'SpO2 (Oxygen Level)'),
-                    (icon: '💓', label: 'Heart Rate'),
-                  ],
-                  onTap: onOxygen,
-                  isDark: isDark,
+          const SizedBox(height: 10),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _MeasurementCard(
+                    title: 'Color Vision Test',
+                    subtitle: 'Short red–green screening with 10 dotted plates.',
+                    graphic: ColorVisionPlateView(
+                      plate: ColorVisionBattery.plates.first,
+                      size: 60,
+                    ),
+                    accentColor: const Color(0xFF059669),
+                    cardGradient: isDark
+                        ? const LinearGradient(
+                            colors: [Color(0xFF10241C), Color(0xFF14532D)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : const LinearGradient(
+                            colors: [Color(0xFFFFFFFF), Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+                            stops: [0.35, 0.75, 1.0],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    borderColor: isDark ? const Color(0xFF166534) : const Color(0xFFA7F3D0),
+                    shadowColor: const Color(0xFF059669),
+                    tags: const [
+                      (icon: Icons.visibility_outlined, label: '10 plates'),
+                      (icon: Icons.description_outlined, label: 'Printable'),
+                    ],
+                    onTap: onColorVision,
+                    isDark: isDark,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _MeasurementCard(
-                  title: 'Temperature',
-                  subtitle: 'Measure your body temperature\nquickly and contactlessly with sensor.',
-                  graphic: const Thermometer3DGraphic(size: 88),
-                  accentColor: const Color(0xFFE11D48),
-                  cardGradient: isDark
-                      ? const LinearGradient(
-                          colors: [Color(0xFF241523), Color(0xFF3B1832)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : const LinearGradient(
-                          colors: [Color(0xFFFFFFFF), Color(0xFFFDF2F8), Color(0xFFFCE7F3)],
-                          stops: [0.35, 0.75, 1.0],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  borderColor: isDark ? const Color(0xFF9F1239) : const Color(0xFFFBCFE8),
-                  shadowColor: const Color(0xFFE11D48),
-                  onTap: onTemperature,
-                  isDark: isDark,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _MeasurementCard(
+                    title: 'BMI Calculator',
+                    subtitle: 'Enter height and weight for a quick BMI result.',
+                    graphic: const BmiScale3DGraphic(size: 64),
+                    accentColor: const Color(0xFF7C3AED),
+                    cardGradient: isDark
+                        ? const LinearGradient(
+                            colors: [Color(0xFF1A1030), Color(0xFF4C1D95)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : const LinearGradient(
+                            colors: [Color(0xFFFFFFFF), Color(0xFFF5F3FF), Color(0xFFEDE9FE)],
+                            stops: [0.35, 0.75, 1.0],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    borderColor: isDark ? const Color(0xFF6D28D9) : const Color(0xFFDDD6FE),
+                    shadowColor: const Color(0xFF7C3AED),
+                    tags: const [
+                      (icon: Icons.straighten_outlined, label: 'cm + kg'),
+                      (icon: Icons.bolt_rounded, label: 'Instant'),
+                    ],
+                    onTap: onBmi,
+                    isDark: isDark,
+                  ),
                 ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          _ColorVisionHubCard(
-            isDark: isDark,
-            onTap: onColorVision,
+              ],
+            ),
           ),
 
           const SizedBox(height: 10),
 
-          // 5. Medical Disclaimer
           const _MedicalDisclaimer(),
         ],
       ),
@@ -893,13 +958,12 @@ class _FeaturePill extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isDark ? const Color(0xFF4A3474) : const Color(0xFFE2E8F0),
-            width: 1.0,
           ),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x06000000),
-              blurRadius: 8,
-              offset: Offset(0, 2),
+              color: Color(0x08000000),
+              blurRadius: 10,
+              offset: Offset(0, 3),
             ),
           ],
         ),
@@ -1013,7 +1077,7 @@ class _MeasurementCard extends StatelessWidget {
     required this.shadowColor,
     required this.onTap,
     required this.isDark,
-    this.tags,
+    this.tags = const [],
   });
 
   final String title;
@@ -1025,7 +1089,7 @@ class _MeasurementCard extends StatelessWidget {
   final Color shadowColor;
   final VoidCallback onTap;
   final bool isDark;
-  final List<({String icon, String label})>? tags;
+  final List<({IconData icon, String label})> tags;
 
   @override
   Widget build(BuildContext context) {
@@ -1034,12 +1098,12 @@ class _MeasurementCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         gradient: cardGradient,
         border: Border.all(
-          color: borderColor.withValues(alpha: isDark ? 0.7 : 0.85),
+          color: borderColor.withValues(alpha: isDark ? 0.7 : 0.9),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: shadowColor.withValues(alpha: isDark ? 0.22 : 0.08),
+            color: shadowColor.withValues(alpha: isDark ? 0.22 : 0.10),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -1054,11 +1118,11 @@ class _MeasurementCard extends StatelessWidget {
           splashColor: accentColor.withValues(alpha: 0.12),
           highlightColor: accentColor.withValues(alpha: 0.06),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
                 graphic,
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1068,54 +1132,62 @@ class _MeasurementCard extends StatelessWidget {
                         title,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 22,
+                          fontSize: 17,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
+                          letterSpacing: -0.3,
                           color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                          height: 1.3,
+                          height: 1.25,
                         ),
                       ),
-                      if (tags != null) ...[
-                        const SizedBox(height: 10),
+                      if (tags.isNotEmpty) ...[
+                        const SizedBox(height: 6),
                         Wrap(
-                          spacing: 8,
+                          spacing: 6,
+                          runSpacing: 4,
                           children: [
-                            for (final tag in tags!)
+                            for (final tag in tags)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: isDark
                                       ? const Color(0xFF1E293B)
-                                      : const Color(0xFFF1F5F9),
-                                  borderRadius: BorderRadius.circular(12),
+                                      : Colors.white.withValues(alpha: 0.85),
+                                  borderRadius: BorderRadius.circular(999),
                                   border: Border.all(
-                                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                    color: isDark
+                                        ? const Color(0xFF334155)
+                                        : const Color(0xFFE2E8F0),
                                   ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(tag.icon, style: const TextStyle(fontSize: 12)),
-                                    const SizedBox(width: 5),
+                                    Icon(tag.icon, size: 11, color: accentColor),
+                                    const SizedBox(width: 4),
                                     Text(
                                       tag.label,
                                       style: TextStyle(
                                         fontFamily: 'PlusJakartaSans',
-                                        fontSize: 11,
+                                        fontSize: 10.5,
                                         fontWeight: FontWeight.w600,
-                                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                        color: isDark
+                                            ? const Color(0xFFCBD5E1)
+                                            : const Color(0xFF475569),
                                       ),
                                     ),
                                   ],
@@ -1127,31 +1199,29 @@ class _MeasurementCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isDark ? const Color(0xFF1E293B) : Colors.white,
                     border: Border.all(
-                      color: accentColor.withValues(alpha: isDark ? 0.8 : 0.85),
-                      width: 1.8,
+                      color: accentColor.withValues(alpha: 0.9),
+                      width: 1.6,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: accentColor.withValues(alpha: 0.20),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
+                        color: accentColor.withValues(alpha: 0.18),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: Center(
-                    child: Icon(
-                      Icons.arrow_forward_rounded,
-                      color: accentColor,
-                      size: 20,
-                    ),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    color: accentColor,
+                    size: 18,
                   ),
                 ),
               ],
@@ -2074,32 +2144,6 @@ class _ColorVisionHubCardState extends State<_ColorVisionHubCard>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF059669)
-                                  .withValues(alpha: isDark ? 0.25 : 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text(
-                              'NEW · NO SENSOR NEEDED',
-                              style: TextStyle(
-                                fontFamily: 'PlusJakartaSans',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.4,
-                                color: Color(0xFF059669),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
                       Text(
                         'Color Vision Test',
                         style: TextStyle(
