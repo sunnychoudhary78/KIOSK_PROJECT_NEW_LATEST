@@ -9,7 +9,20 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+/** Fake contacts / geo / support tickets — never for staging or production. */
+function allowLocalDemoData(): boolean {
+  const env = process.env.SKP_NODE_ENV ?? 'local';
+  return env === 'local' || env === 'dev' || env === 'test';
+}
+
 async function main() {
+  const seedLocalDemo = allowLocalDemoData();
+  if (!seedLocalDemo) {
+    console.info(
+      `Skipping local-only demo data (SKP_NODE_ENV=${process.env.SKP_NODE_ENV ?? 'unset'}).`,
+    );
+  }
+
   const tenant = await prisma.tenant.upsert({
     where: { code: 'default' },
     update: {},
@@ -41,9 +54,13 @@ async function main() {
       status: DeviceStatus.active,
       deviceSecret: demoDeviceSecret,
       deviceSecretHash: demoDeviceSecretHash,
-      latitude: 28.606,
-      longitude: 77.43,
-      address: 'Gaur City 2, Greater Noida West',
+      ...(seedLocalDemo
+        ? {
+            latitude: 28.606,
+            longitude: 77.43,
+            address: 'Gaur City 2, Greater Noida West',
+          }
+        : {}),
     },
     create: {
       tenantId: tenant.id,
@@ -53,9 +70,13 @@ async function main() {
       deviceSecretHash: demoDeviceSecretHash,
       deviceSecret: demoDeviceSecret,
       status: DeviceStatus.active,
-      latitude: 28.606,
-      longitude: 77.43,
-      address: 'Gaur City 2, Greater Noida West',
+      ...(seedLocalDemo
+        ? {
+            latitude: 28.606,
+            longitude: 77.43,
+            address: 'Gaur City 2, Greater Noida West',
+          }
+        : {}),
     },
   });
 
@@ -278,13 +299,15 @@ async function main() {
     });
   }
 
-  const demoSupportCount = await prisma.supportQuery.count({
-    where: {
-      deviceId: demoDevice.id,
-      message: { startsWith: '[Demo]' },
-    },
-  });
-  if (demoSupportCount === 0) {
+  const demoSupportCount = seedLocalDemo
+    ? await prisma.supportQuery.count({
+        where: {
+          deviceId: demoDevice.id,
+          message: { startsWith: '[Demo]' },
+        },
+      })
+    : 1;
+  if (seedLocalDemo && demoSupportCount === 0) {
     const now = Date.now();
     const minutesAgo = (mins: number) => new Date(now - mins * 60_000);
 
@@ -346,10 +369,295 @@ async function main() {
     });
   }
 
+  if (seedLocalDemo) {
+    const astrologyDemoContacts = [
+      {
+        id: 'b0000000-0000-4000-8000-000000000001',
+        kind: 'astrologer' as const,
+        name: 'Acharya Rahul Sharma',
+        phone: '9876543210',
+        rating: 5,
+        sortOrder: 1,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000002',
+        kind: 'astrologer' as const,
+        name: 'Pandit Amit Joshi',
+        phone: '9876501234',
+        rating: 4.5,
+        sortOrder: 2,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000003',
+        kind: 'astrologer' as const,
+        name: 'Acharya Vikram Mishra',
+        phone: '9876512345',
+        rating: 4.5,
+        sortOrder: 3,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000004',
+        kind: 'astrologer' as const,
+        name: 'Pandit Rohan Tiwari',
+        phone: '9876523456',
+        rating: 4,
+        sortOrder: 4,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000005',
+        kind: 'astrologer' as const,
+        name: 'Acharya Suresh Pandey',
+        phone: '9876534567',
+        rating: 4,
+        sortOrder: 5,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000006',
+        kind: 'astrologer' as const,
+        name: 'Jyotish Neha Verma',
+        phone: '9876556789',
+        rating: 4.8,
+        sortOrder: 6,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000007',
+        kind: 'pandit' as const,
+        name: 'Pandit Mohan Shastri',
+        phone: '9876501234',
+        rating: 5,
+        sortOrder: 1,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000008',
+        kind: 'pandit' as const,
+        name: 'Pandit Rajesh Tiwari',
+        phone: '9876512345',
+        rating: 4.5,
+        sortOrder: 2,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000009',
+        kind: 'pandit' as const,
+        name: 'Pandit Sunil Sharma',
+        phone: '9876523456',
+        rating: 4.5,
+        sortOrder: 3,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000010',
+        kind: 'pandit' as const,
+        name: 'Pandit Anil Tripathi',
+        phone: '9876534567',
+        rating: 4,
+        sortOrder: 4,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000011',
+        kind: 'pandit' as const,
+        name: 'Pandit Deepak Mishra',
+        phone: '9876545678',
+        rating: 4,
+        sortOrder: 5,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000012',
+        kind: 'pandit' as const,
+        name: 'Pandit Ramesh Dubey',
+        phone: '9876567890',
+        rating: 3.5,
+        sortOrder: 6,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000013',
+        kind: 'numerology' as const,
+        name: 'Numerologist Kavita Rao',
+        phone: '9876601234',
+        rating: 5,
+        sortOrder: 1,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000014',
+        kind: 'numerology' as const,
+        name: 'Acharya Manish Gupta',
+        phone: '9876612345',
+        rating: 4.5,
+        sortOrder: 2,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000015',
+        kind: 'numerology' as const,
+        name: 'Jyotish Priya Nair',
+        phone: '9876623456',
+        rating: 4.5,
+        sortOrder: 3,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000016',
+        kind: 'numerology' as const,
+        name: 'Numerologist Arjun Mehta',
+        phone: '9876634567',
+        rating: 4,
+        sortOrder: 4,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000017',
+        kind: 'numerology' as const,
+        name: 'Guru Seema Kapoor',
+        phone: '9876645678',
+        rating: 4,
+        sortOrder: 5,
+      },
+      {
+        id: 'b0000000-0000-4000-8000-000000000018',
+        kind: 'numerology' as const,
+        name: 'Numerologist Vivek Shah',
+        phone: '9876656789',
+        rating: 3.5,
+        sortOrder: 6,
+      },
+    ];
+
+    for (const contact of astrologyDemoContacts) {
+      await prisma.astrologyContact.upsert({
+        where: { id: contact.id },
+        update: {
+          kind: contact.kind,
+          name: contact.name,
+          phone: contact.phone,
+          rating: contact.rating,
+          sortOrder: contact.sortOrder,
+        },
+        create: contact,
+      });
+    }
+
+    // Find Services demo pin / rating / geo cluster (Gaur City area).
+    const localServiceDemoEnrich = [
+      {
+        id: 'c0000000-0000-4000-8000-000000000005',
+        pinned: true,
+        rating: 4.0,
+        address: 'Shop 14, Gaur City 2 Market',
+        latitude: 28.6285,
+        longitude: 77.43,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000006',
+        pinned: true,
+        rating: 3.5,
+        address: 'Near Hajipur Crossing',
+        latitude: 28.64,
+        longitude: 77.43,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000001',
+        pinned: false,
+        rating: 3.0,
+        address: 'Gaur City 1, Tower 5 area',
+        latitude: 28.609,
+        longitude: 77.43,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000003',
+        pinned: false,
+        rating: 4.8,
+        address: 'Sector 16C, Noida Extension',
+        latitude: 28.614,
+        longitude: 77.43,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000004',
+        pinned: false,
+        rating: 4.9,
+        address: 'Main Market, Chiranjiv Vihar',
+        latitude: 28.6195,
+        longitude: 77.43,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000002',
+        pinned: false,
+        rating: 4.2,
+        address: 'Opp. Gaur City Mall',
+        latitude: 28.622,
+        longitude: 77.432,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000007',
+        pinned: false,
+        rating: 2.5,
+        address: 'Bisrakh Road workshop',
+        latitude: 28.635,
+        longitude: 77.43,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000110',
+        pinned: true,
+        rating: 4.7,
+        address: 'Gaur City 2 plumbing hub',
+        latitude: 28.6105,
+        longitude: 77.4285,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000111',
+        pinned: false,
+        rating: 4.5,
+        address: 'Sector 4, Greater Noida West',
+        latitude: 28.612,
+        longitude: 77.431,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000112',
+        pinned: false,
+        rating: 3.8,
+        address: 'Near City Park',
+        latitude: 28.618,
+        longitude: 77.429,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000056',
+        pinned: true,
+        rating: 4.6,
+        address: 'Electrical mart, GC-2',
+        latitude: 28.611,
+        longitude: 77.4295,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000057',
+        pinned: false,
+        rating: 4.3,
+        address: 'Tower circle shop',
+        latitude: 28.6075,
+        longitude: 77.4305,
+      },
+      {
+        id: 'c0000000-0000-4000-8000-000000000058',
+        pinned: false,
+        rating: 3.9,
+        address: 'Hajipur service lane',
+        latitude: 28.62,
+        longitude: 77.428,
+      },
+    ];
+
+    for (const row of localServiceDemoEnrich) {
+      await prisma.localServiceContact.updateMany({
+        where: { id: row.id },
+        data: {
+          pinned: row.pinned,
+          rating: row.rating,
+          address: row.address,
+          latitude: row.latitude,
+          longitude: row.longitude,
+        },
+      });
+    }
+  }
+
   console.info('Seed complete', {
     tenantId: tenant.id,
     siteId: ensuredSite.id,
     demoDeviceId: demoDevice.id,
+    localDemoData: seedLocalDemo,
   });
 }
 

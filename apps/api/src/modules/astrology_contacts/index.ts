@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response, Router } from 'express';
+import multer from 'multer';
 import type { AppDeps } from '../../types/deps.js';
 import { authRequired } from '../../shared/auth.js';
 import { validateBody } from '../../infrastructure/http/validate.js';
@@ -11,15 +12,20 @@ import {
 } from './astrology_contacts.schemas.js';
 import { AstrologyContactsService } from './astrology_contacts.service.js';
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+});
+
 function parseKindQuery(raw: unknown): AstrologyContactKind | undefined {
   if (raw === undefined || raw === null || raw === '') {
     return undefined;
   }
   if (typeof raw !== 'string') {
-    throw new AppError('invalid_kind', 'kind must be astrologer or pandit', 400);
+    throw new AppError('invalid_kind', 'kind must be astrologer, pandit, or numerology', 400);
   }
   if (!(ASTROLOGY_CONTACT_KINDS as readonly string[]).includes(raw)) {
-    throw new AppError('invalid_kind', 'kind must be astrologer or pandit', 400);
+    throw new AppError('invalid_kind', 'kind must be astrologer, pandit, or numerology', 400);
   }
   return raw as AstrologyContactKind;
 }
@@ -93,6 +99,46 @@ export function registerAstrologyContactsModule(router: Router, deps: AppDeps): 
           req.correlationId,
         );
         res.status(204).send();
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/astrology-contacts/:id/photo',
+    authRequired(deps.config, ['admin', 'device']),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const photo = await service.readPhoto(requireParam(req.params.id, 'id'));
+        res.setHeader('Content-Type', photo.contentType);
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.send(photo.bytes);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/astrology-contacts/:id/photo',
+    authRequired(deps.config, ['admin']),
+    upload.single('photo'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.principal) {
+          throw new AppError('unauthorized', 'Missing principal', 401);
+        }
+        if (!req.file) {
+          throw new AppError('invalid_file', 'Photo file is required', 400);
+        }
+        const result = await service.setPhoto(
+          requireParam(req.params.id, 'id'),
+          req.file,
+          req.principal.id,
+          req.correlationId,
+        );
+        res.json(result);
       } catch (error) {
         next(error);
       }

@@ -384,6 +384,14 @@ class AstrologyHubPage extends ConsumerWidget {
         onTap: () =>
             Navigator.of(context).pushNamed(AppRoutes.astrologyPandit),
       ),
+      (
+        kind: AstrologyReadingKind.numerology,
+        image: 'assets/new_theme_icons/astrology/contact_numerology.png',
+        title: 'Contact Numerology',
+        subtitle: 'Name · Number · Guidance',
+        onTap: () =>
+            Navigator.of(context).pushNamed(AppRoutes.astrologyNumerology),
+      ),
     ];
 
     return VisitorSessionPopScope(
@@ -516,7 +524,7 @@ class AstrologyHubPage extends ConsumerWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'Kundali, palm, matching, periods, and expert contacts.',
+                'Kundali, palm, matching, periods, numerology, and expert contacts.',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
                   fontSize: 16,
@@ -603,11 +611,11 @@ class AstrologyHubPage extends ConsumerWidget {
 
               const SizedBox(height: 16),
 
-              // 3. 3x2 Reading Cards
+              // Reading cards (2 columns; grows with tile count)
               Expanded(
                 child: Column(
                   children: [
-                    for (var row = 0; row < 3; row++) ...[
+                    for (var row = 0; row < (tiles.length / 2).ceil(); row++) ...[
                       if (row > 0) const SizedBox(height: 12),
                       Expanded(
                         child: Row(
@@ -623,13 +631,15 @@ class AstrologyHubPage extends ConsumerWidget {
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: AstrologyReadingCard(
-                                kind: tiles[row * 2 + 1].kind,
-                                image: tiles[row * 2 + 1].image,
-                                title: tiles[row * 2 + 1].title,
-                                subtitle: tiles[row * 2 + 1].subtitle,
-                                onTap: tiles[row * 2 + 1].onTap,
-                              ),
+                              child: row * 2 + 1 < tiles.length
+                                  ? AstrologyReadingCard(
+                                      kind: tiles[row * 2 + 1].kind,
+                                      image: tiles[row * 2 + 1].image,
+                                      title: tiles[row * 2 + 1].title,
+                                      subtitle: tiles[row * 2 + 1].subtitle,
+                                      onTap: tiles[row * 2 + 1].onTap,
+                                    )
+                                  : const SizedBox.expand(),
                             ),
                           ],
                         ),

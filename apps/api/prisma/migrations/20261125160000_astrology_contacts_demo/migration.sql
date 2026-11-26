@@ -1,0 +1,2 @@
+-- Intentionally empty.
+-- Demo astrology contacts are local-only (prisma/seed.ts) and must not ship via migrate.

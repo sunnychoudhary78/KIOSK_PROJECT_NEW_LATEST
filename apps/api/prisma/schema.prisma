@@ -172,6 +172,7 @@ enum AdPlaybackEventType {
 enum AstrologyContactKind {
   astrologer
   pandit
+  numerology
 }
 
 model Tenant {
@@ -940,6 +941,7 @@ model AstrologyContact {
   rating           Decimal              @db.Decimal(2, 1)
   sortOrder        Int                  @map("sort_order")
   showNumberClicks Int                  @default(0) @map("show_number_clicks")
+  photoStoragePath String?              @map("photo_storage_path")
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
 

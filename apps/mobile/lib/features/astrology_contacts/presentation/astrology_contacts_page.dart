@@ -30,12 +30,17 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(astrologyContactsProvider);
     final l10n = AppLocalizations.of(context);
-    final isPandit = widget.kind == AstrologyContactKind.pandit;
-    final title =
-        isPandit ? l10n.astrologyPanditTitle : l10n.astrologyAstrologerTitle;
-    final helper = isPandit
-        ? l10n.astrologyPanditHelper
-        : l10n.astrologyAstrologerHelper;
+    final title = switch (widget.kind) {
+      AstrologyContactKind.pandit => l10n.astrologyPanditTitle,
+      AstrologyContactKind.numerology => 'Numerology',
+      AstrologyContactKind.astrologer => l10n.astrologyAstrologerTitle,
+    };
+    final helper = switch (widget.kind) {
+      AstrologyContactKind.pandit => l10n.astrologyPanditHelper,
+      AstrologyContactKind.numerology =>
+        'Name, rating, and phone for numerology guidance.',
+      AstrologyContactKind.astrologer => l10n.astrologyAstrologerHelper,
+    };
 
     return SkpScaffold(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),

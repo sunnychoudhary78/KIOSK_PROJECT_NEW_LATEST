@@ -1,4 +1,4 @@
-enum AstrologyContactKind { astrologer, pandit }
+enum AstrologyContactKind { astrologer, pandit, numerology }
 
 class AstrologyContact {
   const AstrologyContact({
@@ -39,9 +39,11 @@ class AstrologyContact {
     final kindRaw = json['kind']?.toString() ?? 'astrologer';
     return AstrologyContact(
       id: json['id']?.toString() ?? '',
-      kind: kindRaw == 'pandit'
-          ? AstrologyContactKind.pandit
-          : AstrologyContactKind.astrologer,
+      kind: switch (kindRaw) {
+        'pandit' => AstrologyContactKind.pandit,
+        'numerology' => AstrologyContactKind.numerology,
+        _ => AstrologyContactKind.astrologer,
+      },
       name: json['name']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 0,

@@ -2,7 +2,15 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-enum AstrologyReadingKind { kundali, palm, match, today, astrologer, pandit }
+enum AstrologyReadingKind {
+  kundali,
+  palm,
+  match,
+  today,
+  astrologer,
+  pandit,
+  numerology,
+}
 
 extension AstrologyReadingKindStyle on AstrologyReadingKind {
   Color get accent => switch (this) {
@@ -12,6 +20,7 @@ extension AstrologyReadingKindStyle on AstrologyReadingKind {
     AstrologyReadingKind.today => const Color(0xFF0284C7),
     AstrologyReadingKind.astrologer => const Color(0xFF6D28D9),
     AstrologyReadingKind.pandit => const Color(0xFFC2410C),
+    AstrologyReadingKind.numerology => const Color(0xFF0F766E),
   };
 
   Color get secondaryAccent => switch (this) {
@@ -21,6 +30,7 @@ extension AstrologyReadingKindStyle on AstrologyReadingKind {
     AstrologyReadingKind.today => const Color(0xFF38BDF8),
     AstrologyReadingKind.astrologer => const Color(0xFFA78BFA),
     AstrologyReadingKind.pandit => const Color(0xFFFBBF24),
+    AstrologyReadingKind.numerology => const Color(0xFF2DD4BF),
   };
 
   Color get bottomWaveColor => switch (this) {
@@ -30,6 +40,7 @@ extension AstrologyReadingKindStyle on AstrologyReadingKind {
     AstrologyReadingKind.today => const Color(0xFFE0F2FE),
     AstrologyReadingKind.astrologer => const Color(0xFFF3E8FF),
     AstrologyReadingKind.pandit => const Color(0xFFFFF7ED),
+    AstrologyReadingKind.numerology => const Color(0xFFCCFBF1),
   };
 }
 
@@ -81,6 +92,8 @@ class _Astrology3DEmblemPainter extends CustomPainter {
         _paintAstrologer(canvas, center, radius);
       case AstrologyReadingKind.pandit:
         _paintPandit(canvas, center, radius);
+      case AstrologyReadingKind.numerology:
+        _paintAstrologer(canvas, center, radius);
     }
   }
 
@@ -1009,6 +1022,22 @@ class _AstrologyReadingCardState extends State<AstrologyReadingCard> {
               ),
         isDark ? const Color(0xFF9A3412) : const Color(0xFFFED7AA),
         const Color(0xFFC2410C),
+      ),
+      AstrologyReadingKind.numerology => (
+        isDark
+            ? const LinearGradient(
+                colors: [Color(0xFF102A28), Color(0xFF134E4A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : const LinearGradient(
+                colors: [Color(0xFFFFFFFF), Color(0xFFF0FDFA), Color(0xFFCCFBF1)],
+                stops: [0.35, 0.75, 1.0],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        isDark ? const Color(0xFF0F766E) : const Color(0xFF99F6E4),
+        const Color(0xFF0F766E),
       ),
     };
 

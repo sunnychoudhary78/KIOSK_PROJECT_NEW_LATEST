@@ -43,8 +43,10 @@ const KNOWN_CHILDREN: Partial<Record<(typeof HOME_ORDER)[number], readonly strin
     'astrology.today',
     'astrology.contact_astrologer',
     'astrology.contact_pandit',
+    'astrology.contact_numerology',
     'astrology.astrologer.show_number',
     'astrology.pandit.show_number',
+    'astrology.numerology.show_number',
   ],
 };
 
@@ -72,8 +74,10 @@ const LABELS: Record<string, string> = {
   'astrology.today': 'Today & Periods',
   'astrology.contact_astrologer': 'Contact Astrologer',
   'astrology.contact_pandit': 'Contact Pandit',
+  'astrology.contact_numerology': 'Contact Numerology',
   'astrology.astrologer.show_number': 'Astrologer · Show number',
   'astrology.pandit.show_number': 'Pandit · Show number',
+  'astrology.numerology.show_number': 'Numerology · Show number',
   'well_being.path.oxygen': 'Oxygen / SpO₂',
   'well_being.path.temperature': 'Temperature',
   'fuel_stations.filter.all': 'Filter · All',

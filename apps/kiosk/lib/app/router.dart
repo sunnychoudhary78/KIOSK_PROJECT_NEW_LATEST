@@ -39,6 +39,7 @@ class AppRoutes {
   static const astrologyToday = '/astrology/today';
   static const astrologyAstrologer = '/astrology/contact-astrologer';
   static const astrologyPandit = '/astrology/contact-pandit';
+  static const astrologyNumerology = '/astrology/contact-numerology';
   static const fuelStations = '/fuel-stations';
   static const localServices = '/local-services';
   static const localServiceContacts = '/local-services/contacts';
@@ -84,6 +85,11 @@ class AppRouter {
       case AppRoutes.astrologyPandit:
         return page(
           (_) => const AstrologyContactsPage(kind: AstrologyContactKind.pandit),
+        );
+      case AppRoutes.astrologyNumerology:
+        return page(
+          (_) =>
+              const AstrologyContactsPage(kind: AstrologyContactKind.numerology),
         );
       case AppRoutes.fuelStations:
         return page((_) => const FuelStationsPage());

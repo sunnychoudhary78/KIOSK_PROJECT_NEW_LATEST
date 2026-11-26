@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { apiRequest } from '../../core/api/client';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Camera } from 'lucide-react';
+import { apiRequest, apiRequestBlob, apiUploadFormData } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
+import { config } from '../../core/config';
 import {
   Button,
   EmptyState,
@@ -11,8 +13,9 @@ import {
   Select,
   Toolbar,
 } from '../../core/ui/primitives';
+import { adsMediaPath } from '../ads/mediaUrl';
 
-const KIND_OPTIONS = ['astrologer', 'pandit'] as const;
+const KIND_OPTIONS = ['astrologer', 'pandit', 'numerology'] as const;
 
 type AstrologyContactKind = (typeof KIND_OPTIONS)[number];
 
@@ -24,6 +27,7 @@ type AstrologyContact = {
   rating: number;
   sortOrder: number;
   showNumberClicks: number;
+  photoUrl: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -49,11 +53,59 @@ const emptyForm: FormState = {
 };
 
 function kindLabel(kind: AstrologyContactKind) {
-  return kind === 'astrologer' ? 'Astrologer' : 'Pandit';
+  if (kind === 'astrologer') return 'Astrologer';
+  if (kind === 'pandit') return 'Pandit';
+  return 'Numerology';
+}
+
+function PhotoThumb({
+  photoUrl,
+  name,
+  token,
+}: {
+  photoUrl: string | null;
+  name: string;
+  token: string | null;
+}) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    async function load() {
+      setBlobUrl(null);
+      if (!photoUrl || !token) return;
+      const path = adsMediaPath(photoUrl);
+      if (!path) return;
+      try {
+        const blob = await apiRequestBlob(path, { token });
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      } catch {
+        if (!cancelled) setBlobUrl(null);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [photoUrl, token]);
+
+  if (blobUrl) {
+    return <img src={blobUrl} alt="" className="h-10 w-10 rounded-full object-cover" />;
+  }
+  return (
+    <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  );
 }
 
 export function AstrologyContactsPage() {
   const { token } = useAuth();
+  const formPanelRef = useRef<HTMLDivElement | null>(null);
   const [list, setList] = useState<AstrologyContactList | null>(null);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -62,6 +114,9 @@ export function AstrologyContactsPage() {
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingPhotoUrl, setEditingPhotoUrl] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -84,6 +139,42 @@ export function AstrologyContactsPage() {
     void loadList();
   }, [loadList]);
 
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    async function loadExistingPhoto() {
+      if (!editingPhotoUrl || !token || photoFile) {
+        if (!photoFile) setPhotoPreview(null);
+        return;
+      }
+      const path = adsMediaPath(editingPhotoUrl);
+      if (!path) return;
+      try {
+        const blob = await apiRequestBlob(path, { token });
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPhotoPreview(objectUrl);
+      } catch {
+        if (!cancelled) setPhotoPreview(null);
+      }
+    }
+    void loadExistingPhoto();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [editingPhotoUrl, token, photoFile]);
+
   const filtered = useMemo(() => {
     const items = list?.items ?? [];
     const q = search.trim().toLowerCase();
@@ -96,18 +187,26 @@ export function AstrologyContactsPage() {
 
   function startEdit(item: AstrologyContact) {
     setEditingId(item.id);
+    setEditingPhotoUrl(item.photoUrl);
+    setPhotoFile(null);
     setForm({
       kind: item.kind,
       name: item.name,
       phone: item.phone,
-      rating: String(item.rating),
-      sortOrder: String(item.sortOrder),
+      rating: Number(item.rating).toFixed(1),
+      sortOrder: String(item.sortOrder ?? ''),
     });
     setFormError(null);
+    window.setTimeout(() => {
+      formPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
   }
 
   function resetForm() {
     setEditingId(null);
+    setEditingPhotoUrl(null);
+    setPhotoFile(null);
+    setPhotoPreview(null);
     setForm(emptyForm);
     setFormError(null);
   }
@@ -116,9 +215,15 @@ export function AstrologyContactsPage() {
     event.preventDefault();
     setSaving(true);
     setFormError(null);
-    const rating = Number(form.rating);
+    const rating = Math.round(Number(form.rating) * 10) / 10;
     if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
       setFormError('Rating must be a number from 0 to 5');
+      setSaving(false);
+      return;
+    }
+    const phone = form.phone.trim();
+    if (!/^\d{10}$/.test(phone)) {
+      setFormError('Phone must be a 10-digit mobile number');
       setSaving(false);
       return;
     }
@@ -131,13 +236,20 @@ export function AstrologyContactsPage() {
     } = {
       kind: form.kind,
       name: form.name.trim(),
-      phone: form.phone.trim(),
+      phone,
       rating,
     };
     if (form.sortOrder.trim() !== '') {
-      body.sortOrder = Number(form.sortOrder);
+      const order = Number(form.sortOrder);
+      if (!Number.isInteger(order) || order < 0) {
+        setFormError('Sort order must be a whole number');
+        setSaving(false);
+        return;
+      }
+      body.sortOrder = order;
     }
     try {
+      let contactId = editingId;
       if (editingId) {
         await apiRequest(`/astrology-contacts/${editingId}`, {
           method: 'PUT',
@@ -145,10 +257,19 @@ export function AstrologyContactsPage() {
           body,
         });
       } else {
-        await apiRequest('/astrology-contacts', {
+        const created = await apiRequest<AstrologyContact>('/astrology-contacts', {
           method: 'POST',
           token,
           body,
+        });
+        contactId = created.id;
+      }
+      if (photoFile && contactId) {
+        const formData = new FormData();
+        formData.append('photo', photoFile);
+        await apiUploadFormData(`/astrology-contacts/${contactId}/photo`, {
+          token,
+          formData,
         });
       }
       resetForm();
@@ -187,83 +308,124 @@ export function AstrologyContactsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Astrology contacts"
-        subtitle="Astrologers and pandits shown on the kiosk Astrology hub. Citizens dial from their own phone."
+        subtitle="Astrologers, pandits, and numerologists shown on the kiosk Astrology hub. Click Edit on a row, change fields above, then Save changes."
       />
 
-      <Panel title={editingId ? 'Edit contact' : 'Add contact'}>
-        <form onSubmit={(event) => void saveContact(event)}>
-          <div className="settings-row">
-            <label>
-              Type
-              <Select
-                value={form.kind}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, kind: e.target.value as AstrologyContactKind }))
-                }
-              >
-                {KIND_OPTIONS.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {kindLabel(kind)}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label>
-              Name
-              <Input
-                value={form.name}
-                onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
-                placeholder="Pandit Ram Sharma"
-                required
-              />
-            </label>
-            <label>
-              Phone
-              <Input
-                value={form.phone}
-                onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))}
-                placeholder="9876543210"
-                required
-                inputMode="numeric"
-                maxLength={10}
-              />
-            </label>
-            <label>
-              Rating (0–5)
-              <Input
-                type="number"
-                min={0}
-                max={5}
-                step={0.5}
-                value={form.rating}
-                onChange={(e) => setForm((s) => ({ ...s, rating: e.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Sort order
-              <Input
-                type="number"
-                min={0}
-                value={form.sortOrder}
-                onChange={(e) => setForm((s) => ({ ...s, sortOrder: e.target.value }))}
-                placeholder="Auto"
-              />
-            </label>
-          </div>
-          {formError ? <p className="error">{formError}</p> : null}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Saving…' : editingId ? 'Save changes' : 'Add contact'}
-            </Button>
-            {editingId ? (
-              <Button type="button" variant="ghost" onClick={resetForm} disabled={saving}>
-                Cancel
+      <div ref={formPanelRef}>
+        <Panel title={editingId ? 'Edit contact' : 'Add contact'}>
+          {editingId ? (
+            <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Editing contact. Update the fields below, optionally change the photo, then click{' '}
+              <strong>Save changes</strong>.
+            </p>
+          ) : null}
+          <form onSubmit={(event) => void saveContact(event)}>
+            <div className="settings-row">
+              <label>
+                Type
+                <Select
+                  value={form.kind}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, kind: e.target.value as AstrologyContactKind }))
+                  }
+                >
+                  {KIND_OPTIONS.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {kindLabel(kind)}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label>
+                Name
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                  placeholder="Pandit Ram Sharma"
+                  required
+                />
+              </label>
+              <label>
+                Phone
+                <Input
+                  value={form.phone}
+                  onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))}
+                  placeholder="9876543210"
+                  required
+                  inputMode="numeric"
+                  maxLength={10}
+                />
+              </label>
+              <label>
+                Rating (0–5)
+                <Input
+                  type="number"
+                  min={0}
+                  max={5}
+                  step={0.1}
+                  value={form.rating}
+                  onChange={(e) => setForm((s) => ({ ...s, rating: e.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Sort order
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.sortOrder}
+                  onChange={(e) => setForm((s) => ({ ...s, sortOrder: e.target.value }))}
+                  placeholder="Auto"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex items-center gap-3">
+              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-muted/40">
+                {photoPreview ? (
+                  <img src={photoPreview} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <Camera className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="inline-flex cursor-pointer">
+                  <span className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted">
+                    {photoPreview ? 'Change photo' : 'Upload photo'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {photoFile ? (
+                  <button
+                    type="button"
+                    className="text-left text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setPhotoFile(null)}
+                  >
+                    Clear new photo
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {formError ? <p className="error mt-3">{formError}</p> : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving…' : editingId ? 'Save changes' : 'Add contact'}
               </Button>
-            ) : null}
-          </div>
-        </form>
-      </Panel>
+              {editingId ? (
+                <Button type="button" variant="ghost" onClick={resetForm} disabled={saving}>
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </Panel>
+      </div>
 
       <Panel title="Contacts on kiosks">
         {listError ? <p className="error">{listError}</p> : null}
@@ -271,7 +433,7 @@ export function AstrologyContactsPage() {
         {!loading && list && list.items.length === 0 ? (
           <EmptyState
             title="No contacts yet"
-            description="Add an astrologer or pandit above. Kiosks will show a not-available message until then."
+            description="Add an astrologer, pandit, or numerologist above. Kiosks will show a not-available message until then."
           />
         ) : null}
         {list && list.items.length > 0 ? (
@@ -286,6 +448,7 @@ export function AstrologyContactsPage() {
                   { value: 'all', label: 'All' },
                   { value: 'astrologer', label: 'Astrologers' },
                   { value: 'pandit', label: 'Pandits' },
+                  { value: 'numerology', label: 'Numerology' },
                 ]}
                 value={kindFilter}
                 onChange={setKindFilter}
@@ -297,6 +460,7 @@ export function AstrologyContactsPage() {
               <table className="table">
                 <thead>
                   <tr>
+                    <th>Photo</th>
                     <th>Order</th>
                     <th>Type</th>
                     <th>Name</th>
@@ -309,11 +473,14 @@ export function AstrologyContactsPage() {
                 <tbody>
                   {filtered.map((item) => (
                     <tr key={item.id}>
+                      <td>
+                        <PhotoThumb photoUrl={item.photoUrl} name={item.name} token={token} />
+                      </td>
                       <td>{item.sortOrder}</td>
                       <td>{kindLabel(item.kind)}</td>
                       <td className="font-medium">{item.name}</td>
                       <td className="font-mono text-sm">{item.phone}</td>
-                      <td>{item.rating.toFixed(1)}</td>
+                      <td>{Number(item.rating).toFixed(1)}</td>
                       <td>{item.showNumberClicks ?? 0}</td>
                       <td className="whitespace-nowrap">
                         <Button
@@ -341,6 +508,10 @@ export function AstrologyContactsPage() {
           </>
         ) : null}
       </Panel>
+      <p className="text-xs text-muted-foreground">
+        API base: {config.apiBaseUrl}. After saving, reopen the kiosk Astrology contact screen to
+        refresh.
+      </p>
     </div>
   );
 }
