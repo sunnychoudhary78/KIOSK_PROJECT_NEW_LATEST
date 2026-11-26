@@ -167,16 +167,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'Name, rating, and phone for astrology guidance.';
 
   @override
+  String get astrologyNumerologyTileTitle => 'Contact Numerology';
+
+  @override
+  String get astrologyNumerologyTileSubtitle =>
+      'Name, rating, and phone for numerology guidance.';
+
+  @override
   String get astrologyPanditTitle => 'Contact Pandit';
 
   @override
   String get astrologyAstrologerTitle => 'Contact Astrologer';
 
   @override
+  String get astrologyNumerologyTitle => 'Contact Numerology';
+
+  @override
   String get astrologyPanditHelper => 'Tap Show number to reveal the phone.';
 
   @override
   String get astrologyAstrologerHelper =>
+      'Tap Show number to reveal the phone.';
+
+  @override
+  String get astrologyNumerologyHelper =>
       'Tap Show number to reveal the phone.';
 
   @override

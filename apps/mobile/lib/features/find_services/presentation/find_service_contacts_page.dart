@@ -179,6 +179,26 @@ class _ContactCardState extends State<_ContactCard> {
                             ],
                           ),
                         ],
+                        if (contact.distanceKm != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.near_me_outlined,
+                                size: 15,
+                                color: SkpColors.muted,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatDistance(contact.distanceKm!),
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: SkpColors.muted,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -318,6 +338,16 @@ class _RatingBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDistance(double km) {
+  if (km < 1) {
+    return '${(km * 1000).round()} m';
+  }
+  if (km < 10) {
+    return '${km.toStringAsFixed(1)} km';
+  }
+  return '${km.toStringAsFixed(0)} km';
 }
 
 String? _absolutePhotoUrl(String? photoUrl) {

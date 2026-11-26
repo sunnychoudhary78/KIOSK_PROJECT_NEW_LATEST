@@ -380,6 +380,18 @@ abstract class AppLocalizations {
   /// **'Name, rating, and phone for astrology guidance.'**
   String get astrologyAstrologerTileSubtitle;
 
+  /// No description provided for @astrologyNumerologyTileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Numerology'**
+  String get astrologyNumerologyTileTitle;
+
+  /// No description provided for @astrologyNumerologyTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name, rating, and phone for numerology guidance.'**
+  String get astrologyNumerologyTileSubtitle;
+
   /// No description provided for @astrologyPanditTitle.
   ///
   /// In en, this message translates to:
@@ -392,6 +404,12 @@ abstract class AppLocalizations {
   /// **'Contact Astrologer'**
   String get astrologyAstrologerTitle;
 
+  /// No description provided for @astrologyNumerologyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Numerology'**
+  String get astrologyNumerologyTitle;
+
   /// No description provided for @astrologyPanditHelper.
   ///
   /// In en, this message translates to:
@@ -403,6 +421,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap Show number to reveal the phone.'**
   String get astrologyAstrologerHelper;
+
+  /// No description provided for @astrologyNumerologyHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Show number to reveal the phone.'**
+  String get astrologyNumerologyHelper;
 
   /// No description provided for @astrologyShowNumber.
   ///
