@@ -8,6 +8,7 @@ class AstrologyContact {
     required this.phone,
     required this.rating,
     this.sortOrder = 0,
+    this.photoUrl,
   });
 
   final String id;
@@ -16,6 +17,7 @@ class AstrologyContact {
   final String phone;
   final double rating;
   final int sortOrder;
+  final String? photoUrl;
 
   String get displayPhone {
     final digits = phone.replaceAll(RegExp(r'\D'), '');
@@ -37,6 +39,10 @@ class AstrologyContact {
 
   factory AstrologyContact.fromJson(Map<String, dynamic> json) {
     final kindRaw = json['kind']?.toString() ?? 'astrologer';
+    final ratingRaw = json['rating'];
+    final rating = ratingRaw is num
+        ? ratingRaw.toDouble()
+        : double.tryParse(ratingRaw?.toString() ?? '') ?? 0;
     return AstrologyContact(
       id: json['id']?.toString() ?? '',
       kind: switch (kindRaw) {
@@ -46,8 +52,9 @@ class AstrologyContact {
       },
       name: json['name']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
-      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      rating: rating.clamp(0, 5),
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      photoUrl: json['photoUrl']?.toString(),
     );
   }
 }

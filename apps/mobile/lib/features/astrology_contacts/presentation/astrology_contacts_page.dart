@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skp_mobile/core/config/app_config.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 import 'package:skp_mobile/core/ui/ui.dart';
 import 'package:skp_mobile/features/astrology_contacts/application/astrology_contacts_controller.dart';
 import 'package:skp_mobile/features/astrology_contacts/domain/astrology_contact.dart';
+import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 import 'package:skp_mobile/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -29,16 +31,16 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(astrologyContactsProvider);
+    final token = ref.watch(citizenAuthProvider.select((s) => s.token));
     final l10n = AppLocalizations.of(context);
     final title = switch (widget.kind) {
       AstrologyContactKind.pandit => l10n.astrologyPanditTitle,
-      AstrologyContactKind.numerology => 'Numerology',
+      AstrologyContactKind.numerology => l10n.astrologyNumerologyTitle,
       AstrologyContactKind.astrologer => l10n.astrologyAstrologerTitle,
     };
     final helper = switch (widget.kind) {
       AstrologyContactKind.pandit => l10n.astrologyPanditHelper,
-      AstrologyContactKind.numerology =>
-        'Name, rating, and phone for numerology guidance.',
+      AstrologyContactKind.numerology => l10n.astrologyNumerologyHelper,
       AstrologyContactKind.astrologer => l10n.astrologyAstrologerHelper,
     };
 
@@ -91,6 +93,7 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
                   itemBuilder: (context, index) {
                     return _AstrologyContactCard(
                       contact: state.contacts[index],
+                      accessToken: token,
                     );
                   },
                 ),
@@ -103,9 +106,13 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
 }
 
 class _AstrologyContactCard extends StatefulWidget {
-  const _AstrologyContactCard({required this.contact});
+  const _AstrologyContactCard({
+    required this.contact,
+    required this.accessToken,
+  });
 
   final AstrologyContact contact;
+  final String? accessToken;
 
   @override
   State<_AstrologyContactCard> createState() => _AstrologyContactCardState();
@@ -140,6 +147,7 @@ class _AstrologyContactCardState extends State<_AstrologyContactCard> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final rating = widget.contact.rating.clamp(0, 5);
+    final photoUrl = _absolutePhotoUrl(widget.contact.photoUrl);
 
     return SkpPanelCard(
       onTap: _revealed ? null : _reveal,
@@ -149,9 +157,10 @@ class _AstrologyContactCardState extends State<_AstrologyContactCard> {
         children: [
           Row(
             children: [
-              const SkpIconWell(
-                icon: Icons.auto_awesome_outlined,
-                size: 48,
+              _PhotoAvatar(
+                name: widget.contact.name,
+                photoUrl: photoUrl,
+                accessToken: widget.accessToken,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -232,4 +241,74 @@ class _AstrologyContactCardState extends State<_AstrologyContactCard> {
       ),
     );
   }
+}
+
+class _PhotoAvatar extends StatelessWidget {
+  const _PhotoAvatar({
+    required this.name,
+    required this.photoUrl,
+    required this.accessToken,
+  });
+
+  final String name;
+  final String? photoUrl;
+  final String? accessToken;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = name.trim();
+    final initial =
+        trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase();
+    final placeholder = Container(
+      width: 52,
+      height: 52,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: SkpColors.accent.withValues(alpha: 0.12),
+        border: Border.all(color: SkpColors.accent.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+          color: SkpColors.accent,
+        ),
+      ),
+    );
+
+    if (photoUrl == null || accessToken == null || accessToken!.isEmpty) {
+      return placeholder;
+    }
+
+    return ClipOval(
+      child: Image.network(
+        photoUrl!,
+        width: 52,
+        height: 52,
+        fit: BoxFit.cover,
+        headers: {'Authorization': 'Bearer $accessToken'},
+        errorBuilder: (_, _, _) => placeholder,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return placeholder;
+        },
+      ),
+    );
+  }
+}
+
+String? _absolutePhotoUrl(String? photoUrl) {
+  if (photoUrl == null || photoUrl.isEmpty) return null;
+  if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
+    return photoUrl;
+  }
+  final base = AppConfig.current.apiBaseUrl;
+  if (photoUrl.startsWith('/v1/') &&
+      (base.endsWith('/v1') || base.endsWith('/v1/'))) {
+    return '$base${photoUrl.substring(3)}';
+  }
+  if (photoUrl.startsWith('/')) return '$base$photoUrl';
+  return '$base/$photoUrl';
 }

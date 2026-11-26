@@ -166,16 +166,30 @@ class AppLocalizationsHi extends AppLocalizations {
       'ज्योतिष सलाह के लिए नाम, रेटिंग और फ़ोन।';
 
   @override
+  String get astrologyNumerologyTileTitle => 'अंक ज्योतिष से संपर्क';
+
+  @override
+  String get astrologyNumerologyTileSubtitle =>
+      'अंक ज्योतिष सलाह के लिए नाम, रेटिंग और फ़ोन।';
+
+  @override
   String get astrologyPanditTitle => 'पंडित से संपर्क';
 
   @override
   String get astrologyAstrologerTitle => 'ज्योतिषी से संपर्क';
 
   @override
+  String get astrologyNumerologyTitle => 'अंक ज्योतिष से संपर्क';
+
+  @override
   String get astrologyPanditHelper => 'फ़ोन देखने के लिए Show number टैप करें।';
 
   @override
   String get astrologyAstrologerHelper =>
+      'फ़ोन देखने के लिए Show number टैप करें।';
+
+  @override
+  String get astrologyNumerologyHelper =>
       'फ़ोन देखने के लिए Show number टैप करें।';
 
   @override
