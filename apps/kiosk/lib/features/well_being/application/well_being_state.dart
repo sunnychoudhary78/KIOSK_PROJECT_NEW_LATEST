@@ -1,4 +1,5 @@
 import 'package:skp_kiosk/core/hardware/serial/serial_state.dart';
+import 'package:skp_kiosk/features/well_being/domain/color_vision_plate.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
@@ -25,6 +26,10 @@ class WellBeingUiState {
     this.liveTempF,
     this.finalTempC,
     this.finalTempF,
+    this.colorVisionPlateIndex = 0,
+    this.colorVisionSessionPlates = const [],
+    this.colorVisionAnswers = const [],
+    this.colorVisionResult,
     this.statusMessage,
     this.print = const ReportPrintSnapshot(),
   });
@@ -48,11 +53,35 @@ class WellBeingUiState {
   final double? liveTempF;
   final double? finalTempC;
   final double? finalTempF;
+  final int colorVisionPlateIndex;
+  /// Shuffled plate order for the active screening run.
+  final List<ColorVisionPlate> colorVisionSessionPlates;
+  final List<String> colorVisionAnswers;
+  final ColorVisionResult? colorVisionResult;
   final String? statusMessage;
   final ReportPrintSnapshot print;
 
   bool get isConnected =>
       connectionStatus == SerialConnectionStatus.connected;
+
+  bool get isColorVisionFlow =>
+      phase == WellBeingPhase.colorVisionIntro ||
+      phase == WellBeingPhase.colorVisionTesting ||
+      phase == WellBeingPhase.colorVisionComplete;
+
+  bool get isMeasurementComplete =>
+      phase == WellBeingPhase.oxiComplete ||
+      phase == WellBeingPhase.tempComplete ||
+      phase == WellBeingPhase.colorVisionComplete;
+
+  ColorVisionPlate? get currentColorVisionPlate {
+    if (phase != WellBeingPhase.colorVisionTesting) return null;
+    final plates = colorVisionSessionPlates;
+    if (colorVisionPlateIndex < 0 || colorVisionPlateIndex >= plates.length) {
+      return null;
+    }
+    return plates[colorVisionPlateIndex];
+  }
 
   String get connectionLabel => switch (connectionStatus) {
         SerialConnectionStatus.disconnected => 'No sensor',
@@ -139,6 +168,11 @@ class WellBeingUiState {
     bool clearFinalTempC = false,
     double? finalTempF,
     bool clearFinalTempF = false,
+    int? colorVisionPlateIndex,
+    List<ColorVisionPlate>? colorVisionSessionPlates,
+    List<String>? colorVisionAnswers,
+    ColorVisionResult? colorVisionResult,
+    bool clearColorVisionResult = false,
     String? statusMessage,
     bool clearStatusMessage = false,
     ReportPrintSnapshot? print,
@@ -166,6 +200,14 @@ class WellBeingUiState {
       liveTempF: clearLiveTempF ? null : (liveTempF ?? this.liveTempF),
       finalTempC: clearFinalTempC ? null : (finalTempC ?? this.finalTempC),
       finalTempF: clearFinalTempF ? null : (finalTempF ?? this.finalTempF),
+      colorVisionPlateIndex:
+          colorVisionPlateIndex ?? this.colorVisionPlateIndex,
+      colorVisionSessionPlates:
+          colorVisionSessionPlates ?? this.colorVisionSessionPlates,
+      colorVisionAnswers: colorVisionAnswers ?? this.colorVisionAnswers,
+      colorVisionResult: clearColorVisionResult
+          ? null
+          : (colorVisionResult ?? this.colorVisionResult),
       statusMessage:
           clearStatusMessage ? null : (statusMessage ?? this.statusMessage),
       print: print ?? this.print,

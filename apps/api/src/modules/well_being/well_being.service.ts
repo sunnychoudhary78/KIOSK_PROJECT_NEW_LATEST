@@ -228,7 +228,11 @@ export class WellBeingService {
     const bytes = await buildHealthReportPdf(input);
     const pageCount = Math.max(1, await countPdfPages(bytes));
     const title =
-      input.mode === 'oxi' ? 'Health Report — Pulse oximetry' : 'Health Report — Temperature';
+      input.mode === 'oxi'
+        ? 'Health Report — Pulse oximetry'
+        : input.mode === 'temp'
+          ? 'Health Report — Temperature'
+          : 'Color Vision Screening Report';
     const printColorMode = toPrismaColorMode(colorMode);
 
     let freePhone: string | null = null;

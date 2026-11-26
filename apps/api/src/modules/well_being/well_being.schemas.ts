@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const wellBeingPrintModeSchema = z.enum(['oxi', 'temp']);
+export const wellBeingPrintModeSchema = z.enum(['oxi', 'temp', 'color_vision']);
 export const wellBeingColorModeSchema = z.enum(['bw', 'color']);
 export type WellBeingColorMode = z.infer<typeof wellBeingColorModeSchema>;
 
@@ -14,6 +14,14 @@ export const wellBeingPrintBodySchema = z.object({
   heartRateInterpretation: z.string().trim().max(120).optional(),
   spo2Interpretation: z.string().trim().max(120).optional(),
   temperatureInterpretation: z.string().trim().max(120).optional(),
+  colorVisionOutcome: z
+    .enum(['normal', 'possible_deficiency', 'inconclusive'])
+    .optional(),
+  colorVisionCorrectCount: z.number().int().min(0).max(50).optional(),
+  colorVisionTotalPlates: z.number().int().min(1).max(50).optional(),
+  colorVisionTitle: z.string().trim().max(120).optional(),
+  colorVisionSummary: z.string().trim().max(400).optional(),
+  colorVisionAdvice: z.string().trim().max(400).optional(),
   measuredAt: z.string().datetime().optional(),
   idempotencyKey: z.string().trim().min(1).max(100).optional(),
   phoneProofToken: z.string().trim().min(1).max(800).optional(),

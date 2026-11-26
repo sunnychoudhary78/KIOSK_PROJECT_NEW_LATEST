@@ -143,6 +143,20 @@ describe('report PDF builders', () => {
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
   });
 
+  it('builds a color vision screening report', async () => {
+    const bytes = await buildHealthReportPdf({
+      mode: 'color_vision',
+      colorMode: 'color',
+      colorVisionOutcome: 'normal',
+      colorVisionCorrectCount: 9,
+      colorVisionTotalPlates: 10,
+      colorVisionTitle: 'Normal screening result',
+      colorVisionSummary: 'You correctly identified most plates in this screening test.',
+      colorVisionAdvice: 'This is a wellness screening only — not a medical diagnosis.',
+    });
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
   it('rasterizes SVG text with system fonts and builds a one-page kundali PDF', async () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f5e6c8"/><text x="20" y="100" font-size="28">Mars</text></svg>';

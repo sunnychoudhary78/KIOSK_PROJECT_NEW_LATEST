@@ -13,6 +13,7 @@ import 'package:skp_kiosk/features/service_analytics/application/service_analyti
 import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
 import 'package:skp_kiosk/features/well_being/application/vitals_line_parser.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
+import 'package:skp_kiosk/features/well_being/domain/color_vision_plate.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
 import 'package:skp_kiosk/services/printer/print_coordinator.dart';
@@ -206,6 +207,10 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       clearLiveTempF: true,
       clearFinalTempC: true,
       clearFinalTempF: true,
+      colorVisionPlateIndex: 0,
+      colorVisionSessionPlates: const [],
+      colorVisionAnswers: const [],
+      clearColorVisionResult: true,
       clearError: true,
       statusMessage: 'Place your finger gently on the sensor',
     );
@@ -236,10 +241,96 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       clearLiveTempF: true,
       clearFinalTempC: true,
       clearFinalTempF: true,
+      colorVisionPlateIndex: 0,
+      colorVisionSessionPlates: const [],
+      colorVisionAnswers: const [],
+      clearColorVisionResult: true,
       clearError: true,
       statusMessage: 'Hold your forehead 1–2 cm from the sensor',
     );
     await _sendCommand(_cmdStartTemp);
+  }
+
+  /// Software-only screening — does not require the USB vitals sensor.
+  Future<void> startColorVision() async {
+    if (!ref.mounted || !state.sessionActive) {
+      return;
+    }
+    // ignore: discarded_futures
+    ref
+        .read(serviceAnalyticsTrackerProvider)
+        .track(ServiceEventKeys.wellBeingColorVision);
+    await _sendCommand(_cmdStop, silent: true);
+    if (!ref.mounted || !state.sessionActive) {
+      return;
+    }
+    state = state.copyWith(
+      activeMode: WellBeingMode.colorVision,
+      phase: WellBeingPhase.colorVisionIntro,
+      fingerDetected: false,
+      objectDetected: false,
+      measurePct: 0,
+      clearLiveHeartRate: true,
+      clearLiveSpO2: true,
+      clearFinalHeartRate: true,
+      clearFinalSpO2: true,
+      clearLiveTempC: true,
+      clearLiveTempF: true,
+      clearFinalTempC: true,
+      clearFinalTempF: true,
+      colorVisionPlateIndex: 0,
+      colorVisionSessionPlates: const [],
+      colorVisionAnswers: const [],
+      clearColorVisionResult: true,
+      print: const ReportPrintSnapshot(),
+      clearError: true,
+      statusMessage: 'Color vision screening',
+    );
+  }
+
+  void beginColorVisionTest() {
+    if (!ref.mounted || !state.sessionActive) return;
+    if (state.phase != WellBeingPhase.colorVisionIntro) return;
+    final session = ColorVisionBattery.startSession();
+    state = state.copyWith(
+      phase: WellBeingPhase.colorVisionTesting,
+      colorVisionPlateIndex: 0,
+      colorVisionSessionPlates: session,
+      colorVisionAnswers: const [],
+      clearColorVisionResult: true,
+      statusMessage: 'Identify the figure in each plate',
+    );
+  }
+
+  void answerColorVisionPlate(String answer) {
+    if (!ref.mounted || !state.sessionActive) return;
+    if (state.phase != WellBeingPhase.colorVisionTesting) return;
+    final plate = state.currentColorVisionPlate;
+    if (plate == null) return;
+    if (!plate.options.contains(answer)) return;
+
+    final session = state.colorVisionSessionPlates;
+    final answers = [...state.colorVisionAnswers, answer];
+    final nextIndex = state.colorVisionPlateIndex + 1;
+    if (nextIndex >= session.length) {
+      final result = ColorVisionBattery.score(
+        answers,
+        sessionPlates: session,
+      );
+      state = state.copyWith(
+        phase: WellBeingPhase.colorVisionComplete,
+        colorVisionAnswers: answers,
+        colorVisionPlateIndex: nextIndex,
+        colorVisionResult: result,
+        statusMessage: result.title,
+      );
+      return;
+    }
+    state = state.copyWith(
+      colorVisionAnswers: answers,
+      colorVisionPlateIndex: nextIndex,
+      statusMessage: 'Plate ${nextIndex + 1} of ${session.length}',
+    );
   }
 
   Future<void> returnToHub() async {
@@ -266,6 +357,10 @@ class WellBeingController extends Notifier<WellBeingUiState> {
       clearLiveTempF: true,
       clearFinalTempC: true,
       clearFinalTempF: true,
+      colorVisionPlateIndex: 0,
+      colorVisionSessionPlates: const [],
+      colorVisionAnswers: const [],
+      clearColorVisionResult: true,
       print: const ReportPrintSnapshot(),
       statusMessage: state.isConnected
           ? 'Choose a measurement'
@@ -275,8 +370,7 @@ class WellBeingController extends Notifier<WellBeingUiState> {
 
   /// Starts DigiLocker-parity print monetization (color mode → phone/pay).
   Future<void> preparePrint() async {
-    if (state.phase != WellBeingPhase.oxiComplete &&
-        state.phase != WellBeingPhase.tempComplete) {
+    if (!state.isMeasurementComplete) {
       return;
     }
     _stopPaymentPoll();
@@ -527,13 +621,19 @@ class WellBeingController extends Notifier<WellBeingUiState> {
   }
 
   Future<void> _runPreparePrint({String? phoneProofToken}) async {
-    if (state.phase != WellBeingPhase.oxiComplete &&
-        state.phase != WellBeingPhase.tempComplete) {
+    if (!state.isMeasurementComplete) {
       return;
     }
-    final mode = state.phase == WellBeingPhase.oxiComplete ? 'oxi' : 'temp';
+    final mode = switch (state.phase) {
+      WellBeingPhase.oxiComplete => 'oxi',
+      WellBeingPhase.tempComplete => 'temp',
+      WellBeingPhase.colorVisionComplete => 'color_vision',
+      _ => null,
+    };
+    if (mode == null) return;
     final colorMode = state.print.colorMode;
     final token = phoneProofToken ?? state.print.phoneProofToken;
+    final cv = state.colorVisionResult;
     _stopPaymentPoll();
     state = state.copyWith(
       print: state.print.copyWith(
@@ -552,9 +652,24 @@ class WellBeingController extends Notifier<WellBeingUiState> {
         if (state.finalSpO2 != null) 'spo2': state.finalSpO2,
         if (state.finalTempC != null) 'tempC': state.finalTempC,
         if (state.finalTempF != null) 'tempF': state.finalTempF,
-        'heartRateInterpretation': state.heartRateInterpretation,
-        'spo2Interpretation': state.spo2Interpretation,
-        'temperatureInterpretation': state.temperatureInterpretation,
+        if (mode == 'oxi') ...{
+          'heartRateInterpretation': state.heartRateInterpretation,
+          'spo2Interpretation': state.spo2Interpretation,
+        },
+        if (mode == 'temp')
+          'temperatureInterpretation': state.temperatureInterpretation,
+        if (cv != null) ...{
+          'colorVisionOutcome': switch (cv.outcome) {
+            ColorVisionOutcome.normal => 'normal',
+            ColorVisionOutcome.possibleDeficiency => 'possible_deficiency',
+            ColorVisionOutcome.inconclusive => 'inconclusive',
+          },
+          'colorVisionCorrectCount': cv.correctCount,
+          'colorVisionTotalPlates': cv.totalPlates,
+          'colorVisionTitle': cv.title,
+          'colorVisionSummary': cv.summary,
+          'colorVisionAdvice': cv.advice,
+        },
         'measuredAt': DateTime.now().toUtc().toIso8601String(),
       },
       previous: state.print,

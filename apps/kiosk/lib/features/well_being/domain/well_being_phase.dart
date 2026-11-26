@@ -1,6 +1,6 @@
-/// UI phases for the dual-sensor Well Being flow.
+/// UI phases for the dual-sensor + color vision Well Being flow.
 enum WellBeingPhase {
-  /// Hub: pick Oxygen or Temperature.
+  /// Hub: pick Oxygen, Temperature, or Color Vision.
   choose,
 
   /// Oximeter: waiting for finger after start max30102.
@@ -23,4 +23,13 @@ enum WellBeingPhase {
 
   /// Temperature: finals available from result line.
   tempComplete,
+
+  /// Color vision: disclaimer / how-to before plates.
+  colorVisionIntro,
+
+  /// Color vision: answering pseudoisochromatic plates.
+  colorVisionTesting,
+
+  /// Color vision: screening result ready.
+  colorVisionComplete,
 }

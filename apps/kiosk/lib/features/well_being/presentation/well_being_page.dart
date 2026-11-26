@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,8 +15,10 @@ import 'package:skp_kiosk/features/session/application/kiosk_session_hold.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_controller.dart';
 import 'package:skp_kiosk/features/well_being/application/well_being_state.dart';
+import 'package:skp_kiosk/features/well_being/domain/color_vision_plate.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_mode.dart';
 import 'package:skp_kiosk/features/well_being/domain/well_being_phase.dart';
+import 'package:skp_kiosk/features/well_being/presentation/widgets/color_vision_plate_view.dart';
 import 'package:skp_kiosk/features/well_being/presentation/widgets/oxi_monitor_panel.dart';
 import 'package:skp_kiosk/features/well_being/presentation/widgets/well_being_marks.dart';
 import 'package:skp_kiosk/services/printer/report_print_support.dart';
@@ -39,7 +43,8 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
   Future<void> _promptWellBeingSessionRatingIfComplete() async {
     final phase = ref.read(wellBeingControllerProvider).phase;
     final complete = phase == WellBeingPhase.oxiComplete ||
-        phase == WellBeingPhase.tempComplete;
+        phase == WellBeingPhase.tempComplete ||
+        phase == WellBeingPhase.colorVisionComplete;
     if (!complete || !mounted) {
       return;
     }
@@ -330,9 +335,9 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
     }
 
     final showBack = state.phase != WellBeingPhase.choose &&
-        state.connectionStatus != SerialConnectionStatus.connecting;
-    final complete = state.phase == WellBeingPhase.oxiComplete ||
-        state.phase == WellBeingPhase.tempComplete;
+        (state.isColorVisionFlow ||
+            state.connectionStatus != SerialConnectionStatus.connecting);
+    final complete = state.isMeasurementComplete;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final currentStep = switch (state.phase) {
@@ -341,10 +346,13 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
       WellBeingPhase.oxiMeasuring ||
       WellBeingPhase.oxiCancelled ||
       WellBeingPhase.tempIdle ||
-      WellBeingPhase.tempMeasuring =>
+      WellBeingPhase.tempMeasuring ||
+      WellBeingPhase.colorVisionIntro ||
+      WellBeingPhase.colorVisionTesting =>
         2,
       WellBeingPhase.oxiComplete ||
-      WellBeingPhase.tempComplete =>
+      WellBeingPhase.tempComplete ||
+      WellBeingPhase.colorVisionComplete =>
         3,
     };
 
@@ -466,6 +474,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (state.phase != WellBeingPhase.choose &&
+                  !state.isColorVisionFlow &&
                   (state.connectionStatus == SerialConnectionStatus.error ||
                       state.connectionStatus == SerialConnectionStatus.disconnected))
                 Padding(
@@ -490,6 +499,7 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                         connected: state.isConnected,
                         onOxygen: () => controller.startOxygen(),
                         onTemperature: () => controller.startTemperature(),
+                        onColorVision: () => controller.startColorVision(),
                       ),
                     WellBeingPhase.oxiIdle => _OxiIdleView(
                         key: const ValueKey('oxiIdle'),
@@ -516,6 +526,19 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
                       ),
                     WellBeingPhase.tempComplete => _TempCompleteView(
                         key: const ValueKey('tempComplete'),
+                        state: state,
+                      ),
+                    WellBeingPhase.colorVisionIntro => _ColorVisionIntroView(
+                        key: const ValueKey('colorVisionIntro'),
+                        onStart: controller.beginColorVisionTest,
+                      ),
+                    WellBeingPhase.colorVisionTesting => _ColorVisionTestingView(
+                        key: ValueKey('cv-${state.colorVisionPlateIndex}'),
+                        state: state,
+                        onAnswer: controller.answerColorVisionPlate,
+                      ),
+                    WellBeingPhase.colorVisionComplete => _ColorVisionCompleteView(
+                        key: const ValueKey('colorVisionComplete'),
                         state: state,
                       ),
                   },
@@ -571,6 +594,7 @@ class _ConnectionBanner extends StatelessWidget {
               fingerDetected ? 'Finger detected' : 'No finger detected',
             WellBeingMode.temp =>
               objectDetected ? 'Forehead detected' : 'No forehead detected',
+            WellBeingMode.colorVision => 'Color vision screening',
             WellBeingMode.none => 'Ready',
           };
 
@@ -583,6 +607,7 @@ class _ConnectionBanner extends StatelessWidget {
               WellBeingMode.temp =>
                 objectDetected ? Icons.thermostat : Icons.sensors,
               WellBeingMode.oxi => fingerDetected ? Icons.back_hand : Icons.sensors,
+              WellBeingMode.colorVision => Icons.visibility_outlined,
               WellBeingMode.none => Icons.favorite_outline,
             }
           : Icons.sensors_off,
@@ -602,11 +627,13 @@ class _ChooseView extends StatelessWidget {
     required this.connected,
     required this.onOxygen,
     required this.onTemperature,
+    required this.onColorVision,
   });
 
   final bool connected;
   final VoidCallback onOxygen;
   final VoidCallback onTemperature;
+  final VoidCallback onColorVision;
 
   @override
   Widget build(BuildContext context) {
@@ -738,7 +765,7 @@ class _ChooseView extends StatelessWidget {
               Container(width: 32, height: 1.5, color: const Color(0xFFF43F5E)),
               const SizedBox(width: 10),
               Text(
-                'Choose a Measurement',
+                'Choose a Health Check',
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
                   fontSize: 17,
@@ -753,7 +780,7 @@ class _ChooseView extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            'Select Blood Oxygen or Temperature. Only one sensor runs at a time.',
+            'Select a vital check or color vision screening. Sensor tests run one at a time.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
@@ -765,7 +792,7 @@ class _ChooseView extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // 4. Two Measurement Cards
+          // 4. Measurement Cards
           Row(
             children: [
               Expanded(
@@ -822,6 +849,13 @@ class _ChooseView extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+
+          const SizedBox(height: 12),
+
+          _ColorVisionHubCard(
+            isDark: isDark,
+            onTap: onColorVision,
           ),
 
           const SizedBox(height: 10),
@@ -1893,6 +1927,1079 @@ class _MedicalDisclaimer extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ColorVisionGraphic extends StatelessWidget {
+  const _ColorVisionGraphic({this.size = 72});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const SweepGradient(
+            colors: [
+              Color(0xFFEF4444),
+              Color(0xFFF59E0B),
+              Color(0xFF22C55E),
+              Color(0xFF06B6D4),
+              Color(0xFF8B5CF6),
+              Color(0xFFEF4444),
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF059669).withValues(alpha: 0.28),
+              blurRadius: 16,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Container(
+            width: size * 0.56,
+            height: size * 0.56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.visibility_rounded,
+              size: size * 0.3,
+              color: const Color(0xFF047857),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ColorVisionHubCard extends StatefulWidget {
+  const _ColorVisionHubCard({
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  State<_ColorVisionHubCard> createState() => _ColorVisionHubCardState();
+}
+
+class _ColorVisionHubCardState extends State<_ColorVisionHubCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, child) {
+        final t = Curves.easeInOut.transform(_pulse.value);
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              colors: isDark
+                  ? const [Color(0xFF0F241C), Color(0xFF14532D), Color(0xFF0B1F17)]
+                  : const [Color(0xFFFFFFFF), Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            border: Border.all(
+              color: (isDark ? const Color(0xFF166534) : const Color(0xFF6EE7B7))
+                  .withValues(alpha: 0.55 + t * 0.35),
+              width: 1.4,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF059669).withValues(alpha: 0.1 + t * 0.12),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: child,
+        );
+      },
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(24),
+          splashColor: const Color(0xFF059669).withValues(alpha: 0.12),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 16, 22, 16),
+            child: Row(
+              children: [
+                ColorVisionPlateView(
+                  plate: ColorVisionBattery.plates.first,
+                  size: 92,
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF059669)
+                                  .withValues(alpha: isDark ? 0.25 : 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              'NEW · NO SENSOR NEEDED',
+                              style: TextStyle(
+                                fontFamily: 'PlusJakartaSans',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                                color: Color(0xFF059669),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Color Vision Test',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Short red–green screening with 10 original dotted plates. Get an instant result you can print.',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.35,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF475569),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          _CvChip(
+                            icon: Icons.timer_outlined,
+                            label: '~2 min',
+                            isDark: isDark,
+                          ),
+                          _CvChip(
+                            icon: Icons.grid_view_rounded,
+                            label: '10 plates',
+                            isDark: isDark,
+                          ),
+                          _CvChip(
+                            icon: Icons.print_outlined,
+                            label: 'Printable',
+                            isDark: isDark,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF059669)
+                        .withValues(alpha: isDark ? 0.28 : 0.14),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Color(0xFF059669),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CvChip extends StatelessWidget {
+  const _CvChip({
+    required this.icon,
+    required this.label,
+    required this.isDark,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0B1F17) : Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF166534) : const Color(0xFFA7F3D0),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF059669)),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isDark ? const Color(0xFFD1FAE5) : const Color(0xFF065F46),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ColorVisionIntroView extends StatelessWidget {
+  const _ColorVisionIntroView({
+    super.key,
+    required this.onStart,
+  });
+
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 5,
+              child: Container(
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? const [Color(0xFF0B1F17), Color(0xFF14532D)]
+                        : const [Color(0xFFF0FDF4), Color(0xFFD1FAE5)],
+                  ),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF166534)
+                        : const Color(0xFFA7F3D0),
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -40,
+                      top: -30,
+                      child: IgnorePointer(
+                        child: Opacity(
+                          opacity: 0.18,
+                          child: _ColorVisionGraphic(size: 220),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: isDark ? 0.06 : 0.55),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF059669)
+                                      .withValues(alpha: 0.2),
+                                  blurRadius: 28,
+                                ),
+                              ],
+                            ),
+                            child: ColorVisionPlateView(
+                              plate: ColorVisionBattery.plates.first,
+                              size: math.min(280, constraints.maxHeight * 0.48),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            'Sample screening plate',
+                            style: TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? const Color(0xFF86EFAC)
+                                  : const Color(0xFF047857),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 5,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Color Vision Screening',
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.6,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'A quick wellness screen for red–green color difficulty.',
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _CvStepTile(
+                            index: 1,
+                            title: 'View each dotted plate',
+                            body: 'Figures are made of colored dots on a matching background.',
+                            isDark: isDark,
+                          ),
+                          const SizedBox(height: 10),
+                          _CvStepTile(
+                            index: 2,
+                            title: 'Tap what you see',
+                            body: 'Choose a number, Nothing, or Unclear — go with your first clear reading.',
+                            isDark: isDark,
+                          ),
+                          const SizedBox(height: 10),
+                          _CvStepTile(
+                            index: 3,
+                            title: 'Get a printable result',
+                            body: 'Screening only — not a clinical diagnosis or Ishihara exam.',
+                            isDark: isDark,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: KioskPrimaryButton(
+                        label: 'Start screening',
+                        icon: Icons.play_arrow_rounded,
+                        onPressed: onStart,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CvStepTile extends StatelessWidget {
+  const _CvStepTile({
+    required this.index,
+    required this.title,
+    required this.body,
+    required this.isDark,
+  });
+
+  final int index;
+  final String title;
+  final String body;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: isDark ? const Color(0xFF10241C) : Colors.white,
+          border: Border.all(
+            color: isDark ? const Color(0xFF166534) : const Color(0xFFBBF7D0),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF059669).withValues(alpha: isDark ? 0.12 : 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF059669).withValues(alpha: isDark ? 0.28 : 0.12),
+              ),
+              child: Text(
+                '$index',
+                style: const TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF059669),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ColorVisionTestingView extends StatelessWidget {
+  const _ColorVisionTestingView({
+    super.key,
+    required this.state,
+    required this.onAnswer,
+  });
+
+  final WellBeingUiState state;
+  final ValueChanged<String> onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    final plate = state.currentColorVisionPlate;
+    if (plate == null) {
+      return const SizedBox.shrink();
+    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final total = state.colorVisionSessionPlates.isEmpty
+        ? ColorVisionBattery.plates.length
+        : state.colorVisionSessionPlates.length;
+    final index = state.colorVisionPlateIndex;
+
+    return Column(
+      children: [
+        _CvProgressHeader(
+          index: index,
+          total: total,
+          isDark: isDark,
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 6,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: isDark
+                          ? const [Color(0xFF0F172A), Color(0xFF10241C)]
+                          : const [Color(0xFFF8FAFC), Color(0xFFECFDF5)],
+                    ),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFD1FAE5),
+                    ),
+                  ),
+                  child: Center(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 280),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.96, end: 1).animate(
+                              animation,
+                            ),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Container(
+                        key: ValueKey(plate.id),
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF059669)
+                                  .withValues(alpha: isDark ? 0.22 : 0.14),
+                              blurRadius: 36,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, c) {
+                            final side = math.min(
+                              math.min(c.maxWidth, c.maxHeight) * 0.92,
+                              420.0,
+                            );
+                            return ColorVisionPlateView(
+                              plate: plate,
+                              size: side,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                flex: 4,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    color: isDark ? const Color(0xFF10241C) : Colors.white,
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF166534)
+                          : const Color(0xFFBBF7D0),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF059669)
+                            .withValues(alpha: isDark ? 0.14 : 0.06),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'What do you see?',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap your best match. Trust your first clear impression.',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < plate.options.length; i++) ...[
+                              if (i > 0) const SizedBox(height: 10),
+                              Expanded(
+                                child: _CvAnswerButton(
+                                  label: plate.options[i],
+                                  isDark: isDark,
+                                  onTap: () => onAnswer(plate.options[i]),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CvProgressHeader extends StatelessWidget {
+  const _CvProgressHeader({
+    required this.index,
+    required this.total,
+    required this.isDark,
+  });
+
+  final int index;
+  final int total;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withValues(alpha: isDark ? 0.22 : 0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Plate ${index + 1} / $total',
+                style: const TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF059669),
+                ),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              'Color vision screening',
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (var i = 0; i < total; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  height: 7,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: i <= index
+                        ? const Color(0xFF059669)
+                        : (isDark
+                            ? const Color(0xFF1E293B)
+                            : const Color(0xFFE2E8F0)),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CvAnswerButton extends StatefulWidget {
+  const _CvAnswerButton({
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  State<_CvAnswerButton> createState() => _CvAnswerButtonState();
+}
+
+class _CvAnswerButtonState extends State<_CvAnswerButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    return AnimatedScale(
+      scale: _pressed ? 0.98 : 1,
+      duration: const Duration(milliseconds: 90),
+      child: Material(
+        color: isDark ? const Color(0xFF0B1F17) : const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: widget.onTap,
+          onHighlightChanged: (v) => setState(() => _pressed = v),
+          borderRadius: BorderRadius.circular(18),
+          splashColor: const Color(0xFF059669).withValues(alpha: 0.16),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isDark ? const Color(0xFF166534) : const Color(0xFF86EFAC),
+                width: 1.4,
+              ),
+            ),
+            child: Text(
+              widget.label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+                color: isDark ? Colors.white : const Color(0xFF064E3B),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ColorVisionCompleteView extends StatelessWidget {
+  const _ColorVisionCompleteView({
+    super.key,
+    required this.state,
+  });
+
+  final WellBeingUiState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final result = state.colorVisionResult;
+    if (result == null) {
+      return const SizedBox.shrink();
+    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = switch (result.outcome) {
+      ColorVisionOutcome.normal => const Color(0xFF059669),
+      ColorVisionOutcome.possibleDeficiency => const Color(0xFFD97706),
+      ColorVisionOutcome.inconclusive => const Color(0xFF64748B),
+    };
+    final icon = switch (result.outcome) {
+      ColorVisionOutcome.normal => Icons.check_circle_rounded,
+      ColorVisionOutcome.possibleDeficiency => Icons.warning_amber_rounded,
+      ColorVisionOutcome.inconclusive => Icons.help_outline_rounded,
+    };
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      accent.withValues(alpha: isDark ? 0.22 : 0.1),
+                      isDark ? const Color(0xFF0F172A) : Colors.white,
+                    ],
+                  ),
+                  border: Border.all(color: accent.withValues(alpha: 0.35)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withValues(alpha: isDark ? 0.2 : 0.1),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accent.withValues(alpha: isDark ? 0.28 : 0.14),
+                      ),
+                      child: Icon(icon, size: 40, color: accent),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      result.title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _MetricCard(
+                            title: 'Correct plates',
+                            value: '${result.correctCount}',
+                            unit: '/ ${result.totalPlates}',
+                            caption: result.scoreLabel,
+                            accent: accent,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 24,
+                              horizontal: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1E1738)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: isDark
+                                    ? const Color(0xFF4A3474)
+                                    : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Screening outcome',
+                                  style: TextStyle(
+                                    fontFamily: 'PlusJakartaSans',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF64748B),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  switch (result.outcome) {
+                                    ColorVisionOutcome.normal => 'Normal',
+                                    ColorVisionOutcome.possibleDeficiency =>
+                                      'Review advised',
+                                    ColorVisionOutcome.inconclusive =>
+                                      'Inconclusive',
+                                  },
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: 'PlusJakartaSans',
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: accent,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Wellness screen only',
+                                  style: TextStyle(
+                                    fontFamily: 'PlusJakartaSans',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? const Color(0xFF64748B)
+                                        : const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      result.summary,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                        color: isDark
+                            ? const Color(0xFFCBD5E1)
+                            : const Color(0xFF334155),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline_rounded, size: 20, color: accent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        result.advice,
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.4,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Use Print below for a takeaway copy of this screening.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: isDark
+                      ? const Color(0xFF64748B)
+                      : const Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
