@@ -498,7 +498,7 @@ export function FindServicesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Find services"
-        subtitle="Providers with lat/lng show within 5 km of each kiosk (and nearby on the mobile app). Pinned + rating still apply inside that radius."
+        subtitle="Providers within 5 km of a kiosk appear first. Providers without lat/lng still show on the kiosk, listed after nearby ones."
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
@@ -656,8 +656,9 @@ export function FindServicesPage() {
                     </label>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Lat/lng required for 5 km filtering on kiosks and the mobile app. Without them,
-                    the provider will not appear in nearby results.
+                    Use the same latitude/longitude as the kiosk (or within 5 km) so the provider
+                    appears first in nearby results. If lat/lng are empty, the provider still shows
+                    on the kiosk, but after nearby ones.
                   </p>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -758,7 +759,7 @@ export function FindServicesPage() {
                                   </div>
                                 ) : (
                                   <div className="text-[11px] font-medium text-amber-700">
-                                    No map location — hidden from 5 km lists
+                                    No map location — shown on kiosk after nearby providers
                                   </div>
                                 )}
                               </div>

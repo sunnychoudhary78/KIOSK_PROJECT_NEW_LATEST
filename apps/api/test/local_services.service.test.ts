@@ -117,6 +117,18 @@ describe('LocalServicesService.list', () => {
             longitude: 77.5,
             photoStoragePath: null,
           },
+          {
+            id: 'no-geo',
+            name: 'No Pin Shop',
+            phone: '7777777777',
+            sortOrder: 3,
+            rating: 4,
+            pinned: false,
+            address: 'Unknown',
+            latitude: null,
+            longitude: null,
+            photoStoragePath: null,
+          },
         ],
       },
     ]);
@@ -130,8 +142,10 @@ describe('LocalServicesService.list', () => {
     const result = await service.list('device-1');
     expect(result.radiusKm).toBe(5);
     expect(result.categories).toHaveLength(1);
-    expect(result.categories[0]?.contacts.map((c) => c.id)).toEqual(['near']);
+    // Same lat/lng first; contacts without a pin still appear after nearby ones.
+    expect(result.categories[0]?.contacts.map((c) => c.id)).toEqual(['near', 'no-geo']);
     expect(result.categories[0]?.contacts[0]?.distanceKm).toBe(0);
+    expect(result.categories[0]?.contacts[1]?.distanceKm).toBeNull();
   });
 
 });
@@ -175,8 +189,9 @@ describe('LocalServicesService.nearby', () => {
     ]);
     const { service } = serviceWith({ localServiceCategory: { findMany } });
     const result = await service.nearby({ lat: 19.076, lng: 72.8777, radiusKm: 5 });
-    expect(result.categories[0]?.contacts).toHaveLength(1);
-    expect(result.categories[0]?.contacts[0]?.id).toBe('near');
+    expect(result.categories[0]?.contacts.map((c) => c.id)).toEqual(['near', 'no-geo']);
+    expect(result.categories[0]?.contacts[0]?.distanceKm).toBe(0);
+    expect(result.categories[0]?.contacts[1]?.distanceKm).toBeNull();
   });
 });
 

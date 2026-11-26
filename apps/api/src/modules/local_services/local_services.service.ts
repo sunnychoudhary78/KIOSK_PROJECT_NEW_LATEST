@@ -91,31 +91,41 @@ function withDistance(
     return contacts.map((row) => mapContact(row, null));
   }
 
-  const scored = contacts
-    .map((row) => {
-      if (row.latitude == null || row.longitude == null) {
-        return null;
-      }
-      const distanceKm = roundDistanceKm(
-        haversineKm(origin.lat, origin.lng, row.latitude, row.longitude),
-      );
-      if (radiusKm != null && distanceKm > radiusKm) {
-        return null;
-      }
-      return mapContact(row, distanceKm);
-    })
-    .filter((row): row is NonNullable<typeof row> => row != null);
+  const nearby: ReturnType<typeof mapContact>[] = [];
+  const withoutGeo: ReturnType<typeof mapContact>[] = [];
 
-  scored.sort((a, b) => {
+  for (const row of contacts) {
+    if (row.latitude == null || row.longitude == null) {
+      // Still show on kiosk so admins who omit lat/lng are not silently hidden.
+      withoutGeo.push(mapContact(row, null));
+      continue;
+    }
+    const distanceKm = roundDistanceKm(
+      haversineKm(origin.lat, origin.lng, row.latitude, row.longitude),
+    );
+    // Inclusive radius so same-spot / boundary contacts always appear.
+    if (radiusKm != null && distanceKm > radiusKm) {
+      continue;
+    }
+    nearby.push(mapContact(row, distanceKm));
+  }
+
+  const byKioskPriority = (
+    a: ReturnType<typeof mapContact>,
+    b: ReturnType<typeof mapContact>,
+  ) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
     const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
     if (da !== db) return da - db;
     if (b.rating !== a.rating) return b.rating - a.rating;
     return a.name.localeCompare(b.name);
-  });
+  };
 
-  return scored;
+  nearby.sort(byKioskPriority);
+  withoutGeo.sort(byKioskPriority);
+  // Nearby first (same lat/lng ≈ 0 km), then contacts that have no map pin yet.
+  return [...nearby, ...withoutGeo];
 }
 
 function parseCoords(
