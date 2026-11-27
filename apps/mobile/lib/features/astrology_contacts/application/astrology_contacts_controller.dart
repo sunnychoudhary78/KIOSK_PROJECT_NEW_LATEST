@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skp_mobile/core/network/api_client.dart';
-import 'package:skp_mobile/features/astrology_contacts/data/astrology_contacts_catalog.dart';
 import 'package:skp_mobile/features/astrology_contacts/domain/astrology_contact.dart';
 import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 
@@ -29,11 +28,9 @@ class AstrologyContactsNotifier extends Notifier<AstrologyContactsState> {
       );
       state = AstrologyContactsState(contacts: _parseItems(result, kind));
     } on ApiException catch (error) {
-      if (_shouldUseCatalog(error)) {
-        final all = await AstrologyContactsCatalog.load();
-        state = AstrologyContactsState(
-          contacts: all.where((c) => c.kind == kind).toList(growable: false),
-        );
+      // Citizen is not allowed on this endpoint yet — show Coming Soon, not a raw error.
+      if (_isComingSoon(error)) {
+        state = const AstrologyContactsState(contacts: []);
         return;
       }
       state = AstrologyContactsState(error: error.toString());
@@ -42,12 +39,13 @@ class AstrologyContactsNotifier extends Notifier<AstrologyContactsState> {
     }
   }
 
-  bool _shouldUseCatalog(ApiException error) {
-    // Prefer live API. Bundle only when UAT still blocks citizen.
-    if (error.statusCode == 403) return true;
+  bool _isComingSoon(ApiException error) {
+    if (error.statusCode == 403 || error.statusCode == 404) return true;
     final message = error.message.toLowerCase();
-    return message.contains('principal type not allowed') ||
-        error.code == 'forbidden';
+    final code = (error.code ?? '').toLowerCase();
+    return code == 'forbidden' ||
+        message.contains('principal type not allowed') ||
+        message.contains('forbidden');
   }
 
   List<AstrologyContact> _parseItems(

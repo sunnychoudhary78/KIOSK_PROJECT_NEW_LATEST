@@ -204,6 +204,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get astrologyContactsEmpty => 'No contacts available right now.';
 
   @override
+  String get astrologyComingSoon => 'Coming Soon';
+
+  @override
+  String get astrologyComingSoonHelper =>
+      'Pandit contacts will appear here once added from the admin panel.';
+
+  @override
   String get activeSessionTitle => 'Active print session';
 
   @override

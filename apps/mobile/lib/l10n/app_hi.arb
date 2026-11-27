@@ -58,6 +58,8 @@
   "astrologyShowNumber": "नंबर दिखाएँ",
   "astrologyContactHint": "इस व्यक्ति से संपर्क करने के लिए आप सीधे कॉल कर सकते हैं।",
   "astrologyContactsEmpty": "अभी कोई संपर्क उपलब्ध नहीं है।",
+  "astrologyComingSoon": "जल्द आ रहा है",
+  "astrologyComingSoonHelper": "एडमिन पैनल से पंडित जोड़ने के बाद यहाँ संपर्क दिखेंगे।",
   "activeSessionTitle": "सक्रिय प्रिंट सत्र",
   "statusPayNow": "अभी भुगतान करें",
   "statusOtpSent": "ओटीपी भेजा गया",

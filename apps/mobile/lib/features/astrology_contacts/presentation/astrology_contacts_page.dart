@@ -71,8 +71,8 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
             Expanded(
               child: SkpEmptyState(
                 icon: Icons.auto_awesome_outlined,
-                title: l10n.astrologyContactsEmpty,
-                message: helper,
+                title: l10n.astrologyComingSoon,
+                message: l10n.astrologyComingSoonHelper,
                 actionLabel: l10n.refresh,
                 secondary: true,
                 onAction: () => ref

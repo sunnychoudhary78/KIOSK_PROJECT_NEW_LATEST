@@ -35,7 +35,7 @@ export function registerAstrologyContactsModule(router: Router, deps: AppDeps): 
 
   router.get(
     '/astrology-contacts',
-    authRequired(deps.config, ['admin', 'device']),
+    authRequired(deps.config, ['admin', 'device', 'citizen']),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const kind = parseKindQuery(req.query.kind);
@@ -107,7 +107,7 @@ export function registerAstrologyContactsModule(router: Router, deps: AppDeps): 
 
   router.get(
     '/astrology-contacts/:id/photo',
-    authRequired(deps.config, ['admin', 'device']),
+    authRequired(deps.config, ['admin', 'device', 'citizen']),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const photo = await service.readPhoto(requireParam(req.params.id, 'id'));
