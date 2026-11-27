@@ -11,7 +11,10 @@ import type {
   NearbyLocalServicesQuery,
   UpdateLocalServiceContactBody,
 } from './local_services.schemas.js';
-import { DEFAULT_LOCAL_SERVICE_RADIUS_KM } from './local_services.schemas.js';
+import {
+  DEFAULT_LOCAL_SERVICE_RADIUS_KM,
+  KIOSK_LOCAL_SERVICE_EXTENDED_RADIUS_KM,
+} from './local_services.schemas.js';
 
 const PHOTO_UPLOAD_DIR = join(process.cwd(), 'uploads', 'local-services');
 
@@ -82,32 +85,58 @@ function extensionFor(mimeType: string | undefined, originalName: string): strin
   }
 }
 
+function asCoord(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+type WithDistanceOptions = {
+  /** Providers beyond radiusKm but within this limit still appear after nearby. */
+  extendedRadiusKm?: number | null;
+  /** When false, contacts missing lat/lng are omitted (kiosk requires a map pin). */
+  includeWithoutGeo?: boolean;
+};
+
 function withDistance(
   contacts: ContactRow[],
   origin: { lat: number; lng: number } | null,
   radiusKm: number | null,
+  options: WithDistanceOptions = {},
 ) {
   if (!origin) {
     return contacts.map((row) => mapContact(row, null));
   }
 
+  const includeWithoutGeo = options.includeWithoutGeo !== false;
+  const extendedRadiusKm =
+    options.extendedRadiusKm == null
+      ? null
+      : Math.max(options.extendedRadiusKm, radiusKm ?? 0);
+
   const nearby: ReturnType<typeof mapContact>[] = [];
+  const extended: ReturnType<typeof mapContact>[] = [];
   const withoutGeo: ReturnType<typeof mapContact>[] = [];
 
   for (const row of contacts) {
-    if (row.latitude == null || row.longitude == null) {
-      // Still show on kiosk so admins who omit lat/lng are not silently hidden.
-      withoutGeo.push(mapContact(row, null));
+    const lat = asCoord(row.latitude);
+    const lng = asCoord(row.longitude);
+    if (lat == null || lng == null) {
+      if (includeWithoutGeo) {
+        withoutGeo.push(mapContact(row, null));
+      }
       continue;
     }
-    const distanceKm = roundDistanceKm(
-      haversineKm(origin.lat, origin.lng, row.latitude, row.longitude),
-    );
+    const distanceKm = roundDistanceKm(haversineKm(origin.lat, origin.lng, lat, lng));
     // Inclusive radius so same-spot / boundary contacts always appear.
-    if (radiusKm != null && distanceKm > radiusKm) {
+    if (radiusKm == null || distanceKm <= radiusKm) {
+      nearby.push(mapContact(row, distanceKm));
       continue;
     }
-    nearby.push(mapContact(row, distanceKm));
+    if (extendedRadiusKm != null && distanceKm <= extendedRadiusKm) {
+      extended.push(mapContact(row, distanceKm));
+      continue;
+    }
   }
 
   const byKioskPriority = (
@@ -123,9 +152,10 @@ function withDistance(
   };
 
   nearby.sort(byKioskPriority);
+  extended.sort(byKioskPriority);
   withoutGeo.sort(byKioskPriority);
-  // Nearby first (same lat/lng ≈ 0 km), then contacts that have no map pin yet.
-  return [...nearby, ...withoutGeo];
+  // Nearby first, then farther pins (kiosk extended), then optional no-pin contacts.
+  return [...nearby, ...extended, ...withoutGeo];
 }
 
 function parseCoords(
@@ -192,10 +222,19 @@ export class LocalServicesService {
         .map((category) => {
           const contacts =
             deviceId && origin
-              ? withDistance(category.contacts, origin, radiusKm)
+              ? withDistance(category.contacts, origin, radiusKm, {
+                  // Same pin as the kiosk (0 km) stays in nearby. If the pin is a bit off
+                  // (or an older device row still has different coords), still show the
+                  // provider — do not hide it while empty lat/lng contacts appear.
+                  extendedRadiusKm: KIOSK_LOCAL_SERVICE_EXTENDED_RADIUS_KM,
+                  // Kiosk requires a map pin; empty lat/lng no longer bypass the filter.
+                  includeWithoutGeo: false,
+                })
               : deviceId
-                ? // Kiosk has no coords: show all (no distance) so machines still work.
-                  category.contacts.map((row) => mapContact(row, null))
+                ? // Kiosk has no coords: show contacts that have a pin (no distance sort).
+                  category.contacts
+                    .filter((row) => asCoord(row.latitude) != null && asCoord(row.longitude) != null)
+                    .map((row) => mapContact(row, null))
                 : // Admin: full list, no geo filter.
                   category.contacts.map((row) => mapContact(row, null));
           return {

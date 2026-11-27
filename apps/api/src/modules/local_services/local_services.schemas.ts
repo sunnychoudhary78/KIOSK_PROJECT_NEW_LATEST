@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const DEFAULT_LOCAL_SERVICE_RADIUS_KM = 5;
+/** Kiosk still lists providers out to this range (sorted after true nearby). */
+export const KIOSK_LOCAL_SERVICE_EXTENDED_RADIUS_KM = 50;
 
 export const createLocalServiceCategorySchema = z.object({
   name: z.string().trim().min(1).max(80),

@@ -351,7 +351,7 @@ export function FindServicesPage() {
       return;
     }
     if ((latitude == null) !== (longitude == null)) {
-      setContactError('Set both latitude and longitude (needed for 5 km kiosk / app filtering)');
+      setContactError('Set both latitude and longitude (required for kiosk nearby filtering)');
       return;
     }
     setSavingContact(true);
@@ -498,7 +498,7 @@ export function FindServicesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Find services"
-        subtitle="Providers within 5 km of a kiosk appear first. Providers without lat/lng still show on the kiosk, listed after nearby ones."
+        subtitle="Providers within 5 km of a kiosk appear first. Lat/lng is required on the kiosk; pins up to 50 km still appear after nearby ones."
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
@@ -656,9 +656,9 @@ export function FindServicesPage() {
                     </label>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Use the same latitude/longitude as the kiosk (or within 5 km) so the provider
-                    appears first in nearby results. If lat/lng are empty, the provider still shows
-                    on the kiosk, but after nearby ones.
+                    Set the same latitude/longitude as the kiosk (or within 5 km) so the provider
+                    appears first. Providers without lat/lng are hidden on the kiosk. Pins up to
+                    50 km still appear after nearby ones.
                   </p>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -759,7 +759,7 @@ export function FindServicesPage() {
                                   </div>
                                 ) : (
                                   <div className="text-[11px] font-medium text-amber-700">
-                                    No map location — shown on kiosk after nearby providers
+                                    No map location — hidden on kiosk until lat/lng are set
                                   </div>
                                 )}
                               </div>

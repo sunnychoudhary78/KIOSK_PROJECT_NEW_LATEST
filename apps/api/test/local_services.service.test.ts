@@ -83,7 +83,7 @@ describe('LocalServicesService.list', () => {
     });
   });
 
-  it('filters device list to contacts within 5 km of the kiosk', async () => {
+  it('lists kiosk contacts by distance and requires a map pin', async () => {
     const findMany = vi.fn(async () => [
       {
         id: 'cat-1',
@@ -105,23 +105,48 @@ describe('LocalServicesService.list', () => {
             photoStoragePath: null,
           },
           {
-            id: 'far',
-            name: 'Far Shop',
-            phone: '8888888888',
+            id: 'same-pin',
+            name: 'Same Pin Shop',
+            phone: '6666666666',
             sortOrder: 2,
+            rating: 2,
+            pinned: false,
+            address: 'Same',
+            latitude: 28.6139,
+            longitude: 77.209,
+            photoStoragePath: null,
+          },
+          {
+            id: 'extended',
+            name: 'Extended Shop',
+            phone: '8888888888',
+            sortOrder: 3,
             rating: 5,
             pinned: true,
-            address: 'Far',
-            // ~20+ km away from origin
+            address: 'Extended',
+            // ~20 km away — outside 5 km nearby, inside 50 km extended
             latitude: 28.8,
             longitude: 77.5,
+            photoStoragePath: null,
+          },
+          {
+            id: 'too-far',
+            name: 'Too Far Shop',
+            phone: '5555555555',
+            sortOrder: 4,
+            rating: 5,
+            pinned: false,
+            address: 'Too Far',
+            // ~200+ km away — outside extended radius
+            latitude: 30.0,
+            longitude: 78.0,
             photoStoragePath: null,
           },
           {
             id: 'no-geo',
             name: 'No Pin Shop',
             phone: '7777777777',
-            sortOrder: 3,
+            sortOrder: 5,
             rating: 4,
             pinned: false,
             address: 'Unknown',
@@ -142,10 +167,15 @@ describe('LocalServicesService.list', () => {
     const result = await service.list('device-1');
     expect(result.radiusKm).toBe(5);
     expect(result.categories).toHaveLength(1);
-    // Same lat/lng first; contacts without a pin still appear after nearby ones.
-    expect(result.categories[0]?.contacts.map((c) => c.id)).toEqual(['near', 'no-geo']);
+    // Same lat/lng first; extended pins still show; empty lat/lng and too-far are hidden.
+    expect(result.categories[0]?.contacts.map((c) => c.id)).toEqual([
+      'near',
+      'same-pin',
+      'extended',
+    ]);
     expect(result.categories[0]?.contacts[0]?.distanceKm).toBe(0);
-    expect(result.categories[0]?.contacts[1]?.distanceKm).toBeNull();
+    expect(result.categories[0]?.contacts[1]?.distanceKm).toBe(0);
+    expect(result.categories[0]?.contacts[2]?.distanceKm).toBeGreaterThan(5);
   });
 
 });
