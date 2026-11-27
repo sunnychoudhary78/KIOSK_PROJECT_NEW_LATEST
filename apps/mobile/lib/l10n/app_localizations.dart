@@ -446,6 +446,18 @@ abstract class AppLocalizations {
   /// **'No contacts available right now.'**
   String get astrologyContactsEmpty;
 
+  /// No description provided for @astrologyComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming Soon'**
+  String get astrologyComingSoon;
+
+  /// No description provided for @astrologyComingSoonHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Pandit contacts will appear here once added from the admin panel.'**
+  String get astrologyComingSoonHelper;
+
   /// No description provided for @activeSessionTitle.
   ///
   /// In en, this message translates to:

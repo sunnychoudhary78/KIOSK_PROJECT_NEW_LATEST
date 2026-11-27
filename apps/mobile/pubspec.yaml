@@ -47,7 +47,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/fuel_stations/catalog.json
-    - assets/astrology_contacts/catalog.json
   fonts:
     - family: PlusJakartaSans
       fonts:

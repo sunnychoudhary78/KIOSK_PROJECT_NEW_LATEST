@@ -203,6 +203,13 @@ class AppLocalizationsHi extends AppLocalizations {
   String get astrologyContactsEmpty => 'अभी कोई संपर्क उपलब्ध नहीं है।';
 
   @override
+  String get astrologyComingSoon => 'जल्द आ रहा है';
+
+  @override
+  String get astrologyComingSoonHelper =>
+      'एडमिन पैनल से पंडित जोड़ने के बाद यहाँ संपर्क दिखेंगे।';
+
+  @override
   String get activeSessionTitle => 'सक्रिय प्रिंट सत्र';
 
   @override

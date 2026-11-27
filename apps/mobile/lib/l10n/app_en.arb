@@ -68,6 +68,8 @@
   "astrologyShowNumber": "Show number",
   "astrologyContactHint": "To contact this person, you can call them directly.",
   "astrologyContactsEmpty": "No contacts available right now.",
+  "astrologyComingSoon": "Coming Soon",
+  "astrologyComingSoonHelper": "Pandit contacts will appear here once added from the admin panel.",
   "activeSessionTitle": "Active print session",
   "statusPayNow": "Pay now",
   "statusOtpSent": "OTP sent",
