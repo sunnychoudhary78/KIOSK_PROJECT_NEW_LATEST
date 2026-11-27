@@ -1,0 +1,52 @@
+---
+description: Kiosk Windows release packaging for OTA (athena zip/rar layout)
+alwaysApply: true
+---
+
+# Kiosk release packaging
+
+When creating a kiosk Windows build / OTA package / `athena-*.zip` / `Release *.rar`, follow this exact flow.
+
+## Version
+1. Bump `apps/kiosk/pubspec.yaml` (`x.y.z+build`), e.g. `0.1.14+15`.
+2. Rebuild so the exe product version matches.
+
+## Build
+```powershell
+$flutter = "C:\Users\Abcom\develop\flutter\bin\flutter.bat"
+cd apps\kiosk
+& $flutter pub get
+& $flutter build windows --release
+```
+Source folder: `apps/kiosk/build/windows/x64/runner/Release`
+
+## Package layout (must match working `Release pev.rar`)
+Archive root must be a single flat folder:
+
+```
+Release/
+  skp_kiosk.exe
+  skp_printer_usb.exe
+  *.dll
+  data/
+```
+
+Hard rules:
+- Exactly **one** `skp_kiosk.exe` (reject nested `Release/Release/`).
+- Always include **`skp_printer_usb.exe`** beside `skp_kiosk.exe` (copy from last known-good Release if the Flutter build omitted it). Ink/Pages telemetry fails without it.
+- Do **not** zip a parent that already contains both `Release/` and `Release/Release/`.
+
+## Outputs
+Write to `dist/`:
+- `athena-x.y.z.zip` — OTA upload (SHA-256 of this file goes in the release record)
+- `Release x.y.z.zip` — same contents
+- `Release x.y.z.rar` — **real RAR5** via WinRAR (`Rar.exe`), not a renamed zip
+- `athena-x.y.z.sha256.txt` — version, layout, sha256, size
+
+Optional copy: `C:\AthenaOTA\Updates\athena-x.y.z.zip`
+
+## Verify before handing off
+```powershell
+# zip: one kiosk + one helper, zero nested Release/Release
+# rar: 7z must report Type = Rar5
+```
