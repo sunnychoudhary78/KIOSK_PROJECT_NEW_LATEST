@@ -8,8 +8,10 @@ type QuotaPeriod = 'daily' | 'weekly' | 'monthly';
 
 type FreeQuotaForm = {
   period: QuotaPeriod;
+  freePages: number | '';
   freeBwPages: number | '';
   freeColorPages: number | '';
+  combined?: boolean;
 };
 
 type SocietyPhone = {
@@ -39,9 +41,21 @@ type PlatformSetting = {
 
 const DEFAULT_QUOTA: FreeQuotaForm = {
   period: 'daily',
+  freePages: 5,
   freeBwPages: 5,
-  freeColorPages: 0,
+  freeColorPages: 5,
+  combined: true,
 };
+
+function combinedFreePages(value: FreeQuotaForm): number {
+  if (value.freePages !== '' && value.freePages != null) {
+    return Math.max(0, Math.min(500, Number(value.freePages) || 0));
+  }
+  const bw = typeof value.freeBwPages === 'number' ? value.freeBwPages : 0;
+  const color = typeof value.freeColorPages === 'number' ? value.freeColorPages : 0;
+  const sum = bw + color;
+  return sum > 0 ? Math.max(0, Math.min(500, sum)) : 5;
+}
 
 type SocietyPhonesPageProps = {
   /** Hide page chrome when nested inside Free Print hub */
@@ -83,7 +97,15 @@ export function SocietyPhonesPage({
     const result = await apiRequest<{ items: PlatformSetting[] }>('/platform-settings', { token });
     const row = result.items.find((item) => item.settingKey === 'society_free_quota_config');
     if (row) {
-      setQuota({ ...DEFAULT_QUOTA, ...row.settingValue });
+      const raw = row.settingValue as FreeQuotaForm & { freePages?: number };
+      const freePages = combinedFreePages({ ...DEFAULT_QUOTA, ...raw });
+      setQuota({
+        period: raw.period || DEFAULT_QUOTA.period,
+        freePages,
+        freeBwPages: freePages,
+        freeColorPages: freePages,
+        combined: true,
+      });
     }
   }, [token]);
 
@@ -119,20 +141,26 @@ export function SocietyPhonesPage({
     setQuotaError(null);
     setQuotaSaved(null);
     try {
+      const freePages = combinedFreePages(quota);
       await apiRequest('/platform-settings/society_free_quota_config', {
         method: 'PUT',
         token,
         body: {
           settingValue: {
             period: quota.period,
-            freeBwPages: Number.isFinite(Number(quota.freeBwPages))
-              ? Math.max(0, Math.min(500, Number(quota.freeBwPages)))
-              : 5,
-            freeColorPages: Number.isFinite(Number(quota.freeColorPages))
-              ? Math.max(0, Math.min(500, Number(quota.freeColorPages)))
-              : 0,
+            freePages,
+            freeBwPages: freePages,
+            freeColorPages: freePages,
+            combined: true,
           },
         },
+      });
+      setQuota({
+        period: quota.period,
+        freePages,
+        freeBwPages: freePages,
+        freeColorPages: freePages,
+        combined: true,
       });
       setQuotaSaved('Society free limit saved.');
     } catch (err) {
@@ -144,12 +172,17 @@ export function SocietyPhonesPage({
 
   async function addPhone(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim()) {
-      setAddError('Enter the person name');
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      setAddError('Enter a valid 10-digit Indian mobile number');
       return;
     }
-    if (!societyName.trim()) {
-      setAddError('Enter the society name');
+    if (name.trim().length > 120) {
+      setAddError('Person name must be 120 characters or fewer');
+      return;
+    }
+    if (societyName.trim().length > 160) {
+      setAddError('Society name must be 160 characters or fewer');
       return;
     }
     setAdding(true);
@@ -159,7 +192,7 @@ export function SocietyPhonesPage({
         method: 'POST',
         token,
         body: {
-          phone: phone.trim(),
+          phone: phoneDigits,
           name: name.trim(),
           societyName: societyName.trim(),
         },
@@ -225,7 +258,7 @@ export function SocietyPhonesPage({
       {embedded ? null : (
         <PageHeader
           title="Society phones"
-          subtitle="Listed numbers use this free limit. The kiosk session cap and night free-disabled window still apply."
+          subtitle="Listed numbers share one free-page pool for B/W and color. The kiosk session cap and night free-disabled window still apply."
         />
       )}
 
@@ -245,39 +278,29 @@ export function SocietyPhonesPage({
                 </Select>
               </label>
               <label>
-                Free B/W pages
+                Free pages (B/W + color combined)
                 <Input
                   type="number"
                   min={0}
                   max={500}
-                  value={quota.freeBwPages}
+                  value={quota.freePages}
                   onChange={(e) => {
                     const raw = e.target.value;
+                    const next = raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0));
                     setQuota((s) => ({
                       ...s,
-                      freeBwPages: raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
-                    }));
-                  }}
-                />
-              </label>
-              <label>
-                Free color pages
-                <Input
-                  type="number"
-                  min={0}
-                  max={500}
-                  value={quota.freeColorPages}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    setQuota((s) => ({
-                      ...s,
-                      freeColorPages:
-                        raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
+                      freePages: next,
+                      freeBwPages: next,
+                      freeColorPages: next,
+                      combined: true,
                     }));
                   }}
                 />
               </label>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              One pool for black-and-white and color together (e.g. 10 total pages).
+            </p>
             {quotaError ? <p className="error">{quotaError}</p> : null}
             {quotaSaved ? <p className="text-sm text-muted-foreground">{quotaSaved}</p> : null}
             <div className="mt-4">
@@ -297,7 +320,7 @@ export function SocietyPhonesPage({
               : 'Society free list'}
           </p>
           <p className="mt-1 text-muted-foreground">
-            Add person name, society name, and mobile — or upload CSV / Excel. Removing a number
+            Add a mobile (name and society optional) — or upload CSV / Excel. Removing a number
             does not erase past ledger history.
           </p>
         </div>
@@ -309,29 +332,26 @@ export function SocietyPhonesPage({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Person name"
-              required
+              placeholder="Person name (optional)"
+              maxLength={120}
             />
             <Input
               value={societyName}
               onChange={(e) => setSocietyName(e.target.value)}
-              placeholder="Society name"
-              required
+              placeholder="Society name (optional)"
+              maxLength={160}
             />
             <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="10-digit mobile number"
+              inputMode="numeric"
+              maxLength={14}
               required
             />
             <Button
               type="submit"
-              disabled={
-                adding ||
-                phone.trim().length === 0 ||
-                name.trim().length === 0 ||
-                societyName.trim().length === 0
-              }
+              disabled={adding || phone.replace(/\D/g, '').length < 10}
             >
               {adding ? 'Adding…' : 'Add number'}
             </Button>
@@ -414,7 +434,7 @@ export function SocietyPhonesPage({
         {!loading && !listError && (list?.items.length ?? 0) === 0 ? (
           <EmptyState
             title="No society numbers yet"
-            description="Add person name, society name, and mobile — or upload a CSV or Excel file."
+            description="Add a 10-digit mobile (name and society optional) — or upload a CSV or Excel file."
           />
         ) : null}
         {list && list.items.length > 0 ? (

@@ -93,12 +93,10 @@ class SocietyPhonesNotifier extends Notifier<SocietyPhonesState> {
 
   Future<bool> saveQuota({
     required String period,
-    required String bwRaw,
-    required String colorRaw,
+    required String pagesRaw,
   }) async {
-    final bw = parseQuotaPages(bwRaw);
-    final color = parseQuotaPages(colorRaw);
-    if (bw == null || color == null) {
+    final pages = parseQuotaPages(pagesRaw);
+    if (pages == null) {
       state = state.copyWith(
         error: 'Free pages must be a whole number from 0 to 500.',
         clearNotice: true,
@@ -107,7 +105,7 @@ class SocietyPhonesNotifier extends Notifier<SocietyPhonesState> {
     }
     state = state.copyWith(savingQuota: true, clearError: true, clearNotice: true);
     try {
-      final quota = SocietyQuota(period: period, freeBwPages: bw, freeColorPages: color);
+      final quota = SocietyQuota(period: period, freePages: pages);
       await _repo.saveQuota(quota);
       state = state.copyWith(
         savingQuota: false,

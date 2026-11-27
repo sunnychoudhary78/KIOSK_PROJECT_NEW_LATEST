@@ -23,7 +23,37 @@ export const printFreeQuotaConfigSchema = z.object({
   period: z.enum(['daily', 'weekly', 'monthly']),
   freeBwPages: z.number().int().min(0).max(500),
   freeColorPages: z.number().int().min(0).max(500),
+  combined: z.boolean().optional(),
+  freePages: z.number().int().min(0).max(500).optional(),
 });
+
+/** Society list: one combined free-page pool for B/W + color. */
+export const societyFreeQuotaConfigSchema = z
+  .object({
+    period: z.enum(['daily', 'weekly', 'monthly']),
+    freePages: z.number().int().min(0).max(500).optional(),
+    freeBwPages: z.number().int().min(0).max(500).optional(),
+    freeColorPages: z.number().int().min(0).max(500).optional(),
+    combined: z.boolean().optional(),
+  })
+  .transform((value) => {
+    const fromSplit = (value.freeBwPages ?? 0) + (value.freeColorPages ?? 0);
+    // New configs set freePages; legacy society rows only had freeBwPages/freeColorPages.
+    const raw =
+      value.freePages != null
+        ? value.freePages
+        : fromSplit > 0
+          ? fromSplit
+          : 5;
+    const freePages = Math.max(0, Math.min(500, Math.floor(raw)));
+    return {
+      period: value.period,
+      freePages,
+      freeBwPages: freePages,
+      freeColorPages: freePages,
+      combined: true as const,
+    };
+  });
 
 export const cabinetLightConfigSchema = z.object({
   enabled: z.boolean(),

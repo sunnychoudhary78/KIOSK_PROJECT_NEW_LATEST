@@ -32,6 +32,7 @@ import {
   otpPrintConfigSchema,
   printFreeQuotaConfigSchema,
   quickPrintConfigSchema,
+  societyFreeQuotaConfigSchema,
   type UpdatePlatformSettingInput,
 } from './platform_settings.schemas.js';
 
@@ -116,9 +117,12 @@ export class PlatformSettingsService {
     if (!row) {
       return { ...DEFAULT_SOCIETY_FREE_QUOTA_CONFIG };
     }
-    const parsed = printFreeQuotaConfigSchema.safeParse({
-      ...DEFAULT_SOCIETY_FREE_QUOTA_CONFIG,
-      ...asObject(row.settingValue),
+    const raw = asObject(row.settingValue);
+    const parsed = societyFreeQuotaConfigSchema.safeParse({
+      period: raw.period ?? DEFAULT_SOCIETY_FREE_QUOTA_CONFIG.period,
+      freePages: raw.freePages,
+      freeBwPages: raw.freeBwPages,
+      freeColorPages: raw.freeColorPages,
     });
     return parsed.success ? parsed.data : { ...DEFAULT_SOCIETY_FREE_QUOTA_CONFIG };
   }
@@ -235,14 +239,27 @@ export class PlatformSettingsService {
       }
       return parsed.data;
     }
-    if (settingKey === PRINT_FREE_QUOTA_CONFIG_KEY || settingKey === SOCIETY_FREE_QUOTA_CONFIG_KEY) {
-      const defaults =
-        settingKey === SOCIETY_FREE_QUOTA_CONFIG_KEY
-          ? DEFAULT_SOCIETY_FREE_QUOTA_CONFIG
-          : DEFAULT_PRINT_FREE_QUOTA_CONFIG;
+    if (settingKey === PRINT_FREE_QUOTA_CONFIG_KEY) {
       const parsed = printFreeQuotaConfigSchema.safeParse({
-        ...defaults,
+        ...DEFAULT_PRINT_FREE_QUOTA_CONFIG,
         ...asObject(raw),
+      });
+      if (!parsed.success) {
+        throw new AppError(
+          'validation_error',
+          parsed.error.issues[0]?.message ?? `Invalid ${settingKey}`,
+          400,
+        );
+      }
+      return { ...parsed.data, combined: false };
+    }
+    if (settingKey === SOCIETY_FREE_QUOTA_CONFIG_KEY) {
+      const body = asObject(raw);
+      const parsed = societyFreeQuotaConfigSchema.safeParse({
+        period: body.period ?? DEFAULT_SOCIETY_FREE_QUOTA_CONFIG.period,
+        freePages: body.freePages,
+        freeBwPages: body.freeBwPages,
+        freeColorPages: body.freeColorPages,
       });
       if (!parsed.success) {
         throw new AppError(

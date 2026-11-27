@@ -262,6 +262,7 @@ function PhotoPicker({
 }
 
 export function FindServicesPage() {
+  // Named export used by app router.
   const { token } = useAuth();
   const [list, setList] = useState<LocalList | null>(null);
   const [loading, setLoading] = useState(false);

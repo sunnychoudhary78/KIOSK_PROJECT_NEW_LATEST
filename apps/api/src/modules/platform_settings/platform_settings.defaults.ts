@@ -32,6 +32,12 @@ export type PrintFreeQuotaConfig = {
   period: PrintFreeQuotaPeriod;
   freeBwPages: number;
   freeColorPages: number;
+  /**
+   * When true (society list), B/W and color share one pool of `freePages`.
+   * `freeBwPages` / `freeColorPages` mirror that pool for older clients.
+   */
+  combined?: boolean;
+  freePages?: number;
 };
 
 export const DEFAULT_OTP_PRINT_CONFIG: OtpPrintConfig = {
@@ -59,11 +65,13 @@ export const DEFAULT_PRINT_FREE_QUOTA_CONFIG: PrintFreeQuotaConfig = {
   freeColorPages: 0,
 };
 
-/** Same shape as the global quota so a listed phone is not reduced before an admin edits it. */
+/** Society phones share one free-page pool across B/W and color. */
 export const DEFAULT_SOCIETY_FREE_QUOTA_CONFIG: PrintFreeQuotaConfig = {
   period: 'daily',
+  freePages: 5,
   freeBwPages: 5,
-  freeColorPages: 0,
+  freeColorPages: 5,
+  combined: true,
 };
 
 /** Cabinet light on relay 2. `mode` `on`/`off` overrides the daily window. */

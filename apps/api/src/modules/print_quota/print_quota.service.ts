@@ -50,13 +50,34 @@ type RemainingQuota = {
   society: boolean;
 };
 
-function isQuotaExhausted(bwUsed: number, bwLimit: number, colorUsed: number, colorLimit: number): boolean {
+function isQuotaExhausted(
+  bwUsed: number,
+  bwLimit: number,
+  colorUsed: number,
+  colorLimit: number,
+  combined = false,
+  combinedLimit = 0,
+): boolean {
+  if (combined) {
+    const limit = Math.max(0, combinedLimit);
+    if (limit <= 0) {
+      return bwUsed + colorUsed > 0;
+    }
+    return bwUsed + colorUsed >= limit;
+  }
   const hasBw = bwLimit > 0;
   const hasColor = colorLimit > 0;
   if (!hasBw && !hasColor) {
     return bwUsed + colorUsed > 0;
   }
   return (!hasBw || bwUsed >= bwLimit) && (!hasColor || colorUsed >= colorLimit);
+}
+
+function combinedPoolLimit(config: PrintFreeQuotaConfig): number {
+  if (config.combined) {
+    return Math.max(0, Math.floor(config.freePages ?? config.freeBwPages));
+  }
+  return 0;
 }
 
 export class PrintQuotaService {
@@ -103,14 +124,19 @@ export class PrintQuotaService {
     const db = tx ?? this.db;
     const { config, society } = await this.resolveQuota(phone, db);
     const periodKey = periodKeyFor(now, config.period);
-    const periodLimit = mode === 'color' ? config.freeColorPages : config.freeBwPages;
+    const combined = Boolean(config.combined || society);
+    const periodLimit = combined
+      ? combinedPoolLimit({ ...config, combined: true })
+      : mode === 'color'
+        ? config.freeColorPages
+        : config.freeBwPages;
     const normalized = normalizePhone(phone);
     const colorMode = toPrismaColorMode(mode);
 
     const rows = await db.phoneFreePageLedger.findMany({
       where: {
         phone: normalized,
-        printColorMode: colorMode,
+        ...(combined ? {} : { printColorMode: colorMode }),
         periodKey,
         status: { in: [FreePageLedgerStatus.reserved, FreePageLedgerStatus.consumed] },
       },
@@ -137,13 +163,13 @@ export class PrintQuotaService {
   }): Promise<EffectiveFreeResult> {
     const now = input.now ?? new Date();
     const limits = printLimitsFromDevice(input.device);
-    const kioskCap =
-      input.mode === 'color' ? limits.freeColorPagesPerSession : limits.freePagesPerSession;
     const freeDisabledNow = this.isFreeDisabledNow(input.device, now);
 
     if (!input.phone) {
       const config = await this.settings.getPrintFreeQuotaConfig();
       const periodLimit = input.mode === 'color' ? config.freeColorPages : config.freeBwPages;
+      const kioskCap =
+        input.mode === 'color' ? limits.freeColorPagesPerSession : limits.freePagesPerSession;
       return {
         freePages: 0,
         remainingBefore: periodLimit,
@@ -156,6 +182,12 @@ export class PrintQuotaService {
     }
 
     const quota = await this.getRemaining(input.phone, input.mode, now, input.tx);
+    // Society combined pool may be spent on either B/W or color; use the higher session free cap.
+    const kioskCap = quota.society
+      ? Math.max(limits.freePagesPerSession, limits.freeColorPagesPerSession)
+      : input.mode === 'color'
+        ? limits.freeColorPagesPerSession
+        : limits.freePagesPerSession;
     const freePages = freeDisabledNow
       ? 0
       : Math.min(quota.remaining, kioskCap, Math.max(0, input.pageCount));
@@ -454,24 +486,37 @@ export class PrintQuotaService {
     const searchDigits = (input.q ?? '').replace(/\D/g, '');
     const allItems = Array.from(byKey.values()).map((stats) => {
       const limits = stats.society ? societyConfig : config;
-      const bwRemaining = Math.max(0, limits.freeBwPages - stats.bwUsed);
-      const colorRemaining = Math.max(0, limits.freeColorPages - stats.colorUsed);
+      const combined = Boolean(limits.combined || stats.society);
+      const pool = combined ? combinedPoolLimit({ ...limits, combined: true }) : 0;
+      const totalUsed = stats.bwUsed + stats.colorUsed;
+      const sharedRemaining = combined ? Math.max(0, pool - totalUsed) : null;
+      const bwRemaining = combined
+        ? sharedRemaining!
+        : Math.max(0, limits.freeBwPages - stats.bwUsed);
+      const colorRemaining = combined
+        ? sharedRemaining!
+        : Math.max(0, limits.freeColorPages - stats.colorUsed);
       return {
         phone: stats.phone,
         periodKey: stats.periodKey,
         society: stats.society,
+        combined,
         bwUsed: stats.bwUsed,
         bwRemaining,
         colorUsed: stats.colorUsed,
         colorRemaining,
-        bwLimit: limits.freeBwPages,
-        colorLimit: limits.freeColorPages,
-        totalUsed: stats.bwUsed + stats.colorUsed,
+        bwLimit: combined ? pool : limits.freeBwPages,
+        colorLimit: combined ? pool : limits.freeColorPages,
+        pagesLimit: combined ? pool : null,
+        pagesRemaining: sharedRemaining,
+        totalUsed,
         exhausted: isQuotaExhausted(
           stats.bwUsed,
           limits.freeBwPages,
           stats.colorUsed,
           limits.freeColorPages,
+          combined,
+          pool,
         ),
         lastActivityAt: stats.lastActivityAt?.toISOString() ?? null,
       };
@@ -536,6 +581,8 @@ export class PrintQuotaService {
       societyLimits: {
         freeBwPages: societyConfig.freeBwPages,
         freeColorPages: societyConfig.freeColorPages,
+        freePages: combinedPoolLimit({ ...societyConfig, combined: true }),
+        combined: true as const,
       },
       summary,
       total,
@@ -603,26 +650,60 @@ export class PrintQuotaService {
       .filter((entry) => entry.printColorMode === PrintColorMode.color)
       .reduce((sum, entry) => sum + entry.pages, 0);
 
+    const combined = bw.society;
+    const pagesLimit = combined ? bw.periodLimit : null;
+    const offCurrent =
+      useAll || periodKey !== bw.periodKey || periodKey !== color.periodKey;
+    // Split usage always comes from ledger rows for the selected period.
+    const detailBwUsed = offCurrent ? bwUsed : (combined ? bwUsed : bw.used);
+    const detailColorUsed = offCurrent
+      ? colorUsed
+      : combined
+        ? colorUsed
+        : color.used;
+    // Combined remaining uses total pages; getRemaining.used is already the pool total.
+    const pagesUsed = combined
+      ? offCurrent
+        ? detailBwUsed + detailColorUsed
+        : bw.used
+      : detailBwUsed + detailColorUsed;
+    const sharedRemaining = combined
+      ? Math.max(0, bw.periodLimit - pagesUsed)
+      : null;
+
     return {
       phone,
       society: bw.society,
+      combined,
       period: bw.period,
       periodKey,
       limits: {
         freeBwPages: bw.periodLimit,
         freeColorPages: color.periodLimit,
+        ...(combined
+          ? { freePages: bw.periodLimit, combined: true as const }
+          : {}),
       },
       summary: {
-        bwUsed: useAll || periodKey !== bw.periodKey ? bwUsed : bw.used,
-        bwRemaining:
-          useAll || periodKey !== bw.periodKey
+        bwUsed: detailBwUsed,
+        bwRemaining: combined
+          ? sharedRemaining!
+          : offCurrent
             ? Math.max(0, bw.periodLimit - bwUsed)
             : bw.remaining,
-        colorUsed: useAll || periodKey !== color.periodKey ? colorUsed : color.used,
-        colorRemaining:
-          useAll || periodKey !== color.periodKey
+        colorUsed: detailColorUsed,
+        colorRemaining: combined
+          ? sharedRemaining!
+          : offCurrent
             ? Math.max(0, color.periodLimit - colorUsed)
             : color.remaining,
+        ...(combined
+          ? {
+              pagesUsed,
+              pagesRemaining: sharedRemaining!,
+              pagesLimit: pagesLimit!,
+            }
+          : {}),
       },
       entries: entries.map((entry) => ({
         id: entry.id,

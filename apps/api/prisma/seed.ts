@@ -265,11 +265,13 @@ async function main() {
     update: {},
     create: {
       settingKey: 'society_free_quota_config',
-      description: 'Free print quota for phones on the society list',
+      description: 'Combined free print pages (B/W + color) for phones on the society list',
       settingValue: {
         period: 'daily',
+        freePages: 5,
         freeBwPages: 5,
-        freeColorPages: 0,
+        freeColorPages: 5,
+        combined: true,
       },
     },
   });

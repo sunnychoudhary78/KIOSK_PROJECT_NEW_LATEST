@@ -23,8 +23,8 @@ export type SocietyImportResult = {
 
 export type SocietyPhoneInput = {
   phone: string;
-  name: string;
-  societyName: string;
+  name?: string;
+  societyName?: string;
   color?: SocietyPhoneColor;
 };
 
@@ -95,14 +95,8 @@ export class SocietyPhonesService {
   }
 
   async add(input: SocietyPhoneInput, adminId: string, correlationId?: string) {
-    const name = normalizeName(input.name);
-    if (!name) {
-      throw new AppError('invalid_name', 'Enter a person name for this society number', 400);
-    }
-    const societyName = normalizeName(input.societyName, 160);
-    if (!societyName) {
-      throw new AppError('invalid_society_name', 'Enter the society name', 400);
-    }
+    const name = normalizeName(input.name ?? '');
+    const societyName = normalizeName(input.societyName ?? '', 160);
     const color = normalizeSocietyColor(input.color);
 
     let phone: string;

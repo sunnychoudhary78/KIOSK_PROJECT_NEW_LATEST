@@ -24,7 +24,15 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
-import { Button, Input, PageHeader, Panel, Select } from '../../core/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  Input,
+  PageHeader,
+  Panel,
+  Select,
+} from '../../core/ui/primitives';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { FreePrintUsagePage } from './FreePrintUsagePage';
@@ -36,17 +44,21 @@ type FreeQuotaSaved = {
   period: QuotaPeriod;
   freeBwPages: number;
   freeColorPages: number;
+  freePages?: number;
+  combined?: boolean;
 };
 
 type FreeQuotaForm = {
   period: QuotaPeriod;
   freeBwPages: number | '';
   freeColorPages: number | '';
+  freePages?: number | '';
+  combined?: boolean;
 };
 
 type PlatformSetting = {
   settingKey: string;
-  settingValue: FreeQuotaForm;
+  settingValue: FreeQuotaForm & { freePages?: number };
 };
 
 type UsageSummary = {
@@ -61,15 +73,23 @@ type UsageSummary = {
 type UsageItem = {
   phone: string;
   society?: boolean;
+  combined?: boolean;
   bwUsed: number;
   colorUsed: number;
   bwRemaining: number;
   colorRemaining: number;
   bwLimit?: number;
   colorLimit?: number;
+  pagesLimit?: number | null;
+  pagesRemaining?: number | null;
+  totalUsed?: number;
   exhausted?: boolean;
   lastActivityAt: string | null;
 };
+
+type OverviewAudienceFilter = 'all' | 'society' | 'public';
+type OverviewStatusFilter = 'all' | 'has_remaining' | 'exhausted' | 'used';
+type OverviewSortKey = 'recent' | 'used_desc' | 'remaining_asc';
 
 type UsageListResponse = {
   period: QuotaPeriod;
@@ -95,6 +115,25 @@ const DEFAULT_QUOTA: FreeQuotaSaved = {
   freeBwPages: 5,
   freeColorPages: 0,
 };
+
+const DEFAULT_SOCIETY_QUOTA: FreeQuotaSaved = {
+  period: 'daily',
+  freePages: 5,
+  freeBwPages: 5,
+  freeColorPages: 5,
+  combined: true,
+};
+
+function societyFreePages(value: Pick<FreeQuotaForm, 'freePages' | 'freeBwPages' | 'freeColorPages'>): number {
+  if (value.freePages !== undefined && value.freePages !== '') {
+    return clampPages(value.freePages, DEFAULT_SOCIETY_QUOTA.freePages ?? 5);
+  }
+  return clampPages(
+    (typeof value.freeBwPages === 'number' ? value.freeBwPages : 0) +
+      (typeof value.freeColorPages === 'number' ? value.freeColorPages : 0),
+    DEFAULT_SOCIETY_QUOTA.freePages ?? 5,
+  );
+}
 
 const TABS: Array<{
   id: HubTab;
@@ -197,11 +236,11 @@ function clampPages(value: unknown, fallback: number) {
 }
 
 function quotasEqual(a: FreeQuotaForm, b: FreeQuotaForm) {
-  return (
-    a.period === b.period &&
-    a.freeBwPages === b.freeBwPages &&
-    a.freeColorPages === b.freeColorPages
-  );
+  if (a.period !== b.period) return false;
+  if (a.combined || b.combined) {
+    return societyFreePages(a) === societyFreePages(b);
+  }
+  return a.freeBwPages === b.freeBwPages && a.freeColorPages === b.freeColorPages;
 }
 
 function MiniBar({
@@ -282,14 +321,18 @@ function QuotaEditor({
   value,
   onChange,
   accent,
+  combined = false,
 }: {
   title: string;
   description: string;
   value: FreeQuotaForm;
   onChange: (next: FreeQuotaForm) => void;
   accent: 'sky' | 'emerald';
+  /** Society: one shared free-page pool for B/W + color. */
+  combined?: boolean;
 }) {
   const styles = ACCENT[accent];
+  const combinedPages = value.freePages ?? value.freeBwPages;
   return (
     <div className={cn('space-y-4 rounded-xl border p-4', styles.card)}>
       <div className="flex items-start gap-3">
@@ -301,7 +344,7 @@ function QuotaEditor({
           <p className="mt-1 text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
-      <div className="settings-row">
+      <div className={cn('settings-row', combined && 'sm:grid-cols-2')}>
         <label>
           Period
           <Select
@@ -313,48 +356,87 @@ function QuotaEditor({
             <option value="monthly">Monthly</option>
           </Select>
         </label>
-        <label>
-          Free B/W pages
-          <Input
-            type="number"
-            min={0}
-            max={500}
-            value={value.freeBwPages}
-            onChange={(e) => {
-              const raw = e.target.value;
-              onChange({
-                ...value,
-                freeBwPages: raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
-              });
-            }}
-          />
-        </label>
-        <label>
-          Free color pages
-          <Input
-            type="number"
-            min={0}
-            max={500}
-            value={value.freeColorPages}
-            onChange={(e) => {
-              const raw = e.target.value;
-              onChange({
-                ...value,
-                freeColorPages: raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
-              });
-            }}
-          />
-        </label>
+        {combined ? (
+          <label>
+            Free pages (B/W + color combined)
+            <Input
+              type="number"
+              min={0}
+              max={500}
+              value={combinedPages}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const next = raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0));
+                onChange({
+                  ...value,
+                  freePages: next,
+                  freeBwPages: next,
+                  freeColorPages: next,
+                  combined: true,
+                });
+              }}
+            />
+          </label>
+        ) : (
+          <>
+            <label>
+              Free B/W pages
+              <Input
+                type="number"
+                min={0}
+                max={500}
+                value={value.freeBwPages}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  onChange({
+                    ...value,
+                    freeBwPages: raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
+                  });
+                }}
+              />
+            </label>
+            <label>
+              Free color pages
+              <Input
+                type="number"
+                min={0}
+                max={500}
+                value={value.freeColorPages}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  onChange({
+                    ...value,
+                    freeColorPages: raw === '' ? '' : Math.max(0, Math.min(500, Number(raw) || 0)),
+                  });
+                }}
+              />
+            </label>
+          </>
+        )}
       </div>
+      {combined ? (
+        <p className="text-xs text-muted-foreground">
+          One shared pool — e.g. 10 means any mix of black-and-white and color until 10 pages are used.
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2 text-xs">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-500/10 px-2.5 py-1 text-slate-700 dark:text-slate-300">
-          <Printer className="h-3 w-3" />
-          B/W {value.freeBwPages === '' ? '—' : value.freeBwPages}
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 py-1 text-rose-700 dark:text-rose-300">
-          <Palette className="h-3 w-3" />
-          Color {value.freeColorPages === '' ? '—' : value.freeColorPages}
-        </span>
+        {combined ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-800 dark:text-emerald-300">
+            <Printer className="h-3 w-3" />
+            {combinedPages === '' ? '—' : combinedPages} pages combined
+          </span>
+        ) : (
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-500/10 px-2.5 py-1 text-slate-700 dark:text-slate-300">
+              <Printer className="h-3 w-3" />
+              B/W {value.freeBwPages === '' ? '—' : value.freeBwPages}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 py-1 text-rose-700 dark:text-rose-300">
+              <Palette className="h-3 w-3" />
+              Color {value.freeColorPages === '' ? '—' : value.freeColorPages}
+            </span>
+          </>
+        )}
         <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-amber-800 dark:text-amber-300">
           <CalendarDays className="h-3 w-3" />
           {periodLabel(value.period)}
@@ -374,9 +456,9 @@ export function FreePrintHubPage() {
       : 'overview';
 
   const [publicQuota, setPublicQuota] = useState<FreeQuotaForm>(DEFAULT_QUOTA);
-  const [societyQuota, setSocietyQuota] = useState<FreeQuotaForm>(DEFAULT_QUOTA);
+  const [societyQuota, setSocietyQuota] = useState<FreeQuotaForm>(DEFAULT_SOCIETY_QUOTA);
   const [savedPublicQuota, setSavedPublicQuota] = useState<FreeQuotaForm>(DEFAULT_QUOTA);
-  const [savedSocietyQuota, setSavedSocietyQuota] = useState<FreeQuotaForm>(DEFAULT_QUOTA);
+  const [savedSocietyQuota, setSavedSocietyQuota] = useState<FreeQuotaForm>(DEFAULT_SOCIETY_QUOTA);
   const [quotaError, setQuotaError] = useState<string | null>(null);
   const [quotaSaved, setQuotaSaved] = useState<string | null>(null);
   const [savingQuota, setSavingQuota] = useState(false);
@@ -393,6 +475,10 @@ export function FreePrintHubPage() {
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
   const [quickAddOk, setQuickAddOk] = useState<string | null>(null);
   const [quickAdding, setQuickAdding] = useState(false);
+  const [overviewSearch, setOverviewSearch] = useState('');
+  const [overviewAudience, setOverviewAudience] = useState<OverviewAudienceFilter>('all');
+  const [overviewStatus, setOverviewStatus] = useState<OverviewStatusFilter>('all');
+  const [overviewSort, setOverviewSort] = useState<OverviewSortKey>('recent');
 
   const setTab = useCallback(
     (next: HubTab, extra?: Record<string, string>) => {
@@ -411,7 +497,7 @@ export function FreePrintHubPage() {
   const loadQuotas = useCallback(async () => {
     const result = await apiRequest<{ items: PlatformSetting[] }>('/platform-settings', { token });
     let nextPublic: FreeQuotaForm = { ...DEFAULT_QUOTA };
-    let nextSociety: FreeQuotaForm = { ...DEFAULT_QUOTA };
+    let nextSociety: FreeQuotaForm = { ...DEFAULT_SOCIETY_QUOTA };
     for (const item of result.items) {
       if (item.settingKey === 'print_free_quota_config') {
         nextPublic = {
@@ -421,10 +507,13 @@ export function FreePrintHubPage() {
         };
       }
       if (item.settingKey === 'society_free_quota_config') {
+        const freePages = societyFreePages(item.settingValue);
         nextSociety = {
-          period: item.settingValue.period || DEFAULT_QUOTA.period,
-          freeBwPages: clampPages(item.settingValue.freeBwPages, DEFAULT_QUOTA.freeBwPages),
-          freeColorPages: clampPages(item.settingValue.freeColorPages, DEFAULT_QUOTA.freeColorPages),
+          period: item.settingValue.period || DEFAULT_SOCIETY_QUOTA.period,
+          freePages,
+          freeBwPages: freePages,
+          freeColorPages: freePages,
+          combined: true,
         };
       }
     }
@@ -486,10 +575,13 @@ export function FreePrintHubPage() {
         freeBwPages: clampPages(publicQuota.freeBwPages, DEFAULT_QUOTA.freeBwPages),
         freeColorPages: clampPages(publicQuota.freeColorPages, DEFAULT_QUOTA.freeColorPages),
       };
+      const societyPages = societyFreePages(societyQuota);
       const nextSociety = {
         period: societyQuota.period,
-        freeBwPages: clampPages(societyQuota.freeBwPages, DEFAULT_QUOTA.freeBwPages),
-        freeColorPages: clampPages(societyQuota.freeColorPages, DEFAULT_QUOTA.freeColorPages),
+        freePages: societyPages,
+        freeBwPages: societyPages,
+        freeColorPages: societyPages,
+        combined: true as const,
       };
       await Promise.all([
         apiRequest('/platform-settings/print_free_quota_config', {
@@ -518,29 +610,36 @@ export function FreePrintHubPage() {
 
   async function quickAddPhone(event: FormEvent) {
     event.preventDefault();
-    if (!quickName.trim()) {
-      setQuickAddError('Enter the person name');
+    const phoneDigits = quickPhone.replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      setQuickAddError('Enter a valid 10-digit Indian mobile number');
       return;
     }
-    if (!quickSocietyName.trim()) {
-      setQuickAddError('Enter the society name');
+    if (quickName.trim().length > 120) {
+      setQuickAddError('Person name must be 120 characters or fewer');
+      return;
+    }
+    if (quickSocietyName.trim().length > 160) {
+      setQuickAddError('Society name must be 160 characters or fewer');
       return;
     }
     setQuickAdding(true);
     setQuickAddError(null);
     setQuickAddOk(null);
+    const person = quickName.trim();
+    const society = quickSocietyName.trim();
     try {
       await apiRequest('/society-phones', {
         method: 'POST',
         token,
         body: {
-          phone: quickPhone.trim(),
-          name: quickName.trim(),
-          societyName: quickSocietyName.trim(),
+          phone: phoneDigits,
+          name: person,
+          societyName: society,
         },
       });
       setQuickAddOk(
-        `${quickName.trim()} · ${quickSocietyName.trim()} · ${quickPhone.trim()} added.`,
+        [person, society, phoneDigits].filter(Boolean).join(' · ') + ' added.',
       );
       setQuickPhone('');
       setQuickName('');
@@ -579,15 +678,62 @@ export function FreePrintHubPage() {
       .slice(0, 6);
   }, [usage]);
 
-  const recentActivity = useMemo(() => {
-    const items = [...(usage?.items ?? [])];
+  const filteredKnownUsage = useMemo(() => {
+    const q = overviewSearch.replace(/\D/g, '');
+    let items = [...(usage?.items ?? [])];
+    if (overviewAudience === 'society') {
+      items = items.filter((item) => item.society);
+    } else if (overviewAudience === 'public') {
+      items = items.filter((item) => !item.society);
+    }
+    if (overviewStatus === 'exhausted') {
+      items = items.filter(
+        (item) => item.exhausted || (item.bwRemaining === 0 && item.colorRemaining === 0),
+      );
+    } else if (overviewStatus === 'has_remaining') {
+      items = items.filter(
+        (item) => !(item.exhausted || (item.bwRemaining === 0 && item.colorRemaining === 0)),
+      );
+    } else if (overviewStatus === 'used') {
+      items = items.filter((item) => item.bwUsed + item.colorUsed > 0);
+    }
+    if (q) {
+      items = items.filter((item) => item.phone.replace(/\D/g, '').includes(q));
+    }
     items.sort((a, b) => {
+      const aUsed = a.totalUsed ?? a.bwUsed + a.colorUsed;
+      const bUsed = b.totalUsed ?? b.bwUsed + b.colorUsed;
+      const aLeft =
+        a.pagesRemaining ??
+        (a.combined || a.society
+          ? Math.max(0, (a.pagesLimit ?? a.bwLimit ?? 0) - aUsed)
+          : a.bwRemaining + a.colorRemaining);
+      const bLeft =
+        b.pagesRemaining ??
+        (b.combined || b.society
+          ? Math.max(0, (b.pagesLimit ?? b.bwLimit ?? 0) - bUsed)
+          : b.bwRemaining + b.colorRemaining);
+      if (overviewSort === 'used_desc') return bUsed - aUsed || a.phone.localeCompare(b.phone);
+      if (overviewSort === 'remaining_asc') return aLeft - bLeft || a.phone.localeCompare(b.phone);
       const aTime = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
       const bTime = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
-      return bTime - aTime;
+      return bTime - aTime || a.phone.localeCompare(b.phone);
     });
-    return items.slice(0, 8);
-  }, [usage]);
+    return items;
+  }, [usage, overviewSearch, overviewAudience, overviewStatus, overviewSort]);
+
+  const knownUsageTotals = useMemo(() => {
+    const items = filteredKnownUsage;
+    return {
+      phones: items.length,
+      used: items.reduce((sum, item) => sum + item.bwUsed + item.colorUsed, 0),
+      bw: items.reduce((sum, item) => sum + item.bwUsed, 0),
+      color: items.reduce((sum, item) => sum + item.colorUsed, 0),
+      exhausted: items.filter(
+        (item) => item.exhausted || (item.bwRemaining === 0 && item.colorRemaining === 0),
+      ).length,
+    };
+  }, [filteredKnownUsage]);
 
   const periodCaption = usage
     ? `${periodLabel(usage.period)} · ${usage.currentPeriodKey ?? usage.periodKey}`
@@ -826,14 +972,17 @@ export function FreePrintHubPage() {
                 </button>
               </div>
               <p className="text-2xl font-semibold tracking-tight">
-                <span className="text-slate-800 dark:text-slate-100">{societyQuota.freeBwPages}</span>
-                <span className="text-base font-normal text-muted-foreground"> B/W</span>
-                <span className="mx-2 text-muted-foreground">·</span>
-                <span className="text-rose-700 dark:text-rose-300">{societyQuota.freeColorPages}</span>
-                <span className="text-base font-normal text-muted-foreground"> Color</span>
+                <span className="text-slate-800 dark:text-slate-100">
+                  {societyFreePages(societyQuota)}
+                </span>
+                <span className="text-base font-normal text-muted-foreground">
+                  {' '}
+                  pages combined
+                </span>
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                {periodLabel(societyQuota.period)} reset · Also DigiLocker / Wellbeing / Astrology
+                {periodLabel(societyQuota.period)} reset · B/W + color share one pool · Also
+                DigiLocker / Wellbeing / Astrology
               </p>
             </div>
 
@@ -848,30 +997,27 @@ export function FreePrintHubPage() {
                 <Input
                   value={quickName}
                   onChange={(e) => setQuickName(e.target.value)}
-                  placeholder="Person name"
-                  required
+                  placeholder="Person name (optional)"
+                  maxLength={120}
                 />
                 <Input
                   value={quickSocietyName}
                   onChange={(e) => setQuickSocietyName(e.target.value)}
-                  placeholder="Society name"
-                  required
+                  placeholder="Society name (optional)"
+                  maxLength={160}
                 />
                 <Input
                   value={quickPhone}
                   onChange={(e) => setQuickPhone(e.target.value)}
                   placeholder="10-digit mobile"
+                  inputMode="numeric"
+                  maxLength={14}
                   required
                 />
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="submit"
-                    disabled={
-                      quickAdding ||
-                      quickPhone.trim().length === 0 ||
-                      quickName.trim().length === 0 ||
-                      quickSocietyName.trim().length === 0
-                    }
+                    disabled={quickAdding || quickPhone.replace(/\D/g, '').length < 10}
                   >
                     <Plus className="mr-1.5 h-3.5 w-3.5" />
                     {quickAdding ? 'Adding…' : 'Add number'}
@@ -888,7 +1034,7 @@ export function FreePrintHubPage() {
           </div>
 
           <Panel
-            title="Recent free-page activity"
+            title="Known free-page data"
             actions={
               <button
                 type="button"
@@ -899,68 +1045,177 @@ export function FreePrintHubPage() {
               </button>
             }
           >
-            {recentActivity.length === 0 ? (
-              <p className="muted">No free-page usage in the current period yet.</p>
+            <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-end">
+                <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
+                  Search phone
+                  <Input
+                    value={overviewSearch}
+                    onChange={(e) => setOverviewSearch(e.target.value)}
+                    placeholder="Digits…"
+                  />
+                </label>
+                <label className="flex min-w-[9rem] flex-col gap-1 text-xs font-medium text-muted-foreground">
+                  Sort
+                  <Select
+                    value={overviewSort}
+                    onChange={(e) => setOverviewSort(e.target.value as OverviewSortKey)}
+                  >
+                    <option value="recent">Most recent</option>
+                    <option value="used_desc">Most pages used</option>
+                    <option value="remaining_asc">Least remaining</option>
+                  </Select>
+                </label>
+              </div>
+              <div className="flex flex-col gap-2">
+                <FilterChips
+                  value={overviewAudience}
+                  onChange={(value) => setOverviewAudience(value as OverviewAudienceFilter)}
+                  options={[
+                    { value: 'all', label: 'All' },
+                    { value: 'society', label: 'Society' },
+                    { value: 'public', label: 'Public' },
+                  ]}
+                />
+                <FilterChips
+                  value={overviewStatus}
+                  onChange={(value) => setOverviewStatus(value as OverviewStatusFilter)}
+                  options={[
+                    { value: 'all', label: 'Any status' },
+                    { value: 'used', label: 'Used pages' },
+                    { value: 'has_remaining', label: 'Has remaining' },
+                    { value: 'exhausted', label: 'Exhausted' },
+                  ]}
+                />
+              </div>
+            </div>
+
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                Showing{' '}
+                <span className="font-semibold tabular-nums text-foreground">
+                  {knownUsageTotals.phones}
+                </span>{' '}
+                phones ·{' '}
+                <span className="font-semibold tabular-nums text-foreground">
+                  {knownUsageTotals.used}
+                </span>{' '}
+                pages used ({knownUsageTotals.bw} B/W · {knownUsageTotals.color} color)
+                {knownUsageTotals.exhausted > 0
+                  ? ` · ${knownUsageTotals.exhausted} exhausted`
+                  : null}
+              </span>
+              {overviewSearch || overviewAudience !== 'all' || overviewStatus !== 'all' ? (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:underline"
+                  onClick={() => {
+                    setOverviewSearch('');
+                    setOverviewAudience('all');
+                    setOverviewStatus('all');
+                    setOverviewSort('recent');
+                  }}
+                >
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
+
+            {filteredKnownUsage.length === 0 ? (
+              <EmptyState
+                title="No matching free-page data"
+                description="Try another audience, status, or phone search. Data appears after free pages are reserved or consumed."
+              />
             ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Phone</th>
-                    <th>Audience</th>
-                    <th>B/W</th>
-                    <th>Color</th>
-                    <th>Last activity</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentActivity.map((item) => {
-                    const exhausted =
-                      item.exhausted ?? (item.bwRemaining === 0 && item.colorRemaining === 0);
-                    return (
-                      <tr key={item.phone}>
-                        <td className="font-mono text-sm font-medium">{item.phone}</td>
-                        <td>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <Badge variant={item.society ? 'success' : 'secondary'}>
-                              {item.society ? 'Society' : 'Public'}
-                            </Badge>
-                            {exhausted ? <Badge variant="warning">Exhausted</Badge> : null}
-                          </div>
-                        </td>
-                        <td>
-                          <MiniBar
-                            used={item.bwUsed}
-                            limit={item.bwLimit ?? item.bwUsed + item.bwRemaining}
-                            tone="slate"
-                          />
-                        </td>
-                        <td>
-                          <MiniBar
-                            used={item.colorUsed}
-                            limit={item.colorLimit ?? item.colorUsed + item.colorRemaining}
-                            tone="rose"
-                          />
-                        </td>
-                        <td className="whitespace-nowrap text-muted-foreground">
-                          {item.lastActivityAt
-                            ? new Date(item.lastActivityAt).toLocaleString()
-                            : '—'}
-                        </td>
-                        <td>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => setTab('usage', { q: item.phone })}
-                          >
-                            Track
-                          </Button>
-                        </td>
+              <div className="overflow-hidden rounded-lg border border-border">
+                <div className="max-h-[24rem] overflow-auto">
+                  <table className="table w-full">
+                    <thead className="sticky top-0 z-[1]">
+                      <tr className="bg-slate-50/95 shadow-[inset_0_-1px_0_0_var(--border)]">
+                        <th>Phone</th>
+                        <th>Audience</th>
+                        <th>B/W</th>
+                        <th>Color</th>
+                        <th className="text-right">Used</th>
+                        <th>Last activity</th>
+                        <th />
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {filteredKnownUsage.map((item) => {
+                        const combined = item.combined || item.society;
+                        const used = item.totalUsed ?? item.bwUsed + item.colorUsed;
+                        const pagesLimit =
+                          item.pagesLimit ??
+                          item.bwLimit ??
+                          item.bwUsed + item.bwRemaining;
+                        const exhausted =
+                          item.exhausted ??
+                          (combined
+                            ? used >= pagesLimit
+                            : item.bwRemaining === 0 && item.colorRemaining === 0);
+                        return (
+                          <tr key={item.phone}>
+                            <td className="font-mono text-sm font-medium">{item.phone}</td>
+                            <td>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Badge variant={item.society ? 'success' : 'secondary'}>
+                                  {item.society ? 'Society' : 'Public'}
+                                </Badge>
+                                {combined ? (
+                                  <Badge variant="secondary">
+                                    {used}/{pagesLimit} combined
+                                  </Badge>
+                                ) : null}
+                                {exhausted ? <Badge variant="warning">Exhausted</Badge> : null}
+                              </div>
+                            </td>
+                            <td>
+                              <MiniBar
+                                used={item.bwUsed}
+                                limit={
+                                  combined
+                                    ? pagesLimit
+                                    : (item.bwLimit ?? item.bwUsed + item.bwRemaining)
+                                }
+                                tone="slate"
+                              />
+                            </td>
+                            <td>
+                              <MiniBar
+                                used={item.colorUsed}
+                                limit={
+                                  combined
+                                    ? pagesLimit
+                                    : (item.colorLimit ?? item.colorUsed + item.colorRemaining)
+                                }
+                                tone="rose"
+                              />
+                            </td>
+                            <td className="text-right text-sm font-semibold tabular-nums">
+                              {used}
+                            </td>
+                            <td className="whitespace-nowrap text-muted-foreground">
+                              {item.lastActivityAt
+                                ? new Date(item.lastActivityAt).toLocaleString()
+                                : '—'}
+                            </td>
+                            <td>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setTab('usage', { q: item.phone })}
+                              >
+                                Track
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </Panel>
 
@@ -1010,10 +1265,11 @@ export function FreePrintHubPage() {
               />
               <QuotaEditor
                 title="Society list"
-                description="Listed numbers. Also gates free DigiLocker / Wellbeing / Astrology when the full job fits."
+                description="Listed numbers share one free-page pool for B/W and color. Also gates DigiLocker / Wellbeing / Astrology when the full job fits."
                 value={societyQuota}
                 onChange={setSocietyQuota}
                 accent="emerald"
+                combined={true}
               />
             </div>
 

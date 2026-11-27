@@ -19,12 +19,15 @@ type UsageItem = {
   phone: string;
   periodKey?: string;
   society?: boolean;
+  combined?: boolean;
   bwUsed: number;
   bwRemaining: number;
   colorUsed: number;
   colorRemaining: number;
   bwLimit?: number;
   colorLimit?: number;
+  pagesLimit?: number | null;
+  pagesRemaining?: number | null;
   totalUsed?: number;
   exhausted?: boolean;
   lastActivityAt: string | null;
@@ -48,7 +51,12 @@ type UsageListResponse = {
   societyPeriodKey?: string;
   availablePeriodKeys?: string[];
   limits: { freeBwPages: number; freeColorPages: number };
-  societyLimits?: { freeBwPages: number; freeColorPages: number };
+  societyLimits?: {
+    freeBwPages: number;
+    freeColorPages: number;
+    freePages?: number;
+    combined?: boolean;
+  };
   summary?: UsageSummary;
   total?: number;
   truncated?: boolean;
@@ -320,7 +328,7 @@ export function FreePrintUsagePage({ embedded = false }: FreePrintUsagePageProps
             : `${periodLabel(data.period)} · ${data.periodKey}`,
         `Public free B/W ${data.limits.freeBwPages} / Color ${data.limits.freeColorPages}`,
         data.societyLimits
-          ? `Society B/W ${data.societyLimits.freeBwPages} / Color ${data.societyLimits.freeColorPages}`
+          ? `Society ${data.societyLimits.freePages ?? data.societyLimits.freeBwPages} pages combined`
           : null,
       ]
         .filter(Boolean)
@@ -471,7 +479,7 @@ export function FreePrintUsagePage({ embedded = false }: FreePrintUsagePageProps
                 }.`
               : `Historical period · ${periodFilter}.`}
           {data?.societyLimits
-            ? ` Society quota: ${periodLabel(data.societyPeriod ?? data.period)} · B/W ${data.societyLimits.freeBwPages} · Color ${data.societyLimits.freeColorPages}.`
+            ? ` Society quota: ${periodLabel(data.societyPeriod ?? data.period)} · ${data.societyLimits.freePages ?? data.societyLimits.freeBwPages} pages combined (B/W + color).`
             : null}
           {data?.truncated ? ` Showing first ${data.items.length} of ${data.total}.` : null}
         </p>
@@ -503,10 +511,22 @@ export function FreePrintUsagePage({ embedded = false }: FreePrintUsagePageProps
             </thead>
             <tbody>
               {visible.map((item) => {
-                const bwLimit = item.bwLimit ?? item.bwUsed + item.bwRemaining;
-                const colorLimit = item.colorLimit ?? item.colorUsed + item.colorRemaining;
+                const combined = item.combined || item.society;
+                const pagesLimit =
+                  item.pagesLimit ??
+                  item.bwLimit ??
+                  item.bwUsed + item.colorUsed + (item.pagesRemaining ?? item.bwRemaining);
+                const bwLimit = combined
+                  ? pagesLimit
+                  : (item.bwLimit ?? item.bwUsed + item.bwRemaining);
+                const colorLimit = combined
+                  ? pagesLimit
+                  : (item.colorLimit ?? item.colorUsed + item.colorRemaining);
                 const exhausted =
-                  item.exhausted ?? (item.bwRemaining === 0 && item.colorRemaining === 0);
+                  item.exhausted ??
+                  (combined
+                    ? item.bwUsed + item.colorUsed >= pagesLimit
+                    : item.bwRemaining === 0 && item.colorRemaining === 0);
                 const rowKey = `${item.phone}::${item.periodKey ?? periodFilter}`;
                 return (
                   <Fragment key={rowKey}>
@@ -517,6 +537,12 @@ export function FreePrintUsagePage({ embedded = false }: FreePrintUsagePageProps
                           <Badge variant={item.society ? 'success' : 'secondary'}>
                             {item.society ? 'Society' : 'Public'}
                           </Badge>
+                          {combined ? (
+                            <Badge variant="secondary">
+                              {(item.totalUsed ?? item.bwUsed + item.colorUsed)}/{pagesLimit}{' '}
+                              combined
+                            </Badge>
+                          ) : null}
                           {exhausted ? <Badge variant="warning">Exhausted</Badge> : null}
                         </div>
                       </td>

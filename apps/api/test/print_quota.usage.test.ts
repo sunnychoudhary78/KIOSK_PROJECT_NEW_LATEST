@@ -28,7 +28,13 @@ function setup(
   }> = [],
   options: {
     societyPhones?: string[];
-    societyConfig?: { period: 'daily' | 'weekly' | 'monthly'; freeBwPages: number; freeColorPages: number };
+    societyConfig?: {
+      period: 'daily' | 'weekly' | 'monthly';
+      freeBwPages?: number;
+      freeColorPages?: number;
+      freePages?: number;
+      combined?: boolean;
+    };
   } = {},
 ) {
   const globalConfig = {
@@ -301,7 +307,7 @@ describe('PrintQuotaService.listUsage', () => {
       ],
       {
         societyPhones: [PHONE_A],
-        societyConfig: { period: 'monthly', freeBwPages: 30, freeColorPages: 1 },
+        societyConfig: { period: 'monthly', freePages: 30, combined: true },
       },
     );
 
@@ -311,9 +317,11 @@ describe('PrintQuotaService.listUsage', () => {
     const society = result.items.find((item) => item.phone === PHONE_A);
     const publicPhone = result.items.find((item) => item.phone === PHONE_B);
     expect(society?.society).toBe(true);
+    expect(society?.combined).toBe(true);
     expect(society?.bwUsed).toBe(2);
     expect(society?.bwRemaining).toBe(28);
     expect(society?.bwLimit).toBe(30);
+    expect(society?.pagesLimit).toBe(30);
     expect(publicPhone?.society).toBe(false);
     expect(publicPhone?.bwRemaining).toBe(4);
   });
@@ -368,17 +376,24 @@ describe('PrintQuotaService.getPhoneUsageDetail', () => {
       ],
       {
         societyPhones: [PHONE_A],
-        societyConfig: { period: 'monthly', freeBwPages: 30, freeColorPages: 4 },
+        societyConfig: { period: 'monthly', freePages: 30, combined: true },
       },
     );
 
     const detail = await service.getPhoneUsageDetail(PHONE_A, { now: NOW });
     expect(detail.society).toBe(true);
+    expect(detail.combined).toBe(true);
     expect(detail.period).toBe('monthly');
     expect(detail.periodKey).toBe(monthlyKey);
-    expect(detail.limits).toEqual({ freeBwPages: 30, freeColorPages: 4 });
+    expect(detail.limits).toEqual({
+      freeBwPages: 30,
+      freeColorPages: 30,
+      freePages: 30,
+      combined: true,
+    });
     expect(detail.summary.bwUsed).toBe(4);
     expect(detail.summary.bwRemaining).toBe(26);
+    expect(detail.summary.pagesRemaining).toBe(26);
     expect(detail.entries).toHaveLength(1);
     expect(detail.entries[0]?.periodKey).toBe(monthlyKey);
   });

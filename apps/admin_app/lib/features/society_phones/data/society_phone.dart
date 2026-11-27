@@ -1,45 +1,50 @@
 class SocietyQuota {
   const SocietyQuota({
     required this.period,
-    required this.freeBwPages,
-    required this.freeColorPages,
+    required this.freePages,
   });
 
   final String period;
-  final int freeBwPages;
-  final int freeColorPages;
+  /// Combined free pages shared by B/W and color.
+  final int freePages;
+
+  int get freeBwPages => freePages;
+  int get freeColorPages => freePages;
 
   static const defaults = SocietyQuota(
     period: 'daily',
-    freeBwPages: 5,
-    freeColorPages: 0,
+    freePages: 5,
   );
 
   factory SocietyQuota.fromJson(Map<String, dynamic> json) {
     final period = json['period']?.toString();
+    final freePagesRaw = json['freePages'];
+    final freePages = freePagesRaw != null
+        ? _pages(freePagesRaw, defaults.freePages)
+        : _pages(json['freeBwPages'], 0) + _pages(json['freeColorPages'], 0);
     return SocietyQuota(
       period: period == 'weekly' || period == 'monthly' ? period! : 'daily',
-      freeBwPages: _pages(json['freeBwPages'], defaults.freeBwPages),
-      freeColorPages: _pages(json['freeColorPages'], defaults.freeColorPages),
+      freePages: freePages > 0 ? freePages : defaults.freePages,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'period': period,
-        'freeBwPages': freeBwPages,
-        'freeColorPages': freeColorPages,
+        'freePages': freePages,
+        'freeBwPages': freePages,
+        'freeColorPages': freePages,
+        'combined': true,
       };
 
   @override
   bool operator ==(Object other) {
     return other is SocietyQuota &&
         other.period == period &&
-        other.freeBwPages == freeBwPages &&
-        other.freeColorPages == freeColorPages;
+        other.freePages == freePages;
   }
 
   @override
-  int get hashCode => Object.hash(period, freeBwPages, freeColorPages);
+  int get hashCode => Object.hash(period, freePages);
 }
 
 class SocietyPhone {
@@ -82,23 +87,21 @@ int? parseQuotaPages(String raw) {
 }
 
 String? validateSocietyPhone(String raw) {
-  final phone = raw.trim();
-  if (phone.length < 8 || phone.length > 20) {
-    return 'Enter a phone number (8–20 characters).';
+  final digits = raw.replaceAll(RegExp(r'\D'), '');
+  if (!RegExp(r'^[6-9]\d{9}$').hasMatch(digits)) {
+    return 'Enter a valid 10-digit Indian mobile number.';
   }
   return null;
 }
 
 String? validateSocietyPersonName(String raw) {
   final name = raw.trim();
-  if (name.isEmpty) return 'Enter the person name.';
   if (name.length > 120) return 'Person name must be 120 characters or fewer.';
   return null;
 }
 
 String? validateSocietyName(String raw) {
   final name = raw.trim();
-  if (name.isEmpty) return 'Enter the society name.';
   if (name.length > 160) return 'Society name must be 160 characters or fewer.';
   return null;
 }

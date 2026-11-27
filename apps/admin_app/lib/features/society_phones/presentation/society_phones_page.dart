@@ -19,8 +19,7 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
   final _phone = TextEditingController();
   final _name = TextEditingController();
   final _societyName = TextEditingController();
-  final _bw = TextEditingController();
-  final _color = TextEditingController();
+  final _pages = TextEditingController();
   var _period = SocietyQuota.defaults.period;
   var _seeded = false;
 
@@ -37,15 +36,13 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
     _phone.dispose();
     _name.dispose();
     _societyName.dispose();
-    _bw.dispose();
-    _color.dispose();
+    _pages.dispose();
     super.dispose();
   }
 
   void _applyQuota(SocietyQuota quota) {
     _period = quota.period;
-    _bw.text = '${quota.freeBwPages}';
-    _color.text = '${quota.freeColorPages}';
+    _pages.text = '${quota.freePages}';
   }
 
   @override
@@ -89,7 +86,7 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
                     Text('Free limit', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 4),
                     const Text(
-                      'Listed numbers use this free limit. The kiosk session cap and the night free-disabled window still apply.',
+                      'Listed numbers share one free-page pool for B/W and color. The kiosk session cap and night free-disabled window still apply.',
                       style: TextStyle(color: AdminColors.muted),
                     ),
                     const SizedBox(height: 12),
@@ -108,19 +105,13 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
                     ),
                     const SizedBox(height: 12),
                     TextField(
-                      controller: _bw,
+                      controller: _pages,
                       enabled: canWrite,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(labelText: 'Free black-and-white pages'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _color,
-                      enabled: canWrite,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(labelText: 'Free color pages'),
+                      decoration: const InputDecoration(
+                        labelText: 'Free pages (B/W + color combined)',
+                      ),
                     ),
                     if (canWrite) ...[
                       const SizedBox(height: 16),
@@ -129,8 +120,7 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
                             ? null
                             : () => ref.read(societyPhonesProvider.notifier).saveQuota(
                                   period: _period,
-                                  bwRaw: _bw.text,
-                                  colorRaw: _color.text,
+                                  pagesRaw: _pages.text,
                                 ),
                         child: Text(state.savingQuota ? 'Saving…' : 'Save limit'),
                       ),
@@ -152,19 +142,20 @@ class _SocietyPhonesPageState extends ConsumerState<SocietyPhonesPage> {
                       TextField(
                         controller: _name,
                         textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(labelText: 'Person name'),
+                        decoration: const InputDecoration(labelText: 'Person name (optional)'),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _societyName,
                         textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(labelText: 'Society name'),
+                        decoration: const InputDecoration(labelText: 'Society name (optional)'),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _phone,
                         keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(labelText: 'Mobile number'),
+                        maxLength: 14,
+                        decoration: const InputDecoration(labelText: '10-digit mobile number'),
                       ),
                       const SizedBox(height: 12),
                       FilledButton(
