@@ -500,14 +500,21 @@ class _BmiScale3DPainter extends CustomPainter {
 
 /// 3D Health Hero Illustration: Glossy Red Heart + ECG Pulse Wave + Athena Kiosk Terminal.
 class HealthHeroIllustration extends StatelessWidget {
-  const HealthHeroIllustration({super.key});
+  const HealthHeroIllustration({
+    super.key,
+    this.width = 280,
+    this.height = 120,
+  });
+
+  final double width;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 280,
-      height: 120,
-      child: CustomPaint(
+    return SizedBox(
+      width: width,
+      height: height,
+      child: const CustomPaint(
         painter: _HealthHeroPainter(),
       ),
     );

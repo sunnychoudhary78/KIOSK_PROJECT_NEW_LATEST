@@ -473,7 +473,12 @@ class _WellBeingPageState extends ConsumerState<WellBeingPage> {
               )
             : const _PartnerPill(),
         body: Padding(
-          padding: const EdgeInsets.fromLTRB(32, 10, 32, 12),
+          padding: EdgeInsets.fromLTRB(
+            state.phase == WellBeingPhase.choose ? 40 : 32,
+            state.phase == WellBeingPhase.choose ? 16 : 10,
+            state.phase == WellBeingPhase.choose ? 40 : 32,
+            state.phase == WellBeingPhase.choose ? 16 : 12,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -653,282 +658,322 @@ class _ChooseView extends StatelessWidget {
   final VoidCallback onColorVision;
   final VoidCallback onBmi;
 
+  static double _scaleOf(Size size) {
+    final widthScale = size.width / SkpTokens.displayWidth;
+    final heightScale = size.height / SkpTokens.displayHeight;
+    return (widthScale < heightScale ? widthScale : heightScale).clamp(0.9, 1.45);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screen = MediaQuery.sizeOf(context);
+    final scale = _scaleOf(screen);
+    double s(double v) => v * scale;
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. Hero Header + 3D Health Terminal Illustration
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final graphicSize = s(88).clamp(72.0, 120.0);
+        final gap = s(14).clamp(10.0, 20.0);
+        final titleSize = s(42).clamp(34.0, 56.0);
+        final subtitleSize = s(18).clamp(15.0, 22.0);
+        final sectionSize = s(20).clamp(16.0, 24.0);
+        final heroW = s(360).clamp(280.0, 480.0);
+        final heroH = s(150).clamp(120.0, 200.0);
+        final showHero = constraints.maxWidth >= 980;
+
+        Widget measurementGrid({required bool expand}) {
+          final rowGap = SizedBox(width: gap);
+          final colGap = SizedBox(height: gap);
+
+          Widget cardRow(List<Widget> cards) {
+            final row = Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: cards[0]),
+                rowGap,
+                Expanded(child: cards[1]),
+              ],
+            );
+            return expand ? Expanded(child: row) : IntrinsicHeight(child: row);
+          }
+
+          final top = cardRow([
+            _MeasurementCard(
+              title: 'Blood Oxygen',
+              subtitle: 'Measure SpO2 and heart rate with your fingertip.',
+              graphic: Oximeter3DGraphic(size: graphicSize),
+              accentColor: const Color(0xFF0284C7),
+              cardGradient: isDark
+                  ? const LinearGradient(
+                      colors: [Color(0xFF131D33), Color(0xFF172554)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFFFFFFFF), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
+                      stops: [0.35, 0.75, 1.0],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              borderColor: isDark ? const Color(0xFF0369A1) : const Color(0xFFBAE6FD),
+              shadowColor: const Color(0xFF0284C7),
+              tags: const [
+                (icon: Icons.water_drop_outlined, label: 'SpO₂ (Oxygen Level)'),
+                (icon: Icons.favorite_border_rounded, label: 'Heart Rate'),
+              ],
+              onTap: onOxygen,
+              isDark: isDark,
+              scale: scale,
+            ),
+            _MeasurementCard(
+              title: 'Temperature',
+              subtitle: 'Quick contactless body temperature reading.',
+              graphic: Thermometer3DGraphic(size: graphicSize),
+              accentColor: const Color(0xFFE11D48),
+              cardGradient: isDark
+                  ? const LinearGradient(
+                      colors: [Color(0xFF241523), Color(0xFF3B1832)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFFFFFFFF), Color(0xFFFDF2F8), Color(0xFFFCE7F3)],
+                      stops: [0.35, 0.75, 1.0],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              borderColor: isDark ? const Color(0xFF9F1239) : const Color(0xFFFBCFE8),
+              shadowColor: const Color(0xFFE11D48),
+              tags: const [
+                (icon: Icons.thermostat_outlined, label: 'Forehead'),
+              ],
+              onTap: onTemperature,
+              isDark: isDark,
+              scale: scale,
+            ),
+          ]);
+
+          final bottom = cardRow([
+            _MeasurementCard(
+              title: 'Color Vision Test',
+              subtitle: 'Short red–green screening with 10 dotted plates.',
+              graphic: ColorVisionPlateView(
+                plate: ColorVisionBattery.plates.first,
+                size: graphicSize * 0.95,
+              ),
+              accentColor: const Color(0xFF059669),
+              cardGradient: isDark
+                  ? const LinearGradient(
+                      colors: [Color(0xFF10241C), Color(0xFF14532D)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFFFFFFFF), Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+                      stops: [0.35, 0.75, 1.0],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              borderColor: isDark ? const Color(0xFF166534) : const Color(0xFFA7F3D0),
+              shadowColor: const Color(0xFF059669),
+              tags: const [
+                (icon: Icons.visibility_outlined, label: '10 plates'),
+                (icon: Icons.description_outlined, label: 'Printable'),
+              ],
+              onTap: onColorVision,
+              isDark: isDark,
+              scale: scale,
+            ),
+            _MeasurementCard(
+              title: 'BMI Calculator',
+              subtitle: 'Enter height and weight for a quick BMI result.',
+              graphic: BmiScale3DGraphic(size: graphicSize),
+              accentColor: const Color(0xFF7C3AED),
+              cardGradient: isDark
+                  ? const LinearGradient(
+                      colors: [Color(0xFF1A1030), Color(0xFF4C1D95)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFFFFFFFF), Color(0xFFF5F3FF), Color(0xFFEDE9FE)],
+                      stops: [0.35, 0.75, 1.0],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              borderColor: isDark ? const Color(0xFF6D28D9) : const Color(0xFFDDD6FE),
+              shadowColor: const Color(0xFF7C3AED),
+              tags: const [
+                (icon: Icons.straighten_outlined, label: 'cm + kg'),
+                (icon: Icons.bolt_rounded, label: 'Instant'),
+              ],
+              onTap: onBmi,
+              isDark: isDark,
+              scale: scale,
+            ),
+          ]);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          'Check Your ',
-                          style: TextStyle(
-                            fontFamily: 'PlusJakartaSans',
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                            color: isDark ? Colors.white : const Color(0xFF0F172A),
-                          ),
-                        ),
-                        ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [Color(0xFFE11D48), Color(0xFFF43F5E), Color(0xFFEC4899)],
-                          ).createShader(bounds),
-                          child: const Text(
-                            'Health',
+              top,
+              colGap,
+              bottom,
+            ],
+          );
+        }
+
+        final content = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            'Check Your ',
                             style: TextStyle(
                               fontFamily: 'PlusJakartaSans',
-                              fontSize: 32,
+                              fontSize: titleSize,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: -0.6,
-                              color: Colors.white,
+                              letterSpacing: -0.8,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Quick, safe and non-invasive health measurements.',
-                      style: TextStyle(
-                        fontFamily: 'PlusJakartaSans',
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: 44,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFE11D48), Color(0xFFF43F5E)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFF43F5E).withValues(alpha: 0.45),
-                            blurRadius: 8,
-                            offset: const Offset(0, 1),
+                          ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Color(0xFFE11D48), Color(0xFFF43F5E), Color(0xFFEC4899)],
+                            ).createShader(bounds),
+                            child: Text(
+                              'Health',
+                              style: TextStyle(
+                                fontFamily: 'PlusJakartaSans',
+                                fontSize: titleSize,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.8,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        _FeaturePill(
-                          icon: Icons.bolt_rounded,
-                          iconColor: const Color(0xFFD946EF),
-                          title: 'Quick & Easy',
-                          subtitle: 'Get results in seconds',
-                          isDark: isDark,
+                      SizedBox(height: s(6)),
+                      Text(
+                        'Quick, safe and non-invasive health measurements.',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: subtitleSize,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                         ),
-                        const SizedBox(width: 8),
-                        _FeaturePill(
-                          icon: Icons.shield_outlined,
-                          iconColor: const Color(0xFFE11D48),
-                          title: 'Safe & Contactless',
-                          subtitle: 'Hygienic and user-friendly',
-                          isDark: isDark,
-                        ),
-                        const SizedBox(width: 8),
-                        _FeaturePill(
-                          icon: Icons.bar_chart_rounded,
-                          iconColor: const Color(0xFF8B5CF6),
-                          title: 'Instant Results',
-                          subtitle: 'On-screen measurement',
-                          isDark: isDark,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              const HealthHeroIllustration(),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          const _WellBeingPrivacyBanner(),
-
-          const SizedBox(height: 14),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(width: 36, height: 1.5, color: const Color(0xFFF43F5E)),
-              const SizedBox(width: 12),
-              Text(
-                'Choose a Measurement',
-                style: TextStyle(
-                  fontFamily: 'PlusJakartaSans',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.2,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(width: 36, height: 1.5, color: const Color(0xFFF43F5E)),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _MeasurementCard(
-                    title: 'Blood Oxygen',
-                    subtitle: 'Measure SpO2 and heart rate with your fingertip.',
-                    graphic: const Oximeter3DGraphic(size: 64),
-                    accentColor: const Color(0xFF0284C7),
-                    cardGradient: isDark
-                        ? const LinearGradient(
-                            colors: [Color(0xFF131D33), Color(0xFF172554)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : const LinearGradient(
-                            colors: [Color(0xFFFFFFFF), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
-                            stops: [0.35, 0.75, 1.0],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+                      ),
+                      SizedBox(height: s(10)),
+                      Container(
+                        width: s(56),
+                        height: s(5),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(3),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFE11D48), Color(0xFFF43F5E)],
                           ),
-                    borderColor: isDark ? const Color(0xFF0369A1) : const Color(0xFFBAE6FD),
-                    shadowColor: const Color(0xFF0284C7),
-                    tags: const [
-                      (icon: Icons.water_drop_outlined, label: 'SpO₂ (Oxygen Level)'),
-                      (icon: Icons.favorite_border_rounded, label: 'Heart Rate'),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFF43F5E).withValues(alpha: 0.45),
+                              blurRadius: 8,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: s(14)),
+                      Row(
+                        children: [
+                          _FeaturePill(
+                            icon: Icons.bolt_rounded,
+                            iconColor: const Color(0xFFD946EF),
+                            title: 'Quick & Easy',
+                            subtitle: 'Get results in seconds',
+                            isDark: isDark,
+                            scale: scale,
+                          ),
+                          SizedBox(width: gap * 0.7),
+                          _FeaturePill(
+                            icon: Icons.shield_outlined,
+                            iconColor: const Color(0xFFE11D48),
+                            title: 'Safe & Contactless',
+                            subtitle: 'Hygienic and user-friendly',
+                            isDark: isDark,
+                            scale: scale,
+                          ),
+                          SizedBox(width: gap * 0.7),
+                          _FeaturePill(
+                            icon: Icons.bar_chart_rounded,
+                            iconColor: const Color(0xFF8B5CF6),
+                            title: 'Instant Results',
+                            subtitle: 'On-screen measurement',
+                            isDark: isDark,
+                            scale: scale,
+                          ),
+                        ],
+                      ),
                     ],
-                    onTap: onOxygen,
-                    isDark: isDark,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MeasurementCard(
-                    title: 'Temperature',
-                    subtitle: 'Quick contactless body temperature reading.',
-                    graphic: const Thermometer3DGraphic(size: 64),
-                    accentColor: const Color(0xFFE11D48),
-                    cardGradient: isDark
-                        ? const LinearGradient(
-                            colors: [Color(0xFF241523), Color(0xFF3B1832)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : const LinearGradient(
-                            colors: [Color(0xFFFFFFFF), Color(0xFFFDF2F8), Color(0xFFFCE7F3)],
-                            stops: [0.35, 0.75, 1.0],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                    borderColor: isDark ? const Color(0xFF9F1239) : const Color(0xFFFBCFE8),
-                    shadowColor: const Color(0xFFE11D48),
-                    tags: const [
-                      (icon: Icons.thermostat_outlined, label: 'Forehead'),
-                    ],
-                    onTap: onTemperature,
-                    isDark: isDark,
-                  ),
-                ),
+                if (showHero) ...[
+                  SizedBox(width: s(18)),
+                  HealthHeroIllustration(width: heroW, height: heroH),
+                ],
               ],
             ),
-          ),
-          const SizedBox(height: 10),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            SizedBox(height: gap),
+            _WellBeingPrivacyBanner(scale: scale),
+            SizedBox(height: gap),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Expanded(
-                  child: _MeasurementCard(
-                    title: 'Color Vision Test',
-                    subtitle: 'Short red–green screening with 10 dotted plates.',
-                    graphic: ColorVisionPlateView(
-                      plate: ColorVisionBattery.plates.first,
-                      size: 60,
-                    ),
-                    accentColor: const Color(0xFF059669),
-                    cardGradient: isDark
-                        ? const LinearGradient(
-                            colors: [Color(0xFF10241C), Color(0xFF14532D)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : const LinearGradient(
-                            colors: [Color(0xFFFFFFFF), Color(0xFFECFDF5), Color(0xFFD1FAE5)],
-                            stops: [0.35, 0.75, 1.0],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                    borderColor: isDark ? const Color(0xFF166534) : const Color(0xFFA7F3D0),
-                    shadowColor: const Color(0xFF059669),
-                    tags: const [
-                      (icon: Icons.visibility_outlined, label: '10 plates'),
-                      (icon: Icons.description_outlined, label: 'Printable'),
-                    ],
-                    onTap: onColorVision,
-                    isDark: isDark,
+                Container(width: s(44), height: 2, color: const Color(0xFFF43F5E)),
+                SizedBox(width: s(14)),
+                Text(
+                  'Choose a Measurement',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: sectionSize,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MeasurementCard(
-                    title: 'BMI Calculator',
-                    subtitle: 'Enter height and weight for a quick BMI result.',
-                    graphic: const BmiScale3DGraphic(size: 64),
-                    accentColor: const Color(0xFF7C3AED),
-                    cardGradient: isDark
-                        ? const LinearGradient(
-                            colors: [Color(0xFF1A1030), Color(0xFF4C1D95)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : const LinearGradient(
-                            colors: [Color(0xFFFFFFFF), Color(0xFFF5F3FF), Color(0xFFEDE9FE)],
-                            stops: [0.35, 0.75, 1.0],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                    borderColor: isDark ? const Color(0xFF6D28D9) : const Color(0xFFDDD6FE),
-                    shadowColor: const Color(0xFF7C3AED),
-                    tags: const [
-                      (icon: Icons.straighten_outlined, label: 'cm + kg'),
-                      (icon: Icons.bolt_rounded, label: 'Instant'),
-                    ],
-                    onTap: onBmi,
-                    isDark: isDark,
-                  ),
-                ),
+                SizedBox(width: s(14)),
+                Container(width: s(44), height: 2, color: const Color(0xFFF43F5E)),
               ],
             ),
-          ),
+            SizedBox(height: gap),
+            if (constraints.maxHeight < 560)
+              SizedBox(
+                height: math.max(300.0, constraints.maxHeight * 0.58),
+                child: measurementGrid(expand: true),
+              )
+            else
+              Expanded(child: measurementGrid(expand: true)),
+            SizedBox(height: gap * 0.8),
+            _MedicalDisclaimer(scale: scale),
+          ],
+        );
 
-          const SizedBox(height: 10),
+        if (constraints.maxHeight < 560) {
+          return SingleChildScrollView(child: content);
+        }
 
-          const _MedicalDisclaimer(),
-        ],
-      ),
+        return content;
+      },
     );
   }
 }
@@ -940,6 +985,7 @@ class _FeaturePill extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.isDark,
+    this.scale = 1,
   });
 
   final IconData icon;
@@ -947,15 +993,17 @@ class _FeaturePill extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool isDark;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
+    double s(double v) => v * scale;
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(12)),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E1738) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(s(18)),
           border: Border.all(
             color: isDark ? const Color(0xFF4A3474) : const Color(0xFFE2E8F0),
           ),
@@ -970,14 +1018,14 @@ class _FeaturePill extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: EdgeInsets.all(s(8)),
               decoration: BoxDecoration(
                 color: iconColor.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 16, color: iconColor),
+              child: Icon(icon, size: s(20), color: iconColor),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: s(10)),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -989,7 +1037,7 @@ class _FeaturePill extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
-                      fontSize: 12.5,
+                      fontSize: s(15).clamp(13.0, 18.0),
                       fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
@@ -1000,7 +1048,7 @@ class _FeaturePill extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
-                      fontSize: 10.5,
+                      fontSize: s(12.5).clamp(11.0, 15.0),
                       fontWeight: FontWeight.w500,
                       color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                     ),
@@ -1016,18 +1064,21 @@ class _FeaturePill extends StatelessWidget {
 }
 
 class _WellBeingPrivacyBanner extends StatelessWidget {
-  const _WellBeingPrivacyBanner();
+  const _WellBeingPrivacyBanner({this.scale = 1});
+
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    double s(double v) => v * scale;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: s(18), vertical: s(14)),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF064E3B).withValues(alpha: 0.35) : const Color(0xFFECFDF5),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(s(18)),
         border: Border.all(
           color: isDark ? const Color(0xFF059669).withValues(alpha: 0.45) : const Color(0xFFA7F3D0),
           width: 1.2,
@@ -1036,24 +1087,24 @@ class _WellBeingPrivacyBanner extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(4),
+            padding: EdgeInsets.all(s(6)),
             decoration: BoxDecoration(
               color: const Color(0xFF10B981).withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.verified_user_rounded,
-              color: Color(0xFF059669),
-              size: 18,
+              color: const Color(0xFF059669),
+              size: s(22),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: s(14)),
           Expanded(
             child: Text(
               'We do not save health readings. Measurements stay on this screen only and are cleared when you leave.',
               style: TextStyle(
                 fontFamily: 'PlusJakartaSans',
-                fontSize: 13,
+                fontSize: s(15).clamp(13.0, 18.0),
                 fontWeight: FontWeight.w600,
                 color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF065F46),
                 height: 1.3,
@@ -1078,6 +1129,7 @@ class _MeasurementCard extends StatelessWidget {
     required this.onTap,
     required this.isDark,
     this.tags = const [],
+    this.scale = 1,
   });
 
   final String title;
@@ -1090,39 +1142,43 @@ class _MeasurementCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool isDark;
   final List<({IconData icon, String label})> tags;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+    final radius = s(28).clamp(22.0, 36.0);
+
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(radius),
         gradient: cardGradient,
         border: Border.all(
           color: borderColor.withValues(alpha: isDark ? 0.7 : 0.9),
-          width: 1.2,
+          width: 1.4,
         ),
         boxShadow: [
           BoxShadow(
             color: shadowColor.withValues(alpha: isDark ? 0.22 : 0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+            blurRadius: s(22),
+            offset: Offset(0, s(7)),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(radius),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(radius),
           splashColor: accentColor.withValues(alpha: 0.12),
           highlightColor: accentColor.withValues(alpha: 0.06),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: s(20), vertical: s(18)),
             child: Row(
               children: [
                 graphic,
-                const SizedBox(width: 12),
+                SizedBox(width: s(16)),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1132,36 +1188,36 @@ class _MeasurementCard extends StatelessWidget {
                         title,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 17,
+                          fontSize: s(22).clamp(18.0, 28.0),
                           fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
+                          letterSpacing: -0.4,
                           color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: s(4)),
                       Text(
                         subtitle,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
-                          fontSize: 12,
+                          fontSize: s(14.5).clamp(12.5, 17.0),
                           fontWeight: FontWeight.w500,
                           color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                          height: 1.25,
+                          height: 1.3,
                         ),
                       ),
                       if (tags.isNotEmpty) ...[
-                        const SizedBox(height: 6),
+                        SizedBox(height: s(10)),
                         Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
+                          spacing: s(8),
+                          runSpacing: s(6),
                           children: [
                             for (final tag in tags)
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: s(10),
+                                  vertical: s(5),
                                 ),
                                 decoration: BoxDecoration(
                                   color: isDark
@@ -1177,13 +1233,13 @@ class _MeasurementCard extends StatelessWidget {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(tag.icon, size: 11, color: accentColor),
-                                    const SizedBox(width: 4),
+                                    Icon(tag.icon, size: s(14), color: accentColor),
+                                    SizedBox(width: s(5)),
                                     Text(
                                       tag.label,
                                       style: TextStyle(
                                         fontFamily: 'PlusJakartaSans',
-                                        fontSize: 10.5,
+                                        fontSize: s(12.5).clamp(11.0, 15.0),
                                         fontWeight: FontWeight.w600,
                                         color: isDark
                                             ? const Color(0xFFCBD5E1)
@@ -1199,16 +1255,16 @@ class _MeasurementCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: s(10)),
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: s(48).clamp(40.0, 58.0),
+                  height: s(48).clamp(40.0, 58.0),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isDark ? const Color(0xFF1E293B) : Colors.white,
                     border: Border.all(
                       color: accentColor.withValues(alpha: 0.9),
-                      width: 1.6,
+                      width: 1.8,
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -1221,7 +1277,7 @@ class _MeasurementCard extends StatelessWidget {
                   child: Icon(
                     Icons.arrow_forward_rounded,
                     color: accentColor,
-                    size: 18,
+                    size: s(22).clamp(18.0, 26.0),
                   ),
                 ),
               ],
@@ -1949,7 +2005,9 @@ class _ReferenceCard extends StatelessWidget {
 }
 
 class _MedicalDisclaimer extends StatelessWidget {
-  const _MedicalDisclaimer();
+  const _MedicalDisclaimer({this.scale = 1});
+
+  final double scale;
 
   static const _copy =
       'For general wellness and informational use only. This kiosk is not a medical device '
@@ -1961,11 +2019,12 @@ class _MedicalDisclaimer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    double s(double v) => v * scale;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: s(18), vertical: s(12)),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(s(16)),
         border: Border.all(
           color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
           width: 1.0,
@@ -1976,20 +2035,20 @@ class _MedicalDisclaimer extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(4),
+            padding: EdgeInsets.all(s(5)),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: const Color(0xFF0284C7).withValues(alpha: 0.12),
             ),
-            child: const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
+            child: Icon(Icons.info_outline_rounded, size: s(18), color: const Color(0xFF0284C7)),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: s(12)),
           Expanded(
             child: Text(
               _copy,
               style: TextStyle(
                 fontFamily: 'PlusJakartaSans',
-                fontSize: 11.5,
+                fontSize: s(13).clamp(11.5, 16.0),
                 fontWeight: FontWeight.w500,
                 color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 height: 1.35,

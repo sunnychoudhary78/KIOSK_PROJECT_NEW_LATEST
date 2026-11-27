@@ -132,6 +132,10 @@ type PrintSummary = {
   paidJobs: number;
   mixedJobs: number;
   otherJobs?: number;
+  bwJobs?: number;
+  colorJobs?: number;
+  bwPages?: number;
+  colorPages?: number;
 };
 
 function formatDeltaPct(pct: number | null | undefined): string | null {
@@ -203,6 +207,7 @@ function MetricCard({
   hint,
   deltaPct,
   split,
+  colorSplit,
   icon: Icon,
   tone = 'primary',
 }: {
@@ -212,6 +217,8 @@ function MetricCard({
   deltaPct?: number | null;
   /** Optional free/paid breakdown. Pass `total` when free+paid should equal the headline. */
   split?: { free: number; paid: number; unit?: string; total?: number };
+  /** Optional black-and-white vs color breakdown. */
+  colorSplit?: { bw: number; color: number; unit?: string; total?: number };
   icon: typeof Activity;
   tone?: 'primary' | 'success' | 'warning' | 'slate';
 }) {
@@ -240,6 +247,9 @@ function MetricCard({
   const unit = split?.unit ?? '';
   const splitBalances =
     split != null && split.total != null ? splitSum === split.total : false;
+  const colorSum = colorSplit ? colorSplit.bw + colorSplit.color : 0;
+  const colorTotal = Math.max(1, colorSplit?.total ?? colorSum);
+  const colorUnit = colorSplit?.unit ?? '';
 
   return (
     <div className={cn('flex items-center gap-3 rounded-lg border px-3 py-2.5', toneClass)}>
@@ -303,6 +313,32 @@ function MetricCard({
                   {unit}
                 </span>
               ) : null}
+            </div>
+          </div>
+        ) : null}
+        {colorSplit && colorSum > 0 ? (
+          <div className="mt-1.5 space-y-1">
+            <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+              <div
+                className="h-full bg-slate-600"
+                style={{ width: `${(colorSplit.bw / colorTotal) * 100}%` }}
+                title={`B/W ${colorSplit.bw}${colorUnit}`}
+              />
+              <div
+                className="h-full bg-rose-500"
+                style={{ width: `${(colorSplit.color / colorTotal) * 100}%` }}
+                title={`Color ${colorSplit.color}${colorUnit}`}
+              />
+            </div>
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] tabular-nums text-muted-foreground">
+              <span className="text-slate-700">
+                {colorSplit.bw}
+                {colorUnit} B/W
+              </span>
+              <span className="text-rose-700">
+                {colorSplit.color}
+                {colorUnit} color
+              </span>
             </div>
           </div>
         ) : null}
@@ -1121,6 +1157,21 @@ export function UsagePage() {
         total: prints.pages,
       }
     : null;
+  const printJobColorSplit = prints
+    ? {
+        bw: prints.bwJobs ?? 0,
+        color: prints.colorJobs ?? 0,
+        total: prints.jobs,
+      }
+    : null;
+  const printPageColorSplit = prints
+    ? {
+        bw: prints.bwPages ?? 0,
+        color: prints.colorPages ?? 0,
+        unit: ' pg',
+        total: prints.pages,
+      }
+    : null;
   const paymentPageSplit = payments
     ? {
         free: payments.freePages ?? 0,
@@ -1363,6 +1414,8 @@ export function UsagePage() {
               hint={
                 prints
                   ? [
+                      `${prints.bwJobs ?? 0} B/W`,
+                      `${prints.colorJobs ?? 0} color`,
                       prints.mixedJobs > 0 ? `${prints.mixedJobs} mixed` : null,
                       (prints.otherJobs ?? 0) > 0 ? `${prints.otherJobs} other` : null,
                     ]
@@ -1371,14 +1424,20 @@ export function UsagePage() {
                   : undefined
               }
               split={printJobSplit ?? undefined}
+              colorSplit={printJobColorSplit ?? undefined}
               icon={Printer}
               tone="slate"
             />
             <MetricCard
               label="Pages printed"
               value={prints ? String(prints.pages) : overlayLoading ? '…' : '—'}
-              hint={prints ? 'free + paid' : undefined}
+              hint={
+                prints
+                  ? `${prints.bwPages ?? 0} B/W · ${prints.colorPages ?? 0} color`
+                  : undefined
+              }
               split={printPageSplit ?? undefined}
+              colorSplit={printPageColorSplit ?? undefined}
               icon={Printer}
               tone="warning"
             />

@@ -362,6 +362,10 @@ export class PrintingService {
     let paidJobs = 0;
     let mixedJobs = 0;
     let otherJobs = 0;
+    let bwJobs = 0;
+    let colorJobs = 0;
+    let bwPages = 0;
+    let colorPages = 0;
 
     for (const job of mapped) {
       const split = splitPages(job.pageCount, job.freePages, job.paidPages);
@@ -372,6 +376,14 @@ export class PrintingService {
       else if (job.billing === 'paid') paidJobs += 1;
       else if (job.billing === 'mixed') mixedJobs += 1;
       else otherJobs += 1;
+
+      if (job.printColorMode === 'color') {
+        colorJobs += 1;
+        colorPages += job.pageCount;
+      } else {
+        bwJobs += 1;
+        bwPages += job.pageCount;
+      }
     }
 
     return {
@@ -383,6 +395,10 @@ export class PrintingService {
       paidJobs,
       mixedJobs,
       otherJobs,
+      bwJobs,
+      colorJobs,
+      bwPages,
+      colorPages,
     };
   }
 
