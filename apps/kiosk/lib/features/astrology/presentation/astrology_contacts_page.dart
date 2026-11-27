@@ -121,11 +121,10 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
                         ? _EmptyContactsState(accent: accent, isDark: isDark)
                         : LayoutBuilder(
                             builder: (context, constraints) {
-                              const gap = 14.0;
-                              final columns = constraints.maxWidth >= 980
-                                  ? 2
-                                  : 1;
-                              const tileHeight = 176.0;
+                              const gap = 16.0;
+                              final columns =
+                                  constraints.maxWidth >= 1100 ? 2 : 1;
+                              const tileHeight = 210.0;
 
                               return GridView.builder(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -422,26 +421,26 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = widget.accent;
     final photoUrl = _absolutePhotoUrl(widget.contact.photoUrl);
+    final panel = isDark ? const Color(0xFF1C143F) : Colors.white;
+    final softFill = isDark
+        ? accent.withValues(alpha: 0.14)
+        : const Color(0xFFF8FAFC);
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C143F) : Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        color: panel,
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isDark
               ? accent.withValues(alpha: 0.38)
-              : const Color(0xFFE8EEF6),
+              : const Color(0xFFE2E8F0),
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: accent.withValues(alpha: isDark ? 0.2 : 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -450,10 +449,11 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            width: 132,
+            width: 168,
             child: Stack(
               fit: StackFit.expand,
               children: [
+                ColoredBox(color: softFill),
                 _PhotoHero(
                   name: widget.contact.name,
                   photoUrl: photoUrl,
@@ -463,8 +463,8 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                   showComplete: true,
                 ),
                 Positioned(
-                  top: 10,
-                  left: 10,
+                  top: 12,
+                  left: 12,
                   child: _RoleChip(
                     label: widget.roleLabel,
                     accent: accent,
@@ -473,9 +473,15 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
               ],
             ),
           ),
+          Container(
+            width: 1,
+            color: isDark
+                ? accent.withValues(alpha: 0.22)
+                : const Color(0xFFE2E8F0),
+          ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -489,22 +495,28 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 17,
+                            fontSize: 22,
                             fontWeight: FontWeight.w800,
-                            height: 1.2,
+                            height: 1.15,
+                            letterSpacing: -0.2,
                             color: colors.textPrimary,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       _RatingPill(rating: widget.contact.rating),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
                   _MiniStars(rating: widget.contact.rating),
                   if (_hasProfileMeta(widget.contact)) ...[
-                    const SizedBox(height: 6),
-                    _ProfileMetaRow(contact: widget.contact, muted: colors.textSecondary),
+                    const SizedBox(height: 10),
+                    _ProfileMetaBlock(
+                      contact: widget.contact,
+                      muted: colors.textSecondary,
+                      softFill: softFill,
+                      accent: accent,
+                    ),
                   ],
                   const Spacer(),
                   AnimatedSwitcher(
@@ -542,11 +554,18 @@ bool _hasProfileMeta(AstrologyContact contact) {
       contact.experienceYears != null;
 }
 
-class _ProfileMetaRow extends StatelessWidget {
-  const _ProfileMetaRow({required this.contact, required this.muted});
+class _ProfileMetaBlock extends StatelessWidget {
+  const _ProfileMetaBlock({
+    required this.contact,
+    required this.muted,
+    required this.softFill,
+    required this.accent,
+  });
 
   final AstrologyContact contact;
   final Color muted;
+  final Color softFill;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -555,20 +574,35 @@ class _ProfileMetaRow extends StatelessWidget {
     final years = contact.experienceYears;
     final chips = <Widget>[
       if (degree != null && degree.isNotEmpty)
-        _MetaChip(icon: Icons.school_outlined, label: degree, muted: muted),
+        _MetaChip(
+          icon: Icons.school_rounded,
+          label: degree,
+          muted: muted,
+          softFill: softFill,
+          accent: accent,
+        ),
       if (years != null)
         _MetaChip(
-          icon: Icons.workspace_premium_outlined,
+          icon: Icons.workspace_premium_rounded,
           label: years == 1 ? '1 yr exp.' : '$years yrs exp.',
           muted: muted,
+          softFill: softFill,
+          accent: accent,
         ),
       if (address != null && address.isNotEmpty)
-        _MetaChip(icon: Icons.location_on_outlined, label: address, muted: muted),
+        _MetaChip(
+          icon: Icons.location_on_rounded,
+          label: address,
+          muted: muted,
+          softFill: softFill,
+          accent: accent,
+          expand: true,
+        ),
     ];
 
     return Wrap(
       spacing: 8,
-      runSpacing: 4,
+      runSpacing: 8,
       children: chips,
     );
   }
@@ -579,36 +613,52 @@ class _MetaChip extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.muted,
+    required this.softFill,
+    required this.accent,
+    this.expand = false,
   });
 
   final IconData icon;
   final String label;
   final Color muted;
+  final Color softFill;
+  final Color accent;
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: muted),
-        const SizedBox(width: 3),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 180),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: muted,
-              height: 1.15,
+    final child = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: softFill,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: accent.withValues(alpha: 0.9)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                color: muted,
+                height: 1.1,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
+
+    if (!expand) return child;
+    return SizedBox(width: double.infinity, child: child);
   }
 }
 
@@ -621,13 +671,13 @@ class _RoleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
+        color: Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -636,13 +686,13 @@ class _RoleChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.auto_awesome, size: 12, color: accent),
-          const SizedBox(width: 4),
+          Icon(Icons.auto_awesome, size: 14, color: accent),
+          const SizedBox(width: 5),
           Text(
             label,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
-              fontSize: 11.5,
+              fontSize: 13,
               fontWeight: FontWeight.w800,
               color: accent,
             ),
@@ -661,30 +711,23 @@ class _RatingPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFFCD34D)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.star_rounded, size: 14, color: Color(0xFFF59E0B)),
-          const SizedBox(width: 3),
+          const Icon(Icons.star_rounded, size: 17, color: Color(0xFFF59E0B)),
+          const SizedBox(width: 4),
           Text(
             rating.toStringAsFixed(1),
             style: const TextStyle(
               fontFamily: 'PlusJakartaSans',
               fontWeight: FontWeight.w800,
-              fontSize: 12.5,
+              fontSize: 14.5,
               color: Color(0xFF9A3412),
             ),
           ),
@@ -813,9 +856,9 @@ class _PhotoHero extends StatelessWidget {
               ),
             ),
           ),
-          ColoredBox(color: Colors.white.withValues(alpha: 0.12)),
+          ColoredBox(color: Colors.white.withValues(alpha: 0.08)),
           Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.fromLTRB(10, 28, 10, 10),
             child: Image.network(
               photoUrl!,
               fit: BoxFit.contain,
@@ -947,14 +990,14 @@ class _MiniStars extends StatelessWidget {
       children: [
         for (var i = 1; i <= 5; i++)
           Padding(
-            padding: EdgeInsets.only(right: i == 5 ? 0 : 1),
+            padding: EdgeInsets.only(right: i == 5 ? 0 : 2),
             child: Icon(
               rating >= i
                   ? Icons.star_rounded
                   : rating >= i - 0.5
                       ? Icons.star_half_rounded
                       : Icons.star_outline_rounded,
-              size: 17,
+              size: 22,
               color: rating >= i - 0.5
                   ? const Color(0xFFF59E0B)
                   : const Color(0xFFD1D5DB),
@@ -983,10 +1026,10 @@ class _ShowNumberButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: revealing ? null : onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1004,27 +1047,27 @@ class _ShowNumberButton extends StatelessWidget {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (revealing)
                   const SizedBox(
-                    width: 16,
-                    height: 16,
+                    width: 18,
+                    height: 18,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2,
+                      strokeWidth: 2.2,
                       color: Colors.white,
                     ),
                   )
                 else
-                  const Icon(Icons.phone_rounded, size: 17, color: Colors.white),
-                const SizedBox(width: 8),
+                  const Icon(Icons.phone_rounded, size: 20, color: Colors.white),
+                const SizedBox(width: 10),
                 Text(
                   revealing ? 'Opening…' : 'Show number',
                   style: const TextStyle(
                     fontFamily: 'PlusJakartaSans',
-                    fontSize: 14.5,
+                    fontSize: 17,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                     letterSpacing: 0.1,
@@ -1053,17 +1096,17 @@ class _RevealedPhone extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withValues(alpha: 0.35)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.phone_in_talk_rounded, size: 18, color: accent),
-          const SizedBox(width: 8),
+          Icon(Icons.phone_in_talk_rounded, size: 20, color: accent),
+          const SizedBox(width: 10),
           Flexible(
             child: Text(
               phone,
@@ -1071,7 +1114,7 @@ class _RevealedPhone extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'PlusJakartaSans',
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.2,
                 color: accent,
