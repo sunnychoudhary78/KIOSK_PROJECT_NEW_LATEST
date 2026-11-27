@@ -49,7 +49,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           SkpPageHeader(
             title: l10n.historyTitle,
             subtitle: l10n.historyHelper,
-            trailing: const SkpAppMenuButton(),
+            leading: const SkpAppMenuButton(),
           ),
           const SizedBox(height: 20),
           Expanded(

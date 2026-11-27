@@ -10,6 +10,7 @@ class SkpPageHeader extends StatelessWidget {
     this.showBack = false,
     this.onBack,
     this.backEnabled = true,
+    this.leading,
     this.trailing,
   });
 
@@ -18,6 +19,7 @@ class SkpPageHeader extends StatelessWidget {
   final bool showBack;
   final VoidCallback? onBack;
   final bool backEnabled;
+  final Widget? leading;
   final Widget? trailing;
 
   @override
@@ -36,6 +38,10 @@ class SkpPageHeader extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (leading != null) ...[
+              leading!,
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
