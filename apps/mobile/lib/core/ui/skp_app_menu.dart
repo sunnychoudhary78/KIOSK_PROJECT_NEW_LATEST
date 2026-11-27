@@ -253,15 +253,7 @@ class _ProfileHeaderCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF0F6A5A),
-            Color(0xFF1A8F78),
-            Color(0xFF2EC4A0),
-          ],
-        ),
+        gradient: SkpColors.heroGradient,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(

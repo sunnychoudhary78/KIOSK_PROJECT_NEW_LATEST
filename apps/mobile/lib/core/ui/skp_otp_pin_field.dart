@@ -11,6 +11,7 @@ class SkpOtpPinField extends StatelessWidget {
     this.length = 6,
     this.enabled = true,
     this.useNativeKeyboard = true,
+    this.accentColor,
     this.onCompleted,
     this.onChanged,
   });
@@ -20,11 +21,13 @@ class SkpOtpPinField extends StatelessWidget {
   final int length;
   final bool enabled;
   final bool useNativeKeyboard;
+  final Color? accentColor;
   final ValueChanged<String>? onCompleted;
   final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final accent = accentColor ?? SkpColors.accent;
     final base = PinTheme(
       width: 48,
       height: 56,
@@ -61,10 +64,10 @@ class SkpOtpPinField extends StatelessWidget {
         defaultPinTheme: base,
         focusedPinTheme: base.copyWith(
           decoration: base.decoration!.copyWith(
-            border: Border.all(color: SkpColors.accent, width: 1.8),
+            border: Border.all(color: accent, width: 1.8),
             boxShadow: [
               BoxShadow(
-                color: SkpColors.accent.withValues(alpha: 0.18),
+                color: accent.withValues(alpha: 0.18),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
@@ -73,7 +76,7 @@ class SkpOtpPinField extends StatelessWidget {
         ),
         submittedPinTheme: base.copyWith(
           decoration: base.decoration!.copyWith(
-            border: Border.all(color: SkpColors.accent),
+            border: Border.all(color: accent),
           ),
         ),
         errorPinTheme: base.copyWith(

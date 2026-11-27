@@ -89,7 +89,7 @@
   "otpExpired": "OTP expired",
   "expiredLabel": "Expired",
   "loginWelcome": "Welcome",
-  "loginHelper": "Sign in with your mobile number to upload documents and print at a kiosk.",
+  "loginHelper": "Sign in with your mobile number to upload documents and print at any IMT-Print kiosk.",
   "enterOtp": "Enter OTP",
   "otpSentTo": "We sent a one-time code to {phone}",
   "@otpSentTo": {

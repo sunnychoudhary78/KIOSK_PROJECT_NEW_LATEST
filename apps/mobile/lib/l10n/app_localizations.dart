@@ -545,7 +545,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginHelper.
   ///
   /// In en, this message translates to:
-  /// **'Sign in with your mobile number to upload documents and print at a kiosk.'**
+  /// **'Sign in with your mobile number to upload documents and print at any IMT-Print kiosk.'**
   String get loginHelper;
 
   /// No description provided for @enterOtp.

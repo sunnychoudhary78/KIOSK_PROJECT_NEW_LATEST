@@ -256,7 +256,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loginHelper =>
-      'Sign in with your mobile number to upload documents and print at a kiosk.';
+      'Sign in with your mobile number to upload documents and print at any IMT-Print kiosk.';
 
   @override
   String get enterOtp => 'Enter OTP';

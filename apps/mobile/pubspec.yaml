@@ -47,6 +47,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/fuel_stations/catalog.json
+    - assets/logo/athenaa_immortech.png
   fonts:
     - family: PlusJakartaSans
       fonts:

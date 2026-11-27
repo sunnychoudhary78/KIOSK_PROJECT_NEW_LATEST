@@ -13,6 +13,7 @@ class SkpBackButton extends StatelessWidget {
       onPressed: enabled ? (onPressed ?? () => Navigator.of(context).maybePop()) : null,
       style: IconButton.styleFrom(
         backgroundColor: SkpColors.panel,
+        foregroundColor: SkpColors.accent,
         side: const BorderSide(color: SkpColors.line),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
