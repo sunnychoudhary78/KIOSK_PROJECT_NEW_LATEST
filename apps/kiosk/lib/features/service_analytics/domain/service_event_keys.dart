@@ -44,6 +44,9 @@ abstract final class ServiceEventKeys {
 
   static String localServicesCategory(String slug) => 'local_services.$slug';
 
+  static String localServicesShowNumber(String slug) =>
+      'local_services.$slug.show_number';
+
   static String fuelFilter(String kind) => 'fuel_stations.filter.$kind';
 
   /// Maps a pushed [RouteSettings] to an event key, or null to skip.

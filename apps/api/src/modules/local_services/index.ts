@@ -74,6 +74,22 @@ export function registerLocalServicesModule(router: Router, deps: AppDeps): void
   );
 
   router.post(
+    '/local-services/contacts/:contactId/reveal',
+    authRequired(deps.config, ['device']),
+    assertActiveDevice(deps.db),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await service.reveal(
+          requireParam(req.params.contactId, 'contactId'),
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
     '/local-services',
     authRequired(deps.config, ['admin']),
     validateBody(createLocalServiceCategorySchema),

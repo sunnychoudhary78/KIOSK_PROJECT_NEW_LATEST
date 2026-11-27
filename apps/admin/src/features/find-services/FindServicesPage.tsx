@@ -29,6 +29,7 @@ type LocalContact = {
   rating: number;
   topRank: number | null;
   pinned?: boolean;
+  showNumberClicks?: number;
   address: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -833,6 +834,12 @@ export function FindServicesPage() {
                                   <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
                                     <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                                     {formatRating(contact.rating)}
+                                  </span>
+                                  <span
+                                    className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-700"
+                                    title="Show number taps on kiosk"
+                                  >
+                                    {contact.showNumberClicks ?? 0} clicks
                                   </span>
                                 </div>
                                 <div className="font-mono text-sm text-foreground">

@@ -912,6 +912,8 @@ model LocalServiceContact {
   rating           Float                @default(0)
   /// Optional Top 5 slot (1–5). Null = not featured; ordered before rating/distance.
   topRank          Int?                 @map("top_rank")
+  /// Kiosk “Show number” taps for this vendor.
+  showNumberClicks Int                  @default(0) @map("show_number_clicks")
   address          String?
   latitude         Float?
   longitude        Float?

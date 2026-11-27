@@ -124,8 +124,9 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
                               const gap = 16.0;
                               final columns =
                                   constraints.maxWidth >= 1100 ? 2 : 1;
-                              // Keep room for name + stars + meta chips + CTA.
-                              const tileHeight = 248.0;
+                              // Room for name + stars + wrapping meta + CTA.
+                              final tileHeight =
+                                  columns == 2 ? 292.0 : 310.0;
 
                               return GridView.builder(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -450,11 +451,11 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
+            padding: const EdgeInsets.fromLTRB(14, 14, 0, 14),
             child: SizedBox(
-              width: 156,
+              width: 168,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(22),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -487,19 +488,20 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Text(
                           widget.contact.name,
-                          maxLines: 1,
+                          maxLines: 2,
+                          softWrap: true,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 20,
+                            fontSize: 21,
                             fontWeight: FontWeight.w800,
-                            height: 1.15,
-                            letterSpacing: -0.2,
+                            height: 1.2,
+                            letterSpacing: -0.25,
                             color: colors.textPrimary,
                           ),
                         ),
@@ -511,8 +513,8 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                   const SizedBox(height: 6),
                   _MiniStars(rating: widget.contact.rating),
                   if (_hasProfileMeta(widget.contact)) ...[
-                    const SizedBox(height: 8),
-                    Flexible(
+                    const SizedBox(height: 10),
+                    Expanded(
                       child: _ProfileMetaBlock(
                         contact: widget.contact,
                         muted: colors.textSecondary,
@@ -576,43 +578,71 @@ class _ProfileMetaBlock extends StatelessWidget {
     final degree = contact.degree?.trim();
     final address = contact.address?.trim();
     final years = contact.experienceYears;
-    final chips = <Widget>[
-      if (degree != null && degree.isNotEmpty)
-        _MetaChip(
-          icon: Icons.school_rounded,
-          label: degree,
-          muted: muted,
-          softFill: softFill,
-          accent: accent,
-        ),
-      if (years != null)
-        _MetaChip(
-          icon: Icons.workspace_premium_rounded,
-          label: years == 1 ? '1 yr exp.' : '$years yrs exp.',
-          muted: muted,
-          softFill: softFill,
-          accent: accent,
-        ),
-      if (address != null && address.isNotEmpty)
-        _MetaChip(
-          icon: Icons.location_on_rounded,
-          label: address,
-          muted: muted,
-          softFill: softFill,
-          accent: accent,
-        ),
-    ];
+    final hasDegree = degree != null && degree.isNotEmpty;
+    final hasAddress = address != null && address.isNotEmpty;
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      children: chips,
+    final longAddress = hasAddress && address.length > 28;
+
+    return Align(
+      alignment: Alignment.topLeft,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (hasDegree)
+              _MetaLine(
+                icon: Icons.school_rounded,
+                label: degree,
+                muted: muted,
+                softFill: softFill,
+                accent: accent,
+              ),
+            if (years != null || (hasAddress && !longAddress)) ...[
+              if (hasDegree) const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  if (years != null)
+                    _MetaPill(
+                      icon: Icons.workspace_premium_rounded,
+                      label: years == 1 ? '1 yr exp.' : '$years yrs exp.',
+                      muted: muted,
+                      softFill: softFill,
+                      accent: accent,
+                    ),
+                  if (hasAddress && !longAddress)
+                    _MetaPill(
+                      icon: Icons.location_on_rounded,
+                      label: address,
+                      muted: muted,
+                      softFill: softFill,
+                      accent: accent,
+                    ),
+                ],
+              ),
+            ],
+            if (longAddress) ...[
+              SizedBox(height: hasDegree || years != null ? 6 : 0),
+              _MetaLine(
+                icon: Icons.location_on_rounded,
+                label: address,
+                muted: muted,
+                softFill: softFill,
+                accent: accent,
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({
+/// Full-width meta row that wraps long copy (degree) instead of truncating.
+class _MetaLine extends StatelessWidget {
+  const _MetaLine({
     required this.icon,
     required this.label,
     required this.muted,
@@ -629,7 +659,59 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: softFill,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 16, color: accent.withValues(alpha: 0.95)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              softWrap: true,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                color: muted,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaPill extends StatelessWidget {
+  const _MetaPill({
+    required this.icon,
+    required this.label,
+    required this.muted,
+    required this.softFill,
+    required this.accent,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color muted;
+  final Color softFill;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: softFill,
         borderRadius: BorderRadius.circular(12),
@@ -639,20 +721,16 @@ class _MetaChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 15, color: accent.withValues(alpha: 0.9)),
-          const SizedBox(width: 5),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 160),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'PlusJakartaSans',
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: muted,
-                height: 1.1,
-              ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            softWrap: true,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: muted,
+              height: 1.25,
             ),
           ),
         ],

@@ -4,7 +4,10 @@ import 'package:skp_kiosk/core/auth/device_auth.dart';
 import 'package:skp_kiosk/core/config/app_config.dart';
 import 'package:skp_kiosk/core/theme/athena_colors.dart';
 import 'package:skp_kiosk/core/ui/ui.dart';
+import 'package:skp_kiosk/features/local_services/application/local_services_controller.dart';
 import 'package:skp_kiosk/features/local_services/domain/local_service.dart';
+import 'package:skp_kiosk/features/service_analytics/application/service_analytics_tracker.dart';
+import 'package:skp_kiosk/features/service_analytics/domain/service_event_keys.dart';
 import 'package:skp_kiosk/features/session/application/kiosk_session_controller.dart';
 import 'package:skp_kiosk/features/session/presentation/visitor_session_pop_scope.dart';
 
@@ -64,6 +67,8 @@ class LocalServiceContactsPage extends ConsumerWidget {
                         itemBuilder: (context, index) {
                           return _ContactCard(
                             contact: contacts[index],
+                            categorySlug: category.slug,
+                            categoryName: category.name,
                             accessToken: token,
                           );
                         },
@@ -77,21 +82,65 @@ class LocalServiceContactsPage extends ConsumerWidget {
   }
 }
 
-class _ContactCard extends StatelessWidget {
+class _ContactCard extends ConsumerStatefulWidget {
   const _ContactCard({
     required this.contact,
+    required this.categorySlug,
+    required this.categoryName,
     required this.accessToken,
   });
 
   final LocalServiceContact contact;
+  final String categorySlug;
+  final String categoryName;
   final String? accessToken;
+
+  @override
+  ConsumerState<_ContactCard> createState() => _ContactCardState();
+}
+
+class _ContactCardState extends ConsumerState<_ContactCard> {
+  bool _revealed = false;
+  bool _revealing = false;
+
+  Future<void> _reveal() async {
+    if (_revealed || _revealing) return;
+    setState(() => _revealing = true);
+    try {
+      await ref
+          .read(localServicesRepositoryProvider)
+          .reveal(widget.contact.id);
+      // ignore: discarded_futures
+      ref.read(serviceAnalyticsTrackerProvider).track(
+            ServiceEventKeys.localServicesShowNumber(widget.categorySlug),
+            metadata: {
+              'contactId': widget.contact.id,
+              'name': widget.contact.name,
+              'categorySlug': widget.categorySlug,
+              'categoryName': widget.categoryName,
+            },
+          );
+      if (!mounted) return;
+      setState(() {
+        _revealed = true;
+        _revealing = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _revealed = true;
+        _revealing = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.athenaColors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final address = contact.address?.trim();
-    final photoUrl = _absolutePhotoUrl(contact.photoUrl);
+    final address = widget.contact.address?.trim();
+    final photoUrl = _absolutePhotoUrl(widget.contact.photoUrl);
+    final accent = colors.accentMagenta;
 
     return Container(
       constraints: const BoxConstraints(minHeight: 112),
@@ -116,10 +165,10 @@ class _ContactCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _PhotoAvatar(
-              name: contact.name,
+              name: widget.contact.name,
               photoUrl: photoUrl,
-              accessToken: accessToken,
-              accent: colors.accentMagenta,
+              accessToken: widget.accessToken,
+              accent: accent,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -130,7 +179,7 @@ class _ContactCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          contact.name,
+                          widget.contact.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -142,7 +191,7 @@ class _ContactCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (contact.topRank != null) ...[
+                      if (widget.contact.topRank != null) ...[
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -152,7 +201,7 @@ class _ContactCard extends StatelessWidget {
                             border: Border.all(color: const Color(0xFFFCD34D)),
                           ),
                           child: Text(
-                            'Top ${contact.topRank}',
+                            'Top ${widget.contact.topRank}',
                             style: const TextStyle(
                               fontFamily: 'PlusJakartaSans',
                               fontSize: 12,
@@ -164,7 +213,7 @@ class _ContactCard extends StatelessWidget {
                       ],
                     ],
                   ),
-                  if (contact.distanceKm != null) ...[
+                  if (widget.contact.distanceKm != null) ...[
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -175,7 +224,7 @@ class _ContactCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          _formatDistance(contact.distanceKm!),
+                          _formatDistance(widget.contact.distanceKm!),
                           style: const TextStyle(
                             fontFamily: 'PlusJakartaSans',
                             fontWeight: FontWeight.w700,
@@ -212,24 +261,150 @@ class _ContactCard extends StatelessWidget {
                       ],
                     ),
                   ],
-                  const SizedBox(height: 8),
-                  Text(
-                    _formatPhone(contact.phone),
-                    style: TextStyle(
-                      fontFamily: 'PlusJakartaSans',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
-                      color: colors.accentMagenta,
-                    ),
+                  const SizedBox(height: 10),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 280),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: _revealed
+                        ? _RevealedPhone(
+                            key: const ValueKey('phone'),
+                            phone: _formatPhone(widget.contact.phone),
+                            accent: accent,
+                          )
+                        : _ShowNumberButton(
+                            key: const ValueKey('cta'),
+                            accent: accent,
+                            revealing: _revealing,
+                            onTap: _reveal,
+                          ),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 16),
-            _RatingBlock(rating: contact.rating),
+            _RatingBlock(rating: widget.contact.rating),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ShowNumberButton extends StatelessWidget {
+  const _ShowNumberButton({
+    super.key,
+    required this.accent,
+    required this.revealing,
+    required this.onTap,
+  });
+
+  final Color accent;
+  final bool revealing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: revealing ? null : onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                accent,
+                Color.lerp(accent, const Color(0xFF312E81), 0.28)!,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: 0.32),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (revealing)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.white,
+                    ),
+                  )
+                else
+                  const Icon(Icons.phone_rounded, size: 18, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  revealing ? 'Opening…' : 'Show number',
+                  style: const TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RevealedPhone extends StatelessWidget {
+  const _RevealedPhone({
+    super.key,
+    required this.phone,
+    required this.accent,
+  });
+
+  final String phone;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.phone_in_talk_rounded, size: 18, color: accent),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              phone,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+                color: accent,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

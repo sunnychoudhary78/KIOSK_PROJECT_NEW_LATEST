@@ -1,5 +1,6 @@
 import { extname, join } from 'node:path';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { Prisma } from '@prisma/client';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
 import { haversineKm, normalizeLatLng, roundDistanceKm } from '../../shared/geo.js';
@@ -25,6 +26,7 @@ const CONTACT_SELECT = {
   sortOrder: true,
   rating: true,
   topRank: true,
+  showNumberClicks: true,
   address: true,
   latitude: true,
   longitude: true,
@@ -38,6 +40,7 @@ type ContactRow = {
   sortOrder: number;
   rating: number;
   topRank: number | null;
+  showNumberClicks: number;
   address: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -64,6 +67,7 @@ function mapContact(row: ContactRow, distanceKm?: number | null) {
     topRank: row.topRank,
     // Backward-compatible flag for older kiosk/mobile builds.
     pinned: row.topRank != null,
+    showNumberClicks: row.showNumberClicks ?? 0,
     address: row.address,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -668,6 +672,36 @@ export class LocalServicesService {
       correlationId,
       metadata: { name: existing.name, phone: existing.phone },
     });
+  }
+
+  async reveal(contactId: string) {
+    try {
+      const row = await this.db.localServiceContact.update({
+        where: { id: contactId },
+        data: { showNumberClicks: { increment: 1 } },
+        select: {
+          id: true,
+          showNumberClicks: true,
+          name: true,
+          category: { select: { slug: true, name: true } },
+        },
+      });
+      return {
+        id: row.id,
+        showNumberClicks: row.showNumberClicks,
+        name: row.name,
+        categorySlug: row.category.slug,
+        categoryName: row.category.name,
+      };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new AppError('not_found', 'Local service contact not found', 404);
+      }
+      throw error;
+    }
   }
 
   private async uniqueSlug(name: string): Promise<string> {

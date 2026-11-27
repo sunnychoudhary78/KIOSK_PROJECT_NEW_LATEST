@@ -99,6 +99,10 @@ export function labelForEventKey(eventKey: string): string {
   if (LABELS[eventKey]) {
     return LABELS[eventKey];
   }
+  if (eventKey.startsWith('local_services.') && eventKey.endsWith('.show_number')) {
+    const slug = eventKey.slice('local_services.'.length, -'.show_number'.length);
+    return `${humanizeSlug(slug)} · Show number`;
+  }
   if (eventKey.startsWith('local_services.')) {
     return humanizeSlug(eventKey.slice('local_services.'.length));
   }

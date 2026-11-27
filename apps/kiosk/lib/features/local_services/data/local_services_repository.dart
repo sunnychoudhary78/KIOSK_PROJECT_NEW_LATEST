@@ -17,4 +17,8 @@ class LocalServicesRepository {
         if (item is Map) LocalServiceCategory.fromJson(Map<String, dynamic>.from(item)),
     ];
   }
+
+  Future<void> reveal(String contactId) async {
+    await _api.post('/local-services/contacts/$contactId/reveal');
+  }
 }
