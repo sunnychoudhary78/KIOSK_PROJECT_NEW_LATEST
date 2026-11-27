@@ -368,6 +368,9 @@ String _formatPhone(String phone) {
 }
 
 String _formatDistance(double km) {
+  if (km <= 0.05) {
+    return 'At this kiosk';
+  }
   if (km < 1) {
     final meters = (km * 1000).round();
     return '$meters m away';

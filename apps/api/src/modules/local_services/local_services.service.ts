@@ -2,7 +2,7 @@ import { extname, join } from 'node:path';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import type { DbClient } from '../../infrastructure/database/prisma.js';
 import { AppError } from '../../shared/errors.js';
-import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
+import { haversineKm, normalizeLatLng, roundDistanceKm } from '../../shared/geo.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type { ServicesCatalogService } from '../services/services.service.js';
 import type {
@@ -165,7 +165,8 @@ function parseCoords(
   if (latitude == null || longitude == null) {
     return { latitude: null, longitude: null };
   }
-  return { latitude, longitude };
+  const normalized = normalizeLatLng(latitude, longitude);
+  return { latitude: normalized.latitude, longitude: normalized.longitude };
 }
 
 export class LocalServicesService {
@@ -188,7 +189,8 @@ export class LocalServicesService {
         select: { latitude: true, longitude: true },
       });
       if (device?.latitude != null && device.longitude != null) {
-        origin = { lat: device.latitude, lng: device.longitude };
+        const pin = normalizeLatLng(device.latitude, device.longitude);
+        origin = { lat: pin.latitude, lng: pin.longitude };
         radiusKm = DEFAULT_LOCAL_SERVICE_RADIUS_KM;
       }
     }

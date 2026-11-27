@@ -7,7 +7,7 @@ import {
   PRINTING_PAUSED_PAPER_OUT,
   printerReportsPaperOut,
 } from '../printing/printing_pause.js';
-import { haversineKm, roundDistanceKm } from '../../shared/geo.js';
+import { haversineKm, normalizeLatLng, roundDistanceKm } from '../../shared/geo.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type {
   AckDeviceShutterInput,
@@ -256,6 +256,7 @@ export class DevicesService {
     const deviceSecret = `ds_${randomBytes(24).toString('hex')}`;
     const deviceSecretHash = await bcrypt.hash(deviceSecret, 10);
     const address = input.address?.trim() ? input.address.trim() : null;
+    const pin = normalizeLatLng(input.latitude, input.longitude);
 
     const device = await this.db.device.create({
       data: {
@@ -266,8 +267,8 @@ export class DevicesService {
         deviceSecretHash,
         deviceSecret,
         status: DeviceStatus.provisioning,
-        latitude: input.latitude,
-        longitude: input.longitude,
+        latitude: pin.latitude,
+        longitude: pin.longitude,
         address,
       },
       include: { site: true },
@@ -334,13 +335,14 @@ export class DevicesService {
       address: device.address,
     };
 
+    const pin = normalizeLatLng(input.latitude, input.longitude);
     const updated = await this.db.device.update({
       where: { id: deviceId },
       data: {
         name: input.name,
         siteId: site.id,
-        latitude: input.latitude,
-        longitude: input.longitude,
+        latitude: pin.latitude,
+        longitude: pin.longitude,
         address,
       },
       include: { site: true },
