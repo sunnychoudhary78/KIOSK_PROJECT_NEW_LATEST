@@ -124,7 +124,8 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
                               const gap = 16.0;
                               final columns =
                                   constraints.maxWidth >= 1100 ? 2 : 1;
-                              const tileHeight = 210.0;
+                              // Keep room for name + stars + meta chips + CTA.
+                              const tileHeight = 248.0;
 
                               return GridView.builder(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -481,7 +482,7 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -495,7 +496,7 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 22,
+                            fontSize: 20,
                             fontWeight: FontWeight.w800,
                             height: 1.15,
                             letterSpacing: -0.2,
@@ -507,18 +508,21 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                       _RatingPill(rating: widget.contact.rating),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _MiniStars(rating: widget.contact.rating),
                   if (_hasProfileMeta(widget.contact)) ...[
-                    const SizedBox(height: 10),
-                    _ProfileMetaBlock(
-                      contact: widget.contact,
-                      muted: colors.textSecondary,
-                      softFill: softFill,
-                      accent: accent,
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: _ProfileMetaBlock(
+                        contact: widget.contact,
+                        muted: colors.textSecondary,
+                        softFill: softFill,
+                        accent: accent,
+                      ),
                     ),
-                  ],
-                  const Spacer(),
+                  ] else
+                    const Spacer(),
+                  const SizedBox(height: 10),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 280),
                     switchInCurve: Curves.easeOutCubic,
@@ -596,13 +600,12 @@ class _ProfileMetaBlock extends StatelessWidget {
           muted: muted,
           softFill: softFill,
           accent: accent,
-          expand: true,
         ),
     ];
 
     return Wrap(
       spacing: 8,
-      runSpacing: 8,
+      runSpacing: 6,
       children: chips,
     );
   }
@@ -615,7 +618,6 @@ class _MetaChip extends StatelessWidget {
     required this.muted,
     required this.softFill,
     required this.accent,
-    this.expand = false,
   });
 
   final IconData icon;
@@ -623,30 +625,30 @@ class _MetaChip extends StatelessWidget {
   final Color muted;
   final Color softFill;
   final Color accent;
-  final bool expand;
 
   @override
   Widget build(BuildContext context) {
-    final child = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: softFill,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: accent.withValues(alpha: 0.14)),
       ),
       child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: accent.withValues(alpha: 0.9)),
-          const SizedBox(width: 6),
-          Flexible(
+          Icon(icon, size: 15, color: accent.withValues(alpha: 0.9)),
+          const SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 160),
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'PlusJakartaSans',
-                fontSize: 14.5,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: muted,
                 height: 1.1,
@@ -656,9 +658,6 @@ class _MetaChip extends StatelessWidget {
         ],
       ),
     );
-
-    if (!expand) return child;
-    return SizedBox(width: double.infinity, child: child);
   }
 }
 
@@ -1047,7 +1046,7 @@ class _ShowNumberButton extends StatelessWidget {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1061,13 +1060,13 @@ class _ShowNumberButton extends StatelessWidget {
                     ),
                   )
                 else
-                  const Icon(Icons.phone_rounded, size: 20, color: Colors.white),
-                const SizedBox(width: 10),
+                  const Icon(Icons.phone_rounded, size: 18, color: Colors.white),
+                const SizedBox(width: 8),
                 Text(
                   revealing ? 'Opening…' : 'Show number',
                   style: const TextStyle(
                     fontFamily: 'PlusJakartaSans',
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                     letterSpacing: 0.1,
@@ -1096,7 +1095,7 @@ class _RevealedPhone extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
@@ -1105,8 +1104,8 @@ class _RevealedPhone extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.phone_in_talk_rounded, size: 20, color: accent),
-          const SizedBox(width: 10),
+          Icon(Icons.phone_in_talk_rounded, size: 18, color: accent),
+          const SizedBox(width: 8),
           Flexible(
             child: Text(
               phone,
@@ -1114,7 +1113,7 @@ class _RevealedPhone extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'PlusJakartaSans',
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.2,
                 color: accent,
