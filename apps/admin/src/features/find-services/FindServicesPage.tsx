@@ -6,16 +6,26 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { Camera, MapPin, Pin, Star } from 'lucide-react';
+import {
+  Camera,
+  MapPin,
+  MousePointerClick,
+  Phone,
+  Pin,
+  Star,
+  Trophy,
+} from 'lucide-react';
 import { apiRequest, apiRequestBlob, apiUploadFormData } from '../../core/api/client';
 import { useAuth } from '../../core/auth/auth-context';
 import {
   Button,
   EmptyState,
+  FilterChips,
   Input,
   Modal,
   PageHeader,
   Panel,
+  Select,
   StatusBadge,
   Toolbar,
 } from '../../core/ui/primitives';
@@ -67,8 +77,42 @@ type KioskDevice = {
   longitude: number | null;
 };
 
+type ClickRow = {
+  contactId: string;
+  categoryId: string;
+  categoryName: string;
+  categorySlug: string;
+  name: string;
+  phone: string;
+  clicks: number;
+  rating: number;
+  topRank: number | null;
+};
+
+type ClicksSort = 'clicks_desc' | 'clicks_asc' | 'name' | 'service';
+
 function formatRating(value: number): string {
   return Number.isFinite(value) ? value.toFixed(1).replace(/\.0$/, '') : '0';
+}
+
+function buildClickRows(categories: LocalCategory[]): ClickRow[] {
+  const rows: ClickRow[] = [];
+  for (const category of categories) {
+    for (const contact of category.contacts) {
+      rows.push({
+        contactId: contact.id,
+        categoryId: category.id,
+        categoryName: category.name,
+        categorySlug: category.slug,
+        name: contact.name,
+        phone: contact.phone,
+        clicks: contact.showNumberClicks ?? 0,
+        rating: contact.rating,
+        topRank: contact.topRank,
+      });
+    }
+  }
+  return rows;
 }
 
 function AuthPhoto({
@@ -254,6 +298,10 @@ export function FindServicesPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null);
   const [kiosks, setKiosks] = useState<KioskDevice[]>([]);
+  const [clicksServiceFilter, setClicksServiceFilter] = useState('all');
+  const [clicksSearch, setClicksSearch] = useState('');
+  const [clicksScope, setClicksScope] = useState<'all' | 'with_clicks' | 'zero'>('all');
+  const [clicksSort, setClicksSort] = useState<ClicksSort>('clicks_desc');
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -309,14 +357,98 @@ export function FindServicesPage() {
   const filteredContacts = useMemo(() => {
     const contacts = selected?.contacts ?? [];
     const q = contactSearch.trim().toLowerCase();
-    if (!q) return contacts;
-    return contacts.filter((item) =>
-      [item.name, item.phone, item.address ?? '', String(item.rating)]
-        .join(' ')
-        .toLowerCase()
-        .includes(q),
+    const filtered = q
+      ? contacts.filter((item) =>
+          [item.name, item.phone, item.address ?? '', String(item.rating)]
+            .join(' ')
+            .toLowerCase()
+            .includes(q),
+        )
+      : contacts;
+    return [...filtered].sort(
+      (a, b) => (b.showNumberClicks ?? 0) - (a.showNumberClicks ?? 0) || a.name.localeCompare(b.name),
     );
   }, [selected, contactSearch]);
+
+  const allClickRows = useMemo(
+    () => buildClickRows(list?.categories ?? []),
+    [list],
+  );
+
+  const clicksSummary = useMemo(() => {
+    const totalClicks = allClickRows.reduce((sum, row) => sum + row.clicks, 0);
+    const withClicks = allClickRows.filter((row) => row.clicks > 0);
+    const topVendor = [...allClickRows].sort(
+      (a, b) => b.clicks - a.clicks || a.name.localeCompare(b.name),
+    )[0];
+    const byService = new Map<string, { name: string; clicks: number; vendors: number }>();
+    for (const row of allClickRows) {
+      const current = byService.get(row.categoryId) ?? {
+        name: row.categoryName,
+        clicks: 0,
+        vendors: 0,
+      };
+      current.clicks += row.clicks;
+      if (row.clicks > 0) current.vendors += 1;
+      byService.set(row.categoryId, current);
+    }
+    const topService = [...byService.values()].sort(
+      (a, b) => b.clicks - a.clicks || a.name.localeCompare(b.name),
+    )[0];
+    return {
+      totalClicks,
+      totalVendors: allClickRows.length,
+      vendorsWithClicks: withClicks.length,
+      topVendor: topVendor && topVendor.clicks > 0 ? topVendor : null,
+      topService: topService && topService.clicks > 0 ? topService : null,
+      byService,
+    };
+  }, [allClickRows]);
+
+  const filteredClickRows = useMemo(() => {
+    const q = clicksSearch.trim().toLowerCase();
+    let rows = allClickRows;
+    if (clicksServiceFilter !== 'all') {
+      rows = rows.filter((row) => row.categoryId === clicksServiceFilter);
+    }
+    if (clicksScope === 'with_clicks') {
+      rows = rows.filter((row) => row.clicks > 0);
+    } else if (clicksScope === 'zero') {
+      rows = rows.filter((row) => row.clicks === 0);
+    }
+    if (q) {
+      rows = rows.filter((row) =>
+        [row.name, row.phone, row.categoryName, row.categorySlug]
+          .join(' ')
+          .toLowerCase()
+          .includes(q),
+      );
+    }
+    const sorted = [...rows];
+    sorted.sort((a, b) => {
+      switch (clicksSort) {
+        case 'clicks_asc':
+          return a.clicks - b.clicks || a.name.localeCompare(b.name);
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'service':
+          return (
+            a.categoryName.localeCompare(b.categoryName) ||
+            b.clicks - a.clicks ||
+            a.name.localeCompare(b.name)
+          );
+        case 'clicks_desc':
+        default:
+          return b.clicks - a.clicks || a.name.localeCompare(b.name);
+      }
+    });
+    return sorted;
+  }, [allClickRows, clicksServiceFilter, clicksScope, clicksSearch, clicksSort]);
+
+  const filteredClicksTotal = useMemo(
+    () => filteredClickRows.reduce((sum, row) => sum + row.clicks, 0),
+    [filteredClickRows],
+  );
 
   function resetContactForm() {
     setContactName('');
@@ -561,6 +693,211 @@ export function FindServicesPage() {
         subtitle="Copy lat/lng from the target kiosk so distance shows 0 km. Lat/lng is required on kiosk; pins up to 50 km still appear after nearby ones."
       />
 
+      <Panel
+        title="Show number clicks"
+        actions={
+          <span className="text-xs text-muted-foreground">
+            Kiosk “Show number” taps · vendor + service
+          </span>
+        }
+      >
+        <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border border-sky-200/70 bg-sky-50/50 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-sky-800">
+              <MousePointerClick className="h-3.5 w-3.5" />
+              Total clicks
+            </div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
+              {clicksSummary.totalClicks}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              across {clicksSummary.totalVendors} providers
+            </div>
+          </div>
+          <div className="rounded-lg border border-emerald-200/70 bg-emerald-50/50 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-emerald-800">
+              <Phone className="h-3.5 w-3.5" />
+              Providers revealed
+            </div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
+              {clicksSummary.vendorsWithClicks}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              of {clicksSummary.totalVendors} have ≥1 click
+            </div>
+          </div>
+          <div className="rounded-lg border border-amber-200/70 bg-amber-50/50 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-amber-800">
+              <Trophy className="h-3.5 w-3.5" />
+              Most clicked vendor
+            </div>
+            <div className="mt-1 truncate text-base font-semibold tracking-tight">
+              {clicksSummary.topVendor?.name ?? '—'}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {clicksSummary.topVendor
+                ? `${clicksSummary.topVendor.clicks} clicks · ${clicksSummary.topVendor.categoryName}`
+                : 'No clicks yet'}
+            </div>
+          </div>
+          <div className="rounded-lg border border-violet-200/70 bg-violet-50/50 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-violet-800">
+              <Trophy className="h-3.5 w-3.5" />
+              Most clicked service
+            </div>
+            <div className="mt-1 truncate text-base font-semibold tracking-tight">
+              {clicksSummary.topService?.name ?? '—'}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {clicksSummary.topService
+                ? `${clicksSummary.topService.clicks} clicks · ${clicksSummary.topService.vendors} vendors`
+                : 'No clicks yet'}
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="flex min-w-[11rem] flex-col gap-1 text-xs font-medium text-muted-foreground">
+              Service
+              <Select
+                value={clicksServiceFilter}
+                onChange={(event) => setClicksServiceFilter(event.target.value)}
+              >
+                <option value="all">All services</option>
+                {(list?.categories ?? []).map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name} (
+                    {category.contacts.reduce((sum, c) => sum + (c.showNumberClicks ?? 0), 0)}{' '}
+                    clicks)
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex min-w-[10rem] flex-col gap-1 text-xs font-medium text-muted-foreground">
+              Sort
+              <Select
+                value={clicksSort}
+                onChange={(event) => setClicksSort(event.target.value as ClicksSort)}
+              >
+                <option value="clicks_desc">Most clicks</option>
+                <option value="clicks_asc">Least clicks</option>
+                <option value="name">Vendor name</option>
+                <option value="service">Service name</option>
+              </Select>
+            </label>
+            <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
+              Search
+              <Input
+                value={clicksSearch}
+                onChange={(event) => setClicksSearch(event.target.value)}
+                placeholder="Vendor, phone, service…"
+              />
+            </label>
+          </div>
+          <FilterChips
+            value={clicksScope}
+            onChange={(value) => setClicksScope(value as 'all' | 'with_clicks' | 'zero')}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'with_clicks', label: 'With clicks' },
+              { value: 'zero', label: 'Zero clicks' },
+            ]}
+          />
+        </div>
+
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            Showing <span className="font-semibold text-foreground">{filteredClickRows.length}</span>{' '}
+            providers ·{' '}
+            <span className="font-semibold tabular-nums text-foreground">{filteredClicksTotal}</span>{' '}
+            clicks in filter
+          </span>
+          {clicksServiceFilter !== 'all' || clicksScope !== 'all' || clicksSearch ? (
+            <button
+              type="button"
+              className="text-xs font-medium text-primary hover:underline"
+              onClick={() => {
+                setClicksServiceFilter('all');
+                setClicksScope('all');
+                setClicksSearch('');
+                setClicksSort('clicks_desc');
+              }}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+
+        {filteredClickRows.length === 0 ? (
+          <EmptyState
+            title="No providers match"
+            description="Try another service filter, search, or click scope."
+          />
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="max-h-[22rem] overflow-auto">
+              <table className="table w-full">
+                <thead className="sticky top-0 z-[1]">
+                  <tr className="bg-slate-50/95 shadow-[inset_0_-1px_0_0_var(--border)]">
+                    <th className="w-12">#</th>
+                    <th>Vendor</th>
+                    <th>Service</th>
+                    <th>Phone</th>
+                    <th className="text-right">Clicks</th>
+                    <th className="w-28">Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredClickRows.map((row, index) => {
+                    const share =
+                      filteredClicksTotal > 0
+                        ? Math.round((row.clicks / filteredClicksTotal) * 100)
+                        : 0;
+                    return (
+                      <tr
+                        key={row.contactId}
+                        className="cursor-pointer transition-colors hover:bg-muted/40"
+                        onClick={() => {
+                          setSelectedId(row.categoryId);
+                          setContactSearch(row.name);
+                        }}
+                      >
+                        <td className="tabular-nums text-muted-foreground">{index + 1}</td>
+                        <td>
+                          <div className="font-medium">{row.name}</div>
+                          {row.topRank != null ? (
+                            <div className="text-[11px] text-amber-700">Top {row.topRank}</div>
+                          ) : null}
+                        </td>
+                        <td className="text-sm">{row.categoryName}</td>
+                        <td className="font-mono text-sm">{row.phone}</td>
+                        <td className="text-right text-base font-semibold tabular-nums">
+                          {row.clicks}
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200/80">
+                              <div
+                                className="h-full rounded-full bg-sky-500"
+                                style={{ width: `${share}%` }}
+                              />
+                            </div>
+                            <span className="w-8 text-right text-[11px] tabular-nums text-muted-foreground">
+                              {share}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Panel>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
         {/* Left: services list */}
         <Panel title="Services">
@@ -624,6 +961,14 @@ export function FindServicesPage() {
                       <div className="text-xs text-muted-foreground">
                         {item.contacts.length}{' '}
                         {item.contacts.length === 1 ? 'number' : 'numbers'}
+                        {' · '}
+                        <span className="tabular-nums">
+                          {item.contacts.reduce(
+                            (sum, contact) => sum + (contact.showNumberClicks ?? 0),
+                            0,
+                          )}{' '}
+                          clicks
+                        </span>
                       </div>
                     </button>
                     {isActive ? (
@@ -784,7 +1129,8 @@ export function FindServicesPage() {
 
               <Panel title={`Providers on kiosk · ${selected.name}`}>
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Order on kiosk: Top 1–5 first, then distance, then rating.
+                  Order on kiosk: Top 1–5 first, then distance, then rating. Admin list below
+                  sorts by Show number clicks.
                 </p>
                 {selected.contacts.length === 0 ? (
                   <EmptyState
