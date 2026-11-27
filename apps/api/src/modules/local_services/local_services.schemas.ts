@@ -22,13 +22,15 @@ const ratingSchema = z.number().min(0).max(5);
 const addressSchema = z.string().trim().max(240).nullable().optional();
 const latSchema = z.number().min(-90).max(90).nullable().optional();
 const lngSchema = z.number().min(-180).max(180).nullable().optional();
+/** 1–5 = Top 5 slot; null clears the feature slot. */
+const topRankSchema = z.number().int().min(1).max(5).nullable().optional();
 
 export const createLocalServiceContactSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
     phone: phoneSchema,
     rating: ratingSchema.optional(),
-    pinned: z.boolean().optional(),
+    topRank: topRankSchema,
     address: addressSchema,
     latitude: latSchema,
     longitude: lngSchema,
@@ -50,7 +52,7 @@ export const updateLocalServiceContactSchema = z
     name: z.string().trim().min(1).max(80).optional(),
     phone: phoneSchema.optional(),
     rating: ratingSchema.optional(),
-    pinned: z.boolean().optional(),
+    topRank: topRankSchema,
     address: addressSchema,
     latitude: latSchema,
     longitude: lngSchema,
@@ -61,7 +63,7 @@ export const updateLocalServiceContactSchema = z
       body.name !== undefined ||
       body.phone !== undefined ||
       body.rating !== undefined ||
-      body.pinned !== undefined ||
+      body.topRank !== undefined ||
       body.address !== undefined ||
       body.latitude !== undefined ||
       body.longitude !== undefined ||

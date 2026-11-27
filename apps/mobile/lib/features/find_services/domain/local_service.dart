@@ -7,6 +7,7 @@ class LocalServiceContact {
     required this.name,
     required this.phone,
     this.rating = 0,
+    this.topRank,
     this.pinned = false,
     this.address,
     this.distanceKm,
@@ -17,6 +18,7 @@ class LocalServiceContact {
   final String name;
   final String phone;
   final double rating;
+  final int? topRank;
   final bool pinned;
   final String? address;
   final double? distanceKm;
@@ -27,6 +29,10 @@ class LocalServiceContact {
     final rating = ratingRaw is num
         ? ratingRaw.toDouble()
         : double.tryParse(ratingRaw?.toString() ?? '') ?? 0;
+    final topRankRaw = json['topRank'];
+    final topRank = topRankRaw is num
+        ? topRankRaw.toInt()
+        : int.tryParse(topRankRaw?.toString() ?? '');
     final distanceRaw = json['distanceKm'];
     final distanceKm = distanceRaw is num
         ? distanceRaw.toDouble()
@@ -36,7 +42,8 @@ class LocalServiceContact {
       name: json['name']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       rating: rating.clamp(0, 5),
-      pinned: json['pinned'] == true,
+      topRank: topRank != null && topRank >= 1 && topRank <= 5 ? topRank : null,
+      pinned: json['pinned'] == true || topRank != null,
       address: json['address']?.toString(),
       distanceKm: distanceKm,
       photoUrl: json['photoUrl']?.toString(),
@@ -90,9 +97,11 @@ class LocalServiceCategory {
         }
       }
     }
-    // Defensive client sort: pinned → distance → rating → name.
+    // Defensive client sort: Top 5 → distance → rating → name.
     contacts.sort((a, b) {
-      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      final ra = a.topRank ?? 1 << 30;
+      final rb = b.topRank ?? 1 << 30;
+      if (ra != rb) return ra.compareTo(rb);
       final da = a.distanceKm ?? double.infinity;
       final db = b.distanceKm ?? double.infinity;
       final byDistance = da.compareTo(db);

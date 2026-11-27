@@ -24,7 +24,7 @@ const CONTACT_SELECT = {
   phone: true,
   sortOrder: true,
   rating: true,
-  pinned: true,
+  topRank: true,
   address: true,
   latitude: true,
   longitude: true,
@@ -37,7 +37,7 @@ type ContactRow = {
   phone: string;
   sortOrder: number;
   rating: number;
-  pinned: boolean;
+  topRank: number | null;
   address: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -61,13 +61,30 @@ function mapContact(row: ContactRow, distanceKm?: number | null) {
     phone: row.phone,
     sortOrder: row.sortOrder,
     rating: row.rating,
-    pinned: row.pinned,
+    topRank: row.topRank,
+    // Backward-compatible flag for older kiosk/mobile builds.
+    pinned: row.topRank != null,
     address: row.address,
     latitude: row.latitude,
     longitude: row.longitude,
     distanceKm: distanceKm ?? null,
     photoUrl: row.photoStoragePath ? `/local-services/contacts/${row.id}/photo` : null,
   };
+}
+
+/** Top 5 first (1→5), then distance, then rating, then name. */
+function byKioskPriority(
+  a: ReturnType<typeof mapContact>,
+  b: ReturnType<typeof mapContact>,
+) {
+  const ra = a.topRank ?? Number.POSITIVE_INFINITY;
+  const rb = b.topRank ?? Number.POSITIVE_INFINITY;
+  if (ra !== rb) return ra - rb;
+  const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
+  const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
+  if (da !== db) return da - db;
+  if (b.rating !== a.rating) return b.rating - a.rating;
+  return a.name.localeCompare(b.name);
 }
 
 function extensionFor(mimeType: string | undefined, originalName: string): string {
@@ -139,23 +156,8 @@ function withDistance(
     }
   }
 
-  const byKioskPriority = (
-    a: ReturnType<typeof mapContact>,
-    b: ReturnType<typeof mapContact>,
-  ) => {
-    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
-    const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
-    if (da !== db) return da - db;
-    if (b.rating !== a.rating) return b.rating - a.rating;
-    return a.name.localeCompare(b.name);
-  };
-
-  nearby.sort(byKioskPriority);
-  extended.sort(byKioskPriority);
-  withoutGeo.sort(byKioskPriority);
-  // Nearby first, then farther pins (kiosk extended), then optional no-pin contacts.
-  return [...nearby, ...extended, ...withoutGeo];
+  // One list: Top 5 slots first, then everyone else by distance + rating.
+  return [...nearby, ...extended, ...withoutGeo].sort(byKioskPriority);
 }
 
 function parseCoords(
@@ -207,7 +209,7 @@ export class LocalServicesService {
         isActive: true,
         contacts: {
           orderBy: [
-            { pinned: 'desc' },
+            { topRank: 'asc' },
             { rating: 'desc' },
             { sortOrder: 'asc' },
             { name: 'asc' },
@@ -267,7 +269,7 @@ export class LocalServicesService {
         isActive: true,
         contacts: {
           orderBy: [
-            { pinned: 'desc' },
+            { topRank: 'asc' },
             { rating: 'desc' },
             { sortOrder: 'asc' },
             { name: 'asc' },
@@ -389,6 +391,19 @@ export class LocalServicesService {
     });
   }
 
+  /** Claim a Top 5 slot; clears the same slot from any other contact in the category. */
+  private async claimTopRank(categoryId: string, contactId: string | null, topRank: number | null) {
+    if (topRank == null) return;
+    await this.db.localServiceContact.updateMany({
+      where: {
+        categoryId,
+        topRank,
+        ...(contactId ? { id: { not: contactId } } : {}),
+      },
+      data: { topRank: null },
+    });
+  }
+
   async createContact(
     categoryId: string,
     input: CreateLocalServiceContactBody,
@@ -414,6 +429,8 @@ export class LocalServicesService {
     const address =
       input.address === undefined ? null : input.address?.trim() ? input.address.trim() : null;
     const coords = parseCoords(input.latitude, input.longitude);
+    const topRank = input.topRank ?? null;
+    await this.claimTopRank(categoryId, null, topRank);
 
     const row = await this.db.localServiceContact.create({
       data: {
@@ -422,7 +439,7 @@ export class LocalServicesService {
         phone: input.phone,
         sortOrder,
         rating: input.rating ?? 0,
-        pinned: input.pinned ?? false,
+        topRank,
         address,
         latitude: coords.latitude,
         longitude: coords.longitude,
@@ -442,7 +459,7 @@ export class LocalServicesService {
         name: row.name,
         phone: row.phone,
         rating: row.rating,
-        pinned: row.pinned,
+        topRank: row.topRank,
         latitude: row.latitude,
         longitude: row.longitude,
       },
@@ -470,7 +487,7 @@ export class LocalServicesService {
       name?: string;
       phone?: string;
       rating?: number;
-      pinned?: boolean;
+      topRank?: number | null;
       address?: string | null;
       latitude?: number | null;
       longitude?: number | null;
@@ -480,7 +497,10 @@ export class LocalServicesService {
     if (input.name !== undefined) data.name = input.name.trim();
     if (input.phone !== undefined) data.phone = input.phone;
     if (input.rating !== undefined) data.rating = input.rating;
-    if (input.pinned !== undefined) data.pinned = input.pinned;
+    if (input.topRank !== undefined) {
+      await this.claimTopRank(categoryId, contactId, input.topRank);
+      data.topRank = input.topRank;
+    }
     if (input.address !== undefined) {
       data.address = input.address?.trim() ? input.address.trim() : null;
     }
@@ -523,7 +543,7 @@ export class LocalServicesService {
           name: existing.name,
           phone: existing.phone,
           rating: existing.rating,
-          pinned: existing.pinned,
+          topRank: existing.topRank,
           address: existing.address,
           latitude: existing.latitude,
           longitude: existing.longitude,
@@ -533,7 +553,7 @@ export class LocalServicesService {
           name: row.name,
           phone: row.phone,
           rating: row.rating,
-          pinned: row.pinned,
+          topRank: row.topRank,
           address: row.address,
           latitude: row.latitude,
           longitude: row.longitude,

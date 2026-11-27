@@ -4,6 +4,7 @@ class LocalServiceContact {
     required this.name,
     required this.phone,
     this.rating = 0,
+    this.topRank,
     this.pinned = false,
     this.address,
     this.latitude,
@@ -16,6 +17,8 @@ class LocalServiceContact {
   final String name;
   final String phone;
   final double rating;
+  /// Admin Top 5 slot (1–5). Null = not featured.
+  final int? topRank;
   final bool pinned;
   final String? address;
   final double? latitude;
@@ -28,12 +31,17 @@ class LocalServiceContact {
     final rating = ratingRaw is num
         ? ratingRaw.toDouble()
         : double.tryParse(ratingRaw?.toString() ?? '') ?? 0;
+    final topRankRaw = json['topRank'];
+    final topRank = topRankRaw is num
+        ? topRankRaw.toInt()
+        : int.tryParse(topRankRaw?.toString() ?? '');
     return LocalServiceContact(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       rating: rating.clamp(0, 5),
-      pinned: json['pinned'] == true,
+      topRank: topRank != null && topRank >= 1 && topRank <= 5 ? topRank : null,
+      pinned: json['pinned'] == true || topRank != null,
       address: json['address']?.toString(),
       latitude: _asDouble(json['latitude']),
       longitude: _asDouble(json['longitude']),
@@ -69,9 +77,11 @@ class LocalServiceCategory {
         }
       }
     }
-    // Defensive client sort: pinned → distance → rating → name (API already sorts this way).
+    // Defensive client sort: Top 5 → distance → rating → name (API already sorts this way).
     contacts.sort((a, b) {
-      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      final ra = a.topRank ?? 1 << 30;
+      final rb = b.topRank ?? 1 << 30;
+      if (ra != rb) return ra.compareTo(rb);
       final da = a.distanceKm ?? double.infinity;
       final db = b.distanceKm ?? double.infinity;
       final byDistance = da.compareTo(db);

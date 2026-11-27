@@ -908,10 +908,10 @@ model LocalServiceContact {
   name             String
   phone            String               @db.VarChar(10)
   sortOrder        Int                  @map("sort_order")
-  /// Admin-set star rating 0–5. Higher ranks first on the kiosk (after pinned).
+  /// Admin-set star rating 0–5. Used after Top 5 (with distance) on the kiosk.
   rating           Float                @default(0)
-  /// When true, contact stays at the top of its category list.
-  pinned           Boolean              @default(false)
+  /// Optional Top 5 slot (1–5). Null = not featured; ordered before rating/distance.
+  topRank          Int?                 @map("top_rank")
   address          String?
   latitude         Float?
   longitude        Float?
@@ -919,7 +919,7 @@ model LocalServiceContact {
   category         LocalServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@index([categoryId, sortOrder])
-  @@index([categoryId, pinned, rating])
+  @@index([categoryId, topRank, rating])
   @@map("local_service_contacts")
 }
 

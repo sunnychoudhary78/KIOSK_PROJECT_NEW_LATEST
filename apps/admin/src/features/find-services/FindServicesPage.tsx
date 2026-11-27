@@ -27,13 +27,23 @@ type LocalContact = {
   phone: string;
   sortOrder: number;
   rating: number;
-  pinned: boolean;
+  topRank: number | null;
+  pinned?: boolean;
   address: string | null;
   latitude: number | null;
   longitude: number | null;
   distanceKm?: number | null;
   photoUrl: string | null;
 };
+
+const TOP_RANK_OPTIONS = [
+  { value: '', label: 'Not in Top 5' },
+  { value: '1', label: 'Top 1' },
+  { value: '2', label: 'Top 2' },
+  { value: '3', label: 'Top 3' },
+  { value: '4', label: 'Top 4' },
+  { value: '5', label: 'Top 5' },
+] as const;
 
 type LocalCategory = {
   id: string;
@@ -219,7 +229,7 @@ export function FindServicesPage() {
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [contactRating, setContactRating] = useState(0);
-  const [contactPinned, setContactPinned] = useState(false);
+  const [contactTopRank, setContactTopRank] = useState<number | null>(null);
   const [contactAddress, setContactAddress] = useState('');
   const [contactLat, setContactLat] = useState('');
   const [contactLng, setContactLng] = useState('');
@@ -233,7 +243,7 @@ export function FindServicesPage() {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editRating, setEditRating] = useState(0);
-  const [editPinned, setEditPinned] = useState(false);
+  const [editTopRank, setEditTopRank] = useState<number | null>(null);
   const [editAddress, setEditAddress] = useState('');
   const [editLat, setEditLat] = useState('');
   const [editLng, setEditLng] = useState('');
@@ -311,7 +321,7 @@ export function FindServicesPage() {
     setContactName('');
     setContactPhone('');
     setContactRating(0);
-    setContactPinned(false);
+    setContactTopRank(null);
     setContactAddress('');
     setContactLat('');
     setContactLng('');
@@ -413,7 +423,7 @@ export function FindServicesPage() {
           name: contactName.trim(),
           phone: contactPhone.trim(),
           rating: contactRating,
-          pinned: contactPinned,
+          topRank: contactTopRank,
           address: contactAddress.trim() || null,
           latitude,
           longitude,
@@ -441,7 +451,7 @@ export function FindServicesPage() {
     setEditName(contact.name);
     setEditPhone(contact.phone);
     setEditRating(contact.rating ?? 0);
-    setEditPinned(Boolean(contact.pinned));
+    setEditTopRank(contact.topRank ?? null);
     setEditAddress(contact.address ?? '');
     setEditLat(contact.latitude != null ? String(contact.latitude) : '');
     setEditLng(contact.longitude != null ? String(contact.longitude) : '');
@@ -499,7 +509,7 @@ export function FindServicesPage() {
           name: editName.trim(),
           phone: editPhone.trim(),
           rating: editRating,
-          pinned: editPinned,
+          topRank: editTopRank,
           address: editAddress.trim() || null,
           latitude,
           longitude,
@@ -740,15 +750,25 @@ export function FindServicesPage() {
                     />
                   </div>
 
-                  <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={contactPinned}
-                      onChange={(event) => setContactPinned(event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    <Pin className="h-3.5 w-3.5 text-amber-600" />
-                    Pin to top of kiosk list
+                  <label className="flex flex-col gap-1.5 text-sm font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Pin className="h-3.5 w-3.5 text-amber-600" />
+                      Top 5 on kiosk
+                    </span>
+                    <select
+                      className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                      value={contactTopRank == null ? '' : String(contactTopRank)}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        setContactTopRank(raw === '' ? null : Number(raw));
+                      }}
+                    >
+                      {TOP_RANK_OPTIONS.map((option) => (
+                        <option key={option.value || 'none'} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   {contactError ? <p className="error">{contactError}</p> : null}
@@ -763,7 +783,7 @@ export function FindServicesPage() {
 
               <Panel title={`Providers on kiosk · ${selected.name}`}>
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Order on kiosk: pinned first, then highest rating.
+                  Order on kiosk: Top 1–5 first, then distance, then rating.
                 </p>
                 {selected.contacts.length === 0 ? (
                   <EmptyState
@@ -785,7 +805,7 @@ export function FindServicesPage() {
                           <li
                             key={contact.id}
                             className={`flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between ${
-                              contact.pinned
+                              contact.topRank != null
                                 ? 'border-amber-300/80 bg-amber-50/50'
                                 : 'border-border bg-background'
                             }`}
@@ -804,10 +824,10 @@ export function FindServicesPage() {
                               <div className="min-w-0 space-y-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="truncate font-semibold">{contact.name}</span>
-                                  {contact.pinned ? (
+                                  {contact.topRank != null ? (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
                                       <Pin className="h-3 w-3" />
-                                      Pinned
+                                      Top {contact.topRank}
                                     </span>
                                   ) : null}
                                   <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
@@ -975,15 +995,25 @@ export function FindServicesPage() {
               />
             </div>
 
-            <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={editPinned}
-                onChange={(event) => setEditPinned(event.target.checked)}
-                className="h-4 w-4"
-              />
-              <Pin className="h-3.5 w-3.5 text-amber-600" />
-              Pin to top of kiosk list
+            <label className="flex flex-col gap-1.5 text-sm font-medium">
+              <span className="inline-flex items-center gap-1.5">
+                <Pin className="h-3.5 w-3.5 text-amber-600" />
+                Top 5 on kiosk
+              </span>
+              <select
+                className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                value={editTopRank == null ? '' : String(editTopRank)}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setEditTopRank(raw === '' ? null : Number(raw));
+                }}
+              >
+                {TOP_RANK_OPTIONS.map((option) => (
+                  <option key={option.value || 'none'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
 
             {editError ? <p className="error">{editError}</p> : null}

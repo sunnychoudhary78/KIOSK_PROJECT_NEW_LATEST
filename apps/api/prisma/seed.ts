@@ -531,11 +531,11 @@ async function main() {
       });
     }
 
-    // Find Services demo pin / rating / geo cluster (Gaur City area).
+    // Find Services demo Top 5 / rating / geo cluster (Gaur City area).
     const localServiceDemoEnrich = [
       {
         id: 'c0000000-0000-4000-8000-000000000005',
-        pinned: true,
+        topRank: 1,
         rating: 4.0,
         address: 'Shop 14, Gaur City 2 Market',
         latitude: 28.6285,
@@ -543,7 +543,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000006',
-        pinned: true,
+        topRank: 2,
         rating: 3.5,
         address: 'Near Hajipur Crossing',
         latitude: 28.64,
@@ -551,7 +551,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000001',
-        pinned: false,
+        topRank: null,
         rating: 3.0,
         address: 'Gaur City 1, Tower 5 area',
         latitude: 28.609,
@@ -559,7 +559,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000003',
-        pinned: false,
+        topRank: null,
         rating: 4.8,
         address: 'Sector 16C, Noida Extension',
         latitude: 28.614,
@@ -567,7 +567,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000004',
-        pinned: false,
+        topRank: null,
         rating: 4.9,
         address: 'Main Market, Chiranjiv Vihar',
         latitude: 28.6195,
@@ -575,7 +575,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000002',
-        pinned: false,
+        topRank: null,
         rating: 4.2,
         address: 'Opp. Gaur City Mall',
         latitude: 28.622,
@@ -583,7 +583,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000007',
-        pinned: false,
+        topRank: null,
         rating: 2.5,
         address: 'Bisrakh Road workshop',
         latitude: 28.635,
@@ -591,7 +591,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000110',
-        pinned: true,
+        topRank: 1,
         rating: 4.7,
         address: 'Gaur City 2 plumbing hub',
         latitude: 28.6105,
@@ -599,7 +599,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000111',
-        pinned: false,
+        topRank: null,
         rating: 4.5,
         address: 'Sector 4, Greater Noida West',
         latitude: 28.612,
@@ -607,7 +607,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000112',
-        pinned: false,
+        topRank: null,
         rating: 3.8,
         address: 'Near City Park',
         latitude: 28.618,
@@ -615,7 +615,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000056',
-        pinned: true,
+        topRank: 1,
         rating: 4.6,
         address: 'Electrical mart, GC-2',
         latitude: 28.611,
@@ -623,7 +623,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000057',
-        pinned: false,
+        topRank: null,
         rating: 4.3,
         address: 'Tower circle shop',
         latitude: 28.6075,
@@ -631,7 +631,7 @@ async function main() {
       },
       {
         id: 'c0000000-0000-4000-8000-000000000058',
-        pinned: false,
+        topRank: null,
         rating: 3.9,
         address: 'Hajipur service lane',
         latitude: 28.62,
@@ -643,7 +643,7 @@ async function main() {
       await prisma.localServiceContact.updateMany({
         where: { id: row.id },
         data: {
-          pinned: row.pinned,
+          topRank: row.topRank,
           rating: row.rating,
           address: row.address,
           latitude: row.latitude,

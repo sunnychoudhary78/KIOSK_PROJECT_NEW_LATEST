@@ -17,7 +17,7 @@ const contactSelect = {
   phone: true,
   sortOrder: true,
   rating: true,
-  pinned: true,
+  topRank: true,
   address: true,
   latitude: true,
   longitude: true,
@@ -40,7 +40,7 @@ describe('LocalServicesService.list', () => {
             phone: '9871471035',
             sortOrder: 1,
             rating: 4.5,
-            pinned: true,
+            topRank: 1,
             address: 'Gate 2',
             latitude: 28.61,
             longitude: 77.2,
@@ -62,7 +62,7 @@ describe('LocalServicesService.list', () => {
         isActive: true,
         contacts: {
           orderBy: [
-            { pinned: 'desc' },
+            { topRank: 'asc' },
             { rating: 'desc' },
             { sortOrder: 'asc' },
             { name: 'asc' },
@@ -74,6 +74,7 @@ describe('LocalServicesService.list', () => {
     expect(result.categories[0]?.contacts[0]).toMatchObject({
       phone: '9871471035',
       rating: 4.5,
+      topRank: 1,
       pinned: true,
       address: 'Gate 2',
       latitude: 28.61,
@@ -98,7 +99,7 @@ describe('LocalServicesService.list', () => {
             phone: '9999999999',
             sortOrder: 1,
             rating: 3,
-            pinned: false,
+            topRank: null,
             address: 'Near',
             latitude: 28.6139,
             longitude: 77.209,
@@ -110,7 +111,7 @@ describe('LocalServicesService.list', () => {
             phone: '6666666666',
             sortOrder: 2,
             rating: 2,
-            pinned: false,
+            topRank: null,
             address: 'Same',
             latitude: 28.6139,
             longitude: 77.209,
@@ -122,11 +123,23 @@ describe('LocalServicesService.list', () => {
             phone: '8888888888',
             sortOrder: 3,
             rating: 5,
-            pinned: true,
+            topRank: null,
             address: 'Extended',
             // ~20 km away — outside 5 km nearby, inside 50 km extended
             latitude: 28.8,
             longitude: 77.5,
+            photoStoragePath: null,
+          },
+          {
+            id: 'top-far',
+            name: 'Top Far Shop',
+            phone: '4444444444',
+            sortOrder: 6,
+            rating: 1,
+            topRank: 2,
+            address: 'Top Far',
+            latitude: 28.7,
+            longitude: 77.35,
             photoStoragePath: null,
           },
           {
@@ -135,7 +148,7 @@ describe('LocalServicesService.list', () => {
             phone: '5555555555',
             sortOrder: 4,
             rating: 5,
-            pinned: false,
+            topRank: null,
             address: 'Too Far',
             // ~200+ km away — outside extended radius
             latitude: 30.0,
@@ -148,7 +161,7 @@ describe('LocalServicesService.list', () => {
             phone: '7777777777',
             sortOrder: 5,
             rating: 4,
-            pinned: false,
+            topRank: null,
             address: 'Unknown',
             latitude: null,
             longitude: null,
@@ -167,15 +180,17 @@ describe('LocalServicesService.list', () => {
     const result = await service.list('device-1');
     expect(result.radiusKm).toBe(5);
     expect(result.categories).toHaveLength(1);
-    // Same lat/lng first; extended pins still show; empty lat/lng and too-far are hidden.
+    // Top 5 first, then distance + rating; empty lat/lng and too-far stay hidden.
     expect(result.categories[0]?.contacts.map((c) => c.id)).toEqual([
+      'top-far',
       'near',
       'same-pin',
       'extended',
     ]);
-    expect(result.categories[0]?.contacts[0]?.distanceKm).toBe(0);
+    expect(result.categories[0]?.contacts[0]?.topRank).toBe(2);
     expect(result.categories[0]?.contacts[1]?.distanceKm).toBe(0);
-    expect(result.categories[0]?.contacts[2]?.distanceKm).toBeGreaterThan(5);
+    expect(result.categories[0]?.contacts[2]?.distanceKm).toBe(0);
+    expect(result.categories[0]?.contacts[3]?.distanceKm).toBeGreaterThan(5);
   });
 
 });
@@ -196,7 +211,7 @@ describe('LocalServicesService.nearby', () => {
             phone: '9111111111',
             sortOrder: 1,
             rating: 4,
-            pinned: false,
+            topRank: null,
             address: 'A',
             latitude: 19.076,
             longitude: 72.8777,
@@ -208,7 +223,7 @@ describe('LocalServicesService.nearby', () => {
             phone: '9222222222',
             sortOrder: 2,
             rating: 5,
-            pinned: true,
+            topRank: null,
             address: 'B',
             latitude: null,
             longitude: null,
@@ -260,12 +275,13 @@ describe('LocalServicesService writes', () => {
       phone: '9876543210',
       sortOrder: 1,
       rating: 0,
-      pinned: false,
+      topRank: null as number | null,
       address: null,
       latitude: 28.6,
       longitude: 77.2,
       photoStoragePath: null,
     }));
+    const updateMany = vi.fn(async () => ({ count: 0 }));
     const deleteContact = vi.fn(async () => undefined);
     const { service, audit } = serviceWith({
       localServiceCategory: {
@@ -277,6 +293,7 @@ describe('LocalServicesService writes', () => {
       localServiceContact: {
         aggregate: aggregateContact,
         create: createContact,
+        updateMany,
         findUnique: findContact,
         delete: deleteContact,
       },
@@ -301,7 +318,7 @@ describe('LocalServicesService writes', () => {
     expect(audit.record).toHaveBeenCalledTimes(4);
   });
 
-  it('updates rating, pin, address and coords', async () => {
+  it('updates rating, topRank, address and coords', async () => {
     const existing = {
       id: 'contact-1',
       categoryId: 'cat-1',
@@ -309,17 +326,18 @@ describe('LocalServicesService writes', () => {
       phone: '9876543210',
       sortOrder: 1,
       rating: 0,
-      pinned: false,
+      topRank: null,
       address: null,
       latitude: null,
       longitude: null,
       photoStoragePath: null,
     };
+    const updateMany = vi.fn(async () => ({ count: 0 }));
     const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
       ...existing,
       ...data,
       rating: 5,
-      pinned: true,
+      topRank: 1,
       address: 'Lobby shop',
       latitude: 28.61,
       longitude: 77.21,
@@ -327,6 +345,7 @@ describe('LocalServicesService writes', () => {
     const { service, audit } = serviceWith({
       localServiceContact: {
         findUnique: vi.fn(async () => existing),
+        updateMany,
         update,
       },
     });
@@ -336,7 +355,7 @@ describe('LocalServicesService writes', () => {
       'contact-1',
       {
         rating: 5,
-        pinned: true,
+        topRank: 1,
         address: 'Lobby shop',
         latitude: 28.61,
         longitude: 77.21,
@@ -346,12 +365,14 @@ describe('LocalServicesService writes', () => {
 
     expect(result).toMatchObject({
       rating: 5,
+      topRank: 1,
       pinned: true,
       address: 'Lobby shop',
       latitude: 28.61,
       longitude: 77.21,
       photoUrl: null,
     });
+    expect(updateMany).toHaveBeenCalledOnce();
     expect(update).toHaveBeenCalledOnce();
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'local_service.contact_updated' }),

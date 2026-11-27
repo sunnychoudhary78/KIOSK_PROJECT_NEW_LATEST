@@ -102,8 +102,8 @@ class _ContactCardState extends State<_ContactCard> {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(SkpTokens.radiusLg),
       side: BorderSide(
-        color: contact.pinned ? const Color(0xFFF59E0B) : SkpColors.line,
-        width: contact.pinned ? 1.6 : 1,
+        color: contact.topRank != null ? const Color(0xFFF59E0B) : SkpColors.line,
+        width: contact.topRank != null ? 1.6 : 1,
       ),
     );
 
@@ -133,13 +133,27 @@ class _ContactCardState extends State<_ContactCard> {
                       children: [
                         Row(
                           children: [
-                            if (contact.pinned) ...[
-                              const Icon(
-                                Icons.push_pin_rounded,
-                                size: 16,
-                                color: Color(0xFFD97706),
+                            if (contact.topRank != null) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFFBEB),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: const Color(0xFFFCD34D)),
+                                ),
+                                child: Text(
+                                  'Top ${contact.topRank}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 6),
                             ],
                             Expanded(
                               child: Text(
