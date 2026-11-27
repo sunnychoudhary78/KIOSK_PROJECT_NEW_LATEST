@@ -121,17 +121,11 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
                         ? _EmptyContactsState(accent: accent, isDark: isDark)
                         : LayoutBuilder(
                             builder: (context, constraints) {
-                              const gap = 16.0;
-                              final columns = constraints.maxWidth >= 1100
-                                  ? 3
-                                  : constraints.maxWidth >= 720
-                                      ? 2
-                                      : 1;
-                              final tileWidth =
-                                  (constraints.maxWidth - gap * (columns - 1)) /
-                                      columns;
-                              final tileHeight =
-                                  (tileWidth * 1.05).clamp(268.0, 320.0);
+                              const gap = 14.0;
+                              final columns = constraints.maxWidth >= 980
+                                  ? 2
+                                  : 1;
+                              const tileHeight = 148.0;
 
                               return GridView.builder(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -432,7 +426,7 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1C143F) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: isDark
               ? accent.withValues(alpha: 0.38)
@@ -441,8 +435,8 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
         boxShadow: [
           BoxShadow(
             color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
           BoxShadow(
             color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
@@ -452,11 +446,11 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            flex: 11,
+          SizedBox(
+            width: 132,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -466,63 +460,47 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                   accessToken: widget.accessToken,
                   accent: accent,
                   secondaryAccent: widget.secondaryAccent,
+                  showComplete: true,
                 ),
                 Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: photoUrl != null ? 36 : 56,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          (isDark ? const Color(0xFF1C143F) : Colors.white)
-                              .withValues(alpha: 0),
-                          (isDark ? const Color(0xFF1C143F) : Colors.white)
-                              .withValues(alpha: photoUrl != null ? 0.92 : 1),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 12,
-                  left: 12,
+                  top: 10,
+                  left: 10,
                   child: _RoleChip(
                     label: widget.roleLabel,
                     accent: accent,
                   ),
                 ),
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: _RatingPill(rating: widget.contact.rating),
-                ),
               ],
             ),
           ),
           Expanded(
-            flex: 10,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.contact.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'PlusJakartaSans',
-                      fontSize: 17.5,
-                      fontWeight: FontWeight.w800,
-                      height: 1.2,
-                      color: colors.textPrimary,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.contact.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            height: 1.2,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _RatingPill(rating: widget.contact.rating),
+                    ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   _MiniStars(rating: widget.contact.rating),
                   const Spacer(),
                   AnimatedSwitcher(
@@ -641,6 +619,7 @@ class _PhotoHero extends StatelessWidget {
     required this.accessToken,
     required this.accent,
     required this.secondaryAccent,
+    this.showComplete = false,
   });
 
   final String name;
@@ -648,6 +627,7 @@ class _PhotoHero extends StatelessWidget {
   final String? accessToken;
   final Color accent;
   final Color secondaryAccent;
+  final bool showComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -679,8 +659,8 @@ class _PhotoHero extends StatelessWidget {
           ),
           Center(
             child: Container(
-              width: 92,
-              height: 92,
+              width: showComplete ? 72 : 92,
+              height: showComplete ? 72 : 92,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -708,7 +688,7 @@ class _PhotoHero extends StatelessWidget {
                 initial,
                 style: TextStyle(
                   fontFamily: 'PlusJakartaSans',
-                  fontSize: 40,
+                  fontSize: showComplete ? 32 : 40,
                   fontWeight: FontWeight.w900,
                   color: accent,
                   height: 1,
@@ -726,8 +706,53 @@ class _PhotoHero extends StatelessWidget {
 
     final headers = {'Authorization': 'Bearer $accessToken'};
 
-    // Any aspect ratio: blurred cover fills the frame, sharp cover sits on top
-    // (top-biased so faces stay in view for typical portrait uploads).
+    // Horizontal cards: contain the full photo. Vertical legacy: soft cover fill.
+    if (showComplete) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: accent.withValues(alpha: 0.12)),
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Transform.scale(
+              scale: 1.08,
+              child: Image.network(
+                photoUrl!,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                alignment: Alignment.center,
+                headers: headers,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+          ColoredBox(color: Colors.white.withValues(alpha: 0.12)),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Image.network(
+              photoUrl!,
+              fit: BoxFit.contain,
+              width: double.infinity,
+              height: double.infinity,
+              alignment: Alignment.center,
+              headers: headers,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, __, ___) => placeholder(),
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return placeholder();
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [
