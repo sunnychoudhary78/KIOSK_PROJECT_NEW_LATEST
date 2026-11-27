@@ -48,6 +48,14 @@ type LocalList = {
   categories: LocalCategory[];
 };
 
+type KioskDevice = {
+  id: string;
+  name: string;
+  siteName: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 function formatRating(value: number): string {
   return Number.isFinite(value) ? value.toFixed(1).replace(/\.0$/, '') : '0';
 }
@@ -234,6 +242,7 @@ export function FindServicesPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null);
+  const [kiosks, setKiosks] = useState<KioskDevice[]>([]);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -253,9 +262,27 @@ export function FindServicesPage() {
     }
   }, [token]);
 
+  const loadKiosks = useCallback(async () => {
+    if (!token) {
+      setKiosks([]);
+      return;
+    }
+    try {
+      const result = await apiRequest<{ items: KioskDevice[] }>('/devices', { token });
+      setKiosks(
+        (result.items ?? []).filter(
+          (item) => item.latitude != null && item.longitude != null,
+        ),
+      );
+    } catch {
+      setKiosks([]);
+    }
+  }, [token]);
+
   useEffect(() => {
     void loadList();
-  }, [loadList]);
+    void loadKiosks();
+  }, [loadList, loadKiosks]);
 
   const selected = list?.categories.find((item) => item.id === selectedId) ?? null;
 
@@ -294,9 +321,31 @@ export function FindServicesPage() {
   function parseOptionalCoord(raw: string): number | null {
     const trimmed = raw.trim();
     if (!trimmed) return null;
-    const value = Number(trimmed);
+    // Allow paste of "28.65195, 77.23149" into one field — take the first number.
+    const first = trimmed.split(/[,/\s]+/).find((part) => part.length > 0) ?? trimmed;
+    const value = Number(first);
     return Number.isFinite(value) ? value : Number.NaN;
   }
+
+  function applyKioskPin(
+    deviceId: string,
+    setLat: (value: string) => void,
+    setLng: (value: string) => void,
+  ) {
+    const device = kiosks.find((item) => item.id === deviceId);
+    if (!device || device.latitude == null || device.longitude == null) return;
+    setLat(String(device.latitude));
+    setLng(String(device.longitude));
+  }
+
+  const kioskPinOptions = useMemo(
+    () =>
+      kiosks.map((item) => ({
+        id: item.id,
+        label: `${item.name} · ${item.siteName} (${item.latitude!.toFixed(5)}, ${item.longitude!.toFixed(5)})`,
+      })),
+    [kiosks],
+  );
 
   async function addService(event: FormEvent) {
     event.preventDefault();
@@ -351,7 +400,7 @@ export function FindServicesPage() {
       return;
     }
     if ((latitude == null) !== (longitude == null)) {
-      setContactError('Set both latitude and longitude (needed for 5 km kiosk / app filtering)');
+      setContactError('Set both latitude and longitude (required for kiosk nearby filtering)');
       return;
     }
     setSavingContact(true);
@@ -498,7 +547,7 @@ export function FindServicesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Find services"
-        subtitle="Providers with lat/lng show within 5 km of each kiosk (and nearby on the mobile app). Pinned + rating still apply inside that radius."
+        subtitle="Copy lat/lng from the target kiosk so distance shows 0 km. Lat/lng is required on kiosk; pins up to 50 km still appear after nearby ones."
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
@@ -655,9 +704,32 @@ export function FindServicesPage() {
                       />
                     </label>
                   </div>
+                  {kioskPinOptions.length > 0 ? (
+                    <label className="flex flex-col gap-1.5 text-sm font-medium">
+                      Copy location from kiosk
+                      <select
+                        className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                        defaultValue=""
+                        onChange={(event) => {
+                          applyKioskPin(event.target.value, setContactLat, setContactLng);
+                          event.target.value = '';
+                        }}
+                      >
+                        <option value="" disabled>
+                          Select kiosk to copy exact lat/lng…
+                        </option>
+                        {kioskPinOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
-                    Lat/lng required for 5 km filtering on kiosks and the mobile app. Without them,
-                    the provider will not appear in nearby results.
+                    Use Copy location from kiosk for the machine that should show this provider
+                    (same pin = 0 km). Empty lat/lng hides the provider on kiosk; pins up to 50 km
+                    still appear after nearby.
                   </p>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -758,7 +830,7 @@ export function FindServicesPage() {
                                   </div>
                                 ) : (
                                   <div className="text-[11px] font-medium text-amber-700">
-                                    No map location — hidden from 5 km lists
+                                    No map location — hidden on kiosk until lat/lng are set
                                   </div>
                                 )}
                               </div>
@@ -867,6 +939,28 @@ export function FindServicesPage() {
                 />
               </label>
             </div>
+            {kioskPinOptions.length > 0 ? (
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Copy location from kiosk
+                <select
+                  className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                  defaultValue=""
+                  onChange={(event) => {
+                    applyKioskPin(event.target.value, setEditLat, setEditLng);
+                    event.target.value = '';
+                  }}
+                >
+                  <option value="" disabled>
+                    Select kiosk to copy exact lat/lng…
+                  </option>
+                  {kioskPinOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <StarRatingInput value={editRating} onChange={setEditRating} />

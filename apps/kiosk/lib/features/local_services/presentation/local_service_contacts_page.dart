@@ -39,7 +39,7 @@ class LocalServiceContactsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Providers within 5 km',
+                'Nearby providers',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontFamily: 'PlusJakartaSans',
                       fontWeight: FontWeight.w800,
@@ -51,7 +51,7 @@ class LocalServiceContactsPage extends ConsumerWidget {
                 child: contacts.isEmpty
                     ? Center(
                         child: Text(
-                          'No providers within 5 km of this kiosk.',
+                          'No providers near this kiosk yet. Add lat/lng in Admin.',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
                             color: colors.textSecondary,
@@ -368,6 +368,9 @@ String _formatPhone(String phone) {
 }
 
 String _formatDistance(double km) {
+  if (km <= 0.05) {
+    return 'At this kiosk';
+  }
   if (km < 1) {
     final meters = (km * 1000).round();
     return '$meters m away';

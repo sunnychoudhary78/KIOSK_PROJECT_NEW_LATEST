@@ -32,6 +32,12 @@ import { SocietyPhonesPage } from '../society-phones/SocietyPhonesPage';
 
 type QuotaPeriod = 'daily' | 'weekly' | 'monthly';
 
+type FreeQuotaSaved = {
+  period: QuotaPeriod;
+  freeBwPages: number;
+  freeColorPages: number;
+};
+
 type FreeQuotaForm = {
   period: QuotaPeriod;
   freeBwPages: number | '';
@@ -84,7 +90,7 @@ type SocietyList = {
 
 type HubTab = 'overview' | 'limits' | 'society' | 'usage';
 
-const DEFAULT_QUOTA: FreeQuotaForm = {
+const DEFAULT_QUOTA: FreeQuotaSaved = {
   period: 'daily',
   freeBwPages: 5,
   freeColorPages: 0,
@@ -404,14 +410,22 @@ export function FreePrintHubPage() {
 
   const loadQuotas = useCallback(async () => {
     const result = await apiRequest<{ items: PlatformSetting[] }>('/platform-settings', { token });
-    let nextPublic = DEFAULT_QUOTA;
-    let nextSociety = DEFAULT_QUOTA;
+    let nextPublic: FreeQuotaForm = { ...DEFAULT_QUOTA };
+    let nextSociety: FreeQuotaForm = { ...DEFAULT_QUOTA };
     for (const item of result.items) {
       if (item.settingKey === 'print_free_quota_config') {
-        nextPublic = { ...DEFAULT_QUOTA, ...item.settingValue };
+        nextPublic = {
+          period: item.settingValue.period || DEFAULT_QUOTA.period,
+          freeBwPages: clampPages(item.settingValue.freeBwPages, DEFAULT_QUOTA.freeBwPages),
+          freeColorPages: clampPages(item.settingValue.freeColorPages, DEFAULT_QUOTA.freeColorPages),
+        };
       }
       if (item.settingKey === 'society_free_quota_config') {
-        nextSociety = { ...DEFAULT_QUOTA, ...item.settingValue };
+        nextSociety = {
+          period: item.settingValue.period || DEFAULT_QUOTA.period,
+          freeBwPages: clampPages(item.settingValue.freeBwPages, DEFAULT_QUOTA.freeBwPages),
+          freeColorPages: clampPages(item.settingValue.freeColorPages, DEFAULT_QUOTA.freeColorPages),
+        };
       }
     }
     setPublicQuota(nextPublic);

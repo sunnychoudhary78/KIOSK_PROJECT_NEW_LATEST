@@ -1,7 +1,7 @@
 name: skp_kiosk
 description: Smart Kiosk Platform — Windows kiosk client
 publish_to: "none"
-version: 0.1.12+13
+version: 0.1.14+15
 
 environment:
   sdk: ^3.10.8
