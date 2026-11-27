@@ -12,7 +12,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTitle => 'IMT-Print';
 
   @override
-  String get brandName => 'IMT-Print';
+  String get brandName => 'ATHENAA';
 
   @override
   String get guestSubtitle =>
