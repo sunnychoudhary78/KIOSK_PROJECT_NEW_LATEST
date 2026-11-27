@@ -1,5 +1,5 @@
 name: skp_mobile
-description: IMT-Print — citizen mobile client
+description: ATHENAA — citizen mobile client
 publish_to: "none"
 version: 0.1.0+1
 
@@ -36,7 +36,7 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: assets/logo/logo.png
-  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_background: "#FFE6F2"
   adaptive_icon_foreground: assets/logo/logo.png
 
 dependency_overrides:
@@ -48,6 +48,7 @@ flutter:
   assets:
     - assets/fuel_stations/catalog.json
     - assets/logo/athenaa_immortech.png
+    - assets/logo/logo.png
   fonts:
     - family: PlusJakartaSans
       fonts:

@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'IMT-Print';
+  String get appTitle => 'ATHENAA';
 
   @override
   String get brandName => 'ATHENAA';
@@ -310,7 +310,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get howItWorks => 'How it works';
 
   @override
-  String get about => 'About IMT-Print';
+  String get about => 'About ATHENAA';
 
   @override
   String get signOut => 'Sign out';
@@ -527,11 +527,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pastSection => 'Earlier';
 
   @override
-  String get aboutTitle => 'About IMT-Print';
+  String get aboutTitle => 'About ATHENAA';
 
   @override
   String get aboutBody =>
-      'IMT-Print lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.';
+      'ATHENAA lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.';
 
   @override
   String get privacyPolicy => 'Privacy policy';

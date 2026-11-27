@@ -12,7 +12,7 @@ class SkpMobileApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(appLocaleProvider);
     return MaterialApp(
-      title: 'IMT-Print',
+      title: 'ATHENAA',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       locale: locale,
