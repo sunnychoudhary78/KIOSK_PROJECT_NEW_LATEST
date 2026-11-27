@@ -449,36 +449,36 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: 168,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(color: softFill),
-                _PhotoHero(
-                  name: widget.contact.name,
-                  photoUrl: photoUrl,
-                  accessToken: widget.accessToken,
-                  accent: accent,
-                  secondaryAccent: widget.secondaryAccent,
-                  showComplete: true,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
+            child: SizedBox(
+              width: 156,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ColoredBox(color: softFill),
+                    _PhotoHero(
+                      name: widget.contact.name,
+                      photoUrl: photoUrl,
+                      accessToken: widget.accessToken,
+                      accent: accent,
+                      secondaryAccent: widget.secondaryAccent,
+                      showComplete: true,
+                    ),
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: _RoleChip(
+                        label: widget.roleLabel,
+                        accent: accent,
+                      ),
+                    ),
+                  ],
                 ),
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: _RoleChip(
-                    label: widget.roleLabel,
-                    accent: accent,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-          Container(
-            width: 1,
-            color: isDark
-                ? accent.withValues(alpha: 0.22)
-                : const Color(0xFFE2E8F0),
           ),
           Expanded(
             child: Padding(
