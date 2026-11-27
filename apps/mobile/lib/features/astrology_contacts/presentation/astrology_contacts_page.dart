@@ -196,6 +196,23 @@ class _AstrologyContactCardState extends State<_AstrologyContactCard> {
                         ),
                       ],
                     ),
+                    if (_profileLines(widget.contact).isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      ..._profileLines(widget.contact).map(
+                        (line) => Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            line,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: SkpColors.muted,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -241,6 +258,19 @@ class _AstrologyContactCardState extends State<_AstrologyContactCard> {
       ),
     );
   }
+}
+
+List<String> _profileLines(AstrologyContact contact) {
+  final lines = <String>[];
+  final degree = contact.degree?.trim();
+  final address = contact.address?.trim();
+  final years = contact.experienceYears;
+  if (degree != null && degree.isNotEmpty) lines.add(degree);
+  if (years != null) {
+    lines.add(years == 1 ? '1 yr experience' : '$years yrs experience');
+  }
+  if (address != null && address.isNotEmpty) lines.add(address);
+  return lines;
 }
 
 class _PhotoAvatar extends StatelessWidget {

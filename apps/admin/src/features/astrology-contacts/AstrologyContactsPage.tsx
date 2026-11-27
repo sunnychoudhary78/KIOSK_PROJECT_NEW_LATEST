@@ -27,6 +27,9 @@ type AstrologyContact = {
   rating: number;
   sortOrder: number;
   showNumberClicks: number;
+  address: string | null;
+  degree: string | null;
+  experienceYears: number | null;
   photoUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -42,6 +45,9 @@ type FormState = {
   phone: string;
   rating: string;
   sortOrder: string;
+  address: string;
+  degree: string;
+  experienceYears: string;
 };
 
 const emptyForm: FormState = {
@@ -50,6 +56,9 @@ const emptyForm: FormState = {
   phone: '',
   rating: '4.5',
   sortOrder: '',
+  address: '',
+  degree: '',
+  experienceYears: '',
 };
 
 function kindLabel(kind: AstrologyContactKind) {
@@ -181,7 +190,10 @@ export function AstrologyContactsPage() {
     return items.filter((item) => {
       if (kindFilter !== 'all' && item.kind !== kindFilter) return false;
       if (!q) return true;
-      return [item.name, item.phone, kindLabel(item.kind)].join(' ').toLowerCase().includes(q);
+      return [item.name, item.phone, item.address ?? '', item.degree ?? '', kindLabel(item.kind)]
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
     });
   }, [list, search, kindFilter]);
 
@@ -195,6 +207,9 @@ export function AstrologyContactsPage() {
       phone: item.phone,
       rating: Number(item.rating).toFixed(1),
       sortOrder: String(item.sortOrder ?? ''),
+      address: item.address ?? '',
+      degree: item.degree ?? '',
+      experienceYears: item.experienceYears != null ? String(item.experienceYears) : '',
     });
     setFormError(null);
     window.setTimeout(() => {
@@ -233,11 +248,17 @@ export function AstrologyContactsPage() {
       phone: string;
       rating: number;
       sortOrder?: number;
+      address: string | null;
+      degree: string | null;
+      experienceYears: number | null;
     } = {
       kind: form.kind,
       name: form.name.trim(),
       phone,
       rating,
+      address: form.address.trim() || null,
+      degree: form.degree.trim() || null,
+      experienceYears: null,
     };
     if (form.sortOrder.trim() !== '') {
       const order = Number(form.sortOrder);
@@ -247,6 +268,15 @@ export function AstrologyContactsPage() {
         return;
       }
       body.sortOrder = order;
+    }
+    if (form.experienceYears.trim() !== '') {
+      const years = Number(form.experienceYears);
+      if (!Number.isInteger(years) || years < 0 || years > 80) {
+        setFormError('Experience must be a whole number from 0 to 80');
+        setSaving(false);
+        return;
+      }
+      body.experienceYears = years;
     }
     try {
       let contactId = editingId;
@@ -378,6 +408,33 @@ export function AstrologyContactsPage() {
                   placeholder="Auto"
                 />
               </label>
+              <label>
+                Degree / qualification
+                <Input
+                  value={form.degree}
+                  onChange={(e) => setForm((s) => ({ ...s, degree: e.target.value }))}
+                  placeholder="Jyotish Acharya"
+                />
+              </label>
+              <label>
+                Experience (years)
+                <Input
+                  type="number"
+                  min={0}
+                  max={80}
+                  value={form.experienceYears}
+                  onChange={(e) => setForm((s) => ({ ...s, experienceYears: e.target.value }))}
+                  placeholder="15"
+                />
+              </label>
+              <label className="sm:col-span-2">
+                Address
+                <Input
+                  value={form.address}
+                  onChange={(e) => setForm((s) => ({ ...s, address: e.target.value }))}
+                  placeholder="Gaur City 1, Greater Noida"
+                />
+              </label>
             </div>
 
             <div className="mt-4 flex items-center gap-3">
@@ -465,8 +522,11 @@ export function AstrologyContactsPage() {
                     <th>Type</th>
                     <th>Name</th>
                     <th>Phone</th>
+                    <th>Degree</th>
+                    <th>Exp.</th>
+                    <th>Address</th>
                     <th>Rating</th>
-                    <th>Show-number clicks</th>
+                    <th>Clicks</th>
                     <th />
                   </tr>
                 </thead>
@@ -480,6 +540,13 @@ export function AstrologyContactsPage() {
                       <td>{kindLabel(item.kind)}</td>
                       <td className="font-medium">{item.name}</td>
                       <td className="font-mono text-sm">{item.phone}</td>
+                      <td className="max-w-[8rem] truncate text-sm">{item.degree ?? '—'}</td>
+                      <td className="text-sm">
+                        {item.experienceYears != null ? `${item.experienceYears}y` : '—'}
+                      </td>
+                      <td className="max-w-[10rem] truncate text-sm text-muted-foreground">
+                        {item.address ?? '—'}
+                      </td>
                       <td>{Number(item.rating).toFixed(1)}</td>
                       <td>{item.showNumberClicks ?? 0}</td>
                       <td className="whitespace-nowrap">

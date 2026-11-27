@@ -31,6 +31,9 @@ function mapRow(row: {
   rating: Prisma.Decimal;
   sortOrder: number;
   showNumberClicks: number;
+  address: string | null;
+  degree: string | null;
+  experienceYears: number | null;
   photoStoragePath: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +46,9 @@ function mapRow(row: {
     rating: Number(row.rating),
     sortOrder: row.sortOrder,
     showNumberClicks: row.showNumberClicks,
+    address: row.address,
+    degree: row.degree,
+    experienceYears: row.experienceYears,
     photoUrl: row.photoStoragePath
       ? `/astrology-contacts/${row.id}/photo`
       : null,
@@ -84,6 +90,9 @@ export class AstrologyContactsService {
         phone: input.phone.trim(),
         rating: input.rating,
         sortOrder,
+        address: input.address ?? null,
+        degree: input.degree ?? null,
+        experienceYears: input.experienceYears ?? null,
       },
     });
 
@@ -94,7 +103,14 @@ export class AstrologyContactsService {
       resourceType: 'astrology_contact',
       resourceId: row.id,
       correlationId,
-      metadata: { kind: row.kind, name: row.name, phone: row.phone },
+      metadata: {
+        kind: row.kind,
+        name: row.name,
+        phone: row.phone,
+        address: row.address,
+        degree: row.degree,
+        experienceYears: row.experienceYears,
+      },
     });
 
     return mapRow(row);
@@ -119,6 +135,9 @@ export class AstrologyContactsService {
         phone: input.phone.trim(),
         rating: input.rating,
         sortOrder: input.sortOrder ?? existing.sortOrder,
+        address: input.address ?? null,
+        degree: input.degree ?? null,
+        experienceYears: input.experienceYears ?? null,
       },
     });
 
@@ -129,7 +148,14 @@ export class AstrologyContactsService {
       resourceType: 'astrology_contact',
       resourceId: row.id,
       correlationId,
-      metadata: { kind: row.kind, name: row.name, phone: row.phone },
+      metadata: {
+        kind: row.kind,
+        name: row.name,
+        phone: row.phone,
+        address: row.address,
+        degree: row.degree,
+        experienceYears: row.experienceYears,
+      },
     });
 
     return mapRow(row);

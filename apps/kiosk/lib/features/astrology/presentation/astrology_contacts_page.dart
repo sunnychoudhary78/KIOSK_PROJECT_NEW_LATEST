@@ -125,7 +125,7 @@ class _AstrologyContactsPageState extends ConsumerState<AstrologyContactsPage> {
                               final columns = constraints.maxWidth >= 980
                                   ? 2
                                   : 1;
-                              const tileHeight = 148.0;
+                              const tileHeight = 176.0;
 
                               return GridView.builder(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -485,11 +485,11 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                       Expanded(
                         child: Text(
                           widget.contact.name,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
-                            fontSize: 18,
+                            fontSize: 17,
                             fontWeight: FontWeight.w800,
                             height: 1.2,
                             color: colors.textPrimary,
@@ -500,8 +500,12 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
                       _RatingPill(rating: widget.contact.rating),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   _MiniStars(rating: widget.contact.rating),
+                  if (_hasProfileMeta(widget.contact)) ...[
+                    const SizedBox(height: 6),
+                    _ProfileMetaRow(contact: widget.contact, muted: colors.textSecondary),
+                  ],
                   const Spacer(),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 280),
@@ -526,6 +530,84 @@ class _ContactCardState extends ConsumerState<_ContactCard> {
           ),
         ],
       ),
+    );
+  }
+}
+
+bool _hasProfileMeta(AstrologyContact contact) {
+  final address = contact.address?.trim();
+  final degree = contact.degree?.trim();
+  return (address != null && address.isNotEmpty) ||
+      (degree != null && degree.isNotEmpty) ||
+      contact.experienceYears != null;
+}
+
+class _ProfileMetaRow extends StatelessWidget {
+  const _ProfileMetaRow({required this.contact, required this.muted});
+
+  final AstrologyContact contact;
+  final Color muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final degree = contact.degree?.trim();
+    final address = contact.address?.trim();
+    final years = contact.experienceYears;
+    final chips = <Widget>[
+      if (degree != null && degree.isNotEmpty)
+        _MetaChip(icon: Icons.school_outlined, label: degree, muted: muted),
+      if (years != null)
+        _MetaChip(
+          icon: Icons.workspace_premium_outlined,
+          label: years == 1 ? '1 yr exp.' : '$years yrs exp.',
+          muted: muted,
+        ),
+      if (address != null && address.isNotEmpty)
+        _MetaChip(icon: Icons.location_on_outlined, label: address, muted: muted),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: chips,
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({
+    required this.icon,
+    required this.label,
+    required this.muted,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: muted),
+        const SizedBox(width: 3),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 180),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: muted,
+              height: 1.15,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
