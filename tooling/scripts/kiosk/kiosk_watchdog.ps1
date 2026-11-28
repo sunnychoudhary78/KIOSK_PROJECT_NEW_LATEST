@@ -1,12 +1,12 @@
-﻿# Kiosk hang watchdog — kill a frozen skp_kiosk.exe so kiosk_shell.bat can relaunch.
+﻿# Kiosk hang watchdog — kill a frozen skp_kiosk.exe so kiosk_launcher.vbs / kiosk_shell.bat can relaunch.
+# Managed by AthenaOtaUpdater — do not rely on this file being inside the app ZIP.
 #
-# Install (as SYSTEM or admin, once per device):
-#   schtasks /Create /TN "SKP Kiosk Watchdog" /SC MINUTE /MO 1 /RU SYSTEM ^
+# Expected task (SYSTEM, every minute):
+#   schtasks /Create /TN "SKP Kiosk Watchdog" /SC MINUTE /MO 1 /RU SYSTEM /F `
 #     /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Kiosk\kiosk_watchdog.ps1"
 #
-# Liveness stamp is written by the Flutter app (Phase 4) to:
+# Liveness stamp is written by the Flutter app to:
 #   C:\Kiosk\runtime\liveness.txt
-# Contents: ISO-8601 UTC timestamp of last UI/liveness beat.
 
 $ErrorActionPreference = 'SilentlyContinue'
 
@@ -19,7 +19,10 @@ $MissingGrace = [TimeSpan]::FromSeconds(120)
 
 function Write-WatchdogLog([string]$Message) {
   $line = '{0:u} {1}' -f [DateTime]::UtcNow, $Message
-  Add-Content -Path $LogPath -Value $line -Encoding ascii
+  try {
+    Add-Content -Path $LogPath -Value $line -Encoding ascii
+  } catch {
+  }
 }
 
 $proc = Get-Process -Name 'skp_kiosk' -ErrorAction SilentlyContinue
@@ -47,8 +50,6 @@ if (Test-Path -LiteralPath $LivenessPath) {
     $reason = "invalid_liveness error=$($_.Exception.Message)"
   }
 } else {
-  # App versions that write liveness.txt: missing stamp after grace = treat as hung.
-  # Use process StartTime so a fresh launch is not killed before first write.
   $started = ($proc | Sort-Object StartTime | Select-Object -First 1).StartTime.ToUniversalTime()
   $up = $now - $started
   if ($up -gt $MissingGrace) {

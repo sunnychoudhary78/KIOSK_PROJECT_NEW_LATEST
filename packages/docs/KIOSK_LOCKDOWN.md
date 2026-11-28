@@ -5,7 +5,9 @@ Use before production fleet rollout.
 ## OS
 
 - [ ] Dedicated Windows user for kiosk mode (no admin)
-- [ ] Shell Launcher (WESL) points at `C:\Kiosk\kiosk_shell.bat` (not the exe directly)
+- [ ] Shell Launcher (WESL) points at `wscript.exe //B //Nologo "C:\Kiosk\kiosk_launcher.vbs"` (not the exe; BAT is fallback only)
+- [ ] Autologon is the `kiosk` user (`AutoAdminLogon=1`) so OTA reboot stays hands-off
+- [ ] Wi‑Fi is connect-automatically / machine-available (not only under `kadmin`)
 - [ ] WESL `DefaultAction` restarts the custom shell on exit
 - [ ] Disable Windows Store, Cortana, and unnecessary startup apps
 - [ ] Auto-logon to kiosk user (secured credentials store)
