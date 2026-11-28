@@ -19,18 +19,29 @@ class SkpPanelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(radius),
-      side: const BorderSide(color: SkpColors.line),
     );
-    return Material(
-      color: SkpColors.panel,
-      shape: shape,
-      clipBehavior: Clip.antiAlias,
-      child: onTap == null
-          ? Padding(padding: padding, child: child)
-          : InkWell(
-              onTap: onTap,
-              child: Padding(padding: padding, child: child),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: SkpColors.accent.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: SkpColors.panel,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: onTap == null
+            ? Padding(padding: padding, child: child)
+            : InkWell(
+                onTap: onTap,
+                child: Padding(padding: padding, child: child),
+              ),
+      ),
     );
   }
 }
@@ -53,7 +64,7 @@ class SkpIconWell extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: SkpColors.accent.withValues(alpha: 0.12),
+        color: SkpColors.accent.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(SkpTokens.radiusMd),
       ),
       child: Icon(icon, color: SkpColors.accent, size: iconSize),

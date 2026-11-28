@@ -32,7 +32,7 @@ class RazorpayCheckout {
     required int amountPaise,
     required String currency,
     String? contact,
-    String name = 'IMT-Print',
+    String name = 'ATHENAA',
     void Function(String? walletName)? onExternalWallet,
   }) {
     final completer = Completer<RazorpayCheckoutResult>();

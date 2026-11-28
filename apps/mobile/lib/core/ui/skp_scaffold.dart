@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skp_mobile/core/theme/app_theme.dart';
 
-/// Cream / soft teal atmospheric background with consistent SafeArea padding.
+/// Soft Immortech atmosphere with consistent SafeArea padding.
 class SkpScaffold extends StatelessWidget {
   const SkpScaffold({
     super.key,
@@ -60,7 +60,7 @@ class _Atmosphere extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return const DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -68,27 +68,31 @@ class _Atmosphere extends StatelessWidget {
           colors: [
             SkpColors.atmosphere,
             SkpColors.cream,
-            SkpColors.creamDeep.withValues(alpha: 0.85),
+            SkpColors.creamDeep,
           ],
         ),
       ),
-      child: const Stack(
+      child: Stack(
         children: [
           Positioned(
-            top: -80,
-            right: -60,
-            child: _Blob(
-              size: 220,
-              color: Color(0x1A0F6A5A),
-            ),
+            top: -90,
+            right: -70,
+            child: _Blob(size: 240, color: Color(0x22FF4FA3)),
           ),
           Positioned(
-            bottom: 40,
-            left: -90,
-            child: _Blob(
-              size: 260,
-              color: Color(0x120F6A5A),
-            ),
+            top: 40,
+            right: -30,
+            child: _Blob(size: 140, color: Color(0x188B5CFF)),
+          ),
+          Positioned(
+            bottom: 20,
+            left: -100,
+            child: _Blob(size: 280, color: Color(0x144DA3FF)),
+          ),
+          Positioned(
+            bottom: -40,
+            right: -60,
+            child: _Blob(size: 180, color: Color(0x14FF4FA3)),
           ),
         ],
       ),

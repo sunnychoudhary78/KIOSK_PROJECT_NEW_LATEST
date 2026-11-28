@@ -101,13 +101,13 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'IMT-Print'**
+  /// **'ATHENAA'**
   String get appTitle;
 
   /// No description provided for @brandName.
   ///
   /// In en, this message translates to:
-  /// **'IMT-Print'**
+  /// **'ATHENAA'**
   String get brandName;
 
   /// No description provided for @guestSubtitle.
@@ -545,7 +545,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginHelper.
   ///
   /// In en, this message translates to:
-  /// **'Sign in with your mobile number to upload documents and print at a kiosk.'**
+  /// **'Sign in with your mobile number to upload documents and print at any IMT-Print kiosk.'**
   String get loginHelper;
 
   /// No description provided for @enterOtp.
@@ -641,7 +641,7 @@ abstract class AppLocalizations {
   /// No description provided for @about.
   ///
   /// In en, this message translates to:
-  /// **'About IMT-Print'**
+  /// **'About ATHENAA'**
   String get about;
 
   /// No description provided for @signOut.
@@ -1025,13 +1025,13 @@ abstract class AppLocalizations {
   /// No description provided for @aboutTitle.
   ///
   /// In en, this message translates to:
-  /// **'About IMT-Print'**
+  /// **'About ATHENAA'**
   String get aboutTitle;
 
   /// No description provided for @aboutBody.
   ///
   /// In en, this message translates to:
-  /// **'IMT-Print lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.'**
+  /// **'ATHENAA lets you upload documents on your phone, pay only for extra pages, and collect prints at a nearby kiosk with a one-time SMS code.\n\nYour OTP is sent to your mobile number and is never shown in this app.'**
   String get aboutBody;
 
   /// No description provided for @privacyPolicy.

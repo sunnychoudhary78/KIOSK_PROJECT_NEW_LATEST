@@ -1,25 +1,40 @@
 import 'package:flutter/material.dart';
 
-/// Smart Kiosk cream-paper tokens. Inverse of the kiosk ATM-dark palette.
+/// ATHENAA Immortech pink / purple brand tokens.
 abstract final class SkpColors {
-  static const Color accent = Color(0xFF0F6A5A);
-  static const Color accentBright = Color(0xFF2EC4A0);
-  static const Color cream = Color(0xFFF3EFE6);
-  static const Color creamDeep = Color(0xFFEBE4D7);
-  static const Color atmosphere = Color(0xFFF7F3EA);
-  static const Color ink = Color(0xFF1C2430);
-  static const Color panel = Color(0xFFFFFDF8);
-  static const Color muted = Color(0xFF5B6573);
-  static const Color line = Color(0xFFD9D1C3);
-  static const Color gold = Color(0xFFE8C872);
+  static const Color accent = Color(0xFF6B2DBA);
+  static const Color accentBright = Color(0xFFFF4FA3);
+  static const Color accentDeep = Color(0xFF3B0A6B);
+  static const Color accentViolet = Color(0xFF8B5CFF);
+  static const Color accentBlue = Color(0xFF4DA3FF);
+  static const Color cream = Color(0xFFF8F6FC);
+  static const Color creamDeep = Color(0xFFF0ECF8);
+  static const Color atmosphere = Color(0xFFFBF9FE);
+  static const Color ink = Color(0xFF1A1A2E);
+  static const Color panel = Color(0xFFFFFFFF);
+  static const Color muted = Color(0xFF6B6B76);
+  static const Color line = Color(0xFFE8E4F0);
+  static const Color gold = Color(0xFFFF4FA3);
   static const Color danger = Color(0xFF9B1C1C);
   static const Color success = Color(0xFF1B7A4A);
+
+  static const LinearGradient brandGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [accentBlue, accentViolet, accentBright],
+  );
+
+  static const LinearGradient heroGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [accentBlue, accentViolet, accentBright],
+  );
 }
 
 abstract final class SkpTokens {
   static const double radiusSm = 12;
   static const double radiusMd = 16;
-  static const double radiusLg = 20;
+  static const double radiusLg = 22;
   static const double hairline = 1;
   static const double buttonHeight = 54;
   static const double pageGutter = 24;

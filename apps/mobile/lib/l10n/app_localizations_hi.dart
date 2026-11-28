@@ -9,10 +9,10 @@ class AppLocalizationsHi extends AppLocalizations {
   AppLocalizationsHi([String locale = 'hi']) : super(locale);
 
   @override
-  String get appTitle => 'IMT-Print';
+  String get appTitle => 'ATHENAA';
 
   @override
-  String get brandName => 'IMT-Print';
+  String get brandName => 'ATHENAA';
 
   @override
   String get guestSubtitle =>
@@ -309,7 +309,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get howItWorks => 'यह कैसे काम करता है';
 
   @override
-  String get about => 'IMT-Print के बारे में';
+  String get about => 'ATHENAA के बारे में';
 
   @override
   String get signOut => 'साइन आउट';
@@ -524,11 +524,11 @@ class AppLocalizationsHi extends AppLocalizations {
   String get pastSection => 'पहले के';
 
   @override
-  String get aboutTitle => 'IMT-Print के बारे में';
+  String get aboutTitle => 'ATHENAA के बारे में';
 
   @override
   String get aboutBody =>
-      'IMT-Print से आप फ़ोन पर दस्तावेज़ अपलोड कर सकते हैं, केवल अतिरिक्त पन्नों का भुगतान कर सकते हैं, और नज़दीकी कियोस्क पर एसएमएस कोड से प्रिंट ले सकते हैं।\n\nआपका ओटीपी आपके मोबाइल नंबर पर जाता है और इस ऐप में नहीं दिखता।';
+      'ATHENAA से आप फ़ोन पर दस्तावेज़ अपलोड कर सकते हैं, केवल अतिरिक्त पन्नों का भुगतान कर सकते हैं, और नज़दीकी कियोस्क पर एसएमएस कोड से प्रिंट ले सकते हैं।\n\nआपका ओटीपी आपके मोबाइल नंबर पर जाता है और इस ऐप में नहीं दिखता।';
 
   @override
   String get privacyPolicy => 'गोपनीयता नीति';

@@ -11,6 +11,7 @@ import 'package:skp_mobile/features/auth/application/citizen_auth.dart';
 import 'package:skp_mobile/features/otp_print/application/challenge_status.dart';
 import 'package:skp_mobile/features/otp_print/application/open_print_session.dart';
 import 'package:skp_mobile/features/otp_print/application/otp_print_controller.dart';
+import 'package:skp_mobile/features/otp_print/application/otp_print_models.dart';
 import 'package:skp_mobile/features/otp_print/application/print_history_controller.dart';
 import 'package:skp_mobile/l10n/app_localizations.dart';
 
@@ -54,7 +55,6 @@ class _HomeTabState extends ConsumerState<HomeTab> {
       body: ListView(
         children: [
           _DashboardHeader(
-            brand: l10n.brandName,
             greeting: greeting,
             onMenu: () => showSkpAppMenu(context, ref),
             onProfile: () =>
@@ -124,14 +124,12 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
 class _DashboardHeader extends StatelessWidget {
   const _DashboardHeader({
-    required this.brand,
     required this.greeting,
     required this.onMenu,
     required this.onProfile,
     required this.profileTooltip,
   });
 
-  final String brand;
   final String greeting;
   final VoidCallback onMenu;
   final VoidCallback onProfile;
@@ -146,30 +144,29 @@ class _DashboardHeader extends StatelessWidget {
           icon: Icons.menu_rounded,
           onPressed: onMenu,
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             children: [
-              Text(
-                brand,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                ),
+              Image.asset(
+                'assets/logo/athenaa_immortech.png',
+                height: 42,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
                 greeting,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: SkpColors.muted,
+                  fontSize: 12,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         _HeaderIconButton(
           icon: Icons.person_outline_rounded,
           onPressed: onProfile,
@@ -202,6 +199,8 @@ class _HeaderIconButton extends StatelessWidget {
       style: IconButton.styleFrom(
         backgroundColor: SkpColors.panel,
         foregroundColor: SkpColors.accent,
+        elevation: 2,
+        shadowColor: SkpColors.accent.withValues(alpha: 0.18),
         side: const BorderSide(color: SkpColors.line),
         shape: circular
             ? const CircleBorder()
@@ -225,39 +224,34 @@ class _HeroPrintCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1A8F78),
-            Color(0xFF0F6A5A),
-            Color(0xFF0A5246),
-          ],
-        ),
+        borderRadius: BorderRadius.circular(26),
+        gradient: SkpColors.heroGradient,
         boxShadow: [
           BoxShadow(
-            color: SkpColors.accent.withValues(alpha: 0.22),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: SkpColors.accentBright.withValues(alpha: 0.28),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         child: Stack(
           children: [
             Positioned(
-              right: -18,
-              bottom: -10,
-              child: Icon(
-                Icons.print_rounded,
-                size: 120,
-                color: Colors.white.withValues(alpha: 0.12),
+              right: -24,
+              bottom: -24,
+              child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.10),
+                ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+              padding: const EdgeInsets.fromLTRB(20, 22, 16, 18),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -268,6 +262,7 @@ class _HeroPrintCard extends StatelessWidget {
                         Text(
                           title,
                           style: theme.textTheme.headlineSmall?.copyWith(
+                            fontFamily: 'serif',
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
                             height: 1.15,
@@ -277,8 +272,9 @@ class _HeroPrintCard extends StatelessWidget {
                         Text(
                           helper,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withValues(alpha: 0.92),
                             height: 1.35,
+                            fontSize: 13.5,
                           ),
                         ),
                         const SizedBox(height: 18),
@@ -286,7 +282,7 @@ class _HeroPrintCard extends StatelessWidget {
                           width: 56,
                           height: 5,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF7DFFC8),
+                            color: Colors.white.withValues(alpha: 0.85),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -322,7 +318,7 @@ class _KioskIllustration extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFB7E8D8), width: 3),
+              border: Border.all(color: const Color(0xFFE8D9FF), width: 3),
             ),
             child: Column(
               children: [
@@ -331,11 +327,11 @@ class _KioskIllustration extends StatelessWidget {
                   width: 46,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8F7F2),
+                    color: const Color(0xFFF3E9FF),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
-                    Icons.description_outlined,
+                    Icons.upload_file_rounded,
                     color: SkpColors.accent,
                     size: 22,
                   ),
@@ -357,13 +353,13 @@ class _KioskIllustration extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF7DFFC8),
+                gradient: SkpColors.brandGradient,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
                 Icons.print_rounded,
                 size: 16,
-                color: SkpColors.accent,
+                color: Colors.white,
               ),
             ),
           ),
@@ -392,63 +388,99 @@ class _ServiceGridCard extends StatelessWidget {
     return Material(
       color: SkpColors.panel,
       elevation: 0,
+      shadowColor: SkpColors.accent.withValues(alpha: 0.12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: const BorderSide(color: SkpColors.line),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 14, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: SkpColors.panel,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: SkpColors.accent.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Stack(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: SkpColors.accent.withValues(alpha: 0.10),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: SkpColors.accent, size: 22),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Expanded(
-                child: Text(
-                  subtitle,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: SkpColors.muted,
-                    height: 1.3,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 46,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withValues(alpha: 0),
+                        SkpColors.accentBright.withValues(alpha: 0.08),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: const BoxDecoration(
-                    color: SkpColors.accent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_rounded,
-                    color: Colors.white,
-                    size: 18,
-                  ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: SkpColors.accent.withValues(alpha: 0.10),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: SkpColors.accent, size: 22),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                        color: SkpColors.accentDeep,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: Text(
+                        subtitle,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: SkpColors.muted,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomRight,
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: SkpColors.brandGradient,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -477,63 +509,76 @@ class _NearbyWideCard extends StatelessWidget {
       color: SkpColors.panel,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: const BorderSide(color: SkpColors.line),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: SkpColors.accent.withValues(alpha: 0.10),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.location_on_outlined,
-                  color: SkpColors.accent,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: SkpColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 38,
-                height: 38,
-                decoration: const BoxDecoration(
-                  color: SkpColors.accent,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_forward_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: SkpColors.panel,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: SkpColors.accent.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
               ),
             ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: SkpColors.accent.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.location_on_outlined,
+                    color: SkpColors.accent,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: SkpColors.accentDeep,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: SkpColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: SkpColors.brandGradient,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
